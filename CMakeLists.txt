@@ -68,6 +68,23 @@ if(SLINKYWINKY_BUILD_ATTACH)
   if(NOT EXISTS "${SW_TOOLS_JAR}")
     message(FATAL_ERROR "The standalone loader requires a full Java 8 JDK containing lib/tools.jar")
   endif()
+  # Pin the BSD-licensed ASM 5.2 dependency to a known SHA-256.
+  set(SW_ASM_JAR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/asm-5.2.jar")
+  set(SW_ASM_HASH "3e5ea0d7da2c5155ef4f470d9092d42de34e3f53db6589c7c07d6721adf4ba3e")
+  if(NOT EXISTS "${SW_ASM_JAR}")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/thirdparty")
+    file(DOWNLOAD "https://repo.maven.apache.org/maven2/org/ow2/asm/asm/5.2/asm-5.2.jar"
+      "${SW_ASM_JAR}" EXPECTED_HASH "SHA256=${SW_ASM_HASH}"
+      TLS_VERIFY ON STATUS SW_ASM_DL_STATUS)
+    list(GET SW_ASM_DL_STATUS 0 SW_ASM_DL_CODE)
+    if(NOT SW_ASM_DL_CODE EQUAL 0)
+      message(FATAL_ERROR "Verified ASM 5.2 dependency unavailable: ${SW_ASM_DL_STATUS}")
+    endif()
+  endif()
+  file(SHA256 "${SW_ASM_JAR}" SW_ASM_CURRENT_HASH)
+  if(NOT SW_ASM_CURRENT_HASH STREQUAL SW_ASM_HASH)
+    message(FATAL_ERROR "ASM 5.2 SHA-256 integrity check failed")
+  endif()
   add_library(slinkywinky_agent SHARED src/agent_entry.cpp src/bridge.cpp)
   target_compile_features(slinkywinky_agent PRIVATE cxx_std_17)
   target_compile_definitions(slinkywinky_agent PRIVATE SLINKYWINKY_BRIDGE_BUILD)
@@ -75,6 +92,11 @@ if(SLINKYWINKY_BUILD_ATTACH)
   target_link_libraries(slinkywinky_agent PRIVATE slinkywinky_core)
   set_target_properties(slinkywinky_agent PROPERTIES OUTPUT_NAME "slinkywinky_agent")
 
+  # Source changes to Java helpers force the POST_BUILD staging commands to rerun.
+  set_property(SOURCE src/windows_loader.cpp APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/attach/AttachMain.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf")
   add_executable(slinkywinky_loader src/windows_loader.cpp)
   target_compile_features(slinkywinky_loader PRIVATE cxx_std_17)
   add_dependencies(slinkywinky_loader slinkywinky_agent)
@@ -88,9 +110,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/AttachTarget.java"
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
-    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8 -cp "${SW_ASM_JAR}"
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
+    COMMAND ${CMAKE_COMMAND} -E chdir "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
+      "${Java_JAR_EXECUTABLE}" xf "${SW_ASM_JAR}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes/META-INF"
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
