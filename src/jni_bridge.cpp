@@ -2,6 +2,8 @@
 #include <jni.h>
 #include <array>
 #include <cstdint>
+#include <cmath>
+#include <limits>
 
 namespace {
 void error(JNIEnv* env,const char* cls,const char* message) {
@@ -64,4 +66,83 @@ extern "C" JNIEXPORT void JNICALL Java_dev_slinkywinky_NativeEngine_nativeClose(
     SWContext* context=ptr(handle);
     if(sw_destroy(&context)!=0)
         error(env,"java/lang/IllegalStateException","Native close rejected");
+}
+
+namespace {
+jfloatArray write_detailed(JNIEnv* env,const SWOutput& out) {
+    const jfloat values[10]={static_cast<jfloat>(out.left_edge),
+        static_cast<jfloat>(out.right_edge), static_cast<jfloat>(out.left_held),
+        static_cast<jfloat>(out.right_held),static_cast<jfloat>(out.attempt_attack),
+        static_cast<jfloat>(out.has_rotation),out.yaw,out.pitch,
+        static_cast<jfloat>(out.has_reach),out.reach_distance};
+    jfloatArray result=env->NewFloatArray(10);
+    if(result) env->SetFloatArrayRegion(result,0,10,values);
+    return result;
+}
+}
+extern "C" JNIEXPORT jfloatArray JNICALL Java_dev_slinkywinky_NativeEngine_nativeStepDetailed(
+    JNIEnv* env, jclass, jlong handle, jlongArray clocks, jintArray flags,
+    jdoubleArray coords, jfloatArray angles, jfloatArray cfg) {
+    if(!clocks || !flags || !coords || !angles || !cfg ||
+       env->GetArrayLength(clocks)!=2 || env->GetArrayLength(flags)!=12 ||
+       env->GetArrayLength(coords)!=6 || env->GetArrayLength(angles)!=2 ||
+       env->GetArrayLength(cfg)!=19) {
+        error(env,"java/lang/IllegalArgumentException","Incorrect detailed frame shape");return nullptr;
+    }
+    jlong time[2];jint f[12];jdouble p[6];jfloat a[2],c[19];
+    env->GetLongArrayRegion(clocks,0,2,time);
+    env->GetIntArrayRegion(flags,0,12,f);
+    env->GetDoubleArrayRegion(coords,0,6,p);
+    env->GetFloatArrayRegion(angles,0,2,a);
+    env->GetFloatArrayRegion(cfg,0,19,c);
+    if(env->ExceptionCheck()) return nullptr;
+    if(time[0]<0 || time[1]<=0 || !std::isfinite(c[18]) ||
+       c[18]<static_cast<jfloat>(std::numeric_limits<std::int32_t>::min()) ||
+       static_cast<double>(c[18])>=2147483648.0) {
+        error(env,"java/lang/IllegalArgumentException","Invalid detailed frame clock or hit-select value");return nullptr;
+    }
+    for(jdouble value:p) if(!std::isfinite(value)) {
+        error(env,"java/lang/IllegalArgumentException","Invalid coordinates");return nullptr;
+    }
+    for(jfloat value:a) if(!std::isfinite(value)) {
+        error(env,"java/lang/IllegalArgumentException","Invalid rotation");return nullptr;
+    }
+    for(jfloat value:c) if(!std::isfinite(value)) {
+        error(env,"java/lang/IllegalArgumentException","Invalid settings");return nullptr;
+    }
+    SWFrame frame{};
+    frame.abi_version=SW_ABI_VERSION;
+    frame.time_ms=static_cast<std::uint64_t>(time[0]);
+    frame.generation=static_cast<std::uint64_t>(time[1]);
+    frame.world_valid=f[0];frame.gui_open=f[1];frame.mouse_left=f[2];
+    frame.mouse_right=f[3];frame.weapon=f[4];frame.sprinting=f[5];
+    frame.hurt_time=f[6];frame.last_attacker_time=f[7];
+    frame.target_present=f[8];frame.target_visible=f[9];frame.target_alive=f[10];
+    frame.target_id=f[11];
+    frame.eye_x=p[0];frame.eye_y=p[1];frame.eye_z=p[2];
+    frame.target_x=p[3];frame.target_y=p[4];frame.target_z=p[5];
+    frame.yaw=a[0];frame.pitch=a[1];
+    SWSettings settings{};
+    settings.abi_version=SW_ABI_VERSION;
+    settings.clicker=c[0]>0;settings.require_mouse=c[1]>0;
+    settings.cps=c[2];settings.aim=c[3]>0;settings.aim_require_mouse=c[4]>0;
+    settings.aim_range=c[5];settings.aim_hspeed=c[6];
+    settings.aim_vspeed=c[7];settings.aim_fov=c[8];
+    settings.auto_block=c[9]>0;settings.block_require_damage=c[10]>0;
+    settings.block_range=c[11];settings.block_max_hurt=c[12];
+    settings.reach=c[13]>0;settings.reach_distance=c[14];
+    settings.reach_activation_ticks=c[15];settings.reach_require_sprint=c[16]>0;
+    settings.hit_select=c[17]>0;settings.hit_select_min_hurt=static_cast<int>(c[18]);
+    SWOutput output{};
+    const int status=sw_step(ptr(handle),&frame,&settings,&output);
+    if(status!=0) {error(env,"java/lang/IllegalStateException","Detailed native tick rejected");return nullptr;}
+    return write_detailed(env,output);
+}
+extern "C" JNIEXPORT jfloatArray JNICALL Java_dev_slinkywinky_NativeEngine_nativeDisable(
+    JNIEnv* env,jclass,jlong handle,jboolean manualLeft,jboolean manualRight) {
+    SWOutput out{};
+    if(sw_disable(ptr(handle),manualLeft,manualRight,&out)!=0) {
+        error(env,"java/lang/IllegalStateException","Native disable rejected");return nullptr;
+    }
+    return write_detailed(env,out);
 }
