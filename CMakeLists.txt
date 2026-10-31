@@ -95,6 +95,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
   # Source changes to Java helpers force the POST_BUILD staging commands to rerun.
   set_property(SOURCE src/windows_loader.cpp APPEND PROPERTY OBJECT_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/ObservedState.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/attach/AttachMain.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/net/minecraft/launchwrapper/LaunchClassLoader.java"
@@ -118,6 +119,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8 -cp "${SW_ASM_JAR}"
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/ObservedState.java"
     COMMAND ${CMAKE_COMMAND} -E chdir "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
       "${Java_JAR_EXECUTABLE}" xf "${SW_ASM_JAR}"
     COMMAND ${CMAKE_COMMAND} -E rm -rf

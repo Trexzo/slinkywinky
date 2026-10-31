@@ -26,6 +26,8 @@ public final class InstrumentationProbe {
     private static volatile Class<?> installedClass;
     private static volatile byte[] originalClassFingerprint;
     private static native int nativeZeroActionTick();
+    private static native int nativeObserveFrame(long timeMs,long generation,int flags,
+                                                  double[] xyz,float[] angles);
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -53,10 +55,18 @@ public final class InstrumentationProbe {
         if (!active) return;
         final int n = ticks.incrementAndGet();
         boolean nativeOk = false;
-        try { nativeOk = nativeZeroActionTick() == 1; }
+        ObservedState.Frame observed=null;
+        try {
+            observed=ObservedState.sample();
+            nativeOk=nativeObserveFrame(observed.timeMs,observed.generation,
+                observed.flags,observed.xyz,observed.angles)==1;
+        }
         catch (Throwable failure) {
             System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
         }
+        if(n==1 && nativeOk && observed!=null)
+            System.out.println(PREFIX+"NATIVE_OBSERVATION_PASS world="+((observed.flags&1)!=0?1:0)+
+                " player="+((observed.flags&2)!=0?1:0)+" target="+((observed.flags&4)!=0?1:0));
         if (n == 1 && nativeOk) {
             System.out.println(PREFIX + "NATIVE_GAME_THREAD_CXX_PASS thread=" +
                 Thread.currentThread().getName());
@@ -223,6 +233,8 @@ public final class InstrumentationProbe {
             if (nativeZeroActionTick() != 1)
                 throw new IllegalStateException("Disabled C++ decision returned action/error");
             System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
+            ObservedState.admit(target);
+            System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
             verifyCallbackVisibility(target);
         }
         if (hook && !hookInstalled.compareAndSet(false, true))
