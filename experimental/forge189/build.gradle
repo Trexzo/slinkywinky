@@ -1,0 +1,20 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://maven.minecraftforge.net/' }
+    }
+    dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT' }
+}
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+sourceCompatibility = targetCompatibility = '1.8'
+version = '0.1.0-preview'
+group = 'dev.slinkywinky'
+archivesBaseName = 'slinkywinky-preview'
+
+minecraft {
+    version = '1.8.9-11.15.1.2318-1.8.9'
+    mappings = 'stable_22'
+    runDir = 'run'
+}
+sourceSets.main.java.srcDirs = ['src/main/java', '../../java']
