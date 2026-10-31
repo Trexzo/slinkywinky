@@ -120,8 +120,12 @@ CombatResult CombatCoordinator::tick(const TickSnapshot& s, const CombatSettings
     out.right_edge = right_.update(s.mouse_right, block_down_);
     out.left_held = left_.effective_down();
     out.right_held = right_.effective_down();
-    if (settings.reach_enabled && !s.gui_open)
-        out.requested_reach = reach_.evaluate({s.sprinting, s.last_attacker_time}, settings.reach);
+    if (settings.reach_enabled && !s.gui_open) {
+        const auto distance = reach_.evaluate({s.sprinting, s.last_attacker_time}, settings.reach);
+        if (distance && std::isfinite(*distance) && *distance >= 0 &&
+            *distance <= static_cast<double>(std::numeric_limits<float>::max()))
+            out.requested_reach = static_cast<float>(*distance);
+    }
     out.rotation = rotations_.winner();
     return out;
 }

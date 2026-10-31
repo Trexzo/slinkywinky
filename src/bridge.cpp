@@ -1,4 +1,3 @@
-#define SLINKYWINKY_BRIDGE_BUILD
 #include "slinkywinky/bridge.h"
 #include "slinkywinky/combat.hpp"
 #include <array>
