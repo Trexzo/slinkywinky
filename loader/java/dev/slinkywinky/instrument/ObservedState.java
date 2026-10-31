@@ -76,6 +76,8 @@ public final class ObservedState {
         if(oldWorld!=world || oldPlayer!=player) {
             generation++;oldWorld=world;oldPlayer=player;
         }
+        if(world==null && player!=null)
+            throw new IllegalStateException("Player exists without world");
         int flags=(world==null?0:1)|(player==null?0:2);
         double[] xyz=new double[6];
         float[] angles=new float[2];

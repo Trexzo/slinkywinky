@@ -176,7 +176,8 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     jdoubleArray xyz,jfloatArray angles) {
     if(!xyz || !angles || env->GetArrayLength(xyz)!=6 ||
        env->GetArrayLength(angles)!=2 || time<0 || generation<=0 ||
-       (flags&~7)!=0 || ((flags&4) && ((flags&3)!=3))) return 0;
+       (flags&~7)!=0 || ((flags&2) && !(flags&1)) ||
+       ((flags&4) && ((flags&3)!=3))) return 0;
     jdouble points[6];jfloat camera[2];
     env->GetDoubleArrayRegion(xyz,0,6,points);
     env->GetFloatArrayRegion(angles,0,2,camera);

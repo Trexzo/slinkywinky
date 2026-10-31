@@ -30,6 +30,14 @@ try:
         raise AssertionError("Mapped observation regression failed: " +
                              observations.stdout + observations.stderr)
     print("PASS: populated player/target, eye-level, disconnect, reentry and invalid field rejection")
+    jni_contract = subprocess.run(
+        [str(java), "-cp", classpath, "dev.slinkywinky.attach.NativeObservationSmoke",
+         str(loader.parent / "slinkywinky_jni.dll")],
+        capture_output=True, text=True, env=env, timeout=15)
+    if jni_contract.returncode != 0 or "NATIVE_OBSERVATION_CONTRACT_PASS" not in jni_contract.stdout:
+        raise AssertionError("Strict native observation ABI regression: " +
+                             jni_contract.stdout + jni_contract.stderr)
+    print("PASS: native observation JNI contract, malformed frames and wrong-thread rejection")
     line = target.stdout.readline().strip()
     assert line == "SLINKYWINKY_ATTACH_TARGET_READY", repr(line)
     result = subprocess.run([str(loader), "attach", str(target.pid), str(home)],

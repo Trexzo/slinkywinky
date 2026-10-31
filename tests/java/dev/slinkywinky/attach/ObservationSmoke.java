@@ -26,6 +26,12 @@ public final class ObservationSmoke {
         ObservedState.Frame reentry=ObservedState.sample();
         check(reentry.flags==3 && reentry.generation>menu.generation,
               "World reentry must advance generation");
+        minecraft.theWorld=null;
+        boolean inconsistent=false;
+        try { ObservedState.sample(); }
+        catch(IllegalStateException expected){inconsistent=true;}
+        check(inconsistent,"Inconsistent player without world must be rejected");
+        minecraft.theWorld=new Object();
         minecraft.thePlayer.posX=Double.NaN;
         boolean refused=false;
         try { ObservedState.sample(); }
