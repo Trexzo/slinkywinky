@@ -22,6 +22,14 @@ try:
     print(result.stdout, result.stderr)
     if result.returncode != 0 or "ATTACH_RESULT=SUCCESS" not in result.stdout:
         raise AssertionError("Native JVM attach failed")
+    # Production mode must refuse unrelated Java processes even when explicitly given a PID.
+    production_env = env.copy()
+    production_env.pop("SLINKYWINKY_ATTACH_TEST", None)
+    denied = subprocess.run([str(loader), "attach", str(target.pid), str(home)],
+                            capture_output=True, text=True, env=production_env, timeout=15)
+    if denied.returncode == 0 or "Refusing non-Minecraft target" not in denied.stderr:
+        raise AssertionError("Unrelated JVM target unexpectedly admitted")
+    print("PASS: non-Minecraft target rejected in production mode")
     print("PASS: standalone Windows loader -> Java 8 Attach API -> native JVMTI agent")
 finally:
     target.terminate()

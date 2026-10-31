@@ -19,3 +19,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 The injector targets a chosen process explicitly and checks it is Minecraft. It never silently scans for and modifies arbitrary JVMs. A successful agent attach **does not yet mean a working client**; live combat, game-thread hooks, GUI, clean unload and true original parity still require implementation and verification.
+
+## Current live JVM limitation
+
+Windows 11 / Java 8 Minecraft JVM testing confirmed that the **standalone native loader and C++ DLL attach successfully without Forge** and recognize the Minecraft class. An optional native `--tick-probe` was also tested but **JVMTI rejected live breakpoint instrumentation with error 98 (`JVMTI_ERROR_NOT_AVAILABLE`)**. That experiment is not a working game-tick integration. The normal attach path does not request breakpoint capabilities and remains operational. See [technical findings](docs/R29_LIVE_JVMTI_LIMIT.md).
