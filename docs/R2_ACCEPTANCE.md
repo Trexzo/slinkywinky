@@ -12,7 +12,7 @@
 | Velocity | Deterministic knockback scaling and chance | Actual game packet interception |
 | Hit Select | Attack gating model | Full original prediction/interaction semantics |
 | Backtrack | Packet-notice holding FIFO + expiry | Actual packet copies, serialization or replay |
-| Runtime | Bounded commands, owner-thread-only drain; host-session lifecycle | JNI/JVMTI or Minecraft frame callback integration |
+| Runtime | Bounded commands, owner-thread admission for all host callbacks; explicit pulse commands, emergency release and generation fencing | JNI/JVMTI or Minecraft frame callback integration |
 | Config | Strict parsing, defaults, backup and replacement | In-game settings UI / profile migration |
 | Shared library/JNI | Portable C ABI; JVM integration smoke with Java 8-compatible wrapper | Real Minecraft event integration, injector, complete GUI |
 

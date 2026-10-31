@@ -25,6 +25,18 @@ int main(){
     s.target->visible=true; settings.auto_block_enabled=true; settings.block_requires_damage=false;
     s.elapsed_ms=200; a=c.tick(s,settings); CHECK(a.right_edge==KeyEdge::press);
     s.elapsed_ms=220; settings.auto_block_enabled=false; a=c.tick(s,settings); CHECK(a.right_edge==KeyEdge::release);
+    // A damage-window block should re-enter only after its reblock cooldown.
+    settings.auto_block_enabled=true;settings.block_requires_damage=true;
+    s.hurt_time=2;s.elapsed_ms=230;
+    a=c.tick(s,settings);CHECK(a.right_held);
+    s.hurt_time=0;s.elapsed_ms=240;
+    a=c.tick(s,settings);CHECK(!a.right_held);
+    s.hurt_time=2;s.elapsed_ms=250;
+    a=c.tick(s,settings);CHECK(!a.right_held);
+    for(int i=0;i<9;i++) {s.elapsed_ms+=20;a=c.tick(s,settings);}
+    CHECK(a.right_held);
+    settings.auto_block_enabled=false;
+    s.elapsed_ms+=20;a=c.tick(s,settings);CHECK(!a.right_held);
     settings.hit_select_enabled=true; settings.hit_select_min_hurt=3;
     s.elapsed_ms=400; a=c.tick(s,settings); CHECK(!a.attempt_attack);
     settings.hit_select_enabled=false; s.elapsed_ms=410;

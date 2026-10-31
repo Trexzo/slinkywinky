@@ -10,7 +10,7 @@
 namespace slinkywinky {
 
 enum class RuntimePhase { detached, attached, running, stopped };
-enum class CommandKind { set_rotation, set_attack, set_block, release_all, world_changed };
+enum class CommandKind { set_rotation, set_attack, set_block, attack_pulse, release_all, world_changed };
 struct Command {
     CommandKind kind = CommandKind::release_all;
     std::uint64_t generation = 0;
@@ -30,6 +30,7 @@ public:
     bool world_changed();
     bool shutdown();
     RuntimePhase phase() const;
+    bool on_owner_thread() const;
     std::uint64_t generation() const;
     std::size_t queued() const;
 private:

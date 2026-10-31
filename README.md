@@ -9,9 +9,9 @@ This is a new C++17 implementation intended to make the behavior and failures of
 - Buildable static C++ library plus a shared C ABI library (`slinkywinky_bridge`).
 - Reference-profile starting values, deterministic xoshiro128+ random generator, Reach cooldown.
 - Tick-based Auto Clicker, Aim Assist, AutoBlock, HitSelect and Velocity decision models.
-- Bounded thread-safe command mailbox, single-owner consumer, generation fencing on world changes.
+- Bounded thread-safe command mailbox, single-owner consumer, generation fencing on world changes, and off-thread rejection before combat state mutation.
 - Bounded packet-notice queue with explicit expiry/release/drop semantics, coordinated through a host-session lifecycle.
-- User/manual versus synthetic mouse-button ownership, safe disable and world reset.
+- User/manual versus synthetic mouse-button ownership, explicit attack-pulse commands, safe disable and world reset.
 - Validated text profile with versioning, forward-compatible unknown keys and backup on replacement.
 - Standalone offline trace demo, portable C ABI contract, and optional Java 8-compatible JNI wrapper. GCC/Clang/Windows/Linux regression builds.
 

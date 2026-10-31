@@ -57,6 +57,10 @@ bool RuntimeMailbox::shutdown() {
     phase_ = RuntimePhase::stopped;
     return true;
 }
+bool RuntimeMailbox::on_owner_thread() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return is_owner();
+}
 RuntimePhase RuntimeMailbox::phase() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return phase_;

@@ -24,6 +24,9 @@ int main(){
     CHECK(batch.valid);CHECK(batch.decision.attempt_attack);
     CHECK(batch.released_packet_notices.empty());
     CHECK(!batch.commands.empty());
+    bool attack_pulse=false;
+    for(const auto& command:batch.commands) if(command.kind==CommandKind::attack_pulse) attack_pulse=true;
+    CHECK(attack_pulse);
     snap.elapsed_ms=191;
     batch=session.tick(snap,settings);
     CHECK(batch.valid && batch.released_packet_notices.size()==1);
@@ -47,7 +50,12 @@ int main(){
     CHECK(!batch.valid && batch.emergency_release);
     snap.generation=session.mailbox().generation();
     int thread_failed=-100;
-    std::thread worker([&]{thread_failed=session.leave_world(false,false).valid?1:0;});
+    std::thread worker([&]{
+        auto rejected_tick=session.tick(snap,settings);
+        if(rejected_tick.valid) {thread_failed=2;return;}
+        if(session.queue_packet_notice(100,1)) {thread_failed=3;return;}
+        thread_failed=session.leave_world(false,false).valid?1:0;
+    });
     worker.join();CHECK(thread_failed==0);
     batch=session.shutdown(false,false);
     CHECK(batch.valid && session.mailbox().phase()==RuntimePhase::stopped);

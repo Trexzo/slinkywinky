@@ -79,9 +79,11 @@ CombatResult CombatCoordinator::tick(const TickSnapshot& s, const CombatSettings
             const auto floor_hurt = static_cast<int>(std::floor(max_hurt));
             const auto fractional = max_hurt - static_cast<float>(floor_hurt);
             const auto allowed_hurt = floor_hurt + (random_.unit_float() < fractional ? 1 : 0);
-            block_down_ = !settings.block_requires_damage ||
+            const bool requested = !settings.block_requires_damage ||
                 (s.hurt_time > 0 && s.hurt_time <= allowed_hurt);
-            if (!block_down_) block_cooldown_ = 0;
+            if (!requested && block_down_) block_cooldown_ = 10;
+            if (!requested) block_down_ = false;
+            else if (block_cooldown_ == 0) block_down_ = true;
         } else {
             block_down_ = false;
             block_cooldown_ = 0;

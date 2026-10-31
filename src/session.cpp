@@ -5,12 +5,12 @@ HostSession::HostSession(std::array<std::uint32_t,4> seed) : coordinator_(seed) 
 bool HostSession::attach() {return mailbox_.attach_owner();}
 bool HostSession::start_world() {return mailbox_.begin_world();}
 bool HostSession::queue_packet_notice(std::uint32_t id,std::uint64_t received_ms) {
-    if(mailbox_.phase()!=RuntimePhase::running) return false;
+    if(!mailbox_.on_owner_thread() || mailbox_.phase()!=RuntimePhase::running) return false;
     return held_.enqueue(id,received_ms,mailbox_.generation());
 }
 HostBatch HostSession::tick(TickSnapshot snapshot,const ClientSettings& settings) {
     HostBatch batch;
-    if(mailbox_.phase()!=RuntimePhase::running) return batch;
+    if(!mailbox_.on_owner_thread() || mailbox_.phase()!=RuntimePhase::running) return batch;
     const auto gen=mailbox_.generation();
     if(snapshot.generation!=gen || !snapshot.world_valid) {
         // Inconsistent frame must never send queued operations to a new world.
@@ -29,8 +29,16 @@ HostBatch HostSession::tick(TickSnapshot snapshot,const ClientSettings& settings
         submit(CommandKind::set_attack,batch.decision.left_held?1.f:0.f);
     if(batch.decision.right_edge!=KeyEdge::none)
         submit(CommandKind::set_block,batch.decision.right_held?1.f:0.f);
-    if(batch.decision.attempt_attack) submit(CommandKind::set_attack,2.f);
+    if(batch.decision.attempt_attack) submit(CommandKind::attack_pulse);
     batch.commands=mailbox_.drain();
+    if(batch.emergency_release) {
+        batch.commands.clear();
+        batch.commands.push_back({CommandKind::release_all,gen,0,0,0});
+        batch.decision=coordinator_.disable(snapshot.mouse_left,snapshot.mouse_right);
+        held_.discard_all();
+        batch.valid=false;
+        return batch;
+    }
     if(settings.backtrack_enabled) {
         batch.released_packet_notices=held_.expire(snapshot.elapsed_ms,settings.backtrack_ms,gen);
     } else {
@@ -49,7 +57,7 @@ HostBatch HostSession::release_state(bool left,bool right) {
 }
 HostBatch HostSession::leave_world(bool left,bool right) {
     HostBatch batch;
-    if(mailbox_.phase()!=RuntimePhase::running) return batch;
+    if(!mailbox_.on_owner_thread() || mailbox_.phase()!=RuntimePhase::running) return batch;
     batch=release_state(left,right);
     held_.discard_all();
     if(!mailbox_.world_changed()) batch.valid=false;
@@ -57,7 +65,8 @@ HostBatch HostSession::leave_world(bool left,bool right) {
 }
 HostBatch HostSession::shutdown(bool left,bool right) {
     HostBatch batch;
-    if(mailbox_.phase()!=RuntimePhase::attached && mailbox_.phase()!=RuntimePhase::running)
+    if(!mailbox_.on_owner_thread() ||
+       (mailbox_.phase()!=RuntimePhase::attached && mailbox_.phase()!=RuntimePhase::running))
         return batch;
     batch=release_state(left,right);
     held_.discard_all();
