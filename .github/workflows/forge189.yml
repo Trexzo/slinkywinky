@@ -1,8 +1,6 @@
 name: Experimental Forge 1.8.9 JAR build
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 jobs:

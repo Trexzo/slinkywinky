@@ -20,6 +20,19 @@ jobs:
         run: cmake --build build-inject --config Release --parallel
       - name: Run all native, JVM and actual Attach API tests
         run: ctest --test-dir build-inject -C Release --output-on-failure
+      - name: Verify standalone package and calculate SHA-256
+        shell: pwsh
+        run: |
+          $d = 'build-inject/Release'
+          $files = @(
+            "$d/slinkywinky_loader.exe",
+            "$d/slinkywinky_agent.dll",
+            "$d/attach-classes/dev/slinkywinky/attach/AttachMain.class")
+          foreach ($f in $files) { if (!(Test-Path -LiteralPath $f)) { throw "Missing artifact $f" } }
+          $files | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $_"
+          } | Set-Content "$d/SHA256SUMS.txt" -Encoding ascii
       - name: Upload loader and agent preview package
         uses: actions/upload-artifact@v4
         with:
@@ -28,5 +41,6 @@ jobs:
             build-inject/Release/slinkywinky_loader.exe
             build-inject/Release/slinkywinky_agent.dll
             build-inject/Release/attach-classes/**
+            build-inject/Release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 7

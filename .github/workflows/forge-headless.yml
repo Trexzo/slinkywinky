@@ -1,8 +1,6 @@
 name: Experimental headless Minecraft 1.8.9 startup
 
 on:
-  push:
-    branches: [reconstruction/r1-core-fidelity]
   workflow_dispatch:
 
 jobs:
