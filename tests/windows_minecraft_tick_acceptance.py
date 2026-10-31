@@ -55,7 +55,8 @@ def wait_for(game, condition, timeout):
         time.sleep(.25)
     return False
 
-markers = ("CALLBACK_CLASSLOADER_VALIDATED", "GAME_THREAD_HOOK_INSTALLED",
+markers = ("NATIVE_CXX_PREFLIGHT_PASS", "NATIVE_GAME_THREAD_CXX_PASS",
+           "CALLBACK_CLASSLOADER_VALIDATED", "GAME_THREAD_HOOK_INSTALLED",
            "GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS",
            "CLASS_BYTECODE_RESTORE_PASS", "GAME_THREAD_HOOK_CLEANUP_PASS")
 with log.open("wb") as output:
@@ -95,7 +96,7 @@ with log.open("wb") as output:
         time.sleep(2)
         if game.poll() is not None:
             raise RuntimeError("Minecraft exited after the second cleanup")
-        print("R38_LIVE_REPEATED_HOOK_AND_FINGERPRINT_PASS", hashes[0], flush=True)
+        print("R40_LIVE_NATIVE_CXX_REPEATED_HOOK_PASS", hashes[0], flush=True)
     except Exception as err:
         print("R38_LIVE_HOOK_ACCEPTANCE_FAIL", repr(err), flush=True)
         sys.exit(3)

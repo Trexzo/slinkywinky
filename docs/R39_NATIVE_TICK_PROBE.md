@@ -7,3 +7,9 @@ During a bounded 20-tick test the same read-only native proof runs on the actual
 The standalone CI package now includes and hashes `slinkywinky_jni.dll`. The ordinary native `attach` and passive `--instrument-probe` are unchanged. Experimental hook use still requires both the explicit `--hook-probe` option and `SLINKYWINKY_EXPERIMENTAL_HOOK=1`.
 
 **Not gameplay ready:** This executes a disabled decision model only; it does not read live combat state, change aiming/inputs/packets, render GUI/HUD or establish original commercial Slinky equivalence. Needs its own Minecraft 1.8.9 test.
+
+## R39 real Minecraft 1.8.9 acceptance — PASS
+
+In the isolated Windows Java 8 Minecraft 1.8.9 development client, two consecutive `--hook-probe` attachments to the same JVM both logged `NATIVE_CXX_PREFLIGHT_PASS`, `NATIVE_GAME_THREAD_CXX_PASS thread=Client thread`, `GAME_THREAD_TICK_20_PASS ticks=20`, and `CLASS_BYTECODE_RESTORE_PASS`. Each attachment generated no gameplay actions; no new crash was detected. Both restoration digests matched within the same JVM: `1f81b87d379f71aee9ad84af845be3c47efd6c4234e58113eba07029641f13df`. The game remained running through both tests and the isolated launcher was shut down afterward.
+
+GitHub's standalone injector, Windows JNI, and C++ core workflows all passed on commit `4fe077c`. The CI download ZIP was independently checked: its five deployed files passed CRC and the internal SHA-256 manifest. The new `tests/windows_minecraft_tick_acceptance.py` requirement for native markers is a manual-only in-game gate, not part of ordinary hosted CI.
