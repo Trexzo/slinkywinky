@@ -46,6 +46,7 @@ public final class ForgePreview {
         ClientRegistry.registerKeyBinding(toggle);
         FMLCommonHandler.instance().bus().register(this);
         MinecraftForge.EVENT_BUS.register(this);
+        System.out.println("[SlinkyWinkyPreview] initialized - read-only");
     }
 
     private void stop() {

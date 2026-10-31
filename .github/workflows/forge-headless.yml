@@ -1,0 +1,49 @@
+name: Experimental headless Minecraft 1.8.9 startup
+
+on:
+  push:
+    branches: [reconstruction/r1-core-fidelity]
+  workflow_dispatch:
+
+jobs:
+  headless-client-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Legacy Gradle 2.14.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '2.14.1'
+          cache-disabled: true
+      - name: Prepare software-rendered virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1
+      - name: Launch Forge 1.8.9 in read-only preview
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          timeout --signal=TERM --kill-after=15s 360s xvfb-run -a -s '-screen 0 1280x720x24' gradle --no-daemon -p experimental/forge189 runClient --stacktrace > forge-client.log 2>&1 || status=$?
+          tail -n 120 forge-client.log || true
+          echo "Forge client exit status: $status"
+          if [ "$status" -eq 124 ] && grep -Fq '[SlinkyWinkyPreview] initialized - read-only' forge-client.log; then
+            echo 'PASS: Forge reached mod initialization and stayed running until controlled timeout'
+            exit 0
+          fi
+          echo 'FAIL: no sustained, confirmed mod startup' >&2
+          exit 1
+      - name: Preserve runtime diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge189-headless-launch-log
+          path: forge-client.log
+          if-no-files-found: warn
+          retention-days: 7
