@@ -78,7 +78,12 @@ bool install_tick_probe(JavaVM* vm) {
         return false;
     jvmtiCapabilities capabilities{};
     capabilities.can_generate_breakpoint_events = 1;
-    if (ti->AddCapabilities(&capabilities) != JVMTI_ERROR_NONE) return false;
+    const jvmtiError capError = ti->AddCapabilities(&capabilities);
+    if (capError != JVMTI_ERROR_NONE) {
+        std::fprintf(stderr, "[SlinkyWinkyAgent] breakpoint capability unavailable err=%d\n",
+                     static_cast<int>(capError));
+        return false;
+    }
     jint count = 0; jclass* classes = nullptr;
     if (ti->GetLoadedClasses(&count, &classes) != JVMTI_ERROR_NONE) return false;
     jmethodID tick = nullptr;
@@ -90,9 +95,14 @@ bool install_tick_probe(JavaVM* vm) {
         if (signature) ti->Deallocate(reinterpret_cast<unsigned char*>(signature));
         if (generic) ti->Deallocate(reinterpret_cast<unsigned char*>(generic));
         if (!minecraft) continue;
+        std::fprintf(stderr, "[SlinkyWinkyAgent] inspect Minecraft method list\n");
         jint methodCount = 0; jmethodID* methods = nullptr;
-        if (ti->GetClassMethods(classes[i], &methodCount, &methods) != JVMTI_ERROR_NONE)
+        const jvmtiError methodError = ti->GetClassMethods(classes[i], &methodCount, &methods);
+        if (methodError != JVMTI_ERROR_NONE) {
+            std::fprintf(stderr, "[SlinkyWinkyAgent] GetClassMethods failed err=%d\n",
+                         static_cast<int>(methodError));
             break;
+        }
         for (jint m = 0; m < methodCount && !tick; ++m) {
             char* name = nullptr; char* desc = nullptr; char* gen = nullptr;
             if (ti->GetMethodName(methods[m], &name, &desc, &gen) == JVMTI_ERROR_NONE &&
@@ -116,13 +126,20 @@ bool install_tick_probe(JavaVM* vm) {
     }
     jvmtiEventCallbacks callbacks{};
     callbacks.Breakpoint = &on_breakpoint;
-    if (ti->SetEventCallbacks(&callbacks, sizeof(callbacks)) != JVMTI_ERROR_NONE)
+    const jvmtiError callbackError = ti->SetEventCallbacks(&callbacks, sizeof(callbacks));
+    if (callbackError != JVMTI_ERROR_NONE) {
+        std::fprintf(stderr, "[SlinkyWinkyAgent] SetEventCallbacks failed err=%d\n",
+                     static_cast<int>(callbackError));
         return false;
+    }
     g_tick_method = tick; g_tick_location = start;
     g_tick_count.store(0); g_tick_enabled.store(true);
-    if (ti->SetBreakpoint(tick, start) != JVMTI_ERROR_NONE ||
-        ti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_BREAKPOINT, nullptr) !=
-            JVMTI_ERROR_NONE) {
+    const jvmtiError bpError = ti->SetBreakpoint(tick, start);
+    const jvmtiError eventError = bpError == JVMTI_ERROR_NONE ?
+        ti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_BREAKPOINT, nullptr) : bpError;
+    if (bpError != JVMTI_ERROR_NONE || eventError != JVMTI_ERROR_NONE) {
+        std::fprintf(stderr, "[SlinkyWinkyAgent] SetBreakpoint/Event failed err=%d,%d\n",
+                     static_cast<int>(bpError), static_cast<int>(eventError));
         g_tick_enabled.store(false);
         ti->ClearBreakpoint(tick, start);
         return false;
