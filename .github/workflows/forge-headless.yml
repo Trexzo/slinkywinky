@@ -39,7 +39,7 @@ jobs:
         run: |
           set -uo pipefail
           status=0
-          timeout --signal=TERM --kill-after=15s 360s env DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 gradle --no-daemon -p experimental/forge189 runClient --stacktrace > forge-client.log 2>&1 || status=$?
+          timeout --signal=TERM --kill-after=15s 360s env DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 gradle --no-daemon -p experimental/forge189 runClient -x getAssets --stacktrace > forge-client.log 2>&1 || status=$?
           tail -n 120 forge-client.log || true
           echo "Forge client exit status: $status"
           if [ "$status" -eq 124 ] && grep -Fq '[SlinkyWinkyPreview] initialized - read-only' forge-client.log; then
