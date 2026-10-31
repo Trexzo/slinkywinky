@@ -140,8 +140,8 @@ public final class InstrumentationProbe {
                         }
                         if (observed.get() != 1 || !sameBytes.get())
                             throw new IllegalStateException("Original class fingerprint mismatch");
-                        restored = true;
                         if(!nativeSessionCloseOk) throw new IllegalStateException("Native client-thread context was not released");
+                        restored = true;
                         System.out.println(PREFIX + "CLASS_BYTECODE_RESTORE_PASS sha256=" +
                             hex(expected));
                         System.out.println(PREFIX + "GAME_THREAD_HOOK_CLEANUP_PASS");
