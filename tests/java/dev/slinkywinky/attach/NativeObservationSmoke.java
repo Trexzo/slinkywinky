@@ -68,7 +68,33 @@ public final class NativeObservationSmoke {
               "Foreign-thread observation must be rejected");
         check(step(observe,handle,1400,5,3,xyz,camera)==1,
               "Rejected calls must not destroy owner context");
+        // A foreign thread cannot destroy a creator-thread-owned native context.
+        final AtomicInteger foreignClose=new AtomicInteger(-99);
+        final AtomicReference<Throwable> foreignCloseError=new AtomicReference<Throwable>();
+        Thread closer=new Thread(new Runnable() {
+            @Override public void run() {
+                try {foreignClose.set(((Integer)close.invoke(null,handle)).intValue());}
+                catch(Throwable failure){foreignCloseError.set(failure);}
+            }
+        },"foreign-close-negative-control");
+        closer.start();closer.join(5000L);
+        check(!closer.isAlive() && foreignCloseError.get()==null && foreignClose.get()==0,
+              "Foreign thread must not destroy the observation context");
+        check(step(observe,handle,1450,5,3,xyz,camera)==1,
+              "Context must survive wrong-thread close");
         check(((Integer)close.invoke(null,handle)).intValue()==1,"Close from owner thread");
+        check(((Integer)close.invoke(null,handle)).intValue()==0,"Double close rejected");
+        check(step(observe,handle,1500,5,3,xyz,camera)==0,"Stale handle rejected");
+        check(step(observe,Long.MAX_VALUE,1500,5,3,xyz,camera)==0,
+              "Forged handle rejected without pointer access");
+        check(((Integer)close.invoke(null,Long.MAX_VALUE)).intValue()==0,
+              "Forged close rejected");
+        long newer=((Long)open.invoke(null)).longValue();
+        check(newer>0 && newer!=handle,"Native handles cannot alias after reopen");
+        check(step(observe,newer,1550,6,3,xyz,camera)==1,"New context remains functional");
+        check(step(observe,handle,1550,6,3,xyz,camera)==0,
+              "Old handle remains invalid even after native allocation reuse");
+        check(((Integer)close.invoke(null,newer)).intValue()==1,"Second context closes");
         System.out.println("NATIVE_OBSERVATION_CONTRACT_PASS");
     }
 }

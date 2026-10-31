@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <cmath>
 #include <limits>
+#include <atomic>
+#include <mutex>
+#include <unordered_map>
 
 namespace {
 void error(JNIEnv* env,const char* cls,const char* message) {
@@ -169,7 +172,16 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeZeroActionTick(JNIEnv
         output.left_edge == 0 && output.right_edge == 0 ? 1 : 0;
 }
 
-/** R41: real, read-only client observations; all native gameplay settings remain OFF. */
+namespace {
+// Opaque monotonically increasing handles avoid raw pointers crossing the Java API.
+// The registry is bounded and guards each C++ decision against concurrent close.
+// sw_step/sw_destroy still independently enforce the creator-thread contract.
+std::mutex observationMutex;
+std::unordered_map<jlong, SWContext*> observationContexts;
+std::atomic<std::uint64_t> observationNextId{1};
+constexpr std::size_t maxObservationContexts = 4;
+}
+/** R41-R45: real, read-only client observations; all gameplay settings remain OFF. */
 extern "C" JNIEXPORT jint JNICALL
 Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     JNIEnv* env,jclass,jlong handle,jlong time,jlong generation,jint flags,
@@ -184,8 +196,10 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     if(env->ExceptionCheck()) return 0;
     for(double value:points) if(!std::isfinite(value)) return 0;
     for(float value:camera) if(!std::isfinite(value)) return 0;
-    SWContext* context=ptr(handle);
-    if(!context) return 0;
+    std::lock_guard<std::mutex> guard(observationMutex);
+    const auto found=observationContexts.find(handle);
+    if(found==observationContexts.end()) return 0;
+    SWContext* context=found->second;
     SWFrame frame{};
     frame.abi_version=SW_ABI_VERSION;
     frame.time_ms=static_cast<std::uint64_t>(time);
@@ -213,11 +227,36 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeOpenObservation(JNIEn
     const std::uint32_t seed[4]={1u,2u,3u,4u};
     SWContext* context=nullptr;
     if(sw_create(seed,&context)!=0 || !context) return 0;
-    return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(context));
+    std::lock_guard<std::mutex> guard(observationMutex);
+    if(observationContexts.size()>=maxObservationContexts) {
+        sw_destroy(&context); // Same thread that created the context.
+        return 0;
+    }
+    const auto index=observationNextId.fetch_add(1);
+    if(index==0 || index>static_cast<std::uint64_t>(std::numeric_limits<jlong>::max())) {
+        sw_destroy(&context);
+        return 0;
+    }
+    const auto token=static_cast<jlong>(index);
+    try {
+        if(!observationContexts.emplace(token,context).second) {
+            sw_destroy(&context);
+            return 0;
+        }
+    } catch (...) {
+        sw_destroy(&context);
+        return 0;
+    }
+    return token;
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeCloseObservation(
     JNIEnv*,jclass,jlong handle) {
-    SWContext* context=ptr(handle);
-    return context && sw_destroy(&context)==0 ? 1 : 0;
+    std::lock_guard<std::mutex> guard(observationMutex);
+    auto found=observationContexts.find(handle);
+    if(found==observationContexts.end()) return 0;
+    SWContext* context=found->second;
+    if(sw_destroy(&context)!=0) return 0;
+    observationContexts.erase(found);
+    return 1;
 }
