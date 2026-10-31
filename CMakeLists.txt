@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.20)
+project(slinkywinky VERSION 0.1.0 LANGUAGES CXX)
+
+add_library(slinkywinky_core STATIC src/core.cpp)
+target_include_directories(slinkywinky_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_features(slinkywinky_core PUBLIC cxx_std_17)
+if(MSVC)
+  target_compile_options(slinkywinky_core PRIVATE /W4)
+else()
+  target_compile_options(slinkywinky_core PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(slinkywinky_core_tests tests/test_core.cpp)
+  target_link_libraries(slinkywinky_core_tests PRIVATE slinkywinky_core)
+  add_test(NAME core_state_models COMMAND slinkywinky_core_tests)
+endif()
