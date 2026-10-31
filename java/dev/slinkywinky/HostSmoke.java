@@ -49,6 +49,9 @@ public final class HostSmoke {
         host.tick(frame(worldB,playerB,160));
         check(host.generation()==3,"world swap isolated");
         host.tick(frame(null,null,180));
+        int releasesInMenu = actions.released;
+        host.tick(frame(null,null,190));
+        check(actions.released == releasesInMenu, "main menu must not repeatedly release");
         check(actions.released>=4,"world leave releases input");
         host.tick(frame(worldA,playerA,200));
         check(host.generation()==4,"world reentry increments generation");
@@ -73,6 +76,11 @@ public final class HostSmoke {
         try { host.tick(frame(worldA,playerA,230));throw new AssertionError("time reversal must reject"); }
         catch (IllegalArgumentException expected) { }
         check(actions.released>=6,"reversal fail closed");
+        // A null input must release synthetic ownership before propagating.
+        int releasesBeforeNull = actions.released;
+        try { host.tick(null); throw new AssertionError("null frame unexpectedly accepted"); }
+        catch (IllegalArgumentException expected) { }
+        check(actions.released > releasesBeforeNull, "null frame must fail closed");
         host.close();
         check(actions.released>=7,"close releases synthetic input");
         try { host.tick(frame(worldA,playerA,260));throw new AssertionError("closed host admitted call"); }

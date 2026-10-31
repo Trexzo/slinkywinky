@@ -30,6 +30,8 @@ public final class ForgePreview {
     private boolean enabled;
     private String status="F9: enable read-only preview";
     private long observations;
+    private long renderProbeFrames;
+    private static final boolean RENDER_PROBE = Boolean.getBoolean("slinkywinky.renderProbe");
     private final GameHost.Actions readonlyActions=new GameHost.Actions() {
         @Override public void apply(NativeEngine.Decision decision) {
             ++observations;
@@ -96,6 +98,9 @@ public final class ForgePreview {
     // This remains a read-only preview: no game actions are applied.
     @SubscribeEvent public void onRenderFrame(TickEvent.RenderTickEvent event) {
         if(event.phase!=TickEvent.Phase.END) return;
+        // Diagnostic is independent of F9 and native loading. It proves Forge render events arrived.
+        if (RENDER_PROBE && ++renderProbeFrames == 30)
+            System.out.println("[SlinkyWinkyPreview] RENDER_EVENT_PROBE_PASS frames=30");
         if(!enabled || host==null) return;
         final Minecraft mc=Minecraft.getMinecraft();
         GameHost.Frame frame=new GameHost.Frame();

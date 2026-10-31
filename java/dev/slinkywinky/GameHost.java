@@ -42,14 +42,18 @@ public final class GameHost implements AutoCloseable {
     public long generation() { assertOwner(); return generation; }
     public void tick(Frame f) {
         assertOwner();
-        if (f == null) throw new IllegalArgumentException("Missing frame");
+        if (f == null) {
+            failClosed();
+            throw new IllegalArgumentException("Missing frame");
+        }
         if (f.monotonicMs < 0 || (previousMs >= 0 && f.monotonicMs < previousMs)) {
             failClosed();
             throw new IllegalArgumentException("Non-monotonic frame clock");
         }
         previousMs = f.monotonicMs;
         if (f.worldToken == null || f.playerToken == null) {
-            transition();
+            // Already idle: avoid redundant native calls and noisy releases every render frame.
+            if (currentWorld != null || currentPlayer != null) transition();
             return;
         }
         if (currentWorld != f.worldToken || currentPlayer != f.playerToken) {
