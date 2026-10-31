@@ -8,6 +8,7 @@ execute_process(COMMAND "${JAVA_COMPILER}" -source 8 -target 8 -d "${BUILD_ROOT}
   "${PROJECT_ROOT}/java/dev/slinkywinky/GameHost.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/HostSettings.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/HostSmoke.java"
+  "${PROJECT_ROOT}/tests/java/dev/slinkywinky/RenderStress.java"
   RESULT_VARIABLE compile_result)
 if(NOT compile_result EQUAL 0)
   message(FATAL_ERROR "JNI Java smoke compilation failed")
@@ -24,4 +25,11 @@ execute_process(COMMAND "${JAVA_EXECUTABLE}" "-Djava.library.path=${LIBRARY_DIR}
   RESULT_VARIABLE host_result)
 if(NOT host_result EQUAL 0)
   message(FATAL_ERROR "JNI host lifecycle failed")
+endif()
+
+execute_process(COMMAND "${JAVA_EXECUTABLE}" "-Djava.library.path=${LIBRARY_DIR}"
+  -cp "${BUILD_ROOT}/java_classes" dev.slinkywinky.RenderStress
+  RESULT_VARIABLE render_result)
+if(NOT render_result EQUAL 0)
+  message(FATAL_ERROR "Render-frequency JNI replay failed")
 endif()
