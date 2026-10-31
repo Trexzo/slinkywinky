@@ -44,7 +44,7 @@ std::uint32_t Random128::next() noexcept {
 }
 
 float Random128::unit_float() noexcept {
-    return static_cast<float>(next() >> 8) * 0x1p-24f;
+    return static_cast<float>(next() >> 8) * (1.0f / 16777216.0f);
 }
 
 bool RotationArbiter::submit(const RotationRequest& request) {
