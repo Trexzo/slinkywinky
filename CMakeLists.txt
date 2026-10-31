@@ -96,7 +96,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
   set_property(SOURCE src/windows_loader.cpp APPEND PROPERTY OBJECT_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/attach/AttachMain.java"
-    "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf")
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/net/minecraft/launchwrapper/LaunchClassLoader.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ClassLoaderSmoke.java")
   add_executable(slinkywinky_loader src/windows_loader.cpp)
   target_compile_features(slinkywinky_loader PRIVATE cxx_std_17)
   add_dependencies(slinkywinky_loader slinkywinky_agent)
@@ -124,6 +126,11 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes" .
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
+      -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+      -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/net/minecraft/launchwrapper/LaunchClassLoader.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ClassLoaderSmoke.java"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:slinkywinky_agent>"
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_agent.dll"
     VERBATIM)
