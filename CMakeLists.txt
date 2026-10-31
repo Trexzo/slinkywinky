@@ -117,6 +117,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${Java_JAR_EXECUTABLE}" xf "${SW_ASM_JAR}"
     COMMAND ${CMAKE_COMMAND} -E rm -rf
       "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes/META-INF"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/ASM-5.2-LICENSE.txt"
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes/ASM-5.2-LICENSE.txt"
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"

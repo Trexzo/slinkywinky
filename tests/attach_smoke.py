@@ -37,9 +37,26 @@ try:
     if denied.returncode == 0 or "Refusing non-Minecraft target" not in denied.stderr:
         raise AssertionError("Unrelated JVM target unexpectedly admitted")
     print("PASS: non-Minecraft target rejected in production mode")
+    hook = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe"],
+        capture_output=True, text=True, env=env, timeout=22)
+    if hook.returncode != 0 or "mode=hook-probe" not in hook.stdout:
+        raise AssertionError("Read-only tick hook installation failed: " +
+                             hook.stdout + hook.stderr)
+    time.sleep(1.8)
+    target.terminate()
+    tail, _ = target.communicate(timeout=5)
+    for marker in ("GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS",
+                   "GAME_THREAD_HOOK_CLEANUP_PASS"):
+        if marker not in tail:
+            raise AssertionError("Missing tick hook or restoration marker " + marker +
+                                 ": " + tail[-1600:])
+    print("PASS: bounded game-thread tick callback and original-bytecode restoration")
+
     print("PASS: standalone Windows loader -> Java 8 Attach API -> native JVMTI agent")
 finally:
-    target.terminate()
+    if target.poll() is None:
+        target.terminate()
     try:
         target.wait(timeout=5)
     except subprocess.TimeoutExpired:

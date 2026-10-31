@@ -31,7 +31,8 @@ public final class AttachMain {
                 throw new IllegalArgumentException("Usage: list | attach PID ABSOLUTE_DLL");
             final boolean tickProbe = args.length == 4 && "--tick-probe".equals(args[3]);
             final boolean instrumentProbe = args.length == 4 && "--instrument-probe".equals(args[3]);
-            if (args.length == 4 && !tickProbe && !instrumentProbe) throw new IllegalArgumentException("Unknown option");
+            final boolean hookProbe = args.length == 4 && "--hook-probe".equals(args[3]);
+            if (args.length == 4 && !tickProbe && !instrumentProbe && !hookProbe) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
                 throw new IllegalArgumentException("Numeric PID required");
@@ -45,18 +46,19 @@ public final class AttachMain {
                 throw new IllegalArgumentException("Refusing non-Minecraft target: " + target.displayName());
             VirtualMachine vm = VirtualMachine.attach(target);
             try {
-                if (instrumentProbe) {
+                if (instrumentProbe || hookProbe) {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
-                    vm.loadAgent(instrumentationJar.getCanonicalPath(), test ? "probe" : "minecraft");
+                    vm.loadAgent(instrumentationJar.getCanonicalPath(),
+                        hookProbe ? (test ? "hook-probe" : "minecraft-hook") : (test ? "probe" : "minecraft"));
                 } else {
                     vm.loadAgentPath(dll.getCanonicalPath(), test ? "probe" : (tickProbe ? "minecraft-ticks" : "minecraft"));
                 }
             } finally {
                 vm.detach();
             }
-            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft"))));
+            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))));
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
             System.exit(2);
