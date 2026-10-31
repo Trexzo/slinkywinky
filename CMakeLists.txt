@@ -87,6 +87,14 @@ if(SLINKYWINKY_BUILD_ATTACH)
     COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/AttachTarget.java"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
+      -d "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
+    COMMAND "${Java_JAR_EXECUTABLE}" cfm
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
+      -C "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes" .
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:slinkywinky_agent>"
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_agent.dll"
     VERBATIM)

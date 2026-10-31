@@ -26,7 +26,8 @@ int wmain(int argc, wchar_t** argv) {
     const bool list = argc == 3 && std::wstring(argv[1]) == L"list";
     const bool attach = (argc == 4 || argc == 5) && std::wstring(argv[1]) == L"attach";
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
-        (argc == 5 && std::wstring(argv[4]) != L"--tick-probe")) {
+        (argc == 5 && std::wstring(argv[4]) != L"--tick-probe" &&
+         std::wstring(argv[4]) != L"--instrument-probe")) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
                    << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME\n";
         return 2;
@@ -38,8 +39,10 @@ int wmain(int argc, wchar_t** argv) {
     if (!GetModuleFileNameW(nullptr, self, MAX_PATH)) return 2;
     const auto folder = std::filesystem::path(self).parent_path();
     const auto agent = folder / L"slinkywinky_agent.dll";
+    const auto instrument = folder / L"slinkywinky_instrument.jar";
     const auto classes = folder / L"attach-classes";
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
+        (argc == 5 && std::wstring(argv[4]) == L"--instrument-probe" && !regular_file_exists(instrument)) ||
         !regular_file_exists(classes / L"dev" / L"slinkywinky" / L"attach" / L"AttachMain.class")) {
         std::wcerr << L"Missing JDK8 tools.jar, executable, native agent or attach helper.\n";
         return 2;
@@ -51,7 +54,7 @@ int wmain(int argc, wchar_t** argv) {
         L" dev.slinkywinky.attach.AttachMain ";
     if (list) command += L"list";
     else command += L"attach " + std::wstring(argv[2]) + L" " + quoted(agent.wstring()) +
-        (argc == 5 ? L" --tick-probe" : L"");
+        (argc == 5 ? L" " + std::wstring(argv[4]) : L"");
     std::vector<wchar_t> commandBuffer(command.begin(), command.end());
     commandBuffer.push_back(L'\0');
     STARTUPINFOW startup{};

@@ -22,6 +22,13 @@ try:
     print(result.stdout, result.stderr)
     if result.returncode != 0 or "ATTACH_RESULT=SUCCESS" not in result.stdout:
         raise AssertionError("Native JVM attach failed")
+    instrument = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--instrument-probe"],
+        capture_output=True, text=True, env=env, timeout=22)
+    if instrument.returncode != 0 or "mode=instrument-probe" not in instrument.stdout:
+        raise AssertionError("Java 8 Instrumentation live attach probe failed: " +
+                             instrument.stdout + instrument.stderr)
+    print("PASS: Java 8 Instrumentation agent live read-only retransformation")
     # Production mode must refuse unrelated Java processes even when explicitly given a PID.
     production_env = env.copy()
     production_env.pop("SLINKYWINKY_ATTACH_TEST", None)
