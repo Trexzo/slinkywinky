@@ -24,8 +24,9 @@ bool numeric(const std::wstring& value) {
 }
 int wmain(int argc, wchar_t** argv) {
     const bool list = argc == 3 && std::wstring(argv[1]) == L"list";
-    const bool attach = argc == 4 && std::wstring(argv[1]) == L"attach";
-    if ((!list && !attach) || (attach && !numeric(argv[2]))) {
+    const bool attach = (argc == 4 || argc == 5) && std::wstring(argv[1]) == L"attach";
+    if ((!list && !attach) || (attach && !numeric(argv[2])) ||
+        (argc == 5 && std::wstring(argv[4]) != L"--tick-probe")) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
                    << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME\n";
         return 2;
@@ -49,7 +50,8 @@ int wmain(int argc, wchar_t** argv) {
         quoted(classes.wstring() + L";" + tools.wstring()) +
         L" dev.slinkywinky.attach.AttachMain ";
     if (list) command += L"list";
-    else command += L"attach " + std::wstring(argv[2]) + L" " + quoted(agent.wstring());
+    else command += L"attach " + std::wstring(argv[2]) + L" " + quoted(agent.wstring()) +
+        (argc == 5 ? L" --tick-probe" : L"");
     std::vector<wchar_t> commandBuffer(command.begin(), command.end());
     commandBuffer.push_back(L'\0');
     STARTUPINFOW startup{};
