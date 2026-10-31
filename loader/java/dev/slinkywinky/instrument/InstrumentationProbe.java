@@ -3,6 +3,7 @@ package dev.slinkywinky.instrument;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
+import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.objectweb.asm.ClassReader;
@@ -64,6 +65,35 @@ public final class InstrumentationProbe {
         }
     }
 
+    /**
+     * LaunchWrapper may try findClass before parent delegation. Its documented
+     * exclusion API makes the agent's existing system-loaded class visible to
+     * the Minecraft class loader. Validate exact identity *before* retransform.
+     */
+    private static void verifyCallbackVisibility(Class<?> target) {
+        final ClassLoader loader = target.getClassLoader();
+        if (loader == null) throw new IllegalStateException("Unexpected bootstrap target");
+        if (loader != InstrumentationProbe.class.getClassLoader()) {
+            if (!"net.minecraft.launchwrapper.LaunchClassLoader".equals(loader.getClass().getName()))
+                throw new IllegalStateException("Unsupported Minecraft class loader: " + loader);
+            try {
+                Method exclude = loader.getClass().getMethod("addClassLoaderExclusion", String.class);
+                exclude.invoke(loader, "dev.slinkywinky.instrument.");
+            } catch (ReflectiveOperationException failure) {
+                throw new IllegalStateException("Cannot register safe class-loader delegation", failure);
+            }
+        }
+        try {
+            Class<?> resolved = Class.forName(InstrumentationProbe.class.getName(), false, loader);
+            if (resolved != InstrumentationProbe.class)
+                throw new IllegalStateException("Callback resolved to a different class loader");
+            System.out.println(PREFIX + "CALLBACK_CLASSLOADER_VALIDATED loader=" + loader);
+            System.out.flush();
+        } catch (ClassNotFoundException failure) {
+            throw new IllegalStateException("Game loader cannot resolve callback", failure);
+        }
+    }
+
     public static void agentmain(String options, Instrumentation instrumentation) {
         final boolean test = "probe".equals(options) || "hook-probe".equals(options);
         final boolean hook = "hook-probe".equals(options) || "minecraft-hook".equals(options);
@@ -115,6 +145,7 @@ public final class InstrumentationProbe {
                 return writer.toByteArray();
             }
         };
+        if (hook) verifyCallbackVisibility(target);
         if (hook && !hookInstalled.compareAndSet(false, true))
             throw new IllegalStateException("Read-only hook already installed");
         if (hook) {
