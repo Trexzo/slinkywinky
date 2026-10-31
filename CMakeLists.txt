@@ -52,3 +52,48 @@ if(SLINKYWINKY_BUILD_JNI)
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_java_smoke.cmake)
   endif()
 endif()
+
+# Injectable Windows architecture: official Java 8 Attach API -> JVMTI native agent.
+# Forge is optional test code only and is NOT a runtime dependency.
+option(SLINKYWINKY_BUILD_ATTACH "Build the standalone JVM attach loader and agent" ${WIN32})
+if(SLINKYWINKY_BUILD_ATTACH)
+  if(NOT WIN32)
+    message(FATAL_ERROR "The standalone loader currently targets Windows x64")
+  endif()
+  find_package(JNI REQUIRED)
+  find_package(Java REQUIRED COMPONENTS Runtime Development)
+  get_filename_component(SW_JDK_BIN "${Java_JAVA_EXECUTABLE}" DIRECTORY)
+  get_filename_component(SW_JDK_HOME "${SW_JDK_BIN}" DIRECTORY)
+  set(SW_TOOLS_JAR "${SW_JDK_HOME}/lib/tools.jar")
+  if(NOT EXISTS "${SW_TOOLS_JAR}")
+    message(FATAL_ERROR "The standalone loader requires a full Java 8 JDK containing lib/tools.jar")
+  endif()
+  add_library(slinkywinky_agent SHARED src/agent_entry.cpp src/bridge.cpp)
+  target_compile_features(slinkywinky_agent PRIVATE cxx_std_17)
+  target_compile_definitions(slinkywinky_agent PRIVATE SLINKYWINKY_BRIDGE_BUILD)
+  target_include_directories(slinkywinky_agent PRIVATE ${JNI_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(slinkywinky_agent PRIVATE slinkywinky_core)
+  set_target_properties(slinkywinky_agent PROPERTIES OUTPUT_NAME "slinkywinky_agent")
+
+  add_executable(slinkywinky_loader src/windows_loader.cpp)
+  target_compile_features(slinkywinky_loader PRIVATE cxx_std_17)
+  add_dependencies(slinkywinky_loader slinkywinky_agent)
+  add_custom_command(TARGET slinkywinky_loader POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-classes"
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8 -cp "${SW_TOOLS_JAR}"
+      -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-classes"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/attach/AttachMain.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/AttachTarget.java"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:slinkywinky_agent>"
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_agent.dll"
+    VERBATIM)
+  if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+      add_test(NAME native_agent_attach
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/attach_smoke.py"
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+      set_tests_properties(native_agent_attach PROPERTIES TIMEOUT 45)
+    endif()
+  endif()
+endif()
