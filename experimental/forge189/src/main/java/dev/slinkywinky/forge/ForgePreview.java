@@ -47,6 +47,25 @@ public final class ForgePreview {
         FMLCommonHandler.instance().bus().register(this);
         MinecraftForge.EVENT_BUS.register(this);
         System.out.println("[SlinkyWinkyPreview] initialized - read-only");
+        // Diagnostic only: enable with -Dslinkywinky.startupProbe=true in an isolated
+        // Forge 1.8.9 development JVM. It never issues game actions or packets.
+        if (Boolean.getBoolean("slinkywinky.startupProbe")) {
+            try (NativeEngine probe = new NativeEngine(new int[]{1,2,3,4})) {
+                if (NativeEngine.abiVersion() != 1)
+                    throw new IllegalStateException("Unexpected JNI ABI version");
+                int[] flags = {1,0,0,0,0,0,0,0,0,0,0,-1};
+                NativeEngine.Decision decision = probe.stepDetailed(
+                    new long[]{1000,1}, flags, new double[6], new float[2],
+                    HostSettings.safeDefaults().toNativeArray());
+                if (decision.attackPulse || decision.hasRotation || decision.hasReach ||
+                    decision.leftHeld || decision.rightHeld)
+                    throw new IllegalStateException("Inactive preview produced an action");
+                System.out.println("[SlinkyWinkyPreview] JNI_STARTUP_PROBE_PASS");
+            } catch (RuntimeException | LinkageError problem) {
+                System.err.println("[SlinkyWinkyPreview] JNI_STARTUP_PROBE_FAIL: " + problem);
+                throw new IllegalStateException("Opt-in native probe failed", problem);
+            }
+        }
     }
 
     private void stop() {
