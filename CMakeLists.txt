@@ -100,6 +100,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/net/minecraft/launchwrapper/LaunchClassLoader.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ClassLoaderSmoke.java")
   add_executable(slinkywinky_loader src/windows_loader.cpp)
+  if(SLINKYWINKY_BUILD_JNI)
+    add_dependencies(slinkywinky_loader slinkywinky_jni)
+  endif()
   target_compile_features(slinkywinky_loader PRIVATE cxx_std_17)
   add_dependencies(slinkywinky_loader slinkywinky_agent)
   add_custom_command(TARGET slinkywinky_loader POST_BUILD

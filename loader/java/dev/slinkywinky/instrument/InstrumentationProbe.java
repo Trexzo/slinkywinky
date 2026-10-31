@@ -25,6 +25,7 @@ public final class InstrumentationProbe {
     private static volatile Instrumentation installedVia;
     private static volatile Class<?> installedClass;
     private static volatile byte[] originalClassFingerprint;
+    private static native int nativeZeroActionTick();
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -51,12 +52,26 @@ public final class InstrumentationProbe {
     public static void onGameTick() {
         if (!active) return;
         final int n = ticks.incrementAndGet();
+        boolean nativeOk = false;
+        try { nativeOk = nativeZeroActionTick() == 1; }
+        catch (Throwable failure) {
+            System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
+        }
+        if (n == 1 && nativeOk) {
+            System.out.println(PREFIX + "NATIVE_GAME_THREAD_CXX_PASS thread=" +
+                Thread.currentThread().getName());
+            System.out.flush();
+        }
+        if (!nativeOk) {
+            System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_REJECTED tick=" + n);
+            active = false;
+        }
         if (n == 1) {
             System.out.println(PREFIX + "GAME_THREAD_TICK_ENTRY_PASS thread=" +
                 Thread.currentThread().getName());
             System.out.flush();
         }
-        if (n >= 20 && cleanupStarted.compareAndSet(false, true)) {
+        if ((n >= 20 || !nativeOk) && cleanupStarted.compareAndSet(false, true)) {
             active = false;
             System.out.println(PREFIX + "GAME_THREAD_TICK_20_PASS ticks=" + n);
             System.out.flush();
@@ -145,9 +160,11 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
-        final boolean test = "probe".equals(options) || "hook-probe".equals(options);
-        final boolean hook = "hook-probe".equals(options) || "minecraft-hook".equals(options);
-        if (!test && !"minecraft".equals(options) && !hook)
+        final int delimiter = options == null ? -1 : options.indexOf('|');
+        final String mode = delimiter < 0 ? options : options.substring(0, delimiter);
+        final boolean test = "probe".equals(mode) || "hook-probe".equals(mode);
+        final boolean hook = "hook-probe".equals(mode) || "minecraft-hook".equals(mode);
+        if (!test && !"minecraft".equals(mode) && !hook)
             throw new IllegalArgumentException("Unsupported instrument mode");
         if (!instrumentation.isRetransformClassesSupported())
             throw new IllegalStateException("Live retransformation unavailable");
@@ -196,7 +213,18 @@ public final class InstrumentationProbe {
                 return writer.toByteArray();
             }
         };
-        if (hook) verifyCallbackVisibility(target);
+        if (hook) {
+            if (delimiter < 0 || delimiter == options.length() - 1)
+                throw new IllegalArgumentException("Missing exact JNI library path");
+            String path = options.substring(delimiter + 1);
+            if (!path.endsWith("slinkywinky_jni.dll"))
+                throw new IllegalArgumentException("Unexpected JNI library path");
+            System.load(path);
+            if (nativeZeroActionTick() != 1)
+                throw new IllegalStateException("Disabled C++ decision returned action/error");
+            System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
+            verifyCallbackVisibility(target);
+        }
         if (hook && !hookInstalled.compareAndSet(false, true))
             throw new IllegalStateException("Read-only hook already installed");
         if (hook) {

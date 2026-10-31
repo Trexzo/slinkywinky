@@ -52,8 +52,15 @@ public final class AttachMain {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
-                    vm.loadAgent(instrumentationJar.getCanonicalPath(),
-                        hookProbe ? (test ? "hook-probe" : "minecraft-hook") : (test ? "probe" : "minecraft"));
+                    String options = test ? "probe" : "minecraft";
+                    if (hookProbe) {
+                        File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
+                        if (!jniLibrary.isFile())
+                            throw new IllegalArgumentException("Missing standalone JNI library");
+                        options = (test ? "hook-probe" : "minecraft-hook") +
+                            "|" + jniLibrary.getCanonicalPath();
+                    }
+                    vm.loadAgent(instrumentationJar.getCanonicalPath(), options);
                 } else {
                     vm.loadAgentPath(dll.getCanonicalPath(), test ? "probe" : (tickProbe ? "minecraft-ticks" : "minecraft"));
                 }

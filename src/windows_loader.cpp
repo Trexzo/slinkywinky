@@ -45,6 +45,8 @@ int wmain(int argc, wchar_t** argv) {
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
         (argc == 5 && (std::wstring(argv[4]) == L"--instrument-probe" ||
           std::wstring(argv[4]) == L"--hook-probe") && !regular_file_exists(instrument)) ||
+        (argc == 5 && std::wstring(argv[4]) == L"--hook-probe" &&
+         !regular_file_exists(folder / L"slinkywinky_jni.dll")) ||
         !regular_file_exists(classes / L"dev" / L"slinkywinky" / L"attach" / L"AttachMain.class")) {
         std::wcerr << L"Missing JDK8 tools.jar, executable, native agent or attach helper.\n";
         return 2;

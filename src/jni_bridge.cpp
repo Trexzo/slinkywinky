@@ -146,3 +146,25 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_dev_slinkywinky_NativeEngine_nativ
     }
     return write_detailed(env,out);
 }
+
+/** Read-only native decision proof, dispatched on the exact Java callback thread. */
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeZeroActionTick(JNIEnv*,jclass) {
+    const std::uint32_t seed[4] = {1u, 2u, 3u, 4u};
+    SWContext* context = nullptr;
+    if (sw_create(seed, &context) != 0 || !context) return 0;
+    SWFrame frame{};
+    frame.abi_version = SW_ABI_VERSION;
+    frame.world_valid = 1;
+    frame.generation = 1;
+    frame.time_ms = 1000;
+    SWSettings settings{};
+    settings.abi_version = SW_ABI_VERSION;
+    SWOutput output{};
+    const int status = sw_step(context, &frame, &settings, &output);
+    const int released = sw_destroy(&context);
+    return status == 0 && released == 0 && output.abi_version == SW_ABI_VERSION &&
+        !output.attempt_attack && !output.left_held && !output.right_held &&
+        !output.has_rotation && !output.has_reach &&
+        output.left_edge == 0 && output.right_edge == 0 ? 1 : 0;
+}
