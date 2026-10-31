@@ -233,7 +233,10 @@ public final class InstrumentationProbe {
             if (nativeZeroActionTick() != 1)
                 throw new IllegalStateException("Disabled C++ decision returned action/error");
             System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
-            ObservedState.admit(target);
+            try { ObservedState.admit(target); }
+            catch (ReflectiveOperationException mappingFailure) {
+                throw new IllegalStateException("Unknown Minecraft observation mapping", mappingFailure);
+            }
             System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
             verifyCallbackVisibility(target);
         }
