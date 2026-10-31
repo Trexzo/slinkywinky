@@ -74,5 +74,17 @@ int main(){
     CHECK(!decide_velocity({NAN,1,1},v,.1f));
     CHECK(!decide_velocity({1,INFINITY,1},v,.1f));
     CHECK(!decide_velocity({1,1,-INFINITY},v,.1f));
+    // A render-frequency decision pump permits a 12 CPS schedule.
+    CombatCoordinator renderRate({1,2,3,4});
+    CombatSettings renderCfg; renderCfg.auto_clicker_enabled=true;
+    renderCfg.require_mouse_down=false; renderCfg.clicks_per_second=12;
+    TickSnapshot renderSnap; renderSnap.world_valid=true;renderSnap.generation=8;
+    renderSnap.holding_weapon=true;
+    int attacksAt125Hz=0;
+    for(int frame=0;frame<125;frame++){
+        renderSnap.elapsed_ms=100+static_cast<std::uint64_t>(frame)*8;
+        if(renderRate.tick(renderSnap,renderCfg).attempt_attack) ++attacksAt125Hz;
+    }
+    CHECK(attacksAt125Hz>=11 && attacksAt125Hz<=14);
     std::cout<<"PASS combat click, GUI gating, aiming, blocking, hit-selection, reset, velocity\n";
 }

@@ -18,3 +18,7 @@ Minecraft client-thread callbacks, world swaps, disconnect/shutdown, OptiFine
 coexistence, HUD rendering and safe disable.
 
 This integration must not be used to claim authenticity or 1:1 behavior.
+
+## R16 event cadence
+
+F9 input toggling remains on the fixed client tick. Read-only decision sampling now runs at the RenderTickEvent END phase (render-frequency), which avoids limiting click-edge timing observations to 20 TPS. This improves diagnostic resolution but is not yet proof of any in-game action timing or commercial Slinky parity.

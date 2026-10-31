@@ -71,6 +71,12 @@ public final class ForgePreview {
                 }
             }
         }
+    }
+
+    // Render ticks can run above the fixed 20 TPS simulation cadence.
+    // This remains a read-only preview: no game actions are applied.
+    @SubscribeEvent public void onRenderFrame(TickEvent.RenderTickEvent event) {
+        if(event.phase!=TickEvent.Phase.END) return;
         if(!enabled || host==null) return;
         final Minecraft mc=Minecraft.getMinecraft();
         GameHost.Frame frame=new GameHost.Frame();
