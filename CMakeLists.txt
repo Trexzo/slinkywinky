@@ -55,7 +55,7 @@ endif()
 
 # Injectable Windows architecture: official Java 8 Attach API -> JVMTI native agent.
 # Forge is optional test code only and is NOT a runtime dependency.
-option(SLINKYWINKY_BUILD_ATTACH "Build the standalone JVM attach loader and agent" ${WIN32})
+option(SLINKYWINKY_BUILD_ATTACH "Build the standalone JVM attach loader and agent" OFF)
 if(SLINKYWINKY_BUILD_ATTACH)
   if(NOT WIN32)
     message(FATAL_ERROR "The standalone loader currently targets Windows x64")

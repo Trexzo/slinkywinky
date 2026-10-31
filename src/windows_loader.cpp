@@ -12,7 +12,7 @@ std::wstring quoted(const std::wstring& s) {
     // Paths derived from our own executable/JDK; reject quotes in all user arguments.
     return L"\"" + s + L"\"";
 }
-bool exists(const std::filesystem::path& file) {
+bool regular_file_exists(const std::filesystem::path& file) {
     std::error_code ec;
     return std::filesystem::is_regular_file(file, ec);
 }
@@ -38,8 +38,8 @@ int wmain(int argc, wchar_t** argv) {
     const auto folder = std::filesystem::path(self).parent_path();
     const auto agent = folder / L"slinkywinky_agent.dll";
     const auto classes = folder / L"attach-classes";
-    if (!exists(java) || !exists(tools) || !exists(agent) ||
-        !exists(classes / L"dev" / L"slinkywinky" / L"attach" / L"AttachMain.class")) {
+    if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
+        !regular_file_exists(classes / L"dev" / L"slinkywinky" / L"attach" / L"AttachMain.class")) {
         std::wcerr << L"Missing JDK8 tools.jar, executable, native agent or attach helper.\n";
         return 2;
     }

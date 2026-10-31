@@ -1,0 +1,32 @@
+name: Injectable Windows Java 8 agent
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  standalone-native-loader:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install full Java 8 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Configure injectable architecture
+        run: cmake -S . -B build-inject -A x64 -DSLINKYWINKY_BUILD_ATTACH=ON -DSLINKYWINKY_BUILD_JNI=ON
+      - name: Build native loader and JVMTI DLL
+        run: cmake --build build-inject --config Release --parallel
+      - name: Run all native, JVM and actual Attach API tests
+        run: ctest --test-dir build-inject -C Release --output-on-failure
+      - name: Upload loader and agent preview package
+        uses: actions/upload-artifact@v4
+        with:
+          name: slinkywinky-standalone-loader-x64-preview
+          path: |
+            build-inject/Release/slinkywinky_loader.exe
+            build-inject/Release/slinkywinky_agent.dll
+            build-inject/Release/attach-classes/**
+          if-no-files-found: error
+          retention-days: 7
