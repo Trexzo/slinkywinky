@@ -34,7 +34,9 @@ try:
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.NativeObservationSmoke",
          str(loader.parent / "slinkywinky_jni.dll")],
         capture_output=True, text=True, env=env, timeout=15)
-    if jni_contract.returncode != 0 or "NATIVE_OBSERVATION_CONTRACT_PASS" not in jni_contract.stdout:
+    if (jni_contract.returncode != 0 or
+        "NATIVE_OBSERVATION_CONTRACT_PASS" not in jni_contract.stdout or
+        "NATIVE_OBSERVATION_REGISTRY_STRESS_PASS" not in jni_contract.stdout):
         raise AssertionError("Strict native observation ABI regression: " +
                              jni_contract.stdout + jni_contract.stderr)
     print("PASS: native observation JNI contract, malformed frames and wrong-thread rejection")

@@ -95,6 +95,48 @@ public final class NativeObservationSmoke {
         check(step(observe,handle,1550,6,3,xyz,camera)==0,
               "Old handle remains invalid even after native allocation reuse");
         check(((Integer)close.invoke(null,newer)).intValue()==1,"Second context closes");
+        // Registry is deliberately bounded at four contexts. Their owners are this thread.
+        final long[] bounded=new long[4];
+        for(int i=0;i<bounded.length;i++) {
+            bounded[i]=((Long)open.invoke(null)).longValue();
+            check(bounded[i]>0,"Expected available bounded slot "+i);
+            for(int j=0;j<i;j++) check(bounded[i]!=bounded[j],"Handle collision");
+        }
+        check(((Long)open.invoke(null)).longValue()==0,"Fifth concurrent context must be rejected");
+        final AtomicReference<Throwable> parallelError=new AtomicReference<Throwable>();
+        final AtomicInteger rejectedParallel=new AtomicInteger();
+        Thread[] workers=new Thread[4];
+        for(int i=0;i<workers.length;i++) {
+            final long crossHandle=bounded[i];
+            workers[i]=new Thread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        for(int j=0;j<500;j++) {
+                            if(step(observe,crossHandle,1600+j,7,3,
+                                    new double[]{1,2,3,4,5,6},new float[]{0,0})!=0)
+                                throw new AssertionError("Wrong-thread JNI call admitted");
+                            rejectedParallel.incrementAndGet();
+                        }
+                    } catch(Throwable failure) {parallelError.compareAndSet(null,failure);}
+                }
+            },"jni-foreign-observer-"+i);
+            workers[i].start();
+        }
+        for(int j=0;j<500;j++) {
+            check(step(observe,bounded[0],1600+j,7,3,xyz,camera)==1,
+                  "Owner-thread observation rejected under contention");
+        }
+        for(Thread worker:workers) worker.join(10000L);
+        for(Thread worker:workers) check(!worker.isAlive(),"JNI worker hung");
+        check(parallelError.get()==null && rejectedParallel.get()==2000,
+              "All foreign JNI access must fail under contention");
+        for(long id:bounded) {
+            check(((Integer)close.invoke(null,id)).intValue()==1,
+                  "Owner must release bounded context");
+            check(step(observe,id,2200,8,3,xyz,camera)==0,
+                  "Released context must stay invalid");
+        }
+        System.out.println("NATIVE_OBSERVATION_REGISTRY_STRESS_PASS");
         System.out.println("NATIVE_OBSERVATION_CONTRACT_PASS");
     }
 }
