@@ -110,6 +110,12 @@ CombatResult CombatCoordinator::tick(const TickSnapshot& s, const CombatSettings
             }
         }
     }
+    // Hit Select gates the synthetic input edge as well as the attack pulse.
+    // Never interfere with the player's physical mouse state.
+    if (settings.hit_select_enabled && s.hurt_time < settings.hit_select_min_hurt) {
+        out.attempt_attack = false;
+        click_down_ = false;
+    }
     out.left_edge = left_.update(s.mouse_left, click_down_);
     out.right_edge = right_.update(s.mouse_right, block_down_);
     out.left_held = left_.effective_down();
@@ -117,13 +123,13 @@ CombatResult CombatCoordinator::tick(const TickSnapshot& s, const CombatSettings
     if (settings.reach_enabled && !s.gui_open)
         out.requested_reach = reach_.evaluate({s.sprinting, s.last_attacker_time}, settings.reach);
     out.rotation = rotations_.winner();
-    if (settings.hit_select_enabled && s.hurt_time < settings.hit_select_min_hurt)
-        out.attempt_attack = false;
     return out;
 }
 std::optional<Knockback> decide_velocity(Knockback in, const VelocitySettings& s,
                                           float random) {
-    if (!s.enabled || !std::isfinite(random) || random < 0 || random >= 1) return std::nullopt;
+    if (!s.enabled || !std::isfinite(random) || random < 0 || random >= 1 ||
+        !std::isfinite(in.x) || !std::isfinite(in.y) || !std::isfinite(in.z))
+        return std::nullopt;
     if (!std::isfinite(s.horizontal) || !std::isfinite(s.vertical) ||
         !std::isfinite(s.chance_percent) || s.horizontal < 0 || s.horizontal > 1 ||
         s.vertical < 0 || s.vertical > 1 || s.chance_percent < 0 || s.chance_percent > 100) return std::nullopt;

@@ -52,5 +52,27 @@ int main(){
     CHECK(out.has_value() && out->x==4 && out->y==4 && out->z==-8);
     CHECK(!decide_velocity({10,5,3},VelocitySettings{},.5f));
     v.chance_percent=20;CHECK(!decide_velocity({1,1,1},v,.9f));
+    // Gate must suppress synthetic input edges while preserving physical input.
+    CombatCoordinator gate({1,2,3,4});
+    CombatSettings gated;
+    gated.auto_clicker_enabled=true; gated.require_mouse_down=false;
+    gated.hit_select_enabled=true; gated.hit_select_min_hurt=3;
+    TickSnapshot snap;
+    snap.world_valid=true; snap.generation=7; snap.elapsed_ms=100;
+    snap.holding_weapon=true; snap.hurt_time=0;
+    auto denied=gate.tick(snap,gated);
+    CHECK(!denied.attempt_attack && denied.left_edge==KeyEdge::none && !denied.left_held);
+    snap.elapsed_ms=250; snap.hurt_time=4;
+    auto permitted=gate.tick(snap,gated);
+    CHECK(permitted.attempt_attack && permitted.left_held && permitted.left_edge==KeyEdge::press);
+    snap.elapsed_ms=260; snap.hurt_time=0;
+    denied=gate.tick(snap,gated);
+    CHECK(!denied.left_held && denied.left_edge==KeyEdge::release);
+    snap.mouse_left=true; snap.elapsed_ms=270;
+    denied=gate.tick(snap,gated);
+    CHECK(denied.left_held && denied.left_edge==KeyEdge::press && !denied.attempt_attack);
+    CHECK(!decide_velocity({NAN,1,1},v,.1f));
+    CHECK(!decide_velocity({1,INFINITY,1},v,.1f));
+    CHECK(!decide_velocity({1,1,-INFINITY},v,.1f));
     std::cout<<"PASS combat click, GUI gating, aiming, blocking, hit-selection, reset, velocity\n";
 }
