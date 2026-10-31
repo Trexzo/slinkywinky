@@ -13,7 +13,7 @@ This is a new C++17 implementation intended to make the behavior and failures of
 - Bounded packet-notice queue with explicit expiry/release/drop semantics, coordinated through a host-session lifecycle.
 - User/manual versus synthetic mouse-button ownership, explicit attack-pulse commands, safe disable and world reset.
 - Validated text profile with versioning, forward-compatible unknown keys and backup on replacement.
-- Standalone offline trace demo, portable C ABI contract, and optional Java 8-compatible JNI wrapper. GCC/Clang/Windows/Linux regression builds.
+- Standalone offline trace demo, portable C ABI contract, and optional Java 8-compatible JNI wrapper. GCC/Clang/Windows/Linux regression builds, sanitizer coverage, and 25,000-frame/50-world stress regression.
 
 ## Build and test
 
