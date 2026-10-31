@@ -7,6 +7,8 @@ public final class AttachTarget {
     }
     public static final class DummyPlayer extends DummyEntity {
         public float rotationYaw=40,rotationPitch=-8;
+        public DummyPlayer(){ posX=1.25; posY=64.0; posZ=2.0; }
+        public float getEyeHeight(){return 1.62f;}
     }
     public static final class Hit {
         public DummyEntity entityHit=new DummyEntity();

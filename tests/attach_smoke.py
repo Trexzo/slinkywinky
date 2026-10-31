@@ -23,6 +23,13 @@ try:
         raise AssertionError("Child-first loader admission regression: " +
                              delegated.stdout + delegated.stderr)
     print("PASS: child-first Minecraft-style loader delegates agent callback safely")
+    observations = subprocess.run(
+        [str(java), "-cp", classpath, "dev.slinkywinky.attach.ObservationSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if observations.returncode != 0 or "OBSERVATION_FIELDS_AND_TRANSITIONS_PASS" not in observations.stdout:
+        raise AssertionError("Mapped observation regression failed: " +
+                             observations.stdout + observations.stderr)
+    print("PASS: populated player/target, eye-level, disconnect, reentry and invalid field rejection")
     line = target.stdout.readline().strip()
     assert line == "SLINKYWINKY_ATTACH_TARGET_READY", repr(line)
     result = subprocess.run([str(loader), "attach", str(target.pid), str(home)],

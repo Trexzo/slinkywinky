@@ -45,6 +45,24 @@ public final class ObservedState {
         if(!Double.isFinite(n)) throw new IllegalStateException("Nonfinite observation");
         return n;
     }
+    private static float eyeHeight(Object player) throws ReflectiveOperationException {
+        for(Class<?> c=player.getClass();c!=null;c=c.getSuperclass()) {
+            for(String name:new String[]{"getEyeHeight","func_70047_e"}) {
+                try {
+                    Method m=c.getDeclaredMethod(name);
+                    if(m.getParameterTypes().length!=0) continue;
+                    m.setAccessible(true);
+                    Object value=m.invoke(player);
+                    if(!(value instanceof Number)) throw new IllegalStateException("Invalid eye height type");
+                    float height=((Number)value).floatValue();
+                    if(!Float.isFinite(height) || height<0 || height>3)
+                        throw new IllegalStateException("Invalid eye height range");
+                    return height;
+                } catch(NoSuchMethodException ignored) { }
+            }
+        }
+        throw new NoSuchMethodException("Player eye height mapping unavailable");
+    }
     private static float angle(Object o,String...names) throws ReflectiveOperationException {
         double n=num(o,names);
         if(Math.abs(n)>Float.MAX_VALUE) throw new IllegalStateException("Rotation overflow");
@@ -63,7 +81,7 @@ public final class ObservedState {
         float[] angles=new float[2];
         if(world!=null && player!=null) {
             xyz[0]=num(player,"posX","field_70165_t");
-            xyz[1]=num(player,"posY","field_70163_u");
+            xyz[1]=num(player,"posY","field_70163_u")+eyeHeight(player);
             xyz[2]=num(player,"posZ","field_70161_v");
             angles[0]=angle(player,"rotationYaw","field_70177_z");
             angles[1]=angle(player,"rotationPitch","field_70125_A");
