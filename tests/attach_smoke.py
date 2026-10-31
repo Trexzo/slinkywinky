@@ -63,7 +63,7 @@ try:
     target.terminate()
     tail, _ = target.communicate(timeout=5)
     for marker in ("GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS",
-                   "GAME_THREAD_HOOK_CLEANUP_PASS"):
+                   "CLASS_BYTECODE_RESTORE_PASS", "GAME_THREAD_HOOK_CLEANUP_PASS"):
         if marker not in tail:
             raise AssertionError("Missing tick hook or restoration marker " + marker +
                                  ": " + tail[-1600:])

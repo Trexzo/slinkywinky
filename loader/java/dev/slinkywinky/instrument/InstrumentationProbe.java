@@ -3,6 +3,9 @@ package dev.slinkywinky.instrument;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,7 +24,20 @@ public final class InstrumentationProbe {
     private static volatile boolean active;
     private static volatile Instrumentation installedVia;
     private static volatile Class<?> installedClass;
+    private static volatile byte[] originalClassFingerprint;
 
+    private static byte[] sha256(byte[] bytes) {
+        try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
+        catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("JDK SHA-256 missing", impossible);
+        }
+    }
+
+    private static String hex(byte[] bytes) {
+        StringBuilder out = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) out.append(String.format("%02x", b & 0xff));
+        return out.toString();
+    }
     private static boolean recognized(String name, boolean test) {
         return test ? "dev.slinkywinky.attach.AttachTarget".equals(name) :
             ("net.minecraft.client.Minecraft".equals(name) || "ave".equals(name));
@@ -48,15 +64,49 @@ public final class InstrumentationProbe {
             final Class<?> target = installedClass;
             Thread cleanup = new Thread(new Runnable() {
                 @Override public void run() {
+                    boolean restored = false;
+                    final byte[] expected = originalClassFingerprint;
+                    final AtomicInteger observed = new AtomicInteger();
+                    final AtomicBoolean sameBytes = new AtomicBoolean();
+                    ClassFileTransformer verifier = new ClassFileTransformer() {
+                        @Override public byte[] transform(ClassLoader loader, String name,
+                                Class<?> type, ProtectionDomain protection, byte[] bytes) {
+                            if (type == target) {
+                                observed.incrementAndGet();
+                                sameBytes.set(Arrays.equals(expected, sha256(bytes)));
+                            }
+                            return null;
+                        }
+                    };
                     try {
-                        instrumentation.retransformClasses(target);
+                        if (expected == null) throw new IllegalStateException("Missing baseline fingerprint");
+                        instrumentation.addTransformer(verifier, true);
+                        try {
+                            // The hook transformer was removed after installation.
+                            // This second retransform restores its unmodified input.
+                            instrumentation.retransformClasses(target);
+                        } finally {
+                            instrumentation.removeTransformer(verifier);
+                        }
+                        if (observed.get() != 1 || !sameBytes.get())
+                            throw new IllegalStateException("Original class fingerprint mismatch");
+                        restored = true;
+                        System.out.println(PREFIX + "CLASS_BYTECODE_RESTORE_PASS sha256=" +
+                            hex(expected));
                         System.out.println(PREFIX + "GAME_THREAD_HOOK_CLEANUP_PASS");
                     } catch (Throwable problem) {
                         System.err.println(PREFIX + "GAME_THREAD_HOOK_CLEANUP_FAIL " + problem);
                     } finally {
-                        installedVia = null;
-                        installedClass = null;
-                        hookInstalled.set(false);
+                        if (restored) {
+                            originalClassFingerprint = null;
+                            installedVia = null;
+                            installedClass = null;
+                            hookInstalled.set(false);
+                        } else {
+                            // A failed restore must not permit reinstrumentation.
+                            active = false;
+                            System.err.println(PREFIX + "HOOK_REATTACH_LOCKED_AFTER_RESTORE_FAILURE");
+                        }
                     }
                 }
             }, "SlinkyWinky-ReadOnly-HookCleanup");
@@ -115,6 +165,7 @@ public final class InstrumentationProbe {
                 if (type == null || !recognized(type.getName(), test)) return null;
                 seen.incrementAndGet();
                 if (!hook) return null;
+                originalClassFingerprint = sha256(bytes);
                 ClassReader reader = new ClassReader(bytes);
                 ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
                 final AtomicInteger exact = new AtomicInteger();
