@@ -7,7 +7,7 @@ import time
 loader = pathlib.Path(sys.argv[1]).resolve()
 home = pathlib.Path(sys.argv[2]).resolve()
 java = home / "bin" / "java.exe"
-classes = loader.parent / "attach-classes"
+classes = loader.parent / "attach-test-classes"
 env = os.environ.copy()
 env["SLINKYWINKY_ATTACH_TEST"] = "1"
 target = subprocess.Popen([str(java), "-cp", str(classes),
