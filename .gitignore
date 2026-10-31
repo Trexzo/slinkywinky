@@ -1,0 +1,14 @@
+build/
+build-*/
+out/
+*.obj
+*.o
+*.dll
+*.exe
+*.jar
+*.zip
+*.bin
+*.dmp
+*.log
+.idea/
+.vscode/
