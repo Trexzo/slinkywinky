@@ -32,3 +32,20 @@ if(BUILD_TESTING)
     add_test(NAME ${unit}_models COMMAND slinkywinky_${unit}_tests)
   endforeach()
 endif()
+
+option(SLINKYWINKY_BUILD_JNI "Build optional JVM integration smoke bridge" OFF)
+if(SLINKYWINKY_BUILD_JNI)
+  find_package(JNI REQUIRED)
+  add_library(slinkywinky_jni SHARED src/jni_bridge.cpp src/bridge.cpp)
+  target_link_libraries(slinkywinky_jni PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_jni PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${JNI_INCLUDE_DIRS})
+  if(BUILD_TESTING)
+    find_package(Java COMPONENTS Runtime Development REQUIRED)
+    add_test(NAME jni_java_roundtrip COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_java_smoke.cmake)
+  endif()
+endif()

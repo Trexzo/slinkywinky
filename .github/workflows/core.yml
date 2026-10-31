@@ -28,3 +28,18 @@ jobs:
             ./build/slinkywinky_offline_demo > trace.csv
           fi
           test $(wc -l < trace.csv) -eq 31
+
+  jni-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configure JNI
+        run: cmake -S . -B build-jni -DCMAKE_BUILD_TYPE=Release -DSLINKYWINKY_BUILD_JNI=ON
+      - name: Build JNI
+        run: cmake --build build-jni --parallel
+      - name: JNI smoke test
+        run: ctest --test-dir build-jni --output-on-failure

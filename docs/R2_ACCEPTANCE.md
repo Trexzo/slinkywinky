@@ -14,7 +14,7 @@
 | Backtrack | Packet-notice holding FIFO + expiry | Actual packet copies, serialization or replay |
 | Runtime | Bounded commands, owner-thread-only drain; host-session lifecycle | JNI/JVMTI or Minecraft frame callback integration |
 | Config | Strict parsing, defaults, backup and replacement | In-game settings UI / profile migration |
-| Shared library | Portable C ABI; unit-test called | Hooking Minecraft, injector, complete GUI |
+| Shared library/JNI | Portable C ABI; JVM integration smoke with Java 8-compatible wrapper | Real Minecraft event integration, injector, complete GUI |
 
 ## Next gates (must not be silently skipped)
 
