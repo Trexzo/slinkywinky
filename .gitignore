@@ -4,11 +4,15 @@ out/
 *.obj
 *.o
 *.dll
+*.so
+*.dylib
 *.exe
 *.jar
 *.zip
 *.bin
 *.dmp
 *.log
+*.tmp
+*.bak
 .idea/
 .vscode/

@@ -7,7 +7,8 @@
 
 namespace slinkywinky {
 
-// Values are candidate-reference hypotheses, not official provenance proof.
+// Reference-profile values are hypotheses drawn from the user's supplied
+// candidate binary. They are not proof of official Slinky provenance.
 struct ReferenceProfile {
     float reach_distance = 3.05f;
     float reach_activation_ticks = 3.0f;
@@ -28,7 +29,7 @@ struct ReachSettings {
     bool require_sprint = false;
 };
 
-// Pure decision model: does not touch the JVM, Minecraft or a process.
+// Pure decision model: never changes a game process or JVM state.
 class ReachController {
 public:
     std::optional<double> evaluate(const ReachInput& input, const ReachSettings& settings);
@@ -39,7 +40,8 @@ private:
     int previous_attacker_time_ = 0;
 };
 
-// Deterministic xoshiro128+ reference sequence; explicit seed required.
+// Independently implemented deterministic xoshiro128+ sequence.
+// Requires an explicit seed; never silently derives one from a clock.
 class Random128 {
 public:
     explicit Random128(std::array<std::uint32_t, 4> seed);
@@ -56,7 +58,7 @@ struct RotationRequest {
     float pitch = 0;
 };
 
-// One rotation owner per frame; equal priorities keep earliest submitter.
+// One owner per frame, deterministic first-submitted tie break.
 class RotationArbiter {
 public:
     void start_frame() noexcept { winner_.reset(); }
@@ -68,7 +70,8 @@ private:
 
 enum class KeyEdge { none, press, release };
 
-// Manual input and synthetic ownership are kept separately to avoid sticky keys.
+// Keeps manual input separate from synthetic ownership, preventing sticky keys
+// when a module is disabled while the real key is still pressed.
 class InputOwnership {
 public:
     KeyEdge update(bool manual_down, bool synthetic_down) noexcept;

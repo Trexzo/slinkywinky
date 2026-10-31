@@ -1,6 +1,7 @@
 #include "slinkywinky/core.hpp"
 
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -23,10 +24,7 @@ int main() {
     try { Random128 invalid({0, 0, 0, 0}); } catch (const std::invalid_argument&) { caught = true; }
     CHECK(caught);
     Random128 bounds({1, 2, 3, 4});
-    for (int i = 0; i < 10000; ++i) {
-        const float v = bounds.unit_float();
-        CHECK(v >= 0.0f && v < 1.0f);
-    }
+    for (int i = 0; i < 10000; ++i) { const float v = bounds.unit_float(); CHECK(v >= 0.0f && v < 1.0f); }
 
     ReachController reach;
     ReachSettings settings;
