@@ -1,0 +1,26 @@
+name: Experimental Forge 1.8.9 compile
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  forge-java8:
+    name: ForgeGradle 2.1 / Minecraft 1.8.9 / JDK 8
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: JDK 8 for legacy ForgeGradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Gradle 2.14.1 (legacy toolchain)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '2.14.1'
+          cache-disabled: true
+      - name: Compile experimental Forge adapter
+        run: gradle --no-daemon -p experimental/forge189 compileJava --stacktrace

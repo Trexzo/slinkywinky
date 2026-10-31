@@ -3,10 +3,13 @@ buildscript {
         mavenCentral()
         maven { url = 'https://maven.minecraftforge.net/' }
     }
-    dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT' }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT'
+    }
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 
+// This is an intentionally separate, read-only integration experiment.
 sourceCompatibility = targetCompatibility = '1.8'
 version = '0.1.0-preview'
 group = 'dev.slinkywinky'
@@ -16,5 +19,17 @@ minecraft {
     version = '1.8.9-11.15.1.2318-1.8.9'
     mappings = 'stable_22'
     runDir = 'run'
+    makeObfSourceJar = false
 }
-sourceSets.main.java.srcDirs = ['src/main/java', '../../java']
+
+// Reuse the actual, tested Java 8 JNI host. Do NOT bundle its smoke-test mains.
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java', '../../java']
+            exclude '**/NativeSmoke.java', '**/HostSmoke.java'
+        }
+        resources.srcDirs = ['src/main/resources']
+    }
+}
+compileJava.options.encoding = 'UTF-8'
