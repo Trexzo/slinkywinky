@@ -39,11 +39,24 @@ jobs:
           fi
           echo 'FAIL: no sustained, confirmed mod startup' >&2
           exit 1
+      - name: Summarize Minecraft crash reports
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for report in experimental/forge189/run/crash-reports/*.txt; do
+            echo "=== Crash report: $report ==="
+            sed -n '1,100p' "$report"
+          done
       - name: Preserve runtime diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: forge189-headless-launch-log
-          path: forge-client.log
+          path: |
+            forge-client.log
+            experimental/forge189/run/crash-reports/
+            experimental/forge189/run/logs/
+            experimental/forge189/run/hs_err_pid*.log
           if-no-files-found: warn
           retention-days: 7
