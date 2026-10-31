@@ -46,6 +46,7 @@ if(SLINKYWINKY_BUILD_JNI)
       -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
       -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
       -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_java_smoke.cmake)
   endif()
 endif()

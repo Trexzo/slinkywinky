@@ -1,0 +1,31 @@
+name: Windows JNI preview artifact
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native-jni-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 8 JNI headers and runtime
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Configure native library
+        run: cmake -S . -B build-jni -A x64 -DSLINKYWINKY_BUILD_JNI=ON
+      - name: Build Windows native bridge
+        run: cmake --build build-jni --config Release --parallel
+      - name: Test Java 8 to Windows native roundtrip
+        run: ctest --test-dir build-jni -C Release --output-on-failure
+      - name: Publish verified preview DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: slinkywinky-jni-windows-x64-preview
+          path: build-jni/Release/slinkywinky_jni.dll
+          if-no-files-found: error
+          retention-days: 7
