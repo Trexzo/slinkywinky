@@ -1,6 +1,7 @@
 #include "slinkywinky/bridge.h"
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #define CHECK(x) do { if(!(x)) throw std::runtime_error("FAIL line "+std::to_string(__LINE__)+": " #x); } while(false)
 int main() {
