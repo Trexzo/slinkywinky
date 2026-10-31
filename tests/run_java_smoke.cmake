@@ -3,6 +3,7 @@ execute_process(COMMAND "${JAVA_COMPILER}" --release 8 -d "${BUILD_ROOT}/java_cl
   "${PROJECT_ROOT}/java/dev/slinkywinky/NativeEngine.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/NativeSmoke.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/GameHost.java"
+  "${PROJECT_ROOT}/java/dev/slinkywinky/HostSettings.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/HostSmoke.java"
   RESULT_VARIABLE compile_result)
 if(NOT compile_result EQUAL 0)

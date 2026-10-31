@@ -42,3 +42,9 @@ without separate admission and authority checks.
 - Forge/Minecraft 1.8.9 linkage, API mappings, real input-edge application.
 - Exact original Slinky behavior, rendering, protocol parsing and in-game combat parity.
 - Actual game reconnect/reinjection and platform-specific native packaging.
+
+## Settings admission (R9)
+
+HostSettings validates every incoming field and provides a defensive-copy immutable profile.
+Safe defaults use candidate-reference numeric values with all action modules explicitly disabled.
+The host rejects non-finite, out-of-range and nonboolean settings before JNI or game actions.

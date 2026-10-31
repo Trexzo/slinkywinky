@@ -62,6 +62,9 @@ public final class GameHost implements AutoCloseable {
             failClosed();
             throw new IllegalArgumentException("Invalid settings");
         }
+        // Reject invalid/unmapped settings before allowing any side effects.
+        try { new HostSettings(f.settings); }
+        catch (IllegalArgumentException invalid) { failClosed(); throw invalid; }
         // Source position and target admission remain host responsibilities.
         int[] flags = {1, bit(f.guiOpen), bit(f.manualLeft), bit(f.manualRight),
             bit(f.weapon), bit(f.sprinting), f.hurtTime, f.lastAttackerTime,
