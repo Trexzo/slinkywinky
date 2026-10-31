@@ -25,15 +25,25 @@ jobs:
         run: |
           $d = 'build-inject/Release'
           $files = @(
-            "$d/slinkywinky_loader.exe",
-            "$d/slinkywinky_agent.dll",
-            "$d/slinkywinky_instrument.jar",
-            "$d/attach-classes/dev/slinkywinky/attach/AttachMain.class")
-          foreach ($f in $files) { if (!(Test-Path -LiteralPath $f)) { throw "Missing artifact $f" } }
-          $files | ForEach-Object {
-            $hash = (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $_"
-          } | Set-Content "$d/SHA256SUMS.txt" -Encoding ascii
+            "slinkywinky_loader.exe",
+            "slinkywinky_agent.dll",
+            "slinkywinky_instrument.jar",
+            "attach-classes/dev/slinkywinky/attach/AttachMain.class")
+          $hashes = foreach ($f in $files) {
+            $full = Join-Path $d $f
+            if (!(Test-Path -LiteralPath $full)) { throw "Missing artifact $full" }
+            $hash = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $f"
+          }
+          $hashes | Set-Content "$d/SHA256SUMS.txt" -Encoding ascii
+          foreach ($line in (Get-Content "$d/SHA256SUMS.txt")) {
+            if ($line -notmatch "^([a-f0-9]{64})  (.+)$") { throw "Invalid hash manifest entry" }
+            $expected = $Matches[1]
+            $full = Join-Path $d $Matches[2]
+            if (!(Test-Path -LiteralPath $full)) { throw "Missing manifest target $full" }
+            $actual = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expected -ne $actual) { throw "Hash mismatch for $full" }
+          }
       - name: Upload loader and agent preview package
         uses: actions/upload-artifact@v4
         with:

@@ -45,9 +45,17 @@ try:
     if denied.returncode == 0 or "Refusing non-Minecraft target" not in denied.stderr:
         raise AssertionError("Unrelated JVM target unexpectedly admitted")
     print("PASS: non-Minecraft target rejected in production mode")
+    # The unverified Minecraft tick hook must be explicitly developer-enabled.
+    no_gate = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if no_gate.returncode == 0 or "SLINKYWINKY_EXPERIMENTAL_HOOK" not in no_gate.stderr:
+        raise AssertionError("Unverified tick hook must be disabled by default")
+    hook_env = env.copy()
+    hook_env["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
     hook = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe"],
-        capture_output=True, text=True, env=env, timeout=22)
+        capture_output=True, text=True, env=hook_env, timeout=22)
     if hook.returncode != 0 or "mode=hook-probe" not in hook.stdout:
         raise AssertionError("Read-only tick hook installation failed: " +
                              hook.stdout + hook.stderr)

@@ -32,6 +32,8 @@ public final class AttachMain {
             final boolean tickProbe = args.length == 4 && "--tick-probe".equals(args[3]);
             final boolean instrumentProbe = args.length == 4 && "--instrument-probe".equals(args[3]);
             final boolean hookProbe = args.length == 4 && "--hook-probe".equals(args[3]);
+            if (hookProbe && !"1".equals(System.getenv("SLINKYWINKY_EXPERIMENTAL_HOOK")))
+                throw new IllegalArgumentException("Unverified hook requires explicit SLINKYWINKY_EXPERIMENTAL_HOOK=1");
             if (args.length == 4 && !tickProbe && !instrumentProbe && !hookProbe) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
