@@ -29,20 +29,21 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_dev_slinkywinky_NativeEngine_nativ
     JNIEnv* env,jclass,jlong handle,jlong time,jlong generation,jboolean world,
     jboolean gui,jboolean mouse,jboolean weapon,jfloat yaw,jfloat pitch,
     jdoubleArray eye,jdoubleArray target,jfloatArray config) {
-    if(!eye || !target || !config || env->GetArrayLength(eye)!=3 ||
-       env->GetArrayLength(target)!=3 || env->GetArrayLength(config)!=7) {
+    if(!eye || !config || env->GetArrayLength(eye)!=3 ||
+       (target && env->GetArrayLength(target)!=3) || env->GetArrayLength(config)!=7) {
         error(env,"java/lang/IllegalArgumentException","Incorrect snapshot array size");return nullptr;
     }
-    jdouble p[3],t[3];jfloat c[7];
+    jdouble p[3],t[3]={0,0,0};jfloat c[7];
     env->GetDoubleArrayRegion(eye,0,3,p);
-    env->GetDoubleArrayRegion(target,0,3,t);
+    if(target) env->GetDoubleArrayRegion(target,0,3,t);
     env->GetFloatArrayRegion(config,0,7,c);
     SWFrame frame{};frame.abi_version=SW_ABI_VERSION;
     frame.time_ms=static_cast<std::uint64_t>(time);
     frame.generation=static_cast<std::uint64_t>(generation);
     frame.world_valid=world;frame.gui_open=gui;frame.mouse_left=mouse;frame.weapon=weapon;
     frame.eye_x=p[0];frame.eye_y=p[1];frame.eye_z=p[2];
-    frame.target_present=1;frame.target_alive=1;frame.target_visible=1;
+    frame.target_present=target!=nullptr;frame.target_alive=target!=nullptr;
+    frame.target_visible=target!=nullptr;
     frame.target_x=t[0];frame.target_y=t[1];frame.target_z=t[2];
     frame.yaw=yaw;frame.pitch=pitch;
     SWSettings settings{};settings.abi_version=SW_ABI_VERSION;

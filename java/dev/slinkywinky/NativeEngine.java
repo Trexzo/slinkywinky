@@ -19,13 +19,14 @@ public final class NativeEngine implements AutoCloseable {
         if (handle == 0) throw new IllegalStateException("Could not initialize native engine");
     }
     public static int abiVersion() { return nativeVersion(); }
-    /** Config: [clickerEnabled, cps, aimEnabled, aimRange, aimHSpeed, aimVSpeed, aimFov]. */
+    /** Config: [clickerEnabled, cps, aimEnabled, aimRange, aimHSpeed, aimVSpeed, aimFov].
+     * Pass null for target when the game has no valid target entity. */
     public synchronized float[] step(long timeMs, long generation,
          boolean world, boolean gui, boolean manualLeft, boolean weapon,
          float yaw, float pitch, double[] eye, double[] target, float[] config) {
         checkOwner();
         if (handle == 0) throw new IllegalStateException("Engine was closed");
-        if (eye == null || eye.length != 3 || target == null || target.length != 3 ||
+        if (eye == null || eye.length != 3 || (target != null && target.length != 3) ||
             config == null || config.length != 7) throw new IllegalArgumentException("Invalid snapshot lengths");
         return nativeStep(handle,timeMs,generation,world,gui,manualLeft,weapon,
                           yaw,pitch,eye,target,config);
