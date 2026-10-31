@@ -172,7 +172,7 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeZeroActionTick(JNIEnv
 /** R41: real, read-only client observations; all native gameplay settings remain OFF. */
 extern "C" JNIEXPORT jint JNICALL
 Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
-    JNIEnv* env,jclass,jlong time,jlong generation,jint flags,
+    JNIEnv* env,jclass,jlong handle,jlong time,jlong generation,jint flags,
     jdoubleArray xyz,jfloatArray angles) {
     if(!xyz || !angles || env->GetArrayLength(xyz)!=6 ||
        env->GetArrayLength(angles)!=2 || time<0 || generation<=0 ||
@@ -183,9 +183,8 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     if(env->ExceptionCheck()) return 0;
     for(double value:points) if(!std::isfinite(value)) return 0;
     for(float value:camera) if(!std::isfinite(value)) return 0;
-    const std::uint32_t seed[4]={1u,2u,3u,4u};
-    SWContext* context=nullptr;
-    if(sw_create(seed,&context)!=0 || !context) return 0;
+    SWContext* context=ptr(handle);
+    if(!context) return 0;
     SWFrame frame{};
     frame.abi_version=SW_ABI_VERSION;
     frame.time_ms=static_cast<std::uint64_t>(time);
@@ -201,9 +200,23 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     settings.abi_version=SW_ABI_VERSION;
     SWOutput output{};
     const int status=sw_step(context,&frame,&settings,&output);
-    const int close=sw_destroy(&context);
-    return status==0 && close==0 && output.abi_version==SW_ABI_VERSION &&
+    return status==0 && output.abi_version==SW_ABI_VERSION &&
         !output.attempt_attack && !output.left_held && !output.right_held &&
         !output.has_rotation && !output.has_reach &&
         output.left_edge==0 && output.right_edge==0 ? 1 : 0;
+}
+
+/** R43: long-lived context, created and destroyed on the exact game thread. */
+extern "C" JNIEXPORT jlong JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeOpenObservation(JNIEnv*,jclass) {
+    const std::uint32_t seed[4]={1u,2u,3u,4u};
+    SWContext* context=nullptr;
+    if(sw_create(seed,&context)!=0 || !context) return 0;
+    return static_cast<jlong>(reinterpret_cast<std::uintptr_t>(context));
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeCloseObservation(
+    JNIEnv*,jclass,jlong handle) {
+    SWContext* context=ptr(handle);
+    return context && sw_destroy(&context)==0 ? 1 : 0;
 }

@@ -26,8 +26,12 @@ public final class InstrumentationProbe {
     private static volatile Class<?> installedClass;
     private static volatile byte[] originalClassFingerprint;
     private static native int nativeZeroActionTick();
-    private static native int nativeObserveFrame(long timeMs,long generation,int flags,
+    private static native long nativeOpenObservation();
+    private static native int nativeObserveFrame(long handle,long timeMs,long generation,int flags,
                                                   double[] xyz,float[] angles);
+    private static native int nativeCloseObservation(long handle);
+    private static volatile long nativeContext;
+    private static volatile boolean nativeSessionCloseOk;
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -58,8 +62,16 @@ public final class InstrumentationProbe {
         ObservedState.Frame observed=null;
         try {
             observed=ObservedState.sample();
-            nativeOk=nativeObserveFrame(observed.timeMs,observed.generation,
-                observed.flags,observed.xyz,observed.angles)==1;
+            if(nativeContext==0) {
+                nativeContext=nativeOpenObservation(); // Runs on exact admitted game thread.
+                if(nativeContext!=0) {
+                    System.out.println(PREFIX+"NATIVE_SESSION_OPEN_PASS");
+                    System.out.flush();
+                }
+            }
+            nativeOk=nativeContext!=0 && nativeObserveFrame(nativeContext,
+                observed.timeMs,observed.generation,observed.flags,
+                observed.xyz,observed.angles)==1;
         }
         catch (Throwable failure) {
             System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
@@ -83,7 +95,20 @@ public final class InstrumentationProbe {
         }
         if ((n >= 20 || !nativeOk) && cleanupStarted.compareAndSet(false, true)) {
             active = false;
-            System.out.println(PREFIX + "GAME_THREAD_TICK_20_PASS ticks=" + n);
+            // Destroy on the same client thread that created this C++ context.
+            long closing=nativeContext;
+            nativeContext=0;
+            boolean closed=closing==0;
+            try {
+                if(closing!=0) closed=nativeCloseObservation(closing)==1;
+            } catch(Throwable problem) {
+                System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_FAIL "+problem);
+            }
+            nativeSessionCloseOk=closed;
+            if(closed) System.out.println(PREFIX+"NATIVE_SESSION_CLOSE_PASS");
+            else System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_REJECTED");
+            if(n>=20 && nativeOk) System.out.println(PREFIX+"GAME_THREAD_TICK_20_PASS ticks="+n);
+            else System.err.println(PREFIX+"GAME_THREAD_HOOK_ABORT ticks="+n);
             System.out.flush();
             final Instrumentation instrumentation = installedVia;
             final Class<?> target = installedClass;
@@ -116,6 +141,7 @@ public final class InstrumentationProbe {
                         if (observed.get() != 1 || !sameBytes.get())
                             throw new IllegalStateException("Original class fingerprint mismatch");
                         restored = true;
+                        if(!nativeSessionCloseOk) throw new IllegalStateException("Native client-thread context was not released");
                         System.out.println(PREFIX + "CLASS_BYTECODE_RESTORE_PASS sha256=" +
                             hex(expected));
                         System.out.println(PREFIX + "GAME_THREAD_HOOK_CLEANUP_PASS");
@@ -245,6 +271,8 @@ public final class InstrumentationProbe {
         if (hook) {
             ticks.set(0);
             cleanupStarted.set(false);
+            nativeContext=0;
+            nativeSessionCloseOk=false;
             installedVia = instrumentation;
             installedClass = target;
             active = true;
