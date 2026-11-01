@@ -141,6 +141,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java")
   add_executable(slinkywinky_loader src/windows_loader.cpp)
+  target_include_directories(slinkywinky_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   if(SLINKYWINKY_BUILD_JNI)
     add_dependencies(slinkywinky_loader slinkywinky_jni)
   endif()
