@@ -1,9 +1,14 @@
 import os
+import faulthandler
 import pathlib
 import subprocess
 import sys
 import time
 
+faulthandler.enable()
+# Diagnostic only: if a subprocess or pipe deadlocks on Windows, emit the
+# Python stack to CTest's retained log instead of silently timing out.
+faulthandler.dump_traceback_later(25, repeat=True)
 loader = pathlib.Path(sys.argv[1]).resolve()
 home = pathlib.Path(sys.argv[2]).resolve()
 java = home / "bin" / "java.exe"
@@ -91,6 +96,7 @@ try:
         raise AssertionError("Unrelated JVM target unexpectedly admitted")
     print("PASS: non-Minecraft target rejected in production mode")
     # The unverified Minecraft tick hook must be explicitly developer-enabled.
+    print("R61_TEST_PHASE=initial-hook-denial", flush=True)
     no_gate = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe"],
         capture_output=True, text=True, env=env, timeout=15)
@@ -98,6 +104,7 @@ try:
         raise AssertionError("Unverified tick hook must be disabled by default")
     hook_env = env.copy()
     hook_env["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
+    print("R61_TEST_PHASE=initial-20-hook", flush=True)
     hook = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe"],
         capture_output=True, text=True, env=hook_env, timeout=22)
@@ -106,6 +113,7 @@ try:
                              hook.stdout + hook.stderr)
     # The original 20-tick default must finish before a second admission.
     time.sleep(1.8)
+    print("R61_TEST_PHASE=bounded-120-denial", flush=True)
     extended_denied = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe=120"],
         capture_output=True, text=True, env=hook_env, timeout=15)
@@ -119,6 +127,7 @@ try:
         raise AssertionError("Arbitrary hook lifespan was accepted")
     extended_env = hook_env.copy()
     extended_env["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
+    print("R61_TEST_PHASE=bounded-120-start", flush=True)
     extended = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe=120"],
         capture_output=True, text=True, env=extended_env, timeout=22)
@@ -170,6 +179,7 @@ try:
         capture_output=True, text=True, env=env, timeout=15)
     if duplicate_stop.returncode == 0:
         raise AssertionError("Duplicate stop must reject after native cleanup")
+    print("R61_TEST_PHASE=target-termination", flush=True)
     target.terminate()
     tail, _ = target.communicate(timeout=5)
     for marker in ("OBSERVATION_RELEASE_PASS", "NATIVE_SESSION_OPEN_PASS", "NATIVE_SESSION_CLOSE_PASS", "OBSERVATION_MAPPING_ADMITTED", "NATIVE_OBSERVATION_PASS world=1 player=1 target=1", "NATIVE_CXX_PREFLIGHT_PASS", "NATIVE_GAME_THREAD_CXX_PASS", "GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS ticks=20", "DIAGNOSTIC_TICK_LIMIT=120",
