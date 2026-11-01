@@ -65,52 +65,19 @@ public final class HookAdmissionSmoke {
             check(claimed.get(),"Passive attempt must not clear active hook claim");
             check(generation.getLong(null)==917L && oldWorld.get(null)==sentinel,
                   "Duplicate admission must not reset active observation state");
-            // R61: stop must not transform any class or tear down JNI off-thread.
-            Field activeField=InstrumentationProbe.class.getDeclaredField("active");
-            activeField.setAccessible(true);
-            Field durationField=InstrumentationProbe.class.getDeclaredField("tickLimit");
-            durationField.setAccessible(true);
-            Field stopField=InstrumentationProbe.class.getDeclaredField("stopRequested");
-            stopField.setAccessible(true);
-            Field cleanupField=InstrumentationProbe.class.getDeclaredField("cleanupStarted");
-            cleanupField.setAccessible(true);
-            AtomicBoolean stopped=(AtomicBoolean)stopField.get(null);
-            AtomicBoolean cleanup=(AtomicBoolean)cleanupField.get(null);
-            boolean originalActive=activeField.getBoolean(null);
-            int originalDuration=durationField.getInt(null);
-            boolean originalStopped=stopped.get();
-            boolean originalCleanup=cleanup.get();
-            try {
-                activeField.setBoolean(null,true);
-                durationField.setInt(null,120);
-                boolean wrongModeDenied=false;
-                try { InstrumentationProbe.agentmain("hook-stop",fake); }
-                catch(IllegalStateException expected){wrongModeDenied=true;}
-                check(wrongModeDenied && !stopped.get(),
-                      "Cannot stop bounded mode through continuous stop command");
-                durationField.setInt(null,36000);
-                InstrumentationProbe.agentmain("hook-stop",fake);
-                check(stopped.get(),"Continuous stop request not recorded");
-                check(activeField.getBoolean(null) && claimed.get(),
-                      "Stop request must not dispose owner context on agent thread");
-                check(generation.getLong(null)==917L && oldWorld.get(null)==sentinel,
-                      "Stop request must never reset game-reflection state");
-                boolean payloadDenied=false;
-                try { InstrumentationProbe.agentmain("hook-stop|injected",fake); }
-                catch(IllegalArgumentException expected){payloadDenied=true;}
-                check(payloadDenied,"Stop must reject argument payloads");
-                cleanup.set(true);
-                boolean cleanupDenied=false;
-                try { InstrumentationProbe.agentmain("hook-stop",fake); }
-                catch(IllegalStateException expected){cleanupDenied=true;}
-                check(cleanupDenied,"Stop cannot race against owner cleanup");
-            } finally {
-                activeField.setBoolean(null,originalActive);
-                durationField.setInt(null,originalDuration);
-                stopped.set(originalStopped);
-                cleanup.set(originalCleanup);
+            // R61: a stop is never delivered by Java Attach while an
+            // instrumented JVM is running. Only the Win32 stop-only event
+            // may request cooperative owner-thread cleanup.
+            boolean reentrantDenied=false;
+            try { InstrumentationProbe.agentmain("hook-stop",fake); }
+            catch(IllegalArgumentException expected) {
+                reentrantDenied=expected.getMessage().contains("Unsupported");
             }
-            System.out.println("CONTINUOUS_STOP_ADMISSION_GUARD_PASS");
+            check(reentrantDenied && claimed.get(),
+                  "Reentrant Java Attach stop mode must not be supported");
+            check(generation.getLong(null)==917L && oldWorld.get(null)==sentinel,
+                  "Rejected stop mode must preserve the active game mapping");
+            System.out.println("CONTINUOUS_STOP_JAVA_REATTACH_DENIED_PASS");
             claimed.set(false);
             boolean missingPath=false;
             try {
