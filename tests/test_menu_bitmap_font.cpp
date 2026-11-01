@@ -37,8 +37,8 @@ int main() {
           slinkywinky::menu_ascii_glyph('A'));
     CHECK(slinkywinky::menu_ascii_glyph('z')==
           slinkywinky::menu_ascii_glyph('Z'));
-    CHECK(slinkywinky::menu_ascii_glyph(' ')==
-          std::array<std::uint8_t,7>{{0,0,0,0,0,0,0}});
+    const std::array<std::uint8_t,7> empty{};
+    CHECK(slinkywinky::menu_ascii_glyph(' ')==empty);
     CHECK(slinkywinky::menu_ascii_glyph('~')==
           slinkywinky::menu_ascii_glyph('?'));
     return 0;
