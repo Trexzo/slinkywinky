@@ -250,25 +250,32 @@ public final class InstrumentationProbe {
                 return writer.toByteArray();
             }
         };
-        if (hook) {
-            if (delimiter < 0 || delimiter == options.length() - 1)
-                throw new IllegalArgumentException("Missing exact JNI library path");
-            String path = options.substring(delimiter + 1);
-            if (!path.endsWith("slinkywinky_jni.dll"))
-                throw new IllegalArgumentException("Unexpected JNI library path");
-            System.load(path);
-            if (nativeZeroActionTick() != 1)
-                throw new IllegalStateException("Disabled C++ decision returned action/error");
-            System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
-            try { ObservedState.admit(target); }
-            catch (ReflectiveOperationException mappingFailure) {
-                throw new IllegalStateException("Unknown Minecraft observation mapping", mappingFailure);
-            }
-            System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
-            verifyCallbackVisibility(target);
-        }
+        // Claim admission BEFORE loading native state or resetting mapped observations.
+        // A competing attach must not disturb an already-running game-thread hook.
         if (hook && !hookInstalled.compareAndSet(false, true))
             throw new IllegalStateException("Read-only hook already installed");
+        if (hook) {
+            try {
+                if (delimiter < 0 || delimiter == options.length() - 1)
+                    throw new IllegalArgumentException("Missing exact JNI library path");
+                String path = options.substring(delimiter + 1);
+                if (!path.endsWith("slinkywinky_jni.dll"))
+                    throw new IllegalArgumentException("Unexpected JNI library path");
+                System.load(path);
+                if (nativeZeroActionTick() != 1)
+                    throw new IllegalStateException("Disabled C++ decision returned action/error");
+                System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
+                try { ObservedState.admit(target); }
+                catch (ReflectiveOperationException mappingFailure) {
+                    throw new IllegalStateException("Unknown Minecraft observation mapping", mappingFailure);
+                }
+                System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
+                verifyCallbackVisibility(target);
+            } catch (RuntimeException | LinkageError failure) {
+                hookInstalled.set(false); // No transformer was installed.
+                throw failure;
+            }
+        }
         if (hook) {
             ticks.set(0);
             cleanupStarted.set(false);
@@ -278,8 +285,12 @@ public final class InstrumentationProbe {
             installedClass = target;
             active = true;
         }
-        instrumentation.addTransformer(transformer, true);
+        boolean transformerInstalled = false;
+        boolean retransformStarted = false;
         try {
+            instrumentation.addTransformer(transformer, true);
+            transformerInstalled = true;
+            retransformStarted = true;
             instrumentation.retransformClasses(target);
             if (seen.get() != 1 || (hook && modified.get() != 1))
                 throw new IllegalStateException("Expected exactly one transformed target");
@@ -288,14 +299,18 @@ public final class InstrumentationProbe {
             System.out.flush();
         } catch (Throwable problem) {
             active = false;
-            if (hook) {
+            if (hook && retransformStarted) {
+                // A partially applied transform is an unknown JVM state. Never
+                // allow another attachment to overwrite it until process exit.
+                System.err.println(PREFIX + "HOOK_REATTACH_LOCKED_AFTER_TRANSFORM_FAILURE");
+            } else if (hook) {
                 installedVia = null; installedClass = null;
-                hookInstalled.set(false);
+                hookInstalled.set(false); // Nothing was transformed.
             }
             System.err.println(PREFIX + "INSTRUMENT_TRANSFORM_FAIL: " + problem);
             throw new IllegalStateException("Instrumentation admission failed", problem);
         } finally {
-            instrumentation.removeTransformer(transformer);
+            if (transformerInstalled) instrumentation.removeTransformer(transformer);
         }
     }
 }
