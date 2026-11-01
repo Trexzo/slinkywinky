@@ -209,7 +209,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR args,int show) {
     alternateAccent=menu.appearance().accent_rgb==0x779ADBu;
     WNDCLASSEXW klassInfo{};klassInfo.cbSize=sizeof(klassInfo);
     klassInfo.lpfnWndProc=wndproc;klassInfo.hInstance=instance;
-    klassInfo.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    klassInfo.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     klassInfo.lpszClassName=klass;
     if(!RegisterClassExW(&klassInfo))return 1;
     HWND hwnd=CreateWindowExW(WS_EX_TOOLWINDOW,klass,
