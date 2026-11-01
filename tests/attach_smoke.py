@@ -138,6 +138,18 @@ try:
                                  ": " + tail[-1600:])
     if tail.count("CLASS_BYTECODE_RESTORE_PASS") != 2 or tail.count("GAME_THREAD_HOOK_CLEANUP_PASS") != 2:
         raise AssertionError("Both bounded hook sessions must restore exact class bytes twice")
+    # R60: inspect only frame counts. Never trust a world/target marker from a
+    # rejected native frame, or treat a mock ray hit as attack eligibility.
+    import re
+    summaries = re.findall(
+        r"NATIVE_OBSERVATION_SUMMARY accepted=(\\d+) worldPlayer=(\\d+) "
+        r"rayEntity=(\\d+) generations=(\\d+)", tail)
+    if summaries != [("20", "20", "20", "0"), ("120", "120", "120", "0")]:
+        raise AssertionError("Expected two exact validated synthetic world/target summaries: " +
+                             repr(summaries))
+    if tail.count("NATIVE_WORLD_PLAYER_OBSERVED tick=1") != 2 or (
+        tail.count("NATIVE_RAY_ENTITY_OBSERVED tick=1") != 2):
+        raise AssertionError("Per-attachment world and ray markers were not reset")
     print("PASS: 20-tick default and opt-in 120-tick native observation; twice-restored bytecode")
 
     print("PASS: standalone Windows loader -> Java 8 Attach API -> native JVMTI agent")
