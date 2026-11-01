@@ -187,6 +187,17 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes" .
+    # Offline tool only: exact Mojang SHA-1 before structural render lookup.
+    # Keep audit code in its own JAR and out of the injected Java agent.
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/render-audit-classes"
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
+      -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+      -d "$<TARGET_FILE_DIR:slinkywinky_loader>/render-audit-classes"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java"
+    COMMAND "${Java_JAR_EXECUTABLE}" cf
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_render_audit.jar"
+      -C "$<TARGET_FILE_DIR:slinkywinky_loader>/render-audit-classes" .
     COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
       -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
