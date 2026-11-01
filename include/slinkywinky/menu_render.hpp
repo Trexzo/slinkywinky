@@ -2,6 +2,7 @@
 #include "slinkywinky/menu.hpp"
 #include <cstdint>
 #include <optional>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -29,12 +30,14 @@ public:
     // Cleanup is intentionally owner-thread only; a failed close leaves this
     // context locked until the host can perform the correct teardown.
     bool detach() noexcept;
-    bool attached() const noexcept {return active_;}
-    std::uint64_t sequence() const noexcept {return sequence_;}
+    bool attached() const noexcept;
+    std::uint64_t sequence() const noexcept;
 private:
     static bool valid_viewport(unsigned width,unsigned height) noexcept;
     bool owner() const noexcept;
+    mutable std::mutex mutex_;
     std::thread::id thread_{};
+    std::uint64_t last_epoch_=0;
     bool active_=false;
     std::uint64_t epoch_=0;
     std::uint64_t sequence_=0;
