@@ -6,6 +6,7 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_hud_ipc.hpp"
+#include "slinkywinky/windows_stop_gate.hpp"
 #include <windows.h>
 #include <cstdlib>
 #include <cstring>
@@ -19,6 +20,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <memory>
+#include <thread>
 
 namespace {
 void error(JNIEnv* env,const char* cls,const char* message) {
@@ -195,6 +197,26 @@ struct ObservationRuntime {
 #ifdef _WIN32
     slinkywinky::HudIpcPublisher hud_ipc;
     bool hud_ipc_enabled = false;
+    HANDLE stop_event = nullptr;
+    const std::thread::id owner_thread = std::this_thread::get_id();
+
+    bool enable_stop_signal() noexcept {
+        if(stop_event || std::this_thread::get_id()!=owner_thread)return false;
+        auto name=slinkywinky::continuous_stop_event_name(GetCurrentProcessId());
+        HANDLE created=CreateEventW(nullptr,TRUE,FALSE,name.c_str());
+        if(!created)return false;
+        if(GetLastError()==ERROR_ALREADY_EXISTS){CloseHandle(created);return false;}
+        stop_event=created;
+        return true;
+    }
+    int poll_stop_signal() const noexcept {
+        if(!stop_event || std::this_thread::get_id()!=owner_thread)return -1;
+        DWORD state=WaitForSingleObject(stop_event,0); // No game-thread wait.
+        return state==WAIT_OBJECT_0?1:(state==WAIT_TIMEOUT?0:-1);
+    }
+    ~ObservationRuntime() noexcept {
+        if(stop_event)CloseHandle(stop_event);
+    }
 #endif
     explicit ObservationRuntime(SWContext* context) : engine(context) {}
 };
@@ -202,6 +224,34 @@ std::mutex observationMutex;
 std::unordered_map<jlong, std::unique_ptr<ObservationRuntime>> observationContexts;
 std::atomic<std::uint64_t> observationNextId{1};
 constexpr std::size_t maxObservationContexts = 4;
+}
+/** R61: a separate Win32 event can only ask the original client thread to stop.
+ * Never require a second Java Attach operation while a game tick hook is active. */
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeEnableStopSignal(
+    JNIEnv*,jclass,jlong handle) {
+#ifdef _WIN32
+    std::lock_guard<std::mutex> guard(observationMutex);
+    const auto found=observationContexts.find(handle);
+    if(found==observationContexts.end())return 0;
+    return found->second->enable_stop_signal()?1:0;
+#else
+    (void)handle;
+    return 0;
+#endif
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativePollStopSignal(
+    JNIEnv*,jclass,jlong handle) {
+#ifdef _WIN32
+    std::lock_guard<std::mutex> guard(observationMutex);
+    const auto found=observationContexts.find(handle);
+    if(found==observationContexts.end())return -1;
+    return found->second->poll_stop_signal();
+#else
+    (void)handle;
+    return -1;
+#endif
 }
 /** R41-R45: real, read-only client observations; all gameplay settings remain OFF. */
 extern "C" JNIEXPORT jint JNICALL
