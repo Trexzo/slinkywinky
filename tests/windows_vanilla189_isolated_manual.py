@@ -298,7 +298,8 @@ def main():
                 markers = tuple(marker.replace("GAME_THREAD_TICK_20_PASS",
                                               "CONTINUOUS_STOP_ON_CLIENT_THREAD_PASS")
                                 for marker in MARKERS)
-                markers += ("CONTINUOUS_STOP_REQUEST_ACCEPTED",)
+                # The native loader reports the request to the parent console;
+                # only the owner-thread completion marker belongs in game stdout.
             elif args.world_observation:
                 probe, expected_ticks = "--hook-probe=600", 600
                 markers = tuple(marker.replace("GAME_THREAD_TICK_20_PASS",
