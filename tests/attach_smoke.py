@@ -42,6 +42,17 @@ try:
         raise AssertionError("Exact vanilla name profile regression: " +
                              vanilla.stdout + vanilla.stderr)
     print("PASS: vanilla 1.8.9 obfuscated tick, world, player and target fields")
+    # R64: invoke ASM verifier on generated classfile fixtures only. No
+    # Mojang binary, Minecraft launch, render injection or graphics context.
+    render_audit = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.RenderCallsiteAuditSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (render_audit.returncode != 0 or
+        "R64_RENDER_CALLSITE_NEGATIVE_CONTROLS_PASS" not in render_audit.stdout):
+        raise AssertionError("Render mapping admission negative controls failed: " +
+                             render_audit.stdout + render_audit.stderr)
+    print("PASS: offline renderer callsite uniqueness and wrong-target rejection")
     admission = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.HookAdmissionSmoke"],
         capture_output=True, text=True, env=env, timeout=15)
