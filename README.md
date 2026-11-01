@@ -73,3 +73,11 @@ This fixture is **not Minecraft**: no original 1.8.9 renderer mapping, in-game G
 `slinkywinky_menu_gl11` now renders first-party menu panels, category accents and inert preview switches as OpenGL 1.1 quadrilaterals. It requires the exact current Win32 WGL graphics/device context, a valid menu frame and viewport, and uses a scoped fixed-function state guard to restore OpenGL server/client attributes and the modelview/projection/texture matrix stacks. The `isolated_wgl_menu_state_restore` Windows CTest creates its own throwaway WGL window, checks reject paths, compares pre/post state and requires zero GL errors after accepted draws. See [R67 GL1.1 rendering and limitations](docs/R67_GL11_STATE_GUARD.md).
 
 **Not an in-game GUI yet.** This code is not connected to a Minecraft render hook, JNI or input, and does not fully certify modern OpenGL/LWJGL shader, framebuffer or state-cache restoration. The real original 1.8.9 render method is still unverified because the authorized Windows desktop is offline. Forge is not introduced into the production injector.
+
+## R68 — readable native GL11 menu and desktop preview
+
+The first-party Windows OpenGL 1.1 menu now renders its own **5×7 textureless ASCII labels** for all publicly documented module names, category tabs, heading and preview-only controls. It uses no copied Slinky fonts or graphics assets. A separate `slinkywinky_gl11_menu_preview.exe` desktop app lets authorized users examine the **actual OpenGL drawing path** without Minecraft or Java injection. This executable is included in the Windows SHA-256-verified preview artifact. All demo switches remain inert.
+
+Regression checks include `native_menu_bitmap_font` (all-platform alphabet/catalog integrity) and the isolated Windows `isolated_wgl_menu_state_restore` test with real GL pixel readbacks proving white labels render above the dark panels without leaving GL11 state mutated. Details and controls: [R68 original GL text and visual preview](docs/R68_GL11_BITMAP_TEXT_PREVIEW.md).
+
+**R68 is still NOT a Minecraft in-game GUI.** The original vanilla 1.8.9 renderer callback remains unverified because the authoritative desktop is offline and the user-owned Mojang client JAR could not be accessed. This is a first-party interim font and render preview, not commercial Slinky UI parity.
