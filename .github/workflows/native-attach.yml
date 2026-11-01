@@ -36,6 +36,7 @@ jobs:
             "slinkywinky_loader.exe",
             "slinkywinky_agent.dll",
             "slinkywinky_instrument.jar",
+            "slinkywinky_render_audit.jar",
             "slinkywinky_jni.dll",
             "slinkywinky_hud_preview.exe",
             "slinkywinky_menu_preview.exe",
@@ -63,6 +64,7 @@ jobs:
             build-inject/Release/slinkywinky_loader.exe
             build-inject/Release/slinkywinky_agent.dll
             build-inject/Release/slinkywinky_instrument.jar
+            build-inject/Release/slinkywinky_render_audit.jar
             build-inject/Release/slinkywinky_jni.dll
             build-inject/Release/slinkywinky_hud_preview.exe
             build-inject/Release/slinkywinky_menu_preview.exe
