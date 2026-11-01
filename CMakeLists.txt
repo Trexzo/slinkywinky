@@ -103,6 +103,14 @@ if(WIN32)
     target_link_libraries(slinkywinky_menu_preview PRIVATE slinkywinky_core user32 gdi32)
     target_include_directories(slinkywinky_menu_preview PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_features(slinkywinky_menu_preview PRIVATE cxx_std_17)
+    # Standalone visual verification of the actual GL1.1 renderer, not Minecraft.
+    add_executable(slinkywinky_gl11_menu_preview WIN32
+      examples/windows_gl11_menu_preview.cpp)
+    target_link_libraries(slinkywinky_gl11_menu_preview PRIVATE
+      slinkywinky_menu_gl11 slinkywinky_core opengl32 user32 gdi32)
+    target_include_directories(slinkywinky_gl11_menu_preview PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_features(slinkywinky_gl11_menu_preview PRIVATE cxx_std_17)
   endif()
   option(SLINKYWINKY_BUILD_HUD_PREVIEW "Build standalone native HUD preview" ON)
   if(SLINKYWINKY_BUILD_HUD_PREVIEW)
