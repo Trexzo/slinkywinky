@@ -34,6 +34,8 @@ public final class InstrumentationProbe {
     private static volatile byte[] originalClassFingerprint;
     private static native int nativeZeroActionTick();
     private static native long nativeOpenObservation();
+    private static native int nativeEnableStopSignal(long handle);
+    private static native int nativePollStopSignal(long handle);
     private static native int nativeObserveFrame(long handle,long timeMs,long generation,int flags,
                                                   double[] xyz,float[] angles);
     private static native int nativeCloseObservation(long handle);
@@ -89,9 +91,17 @@ public final class InstrumentationProbe {
             if(nativeContext==0) {
                 nativeContext=nativeOpenObservation(); // Runs on exact admitted game thread.
                 if(nativeContext!=0) {
+                    if(tickLimit==MAX_CONTINUOUS_TICKS &&
+                       nativeEnableStopSignal(nativeContext)!=1)
+                        throw new IllegalStateException("Win32 stop-only gate unavailable");
                     System.out.println(PREFIX+"NATIVE_SESSION_OPEN_PASS");
                     System.out.flush();
                 }
+            }
+            if(nativeContext!=0 && tickLimit==MAX_CONTINUOUS_TICKS) {
+                final int signal=nativePollStopSignal(nativeContext);
+                if(signal<0) throw new IllegalStateException("Win32 stop gate lost");
+                if(signal==1) stopRequested.set(true);
             }
             nativeOk=nativeContext!=0 && nativeObserveFrame(nativeContext,
                 observed.timeMs,observed.generation,observed.flags,
@@ -254,19 +264,8 @@ public final class InstrumentationProbe {
     public static void agentmain(String options, Instrumentation instrumentation) {
         final int delimiter = options == null ? -1 : options.indexOf('|');
         final String mode = delimiter < 0 ? options : options.substring(0, delimiter);
-        // A stop request is not another instrumentation operation: only the
-        // existing owner thread may close JNI state and restore class bytes.
-        if ("hook-stop".equals(mode) || "minecraft-stop".equals(mode)) {
-            if (delimiter >= 0)
-                throw new IllegalArgumentException("Stop command takes no payload");
-            if (!hookInstalled.get() || !active || cleanupStarted.get() ||
-                tickLimit != MAX_CONTINUOUS_TICKS)
-                throw new IllegalStateException("No active continuous observation to stop");
-            stopRequested.set(true);
-            System.out.println(PREFIX+"CONTINUOUS_STOP_REQUEST_ACCEPTED");
-            System.out.flush();
-            return;
-        }
+        // A stop request is delivered through a separate, stop-only Win32
+        // event. Never recursively Java Attach into a live instrumented JVM.
         final boolean continuous = "hook-continuous".equals(mode) ||
                                    "minecraft-continuous".equals(mode);
         final boolean test = "probe".equals(mode) || "hook-probe".equals(mode) ||
