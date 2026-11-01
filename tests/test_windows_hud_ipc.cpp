@@ -2,21 +2,25 @@
 #include <windows.h>
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include <stdexcept>
+#include <cwchar>
 #include <string>
 #define CHECK(c) do { if(!(c)) throw std::runtime_error("IPC test failed: " #c); } while(false)
 using namespace slinkywinky;
 
-int reader_child(DWORD pid) {
+int reader_child(DWORD pid,bool javaOrigin) {
     HudIpcReader reader;
     if(!reader.connect(pid))return 2;
     auto status=reader.read();
-    return status && status->sequence==1 &&
-           status->status.valid_ticks==1 &&
-           status->status.target_distance==3.25 ? 0 : 3;
+    if(!status || status->sequence!=1 || status->status.valid_ticks!=1)return 3;
+    return javaOrigin ?
+        (status->status.flags==0 && status->status.target_distance==0?0:4) :
+        (status->status.target_distance==3.25?0:5);
 }
 int wmain(int argc,wchar_t** argv) {
-    if(argc==3 && std::wstring(argv[1])==L"--reader")
-        return reader_child(static_cast<DWORD>(std::wcstoul(argv[2],nullptr,10)));
+    if(argc==3 && (std::wstring(argv[1])==L"--reader" ||
+                   std::wstring(argv[1])==L"--java-reader"))
+        return reader_child(static_cast<DWORD>(std::wcstoul(argv[2],nullptr,10)),
+                            std::wstring(argv[1])==L"--java-reader");
     CHECK(argc==1);
     const auto pid=GetCurrentProcessId();
     HudIpcReader reader;

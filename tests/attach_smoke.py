@@ -54,6 +54,19 @@ try:
         raise AssertionError("Strict native observation ABI regression: " +
                              jni_contract.stdout + jni_contract.stderr)
     print("PASS: native observation JNI contract, malformed frames and wrong-thread rejection")
+    # Explicitly opt in ONLY the disposable Java 8 acceptance JVM.
+    ipc_env = env.copy()
+    ipc_env["SLINKYWINKY_HUD_IPC"] = "1"
+    ipc_test = subprocess.run(
+        [str(java), "-cp", classpath, "dev.slinkywinky.attach.NativeHudIpcSmoke",
+         str(loader.parent / "slinkywinky_jni.dll"),
+         str(loader.parent / "slinkywinky_hud_ipc_tests.exe")],
+        capture_output=True, text=True, env=ipc_env, timeout=20)
+    if (ipc_test.returncode != 0 or
+        "JNI_CROSS_PROCESS_HUD_IPC_PASS" not in ipc_test.stdout):
+        raise AssertionError("Native JNI -> Windows IPC acceptance failed: " +
+                             ipc_test.stdout + ipc_test.stderr)
+    print("PASS: opted-in JNI publisher -> separate Win32 reader process")
     line = target.stdout.readline().strip()
     assert line == "SLINKYWINKY_ATTACH_TARGET_READY", repr(line)
     result = subprocess.run([str(loader), "attach", str(target.pid), str(home)],
