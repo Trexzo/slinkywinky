@@ -50,10 +50,19 @@ public final class HookAdmissionSmoke {
                                                fake);
             } catch(IllegalStateException expected) {
                 refused=expected.getMessage()!=null &&
-                        expected.getMessage().contains("already installed");
+                        expected.getMessage().contains("already active");
             }
             check(refused,"Concurrent/repeated attach must reject before JNI preflight");
             check(claimed.get(),"Active native hook ownership must remain claimed");
+            boolean passiveRefused=false;
+            try {
+                InstrumentationProbe.agentmain("probe",fake);
+            } catch(IllegalStateException expected) {
+                passiveRefused=expected.getMessage()!=null &&
+                               expected.getMessage().contains("already active");
+            }
+            check(passiveRefused,"Passive retransformation must not run over active hook");
+            check(claimed.get(),"Passive attempt must not clear active hook claim");
             check(generation.getLong(null)==917L && oldWorld.get(null)==sentinel,
                   "Duplicate admission must not reset active observation state");
             claimed.set(false);

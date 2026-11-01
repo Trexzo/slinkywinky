@@ -111,5 +111,17 @@ public final class ObservedState {
         }
         return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,angles);
     }
+    /** Release strong world/player and reflective class references on shutdown. */
+    public static synchronized void release() {
+        mcClass=null;
+        getter=null;
+        worldField=null;
+        playerField=null;
+        rayField=null;
+        oldWorld=null;
+        oldPlayer=null;
+        vanillaObfuscated=false;
+        generation=1;
+    }
     private ObservedState() { }
 }

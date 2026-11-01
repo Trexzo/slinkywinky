@@ -106,6 +106,10 @@ public final class InstrumentationProbe {
                 System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_FAIL "+problem);
             }
             nativeSessionCloseOk=closed;
+            // Drop Java world, player and reflection references on the exact client
+            // thread before the asynchronous class restoration worker begins.
+            ObservedState.release();
+            System.out.println(PREFIX+"OBSERVATION_RELEASE_PASS");
             if(closed) System.out.println(PREFIX+"NATIVE_SESSION_CLOSE_PASS");
             else System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_REJECTED");
             if(n>=20 && nativeOk) System.out.println(PREFIX+"GAME_THREAD_TICK_20_PASS ticks="+n);
@@ -252,8 +256,10 @@ public final class InstrumentationProbe {
         };
         // Claim admission BEFORE loading native state or resetting mapped observations.
         // A competing attach must not disturb an already-running game-thread hook.
-        if (hook && !hookInstalled.compareAndSet(false, true))
-            throw new IllegalStateException("Read-only hook already installed");
+        // One class retransformation at a time: even a passive probe could
+        // otherwise restore an active diagnostic hook unexpectedly.
+        if (!hookInstalled.compareAndSet(false, true))
+            throw new IllegalStateException("Minecraft instrumentation already active");
         if (hook) {
             try {
                 if (delimiter < 0 || delimiter == options.length() - 1)
@@ -272,6 +278,7 @@ public final class InstrumentationProbe {
                 System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
                 verifyCallbackVisibility(target);
             } catch (RuntimeException | LinkageError failure) {
+                ObservedState.release();
                 hookInstalled.set(false); // No transformer was installed.
                 throw failure;
             }
@@ -304,6 +311,7 @@ public final class InstrumentationProbe {
                 // allow another attachment to overwrite it until process exit.
                 System.err.println(PREFIX + "HOOK_REATTACH_LOCKED_AFTER_TRANSFORM_FAILURE");
             } else if (hook) {
+                ObservedState.release();
                 installedVia = null; installedClass = null;
                 hookInstalled.set(false); // Nothing was transformed.
             }
@@ -311,6 +319,7 @@ public final class InstrumentationProbe {
             throw new IllegalStateException("Instrumentation admission failed", problem);
         } finally {
             if (transformerInstalled) instrumentation.removeTransformer(transformer);
+            if (!hook) hookInstalled.set(false); // Pass-through probe is no longer active.
         }
     }
 }

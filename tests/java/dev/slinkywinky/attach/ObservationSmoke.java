@@ -37,6 +37,15 @@ public final class ObservationSmoke {
         try { ObservedState.sample(); }
         catch(IllegalStateException expected){refused=true;}
         check(refused,"Nonfinite player location not rejected");
+        ObservedState.release();
+        boolean rejectedAfterRelease=false;
+        try { ObservedState.sample(); }
+        catch(IllegalStateException expected) {rejectedAfterRelease=true;}
+        check(rejectedAfterRelease,"Released sampler must not retain an admitted world");
+        minecraft.thePlayer.posX=1.25;
+        ObservedState.admit(AttachTarget.class);
+        check(ObservedState.sample().flags==3,"Sampler must cleanly restart after release");
+        ObservedState.release();
         System.out.println("OBSERVATION_FIELDS_AND_TRANSITIONS_PASS");
     }
 }
