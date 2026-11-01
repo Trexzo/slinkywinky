@@ -31,3 +31,9 @@ The existing late JVMTI breakpoint approach remains unsupported on Java 8 (`JVMT
 R60 adds native-accepted frame counters (world+player, crosshair ray entity, session-generation changes) and a **manual-only** 600-tick original-vanilla-world acceptance harness. The harness refuses menu-only evidence when a world is required. Its optional `--require-ray-entity` also requires a ray-selected entity; neither observation certifies combat eligibility or visible targets. The test never synthesizes input or starts Minecraft in CI. See [R60 evidence requirements and usage](docs/R60_VANILLA_WORLD_OBSERVATION.md).
 
 **The local Windows desktop was offline during development, so R60's in-game acceptance has not been run.** Successful CI only establishes the implementation/build/disposable JVM tests, not a playable or fully reconstructed client.
+
+## R61 — opt-in continuous observation with explicit stop
+
+The native Java 8 injector now also accepts `--hook-probe=continuous` behind `SLINKYWINKY_EXPERIMENTAL_HOOK=1` and `SLINKYWINKY_CONTINUOUS_OBSERVATION=1`. The separate `--stop-observation` command asks the existing Minecraft client-thread owner to close its read-only C++ observation session and restore the original class method. A fallback upper bound of **36,000 client ticks** applies; the stop command only acknowledges a request and is **not** an instant/full native DLL unload. The previous 20/120/600-tick modes remain unchanged. See [R61 lifecycle and limitations](docs/R61_CONTINUOUS_STOP.md).
+
+The original vanilla single-player in-world R60 acceptance and full graphical/behavioral client fidelity are not yet verified. No Forge deployment dependency or proprietary reference binary is included.
