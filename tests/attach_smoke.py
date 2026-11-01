@@ -30,6 +30,13 @@ try:
         raise AssertionError("Mapped observation regression failed: " +
                              observations.stdout + observations.stderr)
     print("PASS: populated player/target, eye-level, disconnect, reentry and invalid field rejection")
+    vanilla = subprocess.run(
+        [str(java), "-cp", classpath, "dev.slinkywinky.attach.Vanilla189MappingSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if vanilla.returncode != 0 or "VANILLA_189_OBFUSCATED_MAPPING_PASS" not in vanilla.stdout:
+        raise AssertionError("Exact vanilla name profile regression: " +
+                             vanilla.stdout + vanilla.stderr)
+    print("PASS: vanilla 1.8.9 obfuscated tick, world, player and target fields")
     jni_contract = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.NativeObservationSmoke",
          str(loader.parent / "slinkywinky_jni.dll")],

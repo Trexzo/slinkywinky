@@ -16,6 +16,7 @@ public final class ObservedState {
     private static Field worldField,playerField,rayField;
     private static Object oldWorld,oldPlayer;
     private static long generation=1;
+    private static boolean vanillaObfuscated;
     private static Field field(Class<?> type,String...names) throws NoSuchFieldException {
         for(Class<?> c=type;c!=null;c=c.getSuperclass())
             for(String name:names)
@@ -25,17 +26,19 @@ public final class ObservedState {
     }
     public static synchronized void admit(Class<?> target) throws ReflectiveOperationException {
         Method get=null;
-        for(String name:new String[]{"getMinecraft","func_71410_x"}) {
+        for(String name:"ave".equals(target.getName())?new String[]{"A"}:new String[]{"getMinecraft","func_71410_x"}) {
             try { Method m=target.getDeclaredMethod(name);
                   if(Modifier.isStatic(m.getModifiers()) && m.getParameterTypes().length==0) {
                       m.setAccessible(true);get=m;break;
                   } } catch(NoSuchMethodException ignored) {}
         }
         if(get==null) throw new NoSuchMethodException("Exact Minecraft instance getter unavailable");
-        Field world=field(target,"theWorld","field_71441_e");
-        Field player=field(target,"thePlayer","field_71439_g");
-        Field ray=field(target,"objectMouseOver","field_71476_x");
+        boolean vanilla="ave".equals(target.getName());
+        Field world=vanilla?field(target,"f"):field(target,"theWorld","field_71441_e");
+        Field player=vanilla?field(target,"h"):field(target,"thePlayer","field_71439_g");
+        Field ray=vanilla?field(target,"s"):field(target,"objectMouseOver","field_71476_x");
         mcClass=target;getter=get;worldField=world;playerField=player;rayField=ray;
+        vanillaObfuscated=vanilla;
         oldWorld=null;oldPlayer=null;generation=1;
     }
     private static double num(Object o,String...names) throws ReflectiveOperationException {
@@ -47,7 +50,7 @@ public final class ObservedState {
     }
     private static float eyeHeight(Object player) throws ReflectiveOperationException {
         for(Class<?> c=player.getClass();c!=null;c=c.getSuperclass()) {
-            for(String name:new String[]{"getEyeHeight","func_70047_e"}) {
+            for(String name:(vanillaObfuscated?new String[]{"aS"}:new String[]{"getEyeHeight","func_70047_e"})) {
                 try {
                     Method m=c.getDeclaredMethod(name);
                     if(m.getParameterTypes().length!=0) continue;
@@ -62,6 +65,10 @@ public final class ObservedState {
             }
         }
         throw new NoSuchMethodException("Player eye height mapping unavailable");
+    }
+    private static double mappedNum(Object o,String obfuscated,String named,String srg)
+            throws ReflectiveOperationException {
+        return vanillaObfuscated?num(o,obfuscated):num(o,named,srg);
     }
     private static float angle(Object o,String...names) throws ReflectiveOperationException {
         double n=num(o,names);
@@ -82,18 +89,22 @@ public final class ObservedState {
         double[] xyz=new double[6];
         float[] angles=new float[2];
         if(world!=null && player!=null) {
-            xyz[0]=num(player,"posX","field_70165_t");
-            xyz[1]=num(player,"posY","field_70163_u")+eyeHeight(player);
-            xyz[2]=num(player,"posZ","field_70161_v");
-            angles[0]=angle(player,"rotationYaw","field_70177_z");
-            angles[1]=angle(player,"rotationPitch","field_70125_A");
+            xyz[0]=mappedNum(player,"s","posX","field_70165_t");
+            xyz[1]=mappedNum(player,"t","posY","field_70163_u")+eyeHeight(player);
+            xyz[2]=mappedNum(player,"u","posZ","field_70161_v");
+            double yaw=mappedNum(player,"y","rotationYaw","field_70177_z");
+            double pitch=mappedNum(player,"z","rotationPitch","field_70125_A");
+            if(Math.abs(yaw)>Float.MAX_VALUE || Math.abs(pitch)>Float.MAX_VALUE)
+                throw new IllegalStateException("Camera rotation overflow");
+            angles[0]=(float)yaw;
+            angles[1]=(float)pitch;
             Object ray=rayField.get(mc);
             if(ray!=null) {
-                Object entity=field(ray.getClass(),"entityHit","field_72308_g").get(ray);
+                Object entity=(vanillaObfuscated?field(ray.getClass(),"d"):field(ray.getClass(),"entityHit","field_72308_g")).get(ray);
                 if(entity!=null) {
-                    xyz[3]=num(entity,"posX","field_70165_t");
-                    xyz[4]=num(entity,"posY","field_70163_u");
-                    xyz[5]=num(entity,"posZ","field_70161_v");
+                    xyz[3]=mappedNum(entity,"s","posX","field_70165_t");
+                    xyz[4]=mappedNum(entity,"t","posY","field_70163_u");
+                    xyz[5]=mappedNum(entity,"u","posZ","field_70161_v");
                     flags|=4;
                 }
             }

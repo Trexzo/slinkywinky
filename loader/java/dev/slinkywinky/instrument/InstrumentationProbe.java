@@ -49,9 +49,10 @@ public final class InstrumentationProbe {
         return test ? "dev.slinkywinky.attach.AttachTarget".equals(name) :
             ("net.minecraft.client.Minecraft".equals(name) || "ave".equals(name));
     }
-    private static boolean isTickMethod(String method, boolean test) {
-        return test ? "tick".equals(method) :
-            ("runTick".equals(method) || "func_71407_l".equals(method));
+    private static boolean isTickMethod(String method,boolean test,boolean vanilla) {
+        if(test) return "tick".equals(method);
+        return vanilla?"s".equals(method):
+            ("runTick".equals(method)||"func_71407_l".equals(method));
     }
 
     /** Runs on the actual target thread. Never changes Minecraft state. */
@@ -227,7 +228,7 @@ public final class InstrumentationProbe {
                             String descriptor, String signature, String[] exceptions) {
                         MethodVisitor downstream =
                             super.visitMethod(access, method, descriptor, signature, exceptions);
-                        if (isTickMethod(method, test) && "()V".equals(descriptor) &&
+                        if (isTickMethod(method,test,"ave".equals(type.getName())) && "()V".equals(descriptor) &&
                             (access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT)) == 0) {
                             exact.incrementAndGet();
                             return new MethodVisitor(Opcodes.ASM5, downstream) {
