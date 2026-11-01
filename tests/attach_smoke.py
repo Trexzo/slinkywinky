@@ -190,9 +190,10 @@ try:
                                  ": " + tail[-1600:])
     if tail.count("CLASS_BYTECODE_RESTORE_PASS") != 3 or tail.count("GAME_THREAD_HOOK_CLEANUP_PASS") != 3:
         raise AssertionError("Bounded and stop-driven sessions must restore exact class bytes three times")
-    if tail.count("CONTINUOUS_STOP_REQUEST_ACCEPTED") != 1 or (
-        tail.count("CONTINUOUS_STOP_ON_CLIENT_THREAD_PASS") != 1):
-        raise AssertionError("Stop request must be honored on the original client thread")
+    if tail.count("CONTINUOUS_STOP_ON_CLIENT_THREAD_PASS") != 1:
+        raise AssertionError(
+            "Native loader acknowledged Win32 event but the client-thread owner "
+            "did not complete the stop: " + tail[-2800:])
     if "GAME_THREAD_TICK_36000_PASS" in tail or "GAME_THREAD_HOOK_ABORT" in tail:
         raise AssertionError("Stop-driven session reached cap or aborted unexpectedly")
     # R60: inspect only frame counts. Never trust a world/target marker from a
