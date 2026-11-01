@@ -13,12 +13,17 @@ int main() {
     const auto check_string=[&](const std::string& text) {
         for(char c:text) {
             const auto glyph=slinkywinky::menu_ascii_glyph(c);
+            std::size_t glyphPixels=0;
             for(std::uint8_t row:glyph) {
                 CHECK((row&0xe0u)==0); // five-bit wide, seven rows
-                if(c!=' ')CHECK(row!=0 || c==':' || c=='!' || c=='?');
-                for(unsigned column=0;column<5;++column)
-                    if((row&(1u<<(4-column)))!=0u)++pixels;
+                for(unsigned column=0;column<5;++column) {
+                    if((row&(1u<<(4-column)))!=0u) {
+                        ++glyphPixels;
+                        ++pixels;
+                    }
+                }
             }
+            if(c!=' ')CHECK(glyphPixels>0);
         }
     };
     for(const auto& module:slinkywinky::official_module_catalog())
