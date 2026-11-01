@@ -15,7 +15,7 @@ Sources:
 `tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java` uses the already pinned ASM 5.2 toolchain to inspect **only locally supplied original Mojang 1.8.9 JAR bytes**. It checks the exact file size and expected SHA-1 **before** reading any class. It then:
 1. Inspects `ave.class`, rejecting wrong class identity.
 2. Finds instance field classes and its virtual invocations with descriptor `(FJ)V`.
-3. Accepts candidates only if the invoked owner corresponds to a declared instance field and that class declares a public, nonstatic, concrete method of that exact name/descriptor.
+3. Accepts candidates only if the invoked owner corresponds to a declared instance field **actually read via GETFIELD in the same Minecraft method**, and that class declares a public, nonstatic, concrete method of that exact name/descriptor.
 4. Rejects zero or multiple matches, missing/oversized classes, bad size, bad hash and unsupported class identities.
 5. Prints the candidate's obfuscated owner, caller and method name, tagged `R64_RENDER_CALLSITE_CANDIDATE`—**not** `RENDER_HOOK_PASS`.
 
