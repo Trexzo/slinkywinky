@@ -49,3 +49,9 @@ This GDI window is a standalone design/testing reference—not a Minecraft rende
 The first-party C++ renderer-neutral `MenuRenderSession` provides an explicit graphics-owner admission boundary: valid viewport, strictly increasing context epoch, immutable numbered menu frames and owner-thread-only resize/shutdown, with a synchronized cross-thread refusal path. The standalone Windows GDI menu preview now uses this adapter for `WM_SIZE`, `WM_PAINT`, and `WM_DESTROY`. See [R63 render lifecycle and integration gates](docs/R63_MENU_RENDER_LIFECYCLE.md).
 
 **R63 still does not draw inside Minecraft**. The injector has no authenticated vanilla 1.8.9 render callback and no independently verified OpenGL state/resource restoration. R60/R61 real single-player runtime acceptance also remains outstanding. No game action, native input injection or Forge production dependency has been introduced.
+
+## R64 — exact original vanilla 1.8.9 renderer-callsite audit
+
+R64 adds a **non-injected**, SHA-1-gated Java 8 verifier for the original Mojang 1.8.9 client JAR. It inspects the `ave` Minecraft class via ASM, requires a renderer field actually read in the same Minecraft method, finds uniquely matching virtual `(FJ)V` calls, then checks that the target renderer class contains exactly one public, concrete method with that signature. Zero or ambiguous matches fail closed. A separate `slinkywinky_render_audit.jar` is included in the Windows preview package. The source and fixture tests are in `tests/java/dev/slinkywinky/attach/RenderCallsiteAudit*.java`; see [R64 offline procedure](docs/R64_VANILLA_RENDER_CALLSITE_AUDIT.md).
+
+**This is an offline candidate-finding tool, not an injected render hook, in-game ClickGUI or original-Slinky fidelity claim.** It does not download or distribute Minecraft binaries. Running it against a user-owned exact original client JAR and confirming the candidate against the live game are still separate gates.
