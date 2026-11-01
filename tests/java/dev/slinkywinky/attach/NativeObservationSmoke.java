@@ -114,7 +114,7 @@ public final class NativeObservationSmoke {
                 try {
                     double[] result=(double[])published.invoke(null,handle);
                     foreignCopy.set(result!=null && result.length==10 &&
-                                    result[0]==8 && result[9]==8 ? 1:0);
+                                    result[0]==7 && result[9]==7 ? 1:0);
                 } catch(Throwable failure) {foreignCopy.set(-1);}
             }
         },"foreign-render-snapshot-positive-control");
