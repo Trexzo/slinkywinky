@@ -8,6 +8,7 @@
 #include "slinkywinky/menu.hpp"
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,18 @@ constexpr int navY=78, navH=42, rowStart=153, rowH=49, visibleRows=8;
 constexpr wchar_t klass[]=L"SlinkyWinkyMenuPreview";
 bool alternateAccent=false;
 int windowWidth=baseWidth;
+std::filesystem::path prefsPath;
+
+void save_prefs() {
+    if(!prefsPath.empty())
+        slinkywinky::save_menu_appearance(prefsPath,menu.appearance());
+}
+std::filesystem::path prefs_path() {
+    wchar_t buffer[32768]{};
+    const DWORD n=GetEnvironmentVariableW(L"LOCALAPPDATA",buffer,32768);
+    if(n==0 || n>=32768)return {};
+    return std::filesystem::path(buffer)/L"SlinkyWinky"/L"menu-preview.conf";
+}
 
 COLORREF color(std::uint32_t rgb) {
     return RGB((rgb>>16)&0xffu,(rgb>>8)&0xffu,rgb&0xffu);
@@ -140,17 +153,19 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_LBUTTONDOWN:{
             const int x=static_cast<short>(LOWORD(lp));
             const int y=static_cast<short>(HIWORD(lp));
-            if(y>=navY && y<navY+navH && x>=18 && x<windowWidth-18) {
-                const int idx=(x-18)*7/(windowWidth-36);
+            RECT client{};GetClientRect(hwnd,&client);
+            const int clientWidth=client.right;
+            if(y>=navY && y<navY+navH && x>=18 && x<clientWidth-18) {
+                const int idx=(x-18)*7/(clientWidth-36);
                 if(idx>=0 && idx<6)menu.select(static_cast<MenuTab>(idx));
             } else if(y>=rowStart && y<rowStart+8*rowH &&
                      menu.tab()!=MenuTab::Profiles) {
                 const auto rows=menu.page();
                 const int idx=(y-rowStart)/rowH;
                 if(idx>=0 && static_cast<std::size_t>(idx)<rows.size()) {
-                    if(x>=windowWidth-92 && x<=windowWidth-19)
+                    if(x>=clientWidth-92 && x<=clientWidth-19)
                         menu.toggle_preview(rows[idx].catalog_index);
-                    else if(x>=windowWidth-145 && x<windowWidth-92)
+                    else if(x>=clientWidth-145 && x<clientWidth-92)
                         menu.toggle_expanded(rows[idx].catalog_index);
                 }
             }
@@ -159,16 +174,21 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_KEYDOWN:{
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
             if(wp>=L'1'&&wp<=L'6')menu.select(static_cast<MenuTab>(wp-L'1'));
-            if(wp==L'C')menu.set_compact(!menu.appearance().compact);
+            if(wp==L'C'){
+                menu.set_compact(!menu.appearance().compact);
+                save_prefs();
+            }
             if(wp==L'G'){
                 alternateAccent=!alternateAccent;
                 menu.set_accent(alternateAccent?0x779ADB:0xE88C46);
+                save_prefs();
             }
             if(wp==L'W'){
                 menu.set_wide(!menu.appearance().wide);
                 windowWidth=menu.appearance().wide?wideWidth:baseWidth;
                 SetWindowPos(hwnd,nullptr,0,0,windowWidth,panelHeight,
                              SWP_NOMOVE|SWP_NOZORDER);
+                save_prefs();
             }
             if(wp==VK_UP)menu.scroll_by(-1);
             if(wp==VK_DOWN)menu.scroll_by(1);
@@ -181,6 +201,12 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR args,int show) {
     if(args && args[0]!=L'\0')return 3; // No PIDs, injected objects, or commands.
+    prefsPath=prefs_path();
+    slinkywinky::MenuAppearance stored{};
+    if(!prefsPath.empty() && slinkywinky::load_menu_appearance(prefsPath,stored))
+        menu.set_appearance(stored);
+    windowWidth=menu.appearance().wide?wideWidth:baseWidth;
+    alternateAccent=menu.appearance().accent_rgb==0x779ADBu;
     WNDCLASSEXW klassInfo{};klassInfo.cbSize=sizeof(klassInfo);
     klassInfo.lpfnWndProc=wndproc;klassInfo.hInstance=instance;
     klassInfo.hCursor=LoadCursorW(nullptr,IDC_ARROW);
