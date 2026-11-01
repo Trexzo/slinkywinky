@@ -34,12 +34,18 @@ public final class AttachMain {
             final String requestedOption = args.length == 4 ? args[3] : "";
             final boolean extendedHook = "--hook-probe=120".equals(requestedOption) ||
                                          "--hook-probe=600".equals(requestedOption);
-            final boolean hookProbe = "--hook-probe".equals(requestedOption) || extendedHook;
+            final boolean continuousHook = "--hook-probe=continuous".equals(requestedOption);
+            final boolean stopObservation = "--stop-observation".equals(requestedOption);
+            final boolean hookProbe = "--hook-probe".equals(requestedOption) ||
+                                      extendedHook || continuousHook;
             if (hookProbe && !"1".equals(System.getenv("SLINKYWINKY_EXPERIMENTAL_HOOK")))
                 throw new IllegalArgumentException("Unverified hook requires explicit SLINKYWINKY_EXPERIMENTAL_HOOK=1");
             if (extendedHook && !"1".equals(System.getenv("SLINKYWINKY_EXTENDED_DIAGNOSTIC")))
                 throw new IllegalArgumentException("Extended read-only hook requires SLINKYWINKY_EXTENDED_DIAGNOSTIC=1");
-            if (args.length == 4 && !tickProbe && !instrumentProbe && !hookProbe) throw new IllegalArgumentException("Unknown option");
+            if (continuousHook && !"1".equals(System.getenv("SLINKYWINKY_CONTINUOUS_OBSERVATION")))
+                throw new IllegalArgumentException("Continuous hook requires SLINKYWINKY_CONTINUOUS_OBSERVATION=1");
+            if (args.length == 4 && !tickProbe && !instrumentProbe &&
+                !hookProbe && !stopObservation) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
                 throw new IllegalArgumentException("Numeric PID required");
@@ -53,16 +59,19 @@ public final class AttachMain {
                 throw new IllegalArgumentException("Refusing non-Minecraft target: " + target.displayName());
             VirtualMachine vm = VirtualMachine.attach(target);
             try {
-                if (instrumentProbe || hookProbe) {
+                if (instrumentProbe || hookProbe || stopObservation) {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
                     String options = test ? "probe" : "minecraft";
+                    if (stopObservation)
+                        options = test ? "hook-stop" : "minecraft-stop";
                     if (hookProbe) {
                         File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
                         if (!jniLibrary.isFile())
                             throw new IllegalArgumentException("Missing standalone JNI library");
-                        options = (test ? "hook-probe" : "minecraft-hook") +
+                        options = (continuousHook ? (test ? "hook-continuous" : "minecraft-continuous") :
+                                               (test ? "hook-probe" : "minecraft-hook")) +
                             "|" + jniLibrary.getCanonicalPath() +
                             (extendedHook ? "|" + requestedOption.substring("--hook-probe=".length()) : "");
                     }
@@ -73,7 +82,7 @@ public final class AttachMain {
             } finally {
                 vm.detach();
             }
-            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))));
+            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (stopObservation ? " mode=stop-observation" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft"))))));
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
             System.exit(2);
