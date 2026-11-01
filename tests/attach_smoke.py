@@ -142,8 +142,8 @@ try:
     # rejected native frame, or treat a mock ray hit as attack eligibility.
     import re
     summaries = re.findall(
-        r"NATIVE_OBSERVATION_SUMMARY accepted=(\\d+) worldPlayer=(\\d+) "
-        r"rayEntity=(\\d+) generations=(\\d+)", tail)
+        r"NATIVE_OBSERVATION_SUMMARY accepted=(\d+) worldPlayer=(\d+) "
+        r"rayEntity=(\d+) generations=(\d+)", tail)
     if summaries != [("20", "20", "20", "0"), ("120", "120", "120", "0")]:
         raise AssertionError("Expected two exact validated synthetic world/target summaries: " +
                              repr(summaries))
