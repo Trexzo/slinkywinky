@@ -20,6 +20,10 @@ public final class InstrumentationProbe {
     private static final String PREFIX = "[SlinkyWinkyInstrument] ";
     private static final AtomicInteger ticks = new AtomicInteger();
     private static final int DEFAULT_TICK_LIMIT = 20;
+    // Stop-command driven observation is still bounded if the operator forgets to stop.
+    // 36,000 client ticks are approximately 30 minutes at nominal 20 TPS.
+    private static final int MAX_CONTINUOUS_TICKS = 36000;
+    private static final AtomicBoolean stopRequested = new AtomicBoolean();
     // An extended diagnostic is bounded and explicitly authorized by the loader.
     private static volatile int tickLimit = DEFAULT_TICK_LIMIT;
     private static final AtomicBoolean cleanupStarted = new AtomicBoolean();
@@ -129,7 +133,9 @@ public final class InstrumentationProbe {
                 Thread.currentThread().getName());
             System.out.flush();
         }
-        if ((n >= tickLimit || !nativeOk) && cleanupStarted.compareAndSet(false, true)) {
+        final boolean requestedStop = stopRequested.get() && tickLimit == MAX_CONTINUOUS_TICKS;
+        if ((n >= tickLimit || requestedStop || !nativeOk) &&
+            cleanupStarted.compareAndSet(false, true)) {
             active = false;
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
@@ -152,9 +158,13 @@ public final class InstrumentationProbe {
             System.out.println(PREFIX+"OBSERVATION_RELEASE_PASS");
             if(closed) System.out.println(PREFIX+"NATIVE_SESSION_CLOSE_PASS");
             else System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_REJECTED");
-            if(n>=tickLimit && nativeOk)
+            if(nativeOk && requestedStop) {
+                System.out.println(PREFIX+"CONTINUOUS_STOP_ON_CLIENT_THREAD_PASS ticks="+n);
+            } else if(n>=tickLimit && nativeOk) {
                 System.out.println(PREFIX+"GAME_THREAD_TICK_"+tickLimit+"_PASS ticks="+n);
-            else System.err.println(PREFIX+"GAME_THREAD_HOOK_ABORT ticks="+n);
+            } else {
+                System.err.println(PREFIX+"GAME_THREAD_HOOK_ABORT ticks="+n);
+            }
             System.out.flush();
             final Instrumentation instrumentation = installedVia;
             final Class<?> target = installedClass;
@@ -244,8 +254,25 @@ public final class InstrumentationProbe {
     public static void agentmain(String options, Instrumentation instrumentation) {
         final int delimiter = options == null ? -1 : options.indexOf('|');
         final String mode = delimiter < 0 ? options : options.substring(0, delimiter);
-        final boolean test = "probe".equals(mode) || "hook-probe".equals(mode);
-        final boolean hook = "hook-probe".equals(mode) || "minecraft-hook".equals(mode);
+        // A stop request is not another instrumentation operation: only the
+        // existing owner thread may close JNI state and restore class bytes.
+        if ("hook-stop".equals(mode) || "minecraft-stop".equals(mode)) {
+            if (delimiter >= 0)
+                throw new IllegalArgumentException("Stop command takes no payload");
+            if (!hookInstalled.get() || !active || cleanupStarted.get() ||
+                tickLimit != MAX_CONTINUOUS_TICKS)
+                throw new IllegalStateException("No active continuous observation to stop");
+            stopRequested.set(true);
+            System.out.println(PREFIX+"CONTINUOUS_STOP_REQUEST_ACCEPTED");
+            System.out.flush();
+            return;
+        }
+        final boolean continuous = "hook-continuous".equals(mode) ||
+                                   "minecraft-continuous".equals(mode);
+        final boolean test = "probe".equals(mode) || "hook-probe".equals(mode) ||
+                             "hook-continuous".equals(mode);
+        final boolean hook = "hook-probe".equals(mode) ||
+                             "minecraft-hook".equals(mode) || continuous;
         if (!test && !"minecraft".equals(mode) && !hook)
             throw new IllegalArgumentException("Unsupported instrument mode");
         if (!instrumentation.isRetransformClassesSupported())
@@ -306,9 +333,11 @@ public final class InstrumentationProbe {
                 if (delimiter < 0 || delimiter == options.length() - 1)
                     throw new IllegalArgumentException("Missing exact JNI library path");
                 String path = options.substring(delimiter + 1);
-                int requestedLimit = DEFAULT_TICK_LIMIT;
+                int requestedLimit = continuous ? MAX_CONTINUOUS_TICKS : DEFAULT_TICK_LIMIT;
                 final int durationDelimiter = path.indexOf('|');
                 if (durationDelimiter >= 0) {
+                    if (continuous)
+                        throw new IllegalArgumentException("Continuous mode takes no tick suffix");
                     requestedLimit = parseExtendedLimit(path.substring(durationDelimiter + 1));
                     path = path.substring(0, durationDelimiter);
                 }
@@ -337,6 +366,7 @@ public final class InstrumentationProbe {
             cleanupStarted.set(false);
             nativeContext=0;
             nativeSessionCloseOk=false;
+            stopRequested.set(false);
             acceptedFrames=0;
             worldPlayerFrames=0;
             rayTargetFrames=0;
