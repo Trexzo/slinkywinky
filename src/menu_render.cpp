@@ -12,9 +12,12 @@ bool MenuRenderSession::owner() const noexcept {
 }
 bool MenuRenderSession::attach(std::uint64_t epoch,unsigned width,
                                unsigned height) noexcept {
-    if(active_ || epoch==0 || !valid_viewport(width,height))return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(active_ || epoch==0 || epoch<=last_epoch_ ||
+       !valid_viewport(width,height))return false;
     thread_=std::this_thread::get_id();
     epoch_=epoch;
+    last_epoch_=epoch;
     width_=width;
     height_=height;
     sequence_=0;
@@ -22,12 +25,14 @@ bool MenuRenderSession::attach(std::uint64_t epoch,unsigned width,
     return true;
 }
 bool MenuRenderSession::resize(unsigned width,unsigned height) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
     if(!active_ || !owner() || !valid_viewport(width,height))return false;
     width_=width;
     height_=height;
     return true;
 }
 std::optional<MenuRenderFrame> MenuRenderSession::next(const MenuState& menu) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if(!active_ || !owner() || !valid_viewport(width_,height_) ||
        sequence_==std::numeric_limits<std::uint64_t>::max())
         return std::nullopt;
@@ -49,13 +54,21 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(const MenuState& menu) {
     return frame;
 }
 bool MenuRenderSession::detach() noexcept {
-    if(!active_)return false;
-    if(!owner())return false;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(!active_ || !owner())return false;
     active_=false;
     epoch_=0;
     sequence_=0;
     width_=height_=0;
     thread_=std::thread::id{};
     return true;
+}
+bool MenuRenderSession::attached() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return active_;
+}
+std::uint64_t MenuRenderSession::sequence() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return sequence_;
 }
 } // namespace slinkywinky
