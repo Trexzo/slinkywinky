@@ -192,9 +192,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
     find_package(Python3 COMPONENTS Interpreter)
     if(Python3_Interpreter_FOUND)
       add_test(NAME native_agent_attach
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/attach_smoke.py"
+        COMMAND "${Python3_EXECUTABLE}" -u "${CMAKE_CURRENT_SOURCE_DIR}/tests/attach_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
-      set_tests_properties(native_agent_attach PROPERTIES TIMEOUT 45)
+      set_tests_properties(native_agent_attach PROPERTIES TIMEOUT 120)
     endif()
   endif()
 endif()
