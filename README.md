@@ -25,3 +25,9 @@ The injector targets a chosen process explicitly and checks it is Minecraft. It 
 R48 verified **two** consecutive read-only native attachments into an isolated **original obfuscated Minecraft 1.8.9** JVM, not a Forge development client. The standalone loader admitted class `ave`, executed zero-action C++ observations on the `Client thread`, closed the session, and restored matching bytecode fingerprints. See [R48 evidence](docs/R48_VANILLA_RUNTIME_ACCEPTANCE.md).
 
 The existing late JVMTI breakpoint approach remains unsupported on Java 8 (`JVMTI_ERROR_NOT_AVAILABLE 98`). The working hook uses Java Instrumentation and JNI and is explicitly developer-gated. It defaults to 20 ticks; R59 adds optional, separately authorized **120- or 600-callback** read-only windows (`--hook-probe=120` / `--hook-probe=600` with `SLINKYWINKY_EXTENDED_DIAGNOSTIC=1` in the attaching process). See [R59 diagnostic bounds and acceptance](docs/R59_EXTENDED_NATIVE_OBSERVATION.md). The actual client is **not yet playable**: live world/target observation, real combat decisions, ClickGUI/HUD, full native-agent unload and verified reference parity are incomplete.
+
+## R60 — independently verifiable world/player observation
+
+R60 adds native-accepted frame counters (world+player, crosshair ray entity, session-generation changes) and a **manual-only** 600-tick original-vanilla-world acceptance harness. The harness refuses menu-only evidence when a world is required. Its optional `--require-ray-entity` also requires a ray-selected entity; neither observation certifies combat eligibility or visible targets. The test never synthesizes input or starts Minecraft in CI. See [R60 evidence requirements and usage](docs/R60_VANILLA_WORLD_OBSERVATION.md).
+
+**The local Windows desktop was offline during development, so R60's in-game acceptance has not been run.** Successful CI only establishes the implementation/build/disposable JVM tests, not a playable or fully reconstructed client.
