@@ -32,6 +32,10 @@ public final class InstrumentationProbe {
     private static native int nativeCloseObservation(long handle);
     /** R53: read-only native sample status, query on the owning client thread. */
     private static native double[] nativeReadObservationStatus(long handle);
+    /** Read-only cross-thread copy; null for unknown, closed or unpublished sessions.
+     * The tenth item is a strictly increasing per-session publication sequence.
+     */
+    private static native double[] nativeReadPublishedStatus(long handle);
     private static volatile long nativeContext;
     private static volatile boolean nativeSessionCloseOk;
 

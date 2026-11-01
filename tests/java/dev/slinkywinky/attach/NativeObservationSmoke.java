@@ -24,10 +24,13 @@ public final class NativeObservationSmoke {
                             double[].class,float[].class);
         Method close=api.getDeclaredMethod("nativeCloseObservation",long.class);
         Method status=api.getDeclaredMethod("nativeReadObservationStatus",long.class);
+        Method published=api.getDeclaredMethod("nativeReadPublishedStatus",long.class);
         open.setAccessible(true);observe.setAccessible(true);close.setAccessible(true);
-        status.setAccessible(true);
+        status.setAccessible(true);published.setAccessible(true);
         final long handle=((Long)open.invoke(null)).longValue();
         check(handle!=0,"Native context creation");
+        check(published.invoke(null,handle)==null,
+              "Cannot read an uncommitted client-thread observation");
         double[] xyz={1.0,65.62,-2.0,4.5,66.0,1.0};
         float[] camera={40f,-8f};
         // Same native owner, same session: preserve state across multiple calls.
@@ -43,6 +46,11 @@ public final class NativeObservationSmoke {
               "Read-only target distance");
         check(snap[5]==40 && snap[6]==-8 && snap[7]==1100 &&
               Math.abs(snap[8]-65.62)<1e-6,"Read-only clock, camera and player eye Y");
+        double[] copied=(double[])published.invoke(null,handle);
+        check(copied!=null && copied.length==10 && copied[9]==3.0,
+              "Three coherent observations published, ordered by sequence");
+        for(int i=0;i<9;i++) check(copied[i]==snap[i],
+              "Published status must exactly equal the owner-thread observation");
         check(step(observe,handle,1150,3,1,new double[6],new float[2])==1,
               "World without player permitted during reentry");
         check(step(observe,handle,1200,4,0,new double[6],new float[2])==1,
@@ -86,6 +94,9 @@ public final class NativeObservationSmoke {
         snap=(double[])status.invoke(null,handle);
         check(snap!=null && snap[0]==7 && snap[1]==4,
               "Rejected JNI calls must not increment ledger");
+        copied=(double[])published.invoke(null,handle);
+        check(copied!=null && copied[0]==7 && copied[9]==7,
+              "Rejected inputs never advance the published HUD sequence");
         // A foreign thread cannot destroy a creator-thread-owned native context.
         final AtomicInteger foreignStatus=new AtomicInteger(-99);
         Thread otherStatus=new Thread(new Runnable() {
@@ -96,7 +107,20 @@ public final class NativeObservationSmoke {
         },"foreign-telemetry-negative-control");
         otherStatus.start();otherStatus.join(5000L);
         check(!otherStatus.isAlive() && foreignStatus.get()==1,
-              "Telemetry must not be queried by another thread");
+              "Owner-only engine state cannot be queried by another thread");
+        final AtomicInteger foreignCopy=new AtomicInteger(-99);
+        Thread otherPublished=new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    double[] result=(double[])published.invoke(null,handle);
+                    foreignCopy.set(result!=null && result.length==10 &&
+                                    result[0]==8 && result[9]==8 ? 1:0);
+                } catch(Throwable failure) {foreignCopy.set(-1);}
+            }
+        },"foreign-render-snapshot-positive-control");
+        otherPublished.start();otherPublished.join(5000L);
+        check(!otherPublished.isAlive() && foreignCopy.get()==1,
+              "Render thread must read a coherent published copy without owning engine");
         final AtomicInteger foreignClose=new AtomicInteger(-99);
         final AtomicReference<Throwable> foreignCloseError=new AtomicReference<Throwable>();
         Thread closer=new Thread(new Runnable() {
@@ -113,12 +137,16 @@ public final class NativeObservationSmoke {
         check(((Integer)close.invoke(null,handle)).intValue()==1,"Close from owner thread");
         check(((Integer)close.invoke(null,handle)).intValue()==0,"Double close rejected");
         check(status.invoke(null,handle)==null,"Closed session telemetry unavailable");
+        check(published.invoke(null,handle)==null,
+              "Revoked observation must not survive native context closure");
         check(step(observe,handle,1500,5,3,xyz,camera)==0,"Stale handle rejected");
         check(step(observe,Long.MAX_VALUE,1500,5,3,xyz,camera)==0,
               "Forged handle rejected without pointer access");
         check(((Integer)close.invoke(null,Long.MAX_VALUE)).intValue()==0,
               "Forged close rejected");
         check(status.invoke(null,Long.MAX_VALUE)==null,"Forged telemetry handle rejected");
+        check(published.invoke(null,Long.MAX_VALUE)==null,
+              "Forged published-status handle rejected");
         long newer=((Long)open.invoke(null)).longValue();
         check(newer>0 && newer!=handle,"Native handles cannot alias after reopen");
         check(step(observe,newer,1550,6,3,xyz,camera)==1,"New context remains functional");
@@ -135,6 +163,7 @@ public final class NativeObservationSmoke {
         check(((Long)open.invoke(null)).longValue()==0,"Fifth concurrent context must be rejected");
         final AtomicReference<Throwable> parallelError=new AtomicReference<Throwable>();
         final AtomicInteger rejectedParallel=new AtomicInteger();
+        final AtomicInteger observedPublished=new AtomicInteger();
         Thread[] workers=new Thread[4];
         for(int i=0;i<workers.length;i++) {
             final long crossHandle=bounded[i];
@@ -146,6 +175,13 @@ public final class NativeObservationSmoke {
                                     new double[]{1,2,3,4,5,6},new float[]{0,0})!=0)
                                 throw new AssertionError("Wrong-thread JNI call admitted");
                             rejectedParallel.incrementAndGet();
+                            double[] copy=(double[])published.invoke(null,crossHandle);
+                            if(copy!=null) {
+                                if(copy.length!=10 || copy[0]!=copy[9] ||
+                                   !Double.isFinite(copy[4]))
+                                    throw new AssertionError("Torn or invalid concurrent HUD copy");
+                                observedPublished.incrementAndGet();
+                            }
                         }
                     } catch(Throwable failure) {parallelError.compareAndSet(null,failure);}
                 }
@@ -160,11 +196,14 @@ public final class NativeObservationSmoke {
         for(Thread worker:workers) check(!worker.isAlive(),"JNI worker hung");
         check(parallelError.get()==null && rejectedParallel.get()==2000,
               "All foreign JNI access must fail under contention");
+        check(observedPublished.get()>0,"Cross-thread published copies must be readable");
         for(long id:bounded) {
             check(((Integer)close.invoke(null,id)).intValue()==1,
                   "Owner must release bounded context");
             check(step(observe,id,2200,8,3,xyz,camera)==0,
                   "Released context must stay invalid");
+            check(published.invoke(null,id)==null,
+                  "Released registry handle must revoke all render snapshots");
         }
         System.out.println("NATIVE_OBSERVATION_LEDGER_PASS");
         System.out.println("NATIVE_OBSERVATION_REGISTRY_STRESS_PASS");

@@ -1,5 +1,6 @@
 #include "slinkywinky/bridge.h"
 #include "slinkywinky/observation.hpp"
+#include "slinkywinky/hud_snapshot.hpp"
 #include <jni.h>
 #include <array>
 #include <cstdint>
@@ -181,6 +182,7 @@ namespace {
 struct ObservationRuntime {
     SWContext* engine = nullptr;
     slinkywinky::ObservationLedger ledger;
+    slinkywinky::HudSnapshotMailbox mailbox;
     explicit ObservationRuntime(SWContext* context) : engine(context) {}
 };
 std::mutex observationMutex;
@@ -234,8 +236,11 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
         !output.attempt_attack && !output.left_held && !output.right_held &&
         !output.has_rotation && !output.has_reach &&
         output.left_edge==0 && output.right_edge==0;
-    if(safe) session.ledger.commit(sample);
-    return safe ? 1 : 0;
+    if(!safe) return 0;
+    session.ledger.commit(sample);
+    const auto accepted=session.ledger.snapshot(); // Read only on client owner thread.
+    // Never publish a frame that has not passed native zero-action admission.
+    return accepted && session.mailbox.publish(*accepted) ? 1 : 0;
 }
 
 /** R43: long-lived context, created and destroyed on the exact game thread. */
@@ -275,8 +280,9 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeCloseObservation(
     if(found==observationContexts.end()) return 0;
     SWContext*& context=found->second->engine;
     if(sw_destroy(&context)!=0) return 0;
+    const bool revoked=found->second->mailbox.revoke();
     observationContexts.erase(found);
-    return 1;
+    return revoked ? 1 : 0;
 }
 
 
@@ -303,5 +309,36 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeReadObservationStatus
     };
     jdoubleArray result=env->NewDoubleArray(9);
     if(result) env->SetDoubleArrayRegion(result,0,9,values);
+    return result;
+}
+
+
+/** R55: coherent, read-only published status for another JVM render/UI thread.
+ * This never calls the owner-thread decision engine or exposes its pointers.
+ * Format: existing nine status doubles followed by a publication sequence.
+ */
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeReadPublishedStatus(
+    JNIEnv* env,jclass,jlong handle) {
+    std::lock_guard<std::mutex> guard(observationMutex);
+    const auto found=observationContexts.find(handle);
+    if(found==observationContexts.end()) return nullptr;
+    const auto published=found->second->mailbox.read();
+    if(!published) return nullptr;
+    const auto& s=published->status;
+    const jdouble values[10]={
+        static_cast<jdouble>(s.valid_ticks),
+        static_cast<jdouble>(s.session_transitions),
+        static_cast<jdouble>(s.generation),
+        static_cast<jdouble>(s.flags),
+        static_cast<jdouble>(s.target_distance),
+        static_cast<jdouble>(s.yaw),
+        static_cast<jdouble>(s.pitch),
+        static_cast<jdouble>(s.time_ms),
+        static_cast<jdouble>(s.eye_y),
+        static_cast<jdouble>(published->sequence)
+    };
+    jdoubleArray result=env->NewDoubleArray(10);
+    if(result) env->SetDoubleArrayRegion(result,0,10,values);
     return result;
 }
