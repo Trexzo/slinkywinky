@@ -53,6 +53,18 @@ try:
         raise AssertionError("Render mapping admission negative controls failed: " +
                              render_audit.stdout + render_audit.stderr)
     print("PASS: offline renderer callsite uniqueness and wrong-target rejection")
+    # R65: bounded, read-only render callback test in generated classfiles.
+    # The production JVM agent is intentionally not involved.
+    render_callback = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.RenderCallbackSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (render_callback.returncode != 0 or
+        "R65_READ_ONLY_RENDER_FIXTURE_PASS" not in render_callback.stdout or
+        "R65_RENDER_THREAD_AND_BOUNDS_NEGATIVE_CONTROLS_PASS" not in render_callback.stdout):
+        raise AssertionError("Read-only render fixture admission failed: " +
+                             render_callback.stdout + render_callback.stderr)
+    print("PASS: isolated bounded render callback and wrong-thread rejection")
     admission = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.HookAdmissionSmoke"],
         capture_output=True, text=True, env=env, timeout=15)
