@@ -128,12 +128,14 @@ try:
     # AttachTarget advances one game tick per ~30 ms. Permit 120 observed ticks
     # plus asynchronous class fingerprint restoration before termination.
     time.sleep(5.0)
+    print("R61_TEST_PHASE=no-active-stop", flush=True)
     # R61: a stop with no active continuous session must fail closed.
     no_session_stop = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--stop-observation"],
         capture_output=True, text=True, env=env, timeout=15)
     if no_session_stop.returncode == 0:
         raise AssertionError("Stop must not succeed without continuous ownership")
+    print("R61_TEST_PHASE=continuous-gate", flush=True)
     no_continuous_gate = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe=continuous"],
         capture_output=True, text=True, env=hook_env, timeout=15)
@@ -142,6 +144,9 @@ try:
         raise AssertionError("Continuous session bypassed its separate opt-in")
     continuous_env = hook_env.copy()
     continuous_env["SLINKYWINKY_CONTINUOUS_OBSERVATION"] = "1"
+    if target.poll() is not None:
+        raise AssertionError("Disposable JVM died before continuous attach")
+    print("R61_TEST_PHASE=continuous-start", flush=True)
     continuous = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--hook-probe=continuous"],
         capture_output=True, text=True, env=continuous_env, timeout=22)
@@ -151,6 +156,7 @@ try:
     # Let the disposable target advance well beyond the default 20 callbacks,
     # but do NOT wait for the 36,000-tick independent upper bound.
     time.sleep(1.3)
+    print("R61_TEST_PHASE=explicit-stop", flush=True)
     stop = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--stop-observation"],
         capture_output=True, text=True, env=env, timeout=22)
@@ -158,6 +164,7 @@ try:
         raise AssertionError("Explicit continuous stop command failed: " +
                              stop.stdout + stop.stderr)
     time.sleep(1.8)
+    print("R61_TEST_PHASE=post-cleanup-denial", flush=True)
     duplicate_stop = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--stop-observation"],
         capture_output=True, text=True, env=env, timeout=15)
