@@ -126,6 +126,9 @@ def main():
                         help="Separate workspace containing the built native injector")
     parser.add_argument("--jdk8", type=Path, required=True,
                         help="Installed full x64 Java 8 JDK")
+    parser.add_argument("--loader", type=Path,
+                        help="Explicit built slinkywinky_loader.exe path inside --workspace; "
+                             "required if several build directories exist")
     parser.add_argument("--minecraft-dir", type=Path,
                         default=Path(os.environ.get("APPDATA", ".")) / ".minecraft",
                         help="Existing official Minecraft installation (read-only)")
@@ -156,7 +159,20 @@ def main():
     client_dir = game_root / "versions" / "1.8.9"
     client_jar = client_dir / "1.8.9.jar"
     manifest_path = client_dir / "1.8.9.json"
-    launcher = workspace / "build-native-agent" / "Release" / "slinkywinky_loader.exe"
+    if args.loader:
+        launcher = args.loader.resolve()
+    else:
+        choices = [
+            workspace / folder / "Release" / "slinkywinky_loader.exe"
+            for folder in ("build-inject", "build-native-agent", "build")
+        ]
+        found = [candidate for candidate in choices if candidate.is_file()]
+        if len(found) != 1:
+            parser.error("Expected one built loader in workspace; use --loader to select "
+                         "an exact executable when none or multiple are found")
+        launcher = found[0].resolve()
+    if workspace not in launcher.parents or launcher.name.lower() != "slinkywinky_loader.exe":
+        parser.error("Loader must be the named native executable inside the workspace")
     if not (client_jar.is_file() and manifest_path.is_file() and launcher.is_file()):
         parser.error("Missing installed vanilla 1.8.9 JAR, JSON, or standalone loader")
     if digest(client_jar, "sha256") != PINNED_CLIENT_SHA256:
