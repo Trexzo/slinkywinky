@@ -6,6 +6,7 @@
 #include <GL/gl.h>
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include <array>
+#include <cstdint>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -110,6 +111,16 @@ void same(const State& a,const State& b) {
         REQUIRE(std::fabs(a.textureMatrix[i]-b.textureMatrix[i])<0.000001);
     }
 }
+std::array<GLubyte,4> readback(int x,int y) {
+    GLint old=0;
+    glGetIntegerv(GL_READ_BUFFER,&old);
+    glReadBuffer(GL_BACK);
+    std::array<GLubyte,4> pixels{};
+    glReadPixels(x,y,1,1,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+    glReadBuffer(static_cast<GLenum>(old));
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    return pixels;
+}
 }
 
 int main() {
@@ -148,10 +159,22 @@ int main() {
         REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
         wrong=*frame;wrong.epoch=0;
         REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
+        wrong=*frame;wrong.visible.front().title="UNTRUSTED";
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
         same(before,snapshot());
         REQUIRE(draw_menu_gl11(*frame,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+        // A successful call must actually draw first-party glyph pixels:
+        // top accent, white 'S' at the first title row, and its empty cell.
+        const auto accent=readback(4,628);
+        REQUIRE(accent[0]>=210 && accent[1]>=125 && accent[2]>=50);
+        const auto titleInk=readback(27,610);
+        REQUIRE(titleInk[0]>=190 && titleInk[1]>=190 && titleInk[2]>=190);
+        const auto titleGap=readback(24,610);
+        REQUIRE(titleGap[0]<80 && titleGap[1]<80 && titleGap[2]<80);
+        const auto moduleInk=readback(34,466);
+        REQUIRE(moduleInk[0]>=190 && moduleInk[1]>=190 && moduleInk[2]>=190);
         REQUIRE(menu.toggle_preview(frame->visible.front().catalog_index));
         const auto changed=admitted.next(menu);
         REQUIRE(changed && changed->visible.front().preview_enabled);
@@ -174,6 +197,8 @@ int main() {
         std::cout<<"R67_ISOLATED_WGL_CONTEXT_PASS\n";
         std::cout<<"R67_FIXED_FUNCTION_GL_STATE_RESTORED_PASS\n";
         std::cout<<"R67_NO_GAME_RENDER_HOOK_OR_INPUT\n";
+        std::cout<<"R68_GL11_BITMAP_LABEL_PIXELS_PASS\n";
+        std::cout<<"R68_GL11_NO_VENDOR_FONT_RESOURCES_PASS\n";
         return 0;
     } catch(const std::exception& failure) {
         std::cerr<<failure.what()<<'\n';
