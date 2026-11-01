@@ -5,7 +5,7 @@ public final class AttachTarget {
     public static class DummyEntity {
         public double posX=4.5,posY=65,posZ=-2;
     }
-    public static final class DummyPlayer extends DummyEntity {
+    public static class DummyPlayer extends DummyEntity {
         public float rotationYaw=40,rotationPitch=-8;
         public DummyPlayer(){ posX=1.25; posY=64.0; posZ=2.0; }
         public float getEyeHeight(){return 1.62f;}

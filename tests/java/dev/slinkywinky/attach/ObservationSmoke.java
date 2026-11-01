@@ -4,6 +4,7 @@ import dev.slinkywinky.instrument.ObservedState;
 /** Deterministic read-only mapped field and state-transition assertions. */
 public final class ObservationSmoke {
     public static class AlternateEntity extends AttachTarget.DummyEntity { }
+    public static class AlternatePlayer extends AttachTarget.DummyPlayer { }
     private static long mappingBuilds() throws Exception {
         java.lang.reflect.Field counter=ObservedState.class.getDeclaredField("mappingBuilds");
         counter.setAccessible(true);
@@ -37,6 +38,12 @@ public final class ObservationSmoke {
         ObservedState.Frame noTarget=ObservedState.sample();
         check(noTarget.flags==3 && noTarget.generation==first.generation,
               "Target loss cannot create a new player session");
+        minecraft.thePlayer=new AlternatePlayer();
+        ObservedState.Frame substitutedPlayer=ObservedState.sample();
+        check(substitutedPlayer.flags==3 &&
+              substitutedPlayer.generation>noTarget.generation &&
+              mappingBuilds()==firstBuilds+2,
+              "Player subclass change must rebuild binding and advance session");
         minecraft.theWorld=null; minecraft.thePlayer=null;
         ObservedState.Frame menu=ObservedState.sample();
         check(menu.flags==0 && menu.generation>first.generation,"Disconnect generation");
