@@ -6,6 +6,7 @@
 #endif
 #include <windows.h>
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/menu_render.hpp"
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -15,6 +16,7 @@
 namespace {
 using slinkywinky::MenuTab;
 slinkywinky::MenuState menu;
+slinkywinky::MenuRenderSession renderSession;
 constexpr int baseWidth=676, wideWidth=844, panelHeight=630;
 constexpr int navY=78, navH=42, rowStart=153, rowH=49, visibleRows=8;
 constexpr wchar_t klass[]=L"SlinkyWinkyMenuPreview";
@@ -58,6 +60,12 @@ int tab_x(int index,int width) {return 18+index*(width-36)/7;}
 void repaint(HWND hwnd) {InvalidateRect(hwnd,nullptr,FALSE);}
 void redraw(HWND hwnd,HDC target) {
     RECT client{};GetClientRect(hwnd,&client);
+    // No frame is rendered unless the host surface belongs to the current
+    // validated owner-thread context with this exact viewport.
+    const auto frame=renderSession.next(menu);
+    if(!frame || frame->viewport_width!=static_cast<unsigned>(client.right) ||
+       frame->viewport_height!=static_cast<unsigned>(client.bottom))
+        return;
     HDC buffer=CreateCompatibleDC(target);
     if(!buffer)return;
     HBITMAP bitmap=CreateCompatibleBitmap(target,client.right,client.bottom);
@@ -66,7 +74,7 @@ void redraw(HWND hwnd,HDC target) {
     const COLORREF bg=RGB(22,22,23),panel=RGB(28,28,29),
                    subtle=RGB(37,37,38),muted=RGB(151,151,153),
                    bright=RGB(244,244,245);
-    const COLORREF accent=color(menu.appearance().accent_rgb);
+    const COLORREF accent=color(frame->appearance.accent_rgb);
     const int w=client.right;
     rect(buffer,0,0,w,client.bottom,bg);
     rect(buffer,0,0,w,4,accent);
@@ -81,24 +89,24 @@ void redraw(HWND hwnd,HDC target) {
     for(int i=0;i<7;++i) {
         const auto tab=static_cast<MenuTab>(i);
         const int x=tab_x(i,w), cell=(w-36)/7;
-        if(menu.tab()==tab) {
+        if(frame->tab==tab) {
             rect(buffer,x,navY,cell,navH,RGB(49,43,37));
             rect(buffer,x+8,navY+navH-3,cell-16,3,accent);
         }
         draw(buffer,widen(slinkywinky::menu_tab_name(tab)),x+3,navY,
              cell-6,navH,tab==MenuTab::Unload?RGB(114,114,117):
-             (menu.tab()==tab?bright:RGB(183,183,185)),
+             (frame->tab==tab?bright:RGB(183,183,185)),
              DT_CENTER|DT_VCENTER|DT_SINGLELINE);
     }
     SelectObject(buffer,body);
-    draw(buffer,widen(slinkywinky::menu_tab_name(menu.tab())),25,125,
+    draw(buffer,widen(slinkywinky::menu_tab_name(frame->tab)),25,125,
          w-160,24,bright);
     SelectObject(buffer,small);
-    draw(buffer,menu.tab()==MenuTab::Profiles?L"Profiles not wired to gameplay":
+    draw(buffer,frame->is_placeholder?L"Profiles not wired to gameplay":
          L"PREVIEW-ONLY SWITCHES",w-225,125,202,24,muted,
          DT_RIGHT|DT_SINGLELINE|DT_VCENTER);
-    const auto page=menu.page();
-    if(menu.tab()==MenuTab::Profiles) {
+    const auto& page=frame->visible;
+    if(frame->is_placeholder) {
         rect(buffer,18,163,w-36,113,panel);
         draw(buffer,L"Profile management is a separate future milestone.",
              33,172,w-66,32,bright);
@@ -113,7 +121,7 @@ void redraw(HWND hwnd,HDC target) {
             SelectObject(buffer,nameFont);
             draw(buffer,widen(item.title),31,y+5,w-206,23,bright);
             SelectObject(buffer,small);
-            if(!menu.appearance().compact)
+            if(!frame->appearance.compact)
                 draw(buffer,item.expanded?L"Settings UI: not connected":
                      L"UI catalog only - no module implementation",
                      31,y+24,w-206,16,muted);
@@ -142,6 +150,14 @@ void redraw(HWND hwnd,HDC target) {
 LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     switch(message){
         case WM_ERASEBKGND:return 1;
+        case WM_SIZE: {
+            const unsigned width=LOWORD(lp),height=HIWORD(lp);
+            if(!renderSession.attached())
+                renderSession.attach(1,width,height);
+            else
+                renderSession.resize(width,height);
+            return 0;
+        }
         case WM_PAINT: {
             PAINTSTRUCT ps{};HDC dc=BeginPaint(hwnd,&ps);
             if(dc)redraw(hwnd,dc);EndPaint(hwnd,&ps);return 0;
@@ -194,7 +210,10 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(wp==VK_DOWN)menu.scroll_by(1);
             repaint(hwnd);return 0;
         }
-        case WM_DESTROY:PostQuitMessage(0);return 0;
+        case WM_DESTROY:
+            renderSession.detach(); // Only owner thread may release the context.
+            PostQuitMessage(0);
+            return 0;
         default:return DefWindowProcW(hwnd,message,wp,lp);
     }
 }
