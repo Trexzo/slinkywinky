@@ -23,7 +23,9 @@ public final class NativeObservationSmoke {
                             long.class,long.class,long.class,int.class,
                             double[].class,float[].class);
         Method close=api.getDeclaredMethod("nativeCloseObservation",long.class);
+        Method status=api.getDeclaredMethod("nativeReadObservationStatus",long.class);
         open.setAccessible(true);observe.setAccessible(true);close.setAccessible(true);
+        status.setAccessible(true);
         final long handle=((Long)open.invoke(null)).longValue();
         check(handle!=0,"Native context creation");
         double[] xyz={1.0,65.62,-2.0,4.5,66.0,1.0};
@@ -32,11 +34,24 @@ public final class NativeObservationSmoke {
         check(step(observe,handle,1000,1,0,new double[6],new float[2])==1,"Menu frame");
         check(step(observe,handle,1050,2,3,xyz,camera)==1,"World/player frame");
         check(step(observe,handle,1100,2,7,xyz,camera)==1,"Ray-selected target frame");
+        double[] snap=(double[])status.invoke(null,handle);
+        check(snap!=null && snap.length==9 && snap[0]==3.0 &&
+              snap[1]==1.0 && snap[2]==2.0 && snap[3]==7.0,
+              "Native ledger counts, transitions and flags");
+        check(Math.abs(snap[4]-Math.sqrt(
+                (4.5-1.0)*(4.5-1.0)+(66.0-65.62)*(66.0-65.62)+(1.0+2.0)*(1.0+2.0)))<1e-6,
+              "Read-only target distance");
+        check(snap[5]==40 && snap[6]==-8 && snap[7]==1100 &&
+              Math.abs(snap[8]-65.62)<1e-6,"Read-only clock, camera and player eye Y");
         check(step(observe,handle,1150,3,1,new double[6],new float[2])==1,
               "World without player permitted during reentry");
         check(step(observe,handle,1200,4,0,new double[6],new float[2])==1,
               "World disconnect");
         check(step(observe,handle,1250,5,3,xyz,camera)==1,"New world session");
+        snap=(double[])status.invoke(null,handle);
+        check(snap!=null && snap[0]==6 && snap[1]==4 && snap[2]==5 &&
+              snap[3]==3 && snap[4]==0,
+              "Ledger must retain history while resetting target distance");
         // Invalid frame shape, impossible flags and nonfinite values must fail closed.
         check(step(observe,handle,1300,5,2,xyz,camera)==0,"Player without world rejected");
         check(step(observe,handle,1300,5,4,xyz,camera)==0,"Target without world rejected");
@@ -68,7 +83,20 @@ public final class NativeObservationSmoke {
               "Foreign-thread observation must be rejected");
         check(step(observe,handle,1400,5,3,xyz,camera)==1,
               "Rejected calls must not destroy owner context");
+        snap=(double[])status.invoke(null,handle);
+        check(snap!=null && snap[0]==7 && snap[1]==4,
+              "Rejected JNI calls must not increment ledger");
         // A foreign thread cannot destroy a creator-thread-owned native context.
+        final AtomicInteger foreignStatus=new AtomicInteger(-99);
+        Thread otherStatus=new Thread(new Runnable() {
+            @Override public void run() {
+                try {foreignStatus.set(status.invoke(null,handle)==null?1:0);}
+                catch(Throwable failure){foreignStatus.set(-1);}
+            }
+        },"foreign-telemetry-negative-control");
+        otherStatus.start();otherStatus.join(5000L);
+        check(!otherStatus.isAlive() && foreignStatus.get()==1,
+              "Telemetry must not be queried by another thread");
         final AtomicInteger foreignClose=new AtomicInteger(-99);
         final AtomicReference<Throwable> foreignCloseError=new AtomicReference<Throwable>();
         Thread closer=new Thread(new Runnable() {
@@ -84,11 +112,13 @@ public final class NativeObservationSmoke {
               "Context must survive wrong-thread close");
         check(((Integer)close.invoke(null,handle)).intValue()==1,"Close from owner thread");
         check(((Integer)close.invoke(null,handle)).intValue()==0,"Double close rejected");
+        check(status.invoke(null,handle)==null,"Closed session telemetry unavailable");
         check(step(observe,handle,1500,5,3,xyz,camera)==0,"Stale handle rejected");
         check(step(observe,Long.MAX_VALUE,1500,5,3,xyz,camera)==0,
               "Forged handle rejected without pointer access");
         check(((Integer)close.invoke(null,Long.MAX_VALUE)).intValue()==0,
               "Forged close rejected");
+        check(status.invoke(null,Long.MAX_VALUE)==null,"Forged telemetry handle rejected");
         long newer=((Long)open.invoke(null)).longValue();
         check(newer>0 && newer!=handle,"Native handles cannot alias after reopen");
         check(step(observe,newer,1550,6,3,xyz,camera)==1,"New context remains functional");
@@ -136,6 +166,7 @@ public final class NativeObservationSmoke {
             check(step(observe,id,2200,8,3,xyz,camera)==0,
                   "Released context must stay invalid");
         }
+        System.out.println("NATIVE_OBSERVATION_LEDGER_PASS");
         System.out.println("NATIVE_OBSERVATION_REGISTRY_STRESS_PASS");
         System.out.println("NATIVE_OBSERVATION_CONTRACT_PASS");
     }

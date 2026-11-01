@@ -1,4 +1,5 @@
 #include "slinkywinky/bridge.h"
+#include "slinkywinky/observation.hpp"
 #include <jni.h>
 #include <array>
 #include <cstdint>
@@ -7,6 +8,7 @@
 #include <atomic>
 #include <mutex>
 #include <unordered_map>
+#include <memory>
 
 namespace {
 void error(JNIEnv* env,const char* cls,const char* message) {
@@ -176,8 +178,13 @@ namespace {
 // Opaque monotonically increasing handles avoid raw pointers crossing the Java API.
 // The registry is bounded and guards each C++ decision against concurrent close.
 // sw_step/sw_destroy still independently enforce the creator-thread contract.
+struct ObservationRuntime {
+    SWContext* engine = nullptr;
+    slinkywinky::ObservationLedger ledger;
+    explicit ObservationRuntime(SWContext* context) : engine(context) {}
+};
 std::mutex observationMutex;
-std::unordered_map<jlong, SWContext*> observationContexts;
+std::unordered_map<jlong, std::unique_ptr<ObservationRuntime>> observationContexts;
 std::atomic<std::uint64_t> observationNextId{1};
 constexpr std::size_t maxObservationContexts = 4;
 }
@@ -199,7 +206,15 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     std::lock_guard<std::mutex> guard(observationMutex);
     const auto found=observationContexts.find(handle);
     if(found==observationContexts.end()) return 0;
-    SWContext* context=found->second;
+    ObservationRuntime& session=*found->second;
+    slinkywinky::ObservationFrame sample{};
+    sample.time_ms=static_cast<std::uint64_t>(time);
+    sample.generation=static_cast<std::uint64_t>(generation);
+    sample.flags=static_cast<std::uint32_t>(flags);
+    for(std::size_t i=0;i<6;++i) sample.xyz[i]=points[i];
+    sample.angles={camera[0],camera[1]};
+    if(!session.ledger.can_accept(sample)) return 0;
+    SWContext* context=session.engine;
     SWFrame frame{};
     frame.abi_version=SW_ABI_VERSION;
     frame.time_ms=static_cast<std::uint64_t>(time);
@@ -215,10 +230,12 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     settings.abi_version=SW_ABI_VERSION;
     SWOutput output{};
     const int status=sw_step(context,&frame,&settings,&output);
-    return status==0 && output.abi_version==SW_ABI_VERSION &&
+    const bool safe=status==0 && output.abi_version==SW_ABI_VERSION &&
         !output.attempt_attack && !output.left_held && !output.right_held &&
         !output.has_rotation && !output.has_reach &&
-        output.left_edge==0 && output.right_edge==0 ? 1 : 0;
+        output.left_edge==0 && output.right_edge==0;
+    if(safe) session.ledger.commit(sample);
+    return safe ? 1 : 0;
 }
 
 /** R43: long-lived context, created and destroyed on the exact game thread. */
@@ -239,7 +256,8 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeOpenObservation(JNIEn
     }
     const auto token=static_cast<jlong>(index);
     try {
-        if(!observationContexts.emplace(token,context).second) {
+        if(!observationContexts.emplace(
+                token,std::make_unique<ObservationRuntime>(context)).second) {
             sw_destroy(&context);
             return 0;
         }
@@ -255,8 +273,35 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeCloseObservation(
     std::lock_guard<std::mutex> guard(observationMutex);
     auto found=observationContexts.find(handle);
     if(found==observationContexts.end()) return 0;
-    SWContext* context=found->second;
+    SWContext*& context=found->second->engine;
     if(sw_destroy(&context)!=0) return 0;
     observationContexts.erase(found);
     return 1;
+}
+
+
+/** R53: owner-thread-only native status for a future read-only HUD. */
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeReadObservationStatus(
+    JNIEnv* env,jclass,jlong handle) {
+    std::lock_guard<std::mutex> guard(observationMutex);
+    const auto found=observationContexts.find(handle);
+    if(found==observationContexts.end()) return nullptr;
+    const auto status=found->second->ledger.snapshot();
+    if(!status) return nullptr;
+    // No entity identities, pointers, packets or input commands are exposed.
+    const jdouble values[9]={
+        static_cast<jdouble>(status->valid_ticks),
+        static_cast<jdouble>(status->session_transitions),
+        static_cast<jdouble>(status->generation),
+        static_cast<jdouble>(status->flags),
+        static_cast<jdouble>(status->target_distance),
+        static_cast<jdouble>(status->yaw),
+        static_cast<jdouble>(status->pitch),
+        static_cast<jdouble>(status->time_ms),
+        static_cast<jdouble>(status->eye_y)
+    };
+    jdoubleArray result=env->NewDoubleArray(9);
+    if(result) env->SetDoubleArrayRegion(result,0,9,values);
+    return result;
 }

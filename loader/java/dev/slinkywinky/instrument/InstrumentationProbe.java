@@ -30,6 +30,8 @@ public final class InstrumentationProbe {
     private static native int nativeObserveFrame(long handle,long timeMs,long generation,int flags,
                                                   double[] xyz,float[] angles);
     private static native int nativeCloseObservation(long handle);
+    /** R53: read-only native sample status, query on the owning client thread. */
+    private static native double[] nativeReadObservationStatus(long handle);
     private static volatile long nativeContext;
     private static volatile boolean nativeSessionCloseOk;
 
