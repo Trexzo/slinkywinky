@@ -14,6 +14,16 @@ public final class Vanilla189MappingSmoke {
         check(first.xyz[0]==1.25 && first.xyz[2]==2.0,"Mapped player coords");
         check(first.xyz[3]==4.5 && first.xyz[4]==65 && first.xyz[5]==-2.0,"Mapped target coords");
         check(first.angles[0]==42 && first.angles[1]==-9,"Mapped rotations");
+        Field cache=ObservedState.class.getDeclaredField("mappingBuilds");
+        cache.setAccessible(true);
+        long initial=cache.getLong(null);
+        check(initial==3,"Vanilla profile must bind three runtime classes");
+        for(int i=0;i<200;i++) {
+            ObservedState.Frame stable=ObservedState.sample();
+            check(stable.flags==7 && stable.generation==first.generation,
+                  "Vanilla repeated frames must preserve session");
+        }
+        check(cache.getLong(null)==initial,"Vanilla mapping must be reused, not reflected per tick");
         Method tick=InstrumentationProbe.class.getDeclaredMethod("isTickMethod",String.class,boolean.class,boolean.class);
         tick.setAccessible(true);
         check((Boolean)tick.invoke(null,"s",false,true),"vanilla tick");
@@ -33,6 +43,11 @@ public final class Vanilla189MappingSmoke {
         world.set(game,new Object());player.set(game,Class.forName("pk").newInstance());
         ObservedState.Frame rejoin=ObservedState.sample();
         check(rejoin.flags==3 && rejoin.generation>menu.generation,"reentry");
+        ObservedState.release();
+        check(cache.getLong(null)==0,"Release must drop vanilla reflection bindings");
+        ObservedState.admit(mc);
+        check(ObservedState.sample().flags==3,"Vanilla readmission must rebind cleanly");
+        ObservedState.release();
         System.out.println("VANILLA_189_OBFUSCATED_MAPPING_PASS");
     }
 }
