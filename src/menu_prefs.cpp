@@ -78,7 +78,6 @@ bool parse_menu_appearance(const std::string& text,
                     std::stoul(val,&used,16));
                 if(used!=6)return false;
             }else if(key=="scale"){
-                std::size_t used=0;
                 std::istringstream scale(val);
                 scale.imbue(std::locale::classic());
                 float n=0;
