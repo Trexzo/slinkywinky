@@ -1,6 +1,12 @@
 #include "slinkywinky/bridge.h"
 #include "slinkywinky/observation.hpp"
 #include "slinkywinky/hud_snapshot.hpp"
+#ifdef _WIN32
+#include "slinkywinky/windows_hud_ipc.hpp"
+#include <windows.h>
+#include <cstdlib>
+#include <cstring>
+#endif
 #include <jni.h>
 #include <array>
 #include <cstdint>
@@ -183,6 +189,10 @@ struct ObservationRuntime {
     SWContext* engine = nullptr;
     slinkywinky::ObservationLedger ledger;
     slinkywinky::HudSnapshotMailbox mailbox;
+#ifdef _WIN32
+    slinkywinky::HudIpcPublisher hud_ipc;
+    bool hud_ipc_enabled = false;
+#endif
     explicit ObservationRuntime(SWContext* context) : engine(context) {}
 };
 std::mutex observationMutex;
@@ -240,7 +250,15 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeObserveFrame(
     session.ledger.commit(sample);
     const auto accepted=session.ledger.snapshot(); // Read only on client owner thread.
     // Never publish a frame that has not passed native zero-action admission.
-    return accepted && session.mailbox.publish(*accepted) ? 1 : 0;
+    if(!accepted || !session.mailbox.publish(*accepted))return 0;
+#ifdef _WIN32
+    if(session.hud_ipc_enabled) {
+        const auto published=session.mailbox.read();
+        if(published) session.hud_ipc.publish(*published);
+        // Local HUD IPC is best-effort and must never block the client tick.
+    }
+#endif
+    return 1;
 }
 
 /** R43: long-lived context, created and destroyed on the exact game thread. */
@@ -261,11 +279,25 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeOpenObservation(JNIEn
     }
     const auto token=static_cast<jlong>(index);
     try {
-        if(!observationContexts.emplace(
-                token,std::make_unique<ObservationRuntime>(context)).second) {
+        auto inserted=observationContexts.emplace(
+            token,std::make_unique<ObservationRuntime>(context));
+        if(!inserted.second) {
             sw_destroy(&context);
             return 0;
         }
+#ifdef _WIN32
+        const char* requested=std::getenv("SLINKYWINKY_HUD_IPC");
+        if(requested && std::strcmp(requested,"1")==0) {
+            auto& runtime=*inserted.first->second;
+            if(!runtime.hud_ipc.open(GetCurrentProcessId())) {
+                SWContext*& owned=runtime.engine;
+                sw_destroy(&owned); // Invoked on creator thread.
+                observationContexts.erase(inserted.first);
+                return 0; // Opt-in could not be honored; fail admission.
+            }
+            runtime.hud_ipc_enabled=true;
+        }
+#endif
     } catch (...) {
         sw_destroy(&context);
         return 0;
@@ -280,6 +312,9 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeCloseObservation(
     if(found==observationContexts.end()) return 0;
     SWContext*& context=found->second->engine;
     if(sw_destroy(&context)!=0) return 0;
+#ifdef _WIN32
+    found->second->hud_ipc.revoke();
+#endif
     const bool revoked=found->second->mailbox.revoke();
     observationContexts.erase(found);
     return revoked ? 1 : 0;

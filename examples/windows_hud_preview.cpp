@@ -3,6 +3,7 @@
 #include <windows.h>
 #include "slinkywinky/hud.hpp"
 #include "slinkywinky/hud_snapshot.hpp"
+#include "slinkywinky/windows_hud_ipc.hpp"
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -11,12 +12,16 @@
 #include <memory>
 #include <mutex>
 #include <chrono>
+#include <cwchar>
 
 namespace {
 constexpr wchar_t class_name[]=L"SlinkyWinkyNativeHudPreview";
 constexpr int width=444, height=406;
 struct Preview { std::atomic<int> page{3}; bool compact=false,angles=true; };
 Preview preview;
+std::uint32_t livePid=0; // Nonzero only with explicit --pid.
+slinkywinky::HudIpcReader liveReader; // Accessed on GDI window thread only.
+bool liveConnected=false;
 std::atomic<bool> producerRunning{true};
 std::mutex mailboxAccess;
 std::shared_ptr<slinkywinky::HudSnapshotMailbox> publishedMailbox;
@@ -69,6 +74,16 @@ HFONT make_font(int size,int weight){
 }
 slinkywinky::HudPanel model(){
     const slinkywinky::HudOptions options{preview.angles,true,preview.compact};
+    if(livePid!=0) {
+        if(!liveConnected)liveConnected=liveReader.connect(livePid);
+        if(!liveConnected)return slinkywinky::make_hud_panel(std::nullopt,options);
+        const auto published=liveReader.read();
+        if(!published){
+            liveReader.close();liveConnected=false;
+            return slinkywinky::make_hud_panel(std::nullopt,options);
+        }
+        return slinkywinky::make_hud_panel(published->status,options);
+    }
     if(preview.page.load()==0) return slinkywinky::make_hud_panel(std::nullopt,options);
     std::shared_ptr<slinkywinky::HudSnapshotMailbox> box;
     {
@@ -122,8 +137,11 @@ void paint(HWND hwnd,HDC dc){
     fill(memory,{16,361,428,362},RGB(49,55,68));
     if(small)SelectObject(memory,small);
     SetTextColor(memory,RGB(140,151,170));
-    label(memory,L"OFFLINE  |  1-4 states  |  C compact  |  A angles  |  Esc close",
-          {18,371,426,397},DT_SINGLELINE|DT_CENTER|DT_VCENTER);
+    const std::wstring footer=livePid?
+        L"LOCAL READ-ONLY  |  C compact  |  A angles  |  Esc close":
+        L"OFFLINE  |  1-4 states  |  C compact  |  A angles  |  Esc close";
+    label(memory,footer,{18,371,426,397},
+          DT_SINGLELINE|DT_CENTER|DT_VCENTER);
     BitBlt(dc,0,0,bounds.right,bounds.bottom,memory,0,0,SRCCOPY);
     if(oldFont)SelectObject(memory,oldFont);
     if(large)DeleteObject(large);
@@ -138,7 +156,8 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
             if(wp==1)InvalidateRect(hwnd,nullptr,FALSE);return 0;
         case WM_KEYDOWN:
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
-            if(wp>=L'1'&&wp<=L'4')preview.page.store(static_cast<int>(wp-L'1'));
+            if(livePid==0 && wp>=L'1'&&wp<=L'4')
+                preview.page.store(static_cast<int>(wp-L'1'));
             if(wp==L'C')preview.compact=!preview.compact;
             if(wp==L'A')preview.angles=!preview.angles;
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
@@ -157,7 +176,17 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     }
 }
 }
-int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
+int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR commandLine,int show){
+    const std::wstring arguments(commandLine?commandLine:L"");
+    if(!arguments.empty()) {
+        if(arguments.rfind(L"--pid ",0)!=0)return 3;
+        const wchar_t* begin=arguments.c_str()+6;
+        wchar_t* end=nullptr;
+        const unsigned long chosen=std::wcstoul(begin,&end,10);
+        if(end==begin || (end && *end!=L'\0') || chosen==0 ||
+           chosen>0xfffffffful)return 3;
+        livePid=static_cast<std::uint32_t>(chosen);
+    }
     WNDCLASSEXW cls{};cls.cbSize=sizeof(cls);
     cls.hInstance=instance;cls.lpfnWndProc=procedure;
     cls.lpszClassName=class_name;cls.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
@@ -169,12 +198,14 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
         WS_POPUP,x,y,width,height,nullptr,nullptr,instance,nullptr);
     if(!hwnd)return 2;
     SetLayeredWindowAttributes(hwnd,RGB(0,0,0),248,LWA_ALPHA);
-    std::thread producer(synthetic_producer);
+    std::thread producer;
+    if(livePid==0)producer=std::thread(synthetic_producer);
     ShowWindow(hwnd,show==SW_HIDE?SW_SHOWNORMAL:show);
     UpdateWindow(hwnd);SetFocus(hwnd);
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
     producerRunning.store(false);
-    producer.join(); // No detached render/publication threads after window exit.
+    if(producer.joinable())producer.join();
+    liveReader.close();
     return static_cast<int>(msg.wParam);
 }
