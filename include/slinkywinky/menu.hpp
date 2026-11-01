@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,13 @@ struct MenuAppearance {
     float scale=1.0f;
 };
 
+// GUI appearance is stored independently from ClientSettings/combat profiles.
+std::string serialize_menu_appearance(const MenuAppearance& appearance);
+bool parse_menu_appearance(const std::string& text, MenuAppearance& appearance) noexcept;
+bool load_menu_appearance(const std::filesystem::path& path,MenuAppearance& result) noexcept;
+bool save_menu_appearance(const std::filesystem::path& path,
+                          const MenuAppearance& appearance) noexcept;
+
 struct MenuItem {
     std::size_t catalog_index=0;
     std::string title;
@@ -55,6 +63,9 @@ public:
     void set_wide(bool value) noexcept {appearance_.wide=value;}
     bool set_scale(float value) noexcept;
     bool set_accent(std::uint32_t rgb) noexcept;
+    void set_appearance(const MenuAppearance& appearance) noexcept {
+        appearance_=appearance;
+    }
     void set_allow_input(bool value) noexcept {appearance_.allow_input_while_open=value;}
     std::size_t tab_count(MenuTab tab) const noexcept;
     std::vector<MenuItem> page(std::size_t maximum=8) const;
