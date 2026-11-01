@@ -100,7 +100,10 @@ def validate_observation_evidence(log_text, attempts, expected_ticks,
         accepted, world_frames, ray_frames, generations = map(
             int, (accepted, world_frames, ray_frames, generations)
         )
-        if accepted != expected_ticks:
+        if expected_ticks is None:
+            if not 21 <= accepted < 36000:
+                raise RuntimeError("Stop-driven accepted tick count outside safe range")
+        elif accepted != expected_ticks:
             raise RuntimeError("Unexpected native-accepted callback count")
         if world_frames > accepted or ray_frames > world_frames or generations >= accepted:
             raise RuntimeError("Inconsistent native-accepted observation counters")
@@ -138,6 +141,8 @@ def main():
                         help="Manual-only: enter a local single-player world, then run a 600-tick read-only probe")
     parser.add_argument("--require-ray-entity", action="store_true",
                         help="Also require a native-accepted entity under the crosshair; implies --world-observation")
+    parser.add_argument("--continuous-observation", action="store_true",
+                        help="Opt-in R61 manual world session; stop after a bounded observation interval")
     args = parser.parse_args()
     if not args.run:
         parser.error("Refusing to start Minecraft: pass --run explicitly")
@@ -145,6 +150,8 @@ def main():
         parser.error("Windows x64 only")
     if args.require_ray_entity and not args.world_observation:
         parser.error("--require-ray-entity requires --world-observation")
+    if args.continuous_observation and not args.world_observation:
+        parser.error("--continuous-observation requires --world-observation")
     if args.world_observation and not sys.stdin.isatty():
         parser.error("Manual world admission requires an interactive terminal")
 
@@ -249,6 +256,8 @@ def main():
     environment["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
     if args.world_observation:
         environment["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
+    if args.continuous_observation:
+        environment["SLINKYWINKY_CONTINUOUS_OBSERVATION"] = "1"
 
     def read_log():
         return log.read_text(encoding="utf-8", errors="replace")
@@ -280,16 +289,23 @@ def main():
                 print("The probe will record counts only; it will not control the game.", flush=True)
                 if args.require_ray_entity:
                     print("During the probe, aim the crosshair at an entity at least once.", flush=True)
-                input("Once the world is loaded, press Enter to start the 600-tick observation: ")
+                input("Once the world is loaded, press Enter to start the read-only observation: ")
                 if game.poll() is not None:
                     raise RuntimeError("Minecraft exited before world observation")
             attempts = 1 if args.world_observation else 2
-            probe = "--hook-probe=600" if args.world_observation else "--hook-probe"
-            expected_ticks = 600 if args.world_observation else 20
-            markers = tuple(marker.replace("GAME_THREAD_TICK_20_PASS",
-                                           "GAME_THREAD_TICK_600_PASS")
-                            for marker in MARKERS)
-            if not args.world_observation:
+            if args.continuous_observation:
+                probe, expected_ticks = "--hook-probe=continuous", None
+                markers = tuple(marker.replace("GAME_THREAD_TICK_20_PASS",
+                                              "CONTINUOUS_STOP_ON_CLIENT_THREAD_PASS")
+                                for marker in MARKERS)
+                markers += ("CONTINUOUS_STOP_REQUEST_ACCEPTED",)
+            elif args.world_observation:
+                probe, expected_ticks = "--hook-probe=600", 600
+                markers = tuple(marker.replace("GAME_THREAD_TICK_20_PASS",
+                                               "GAME_THREAD_TICK_600_PASS")
+                                for marker in MARKERS)
+            else:
+                probe, expected_ticks = "--hook-probe", 20
                 markers = MARKERS
             for iteration in range(1, attempts + 1):
                 result = subprocess.run(
@@ -298,6 +314,22 @@ def main():
                 )
                 if result.returncode != 0 or "ATTACH_RESULT=SUCCESS" not in result.stdout:
                     raise RuntimeError("Attach failed: " + result.stdout + result.stderr)
+                if args.continuous_observation:
+                    # Only this explicitly authorized manual fixture runs the
+                    # owner-thread stop lifecycle. Not in hosted CI.
+                    time.sleep(3.0)
+                    if game.poll() is not None:
+                        raise RuntimeError("Vanilla JVM exited before stop request")
+                    stopped = subprocess.run(
+                        [str(launcher), "attach", str(game.pid), str(jdk),
+                         "--stop-observation"],
+                        capture_output=True, text=True, timeout=25, env=environment
+                    )
+                    if stopped.returncode != 0 or (
+                        "mode=stop-observation" not in stopped.stdout
+                    ):
+                        raise RuntimeError("Stop request failed: " +
+                                           stopped.stdout + stopped.stderr)
                 for marker in markers:
                     if not wait_for(game, marker, iteration, 55 if args.world_observation else 15):
                         raise RuntimeError("Missing " + marker + " on attach " + str(iteration))
@@ -311,7 +343,8 @@ def main():
             if game.poll() is not None:
                 raise RuntimeError("Minecraft exited unexpectedly after cleanup")
             if args.world_observation:
-                print("VANILLA_189_WORLD_OBSERVATION_PASS",
+                print("VANILLA_189_CONTINUOUS_STOP_PASS" if args.continuous_observation
+                      else "VANILLA_189_WORLD_OBSERVATION_PASS",
                       "worldPlayer=" + evidence[0][1], "rayEntity=" + evidence[0][2],
                       "restoredSha256=" + fingerprints[0], flush=True)
             else:
