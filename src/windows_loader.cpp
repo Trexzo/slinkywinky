@@ -1,6 +1,8 @@
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
+#include "slinkywinky/windows_stop_gate.hpp"
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -37,6 +39,28 @@ int wmain(int argc, wchar_t** argv) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
                    << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation]\n";
         return 2;
+    }
+    // Never enter the Java Attach API for an active continuous session. It may
+    // require a JVM safepoint while our tick instrumentation is executing.
+    // This separate event has one power only: request cooperative shutdown.
+    if(stop_option) {
+        std::uint64_t target=0;
+        try { target=std::stoull(std::wstring(argv[2])); }
+        catch(...) {return 2;}
+        if(target==0 || target>0xffffffffULL)return 2;
+        const auto eventName=slinkywinky::continuous_stop_event_name(
+            static_cast<std::uint32_t>(target));
+        HANDLE signal=OpenEventW(EVENT_MODIFY_STATE,FALSE,eventName.c_str());
+        if(!signal) {
+            std::wcerr << L"ATTACH_RESULT=FAIL no active continuous stop gate for PID\n";
+            return 2;
+        }
+        const BOOL requested=SetEvent(signal);
+        CloseHandle(signal);
+        if(!requested)return 2;
+        std::wcout << L"ATTACH_RESULT=SUCCESS pid=" << target
+                   << L" mode=stop-observation\n";
+        return 0;
     }
     const std::filesystem::path home = list ? argv[2] : argv[3];
     const auto java = home / L"bin" / L"java.exe";
