@@ -91,8 +91,8 @@ def validate_observation_evidence(log_text, attempts, expected_ticks,
     )):
         raise RuntimeError("Game hook rejection, native close, or restoration failure")
     evidence = re.findall(
-        r"NATIVE_OBSERVATION_SUMMARY accepted=(\\d+) worldPlayer=(\\d+) "
-        r"rayEntity=(\\d+) generations=(\\d+)", log_text
+        r"NATIVE_OBSERVATION_SUMMARY accepted=(\d+) worldPlayer=(\d+) "
+        r"rayEntity=(\d+) generations=(\d+)", log_text
     )
     if len(evidence) != attempts:
         raise RuntimeError("Expected exactly one accepted-frame summary per attachment")
