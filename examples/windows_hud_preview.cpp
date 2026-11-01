@@ -116,7 +116,7 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
     WNDCLASSEXW cls{};cls.cbSize=sizeof(cls);
     cls.hInstance=instance;cls.lpfnWndProc=procedure;
-    cls.lpszClassName=class_name;cls.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    cls.lpszClassName=class_name;cls.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     if(!RegisterClassExW(&cls))return 1;
     const int x=(GetSystemMetrics(SM_CXSCREEN)-width)/2;
     const int y=(GetSystemMetrics(SM_CYSCREEN)-height)/2;
