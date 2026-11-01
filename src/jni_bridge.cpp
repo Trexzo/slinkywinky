@@ -2,6 +2,9 @@
 #include "slinkywinky/observation.hpp"
 #include "slinkywinky/hud_snapshot.hpp"
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include <windows.h>
 #include <cstdlib>
