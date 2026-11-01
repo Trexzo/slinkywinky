@@ -3,6 +3,7 @@
 #include <windows.h>
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -52,11 +53,16 @@ std::optional<PublishedObservation> decode(const HudWire& wire,std::uint32_t pid
     if(now<wire.beat_ms || now-wire.beat_ms>expiry_ms) return std::nullopt;
     for(double v:wire.fields) if(!std::isfinite(v)) return std::nullopt;
     // Integer-valued counters and flags must be exact and bounded.
-    for(int index:std::array<int,5>{0,1,2,3,9}) {
+    for(int index:std::array<int,6>{0,1,2,3,7,9}) {
         double value=wire.fields[index];
         if(value<0 || value>9007199254740991.0 ||
            std::floor(value)!=value) return std::nullopt;
     }
+    if(wire.fields[3]>7 || wire.fields[0]==0 ||
+       wire.fields[2]==0 || wire.fields[9]==0 ||
+       std::abs(wire.fields[5])>static_cast<double>(FLT_MAX) ||
+       std::abs(wire.fields[6])>static_cast<double>(FLT_MAX))
+        return std::nullopt;
     ObservationStatus s{};
     s.valid_ticks=static_cast<std::uint64_t>(wire.fields[0]);
     s.session_transitions=static_cast<std::uint64_t>(wire.fields[1]);
