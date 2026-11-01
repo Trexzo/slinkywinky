@@ -41,6 +41,10 @@ public final class InstrumentationProbe {
     private static native double[] nativeReadPublishedStatus(long handle);
     private static volatile long nativeContext;
     private static volatile boolean nativeSessionCloseOk;
+    // R60: counters are owned solely by the admitted Minecraft client thread.
+    // They record validated read-only frames, never entity identities or locations.
+    private static int acceptedFrames, worldPlayerFrames, rayTargetFrames, generationChanges;
+    private static long lastAcceptedGeneration = -1L;
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -92,6 +96,22 @@ public final class InstrumentationProbe {
         catch (Throwable failure) {
             System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
         }
+        if (nativeOk && observed != null) {
+            acceptedFrames++;
+            if ((observed.flags & 3) == 3) {
+                worldPlayerFrames++;
+                if (worldPlayerFrames == 1)
+                    System.out.println(PREFIX+"NATIVE_WORLD_PLAYER_OBSERVED tick="+n);
+            }
+            if ((observed.flags & 4) != 0) {
+                rayTargetFrames++;
+                if (rayTargetFrames == 1)
+                    System.out.println(PREFIX+"NATIVE_RAY_ENTITY_OBSERVED tick="+n);
+            }
+            if (lastAcceptedGeneration != -1L &&
+                observed.generation != lastAcceptedGeneration) generationChanges++;
+            lastAcceptedGeneration = observed.generation;
+        }
         if(n==1 && nativeOk && observed!=null)
             System.out.println(PREFIX+"NATIVE_OBSERVATION_PASS world="+((observed.flags&1)!=0?1:0)+
                 " player="+((observed.flags&2)!=0?1:0)+" target="+((observed.flags&4)!=0?1:0));
@@ -121,6 +141,11 @@ public final class InstrumentationProbe {
                 System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_FAIL "+problem);
             }
             nativeSessionCloseOk=closed;
+            // Summarize native-accepted observations before the Java sampler
+            // releases all references. A UI cannot mistake this for combat proof.
+            System.out.println(PREFIX+"NATIVE_OBSERVATION_SUMMARY accepted="+acceptedFrames+
+                " worldPlayer="+worldPlayerFrames+" rayEntity="+rayTargetFrames+
+                " generations="+generationChanges);
             // Drop Java world, player and reflection references on the exact client
             // thread before the asynchronous class restoration worker begins.
             ObservedState.release();
@@ -312,6 +337,11 @@ public final class InstrumentationProbe {
             cleanupStarted.set(false);
             nativeContext=0;
             nativeSessionCloseOk=false;
+            acceptedFrames=0;
+            worldPlayerFrames=0;
+            rayTargetFrames=0;
+            generationChanges=0;
+            lastAcceptedGeneration=-1L;
             installedVia = instrumentation;
             installedClass = target;
             active = true;
