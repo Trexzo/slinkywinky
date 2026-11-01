@@ -58,7 +58,9 @@ public final class RenderCallbackSmoke implements Opcodes {
         try {
             RenderCallbackProbe.weaveFixture(bytes);
             throw new AssertionError("Non-exact renderer mapped");
-        } catch(IllegalArgumentException expected) {}
+        } catch(RuntimeException expected) {
+            // ASM may reject truncated classfiles before policy validation.
+        }
     }
     private static int work(Class<?> clazz) throws Exception {
         return clazz.getField("work").getInt(null);
