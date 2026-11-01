@@ -75,6 +75,22 @@ public final class HookAdmissionSmoke {
             }
             check(missingPath,"Missing JNI path must fail before any instrumentation");
             check(!claimed.get(),"Preflight failure must release unused admission");
+            // The native agent accepts only two finite, explicitly listed extensions.
+            Method parse=InstrumentationProbe.class.getDeclaredMethod(
+                "parseExtendedLimit",String.class);
+            parse.setAccessible(true);
+            check(((Integer)parse.invoke(null,"120"))==120,"Short diagnostic bound");
+            check(((Integer)parse.invoke(null,"600"))==600,"Long diagnostic bound");
+            for(String invalid:new String[]{"0","19","20","121","601","-1",
+                                            "unlimited","120|600"," 120"}) {
+                boolean denied=false;
+                try { parse.invoke(null,invalid); }
+                catch(java.lang.reflect.InvocationTargetException failure) {
+                    denied=failure.getCause() instanceof IllegalArgumentException;
+                }
+                check(denied,"Unlisted diagnostic duration was accepted: "+invalid);
+            }
+            System.out.println("HOOK_DURATION_POLICY_PASS");
             System.out.println("HOOK_ADMISSION_RACE_GUARD_PASS");
         } finally {
             claimed.set(false);
