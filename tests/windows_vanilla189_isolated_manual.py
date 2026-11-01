@@ -95,11 +95,19 @@ def main():
                         help="Existing official Minecraft installation (read-only)")
     parser.add_argument("--run", action="store_true",
                         help="Explicitly authorize launching one disposable vanilla client")
+    parser.add_argument("--world-observation", action="store_true",
+                        help="Manual-only: enter a local single-player world, then run a 600-tick read-only probe")
+    parser.add_argument("--require-ray-entity", action="store_true",
+                        help="Also require a native-accepted entity under the crosshair; implies --world-observation")
     args = parser.parse_args()
     if not args.run:
         parser.error("Refusing to start Minecraft: pass --run explicitly")
     if os.name != "nt":
         parser.error("Windows x64 only")
+    if args.require_ray_entity and not args.world_observation:
+        parser.error("--require-ray-entity requires --world-observation")
+    if args.world_observation and not sys.stdin.isatty():
+        parser.error("Manual world admission requires an interactive terminal")
 
     game_root = args.minecraft_dir.resolve()
     workspace = args.workspace.resolve()
@@ -187,6 +195,8 @@ def main():
     environment = os.environ.copy()
     environment.pop("SLINKYWINKY_ATTACH_TEST", None)
     environment["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
+    if args.world_observation:
+        environment["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
 
     def read_log():
         return log.read_text(encoding="utf-8", errors="replace")
@@ -213,28 +223,67 @@ def main():
                      if pid == game.pid]
             if len(exact) != 1:
                 raise RuntimeError("The newly launched vanilla PID was not uniquely enumerated")
-            for iteration in (1, 2):
+            if args.world_observation:
+                print("Open a LOCAL single-player world in the isolated client.", flush=True)
+                print("The probe will record counts only; it will not control the game.", flush=True)
+                if args.require_ray_entity:
+                    print("During the probe, aim the crosshair at an entity at least once.", flush=True)
+                input("Once the world is loaded, press Enter to start the 600-tick observation: ")
+                if game.poll() is not None:
+                    raise RuntimeError("Minecraft exited before world observation")
+            attempts = 1 if args.world_observation else 2
+            probe = "--hook-probe=600" if args.world_observation else "--hook-probe"
+            expected_ticks = 600 if args.world_observation else 20
+            markers = tuple(marker.replace("GAME_THREAD_TICK_20_PASS",
+                                           "GAME_THREAD_TICK_600_PASS")
+                            for marker in MARKERS)
+            if not args.world_observation:
+                markers = MARKERS
+            for iteration in range(1, attempts + 1):
                 result = subprocess.run(
-                    [str(launcher), "attach", str(game.pid), str(jdk), "--hook-probe"],
+                    [str(launcher), "attach", str(game.pid), str(jdk), probe],
                     capture_output=True, text=True, timeout=25, env=environment
                 )
                 if result.returncode != 0 or "ATTACH_RESULT=SUCCESS" not in result.stdout:
                     raise RuntimeError("Attach failed: " + result.stdout + result.stderr)
-                for marker in MARKERS:
-                    if not wait_for(game, marker, iteration, 15):
+                for marker in markers:
+                    if not wait_for(game, marker, iteration, 55 if args.world_observation else 15):
                         raise RuntimeError("Missing " + marker + " on attach " + str(iteration))
                 if "Game crashed!" in read_log() or "NoClassDefFoundError" in read_log():
                     raise RuntimeError("Crash signature detected")
                 print("VANILLA_INJECT_PASS", iteration, flush=True)
+            evidence = re.findall(
+                r"NATIVE_OBSERVATION_SUMMARY accepted=(\\d+) worldPlayer=(\\d+) "
+                r"rayEntity=(\\d+) generations=(\\d+)", read_log()
+            )
+            if len(evidence) != attempts:
+                raise RuntimeError("Expected exactly one accepted-frame summary per attachment")
+            for accepted, world_frames, ray_frames, generations in evidence:
+                accepted, world_frames, ray_frames = (
+                    int(accepted), int(world_frames), int(ray_frames)
+                )
+                if accepted != expected_ticks:
+                    raise RuntimeError("Unexpected accepted tick count")
+                if world_frames > accepted or ray_frames > world_frames:
+                    raise RuntimeError("Inconsistent native-accepted world/ray counts")
+                if args.world_observation and world_frames == 0:
+                    raise RuntimeError("No native-accepted world+player frames: menu-only is not world acceptance")
+                if args.require_ray_entity and ray_frames == 0:
+                    raise RuntimeError("No native-accepted ray-selected entity frames")
             fingerprints = re.findall(
                 r"CLASS_BYTECODE_RESTORE_PASS sha256=([a-f0-9]{64})", read_log()
             )
-            if len(fingerprints) != 2 or fingerprints[0] != fingerprints[1]:
-                raise RuntimeError("Original class fingerprint not restored twice")
+            if len(fingerprints) != attempts or len(set(fingerprints)) != 1:
+                raise RuntimeError("Original class fingerprint not restored for every attachment")
             if game.poll() is not None:
                 raise RuntimeError("Minecraft exited unexpectedly after cleanup")
-            print("VANILLA_189_STANDALONE_NATIVE_ACCEPTANCE_PASS",
-                  fingerprints[0], flush=True)
+            if args.world_observation:
+                print("VANILLA_189_WORLD_OBSERVATION_PASS",
+                      "worldPlayer=" + evidence[0][1], "rayEntity=" + evidence[0][2],
+                      "restoredSha256=" + fingerprints[0], flush=True)
+            else:
+                print("VANILLA_189_STANDALONE_NATIVE_ACCEPTANCE_PASS",
+                      fingerprints[0], flush=True)
         except Exception as exc:
             print("VANILLA_ACCEPTANCE_FAIL", repr(exc), flush=True)
             for line in read_log().splitlines()[-35:]:
