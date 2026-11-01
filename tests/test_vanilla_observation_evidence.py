@@ -84,6 +84,29 @@ class RuntimeEvidenceTests(unittest.TestCase):
             with self.subTest(marker=marker), self.assertRaisesRegex(RuntimeError, "failure"):
                 validate_observation_evidence(self.record(600, 600, 1) + marker, 1, 600, True)
 
+    def test_continuous_stop_world_acceptance(self):
+        log = self.record(73, 71, 4, 1)
+        evidence, sha = validate_observation_evidence(
+            log, 1, None, require_world=True, require_ray_entity=True
+        )
+        self.assertEqual(evidence[0][0], "73")
+        self.assertEqual(sha, [self.SHA])
+
+    def test_continuous_must_exceed_short_default_and_stay_below_cap(self):
+        for accepted in (0, 20, 36000, 36001):
+            with self.subTest(accepted=accepted), self.assertRaisesRegex(
+                RuntimeError, "safe range"
+            ):
+                validate_observation_evidence(
+                    self.record(accepted, accepted, 0), 1, None, require_world=True
+                )
+
+    def test_continuous_menu_only_does_not_pass_world(self):
+        with self.assertRaisesRegex(RuntimeError, "menu-only"):
+            validate_observation_evidence(
+                self.record(80, 0, 0), 1, None, require_world=True
+            )
+
     def test_duplicate_or_missing_summaries_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "exactly one"):
             validate_observation_evidence(self.record(20, 0, 0) * 2, 1, 20)
