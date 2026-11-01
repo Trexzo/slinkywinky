@@ -67,3 +67,9 @@ The Minecraft original-JAR verification from R64 and live game-world/render acce
 R66 adds a second, independent Java 8 process to the Windows CI suite. A test-only agent exercises the synthetic renderer's eight-frame bound, preserves the original method's behavior, verifies the restored class SHA-256, and exits cleanly. The new `native_render_fixture_attach` CTest passed, bringing the Windows suite to **16/16** on R66 commit `2668a16`.
 
 This fixture is **not Minecraft**: no original 1.8.9 renderer mapping, in-game GUI or graphics-context teardown has been verified. The test-only agent stays outside the release artifact; PR #1 remains draft.
+
+## R67 — isolated WGL OpenGL 1.1 menu drawing and state guard
+
+`slinkywinky_menu_gl11` now renders first-party menu panels, category accents and inert preview switches as OpenGL 1.1 quadrilaterals. It requires the exact current Win32 WGL graphics/device context, a valid menu frame and viewport, and uses a scoped fixed-function state guard to restore OpenGL server/client attributes and the modelview/projection/texture matrix stacks. The `isolated_wgl_menu_state_restore` Windows CTest creates its own throwaway WGL window, checks reject paths, compares pre/post state and requires zero GL errors after accepted draws. See [R67 GL1.1 rendering and limitations](docs/R67_GL11_STATE_GUARD.md).
+
+**Not an in-game GUI yet.** This code is not connected to a Minecraft render hook, JNI or input, and does not fully certify modern OpenGL/LWJGL shader, framebuffer or state-cache restoration. The real original 1.8.9 render method is still unverified because the authorized Windows desktop is offline. Forge is not introduced into the production injector.
