@@ -3,9 +3,11 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/menu_bitmap_font.hpp"
 #include <GL/gl.h>
 #include <algorithm>
 #include <cstdint>
+#include <string_view>
 
 namespace slinkywinky {
 namespace {
@@ -17,8 +19,8 @@ bool stack_available(GLenum depth, GLenum capacity,
     return current>=minimum_depth && max>current;
 }
 
-// This only draws opaque first-party rectangles. No text renderer,
-// textures, shaders, VBO, framebuffer binding or game input are involved.
+// First-party opaque geometry and tiny ASCII bitmaps only. No textures,
+// shaders, VBO, font files, framebuffer binding or game input.
 void quad(float x,float y,float w,float h) noexcept {
     glBegin(GL_QUADS);
     glVertex2f(x,y);
@@ -31,6 +33,35 @@ void rgb(std::uint32_t c) noexcept {
     glColor4ub(static_cast<GLubyte>((c>>16)&255),
                static_cast<GLubyte>((c>>8)&255),
                static_cast<GLubyte>(c&255),255);
+}
+
+// Draw original 5x7 block glyphs in the currently admitted GL1.1 context.
+// Clamp characters and width before issuing any geometry. Glyph data is
+// first-party, textureless and uppercase-only by explicit design.
+void text(std::string_view label,float x,float y,
+          float pixelScale,float maxWidth) noexcept {
+    if(pixelScale<=0.0f || maxWidth<5.0f*pixelScale)return;
+    const float advance=6.0f*pixelScale;
+    const float glyphWidth=5.0f*pixelScale;
+    const auto limit=std::min<std::size_t>(label.size(),48);
+    glBegin(GL_QUADS);
+    for(std::size_t i=0;i<limit;++i) {
+        const float offset=static_cast<float>(i)*advance;
+        if(offset+glyphWidth>maxWidth)break;
+        const auto rows=menu_ascii_glyph(label[i]);
+        for(unsigned row=0;row<7;++row) {
+            for(unsigned col=0;col<5;++col) {
+                if((rows[row]&(1u<<(4-col)))==0u)continue;
+                const float left=x+offset+static_cast<float>(col)*pixelScale;
+                const float top=y+static_cast<float>(row)*pixelScale;
+                glVertex2f(left,top);
+                glVertex2f(left+pixelScale,top);
+                glVertex2f(left+pixelScale,top+pixelScale);
+                glVertex2f(left,top+pixelScale);
+            }
+        }
+    }
+    glEnd();
 }
 
 /**
@@ -110,7 +141,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         return false;
     for(const auto& item:frame.visible)
         if(item.catalog_index>=official_module_catalog().size() ||
-           official_module_catalog()[item.catalog_index].tab!=frame.tab)
+           official_module_catalog()[item.catalog_index].tab!=frame.tab ||
+           item.title!=official_module_catalog()[item.catalog_index].name)
             return false;
     if(frame.is_placeholder && !frame.visible.empty())return false;
     GLint viewport[4]{};
@@ -165,6 +197,41 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         rgb(0xcacacc);
         quad(w-73+(item.preview_enabled?21.0f:0.0f),y+15,17,16);
     }
+    // Render text last to keep it legible above the opaque controls.
+    // UI toggles remain inert: these glyphs never enable gameplay behavior.
+    rgb(0xf2f2f3);
+    text("SLINKYWINKY",23,18,2.6f,w-40.0f);
+    rgb(0x929295);
+    text("NATIVE MENU / PREVIEW ONLY",23,53,1.3f,w-45.0f);
+    const float cell=(w-36.0f)/7.0f;
+    for(unsigned i=0;i<7;++i) {
+        const auto tab=static_cast<MenuTab>(i);
+        rgb(i==selected?0xf2f2f3:0xb7b7b9);
+        text(menu_tab_name(tab),
+             21.0f+static_cast<float>(i)*cell,92,
+             1.35f,cell-6.0f);
+    }
+    rgb(0xf2f2f3);
+    text(menu_tab_name(frame.tab),25,131,1.7f,w-45.0f);
+    if(frame.is_placeholder) {
+        rgb(0x929295);
+        text("PROFILES NOT CONNECTED",32,178,1.45f,w-64.0f);
+    }
+    for(std::size_t i=0;i<frame.visible.size();++i) {
+        const auto& item=frame.visible[i];
+        const float y=153.0f+static_cast<float>(i)*49.0f;
+        rgb(0xf2f2f3);
+        text(item.title,31.0f,y+9.0f,2.0f,w-208.0f);
+        if(!frame.appearance.compact) {
+            rgb(0x929295);
+            text(item.expanded?"SETTINGS PREVIEW":"UI DEMO ONLY",
+                 31.0f,y+31.0f,1.1f,w-208.0f);
+        }
+        rgb(0xf0f0f0);
+        text(item.expanded?"-":"+",w-117.0f,y+17.0f,1.5f,25.0f);
+    }
+    rgb(0x929295);
+    text("UI PREVIEW - NO GAME ACTIONS",23,585,1.2f,w-46.0f);
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture
     // selection or app-managed caches; state restoration is GL1.1 only.
     return true;
