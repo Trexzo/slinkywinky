@@ -40,7 +40,8 @@ try:
     admission = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.HookAdmissionSmoke"],
         capture_output=True, text=True, env=env, timeout=15)
-    if admission.returncode != 0 or "HOOK_ADMISSION_RACE_GUARD_PASS" not in admission.stdout:
+    if (admission.returncode != 0 or "HOOK_ADMISSION_RACE_GUARD_PASS" not in admission.stdout or
+        "HOOK_DURATION_POLICY_PASS" not in admission.stdout):
         raise AssertionError("Hook overlap admission regression: " +
                              admission.stdout + admission.stderr)
     print("PASS: duplicate hook rejected before shared state mutation; preflight rollback")
@@ -103,15 +104,41 @@ try:
     if hook.returncode != 0 or "mode=hook-probe" not in hook.stdout:
         raise AssertionError("Read-only tick hook installation failed: " +
                              hook.stdout + hook.stderr)
+    # The original 20-tick default must finish before a second admission.
     time.sleep(1.8)
+    extended_denied = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe=120"],
+        capture_output=True, text=True, env=hook_env, timeout=15)
+    if extended_denied.returncode == 0 or "SLINKYWINKY_EXTENDED_DIAGNOSTIC" not in extended_denied.stderr:
+        raise AssertionError("Long-running diagnostic bypassed explicit gate: " +
+                             extended_denied.stdout + extended_denied.stderr)
+    malformed = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe=999"],
+        capture_output=True, text=True, env=hook_env, timeout=15)
+    if malformed.returncode == 0:
+        raise AssertionError("Arbitrary hook lifespan was accepted")
+    extended_env = hook_env.copy()
+    extended_env["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
+    extended = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe=120"],
+        capture_output=True, text=True, env=extended_env, timeout=22)
+    if extended.returncode != 0 or "mode=hook-probe" not in extended.stdout:
+        raise AssertionError("Bounded extended native hook refused: " +
+                             extended.stdout + extended.stderr)
+    # AttachTarget advances one game tick per ~30 ms. Permit 120 observed ticks
+    # plus asynchronous class fingerprint restoration before termination.
+    time.sleep(5.0)
     target.terminate()
     tail, _ = target.communicate(timeout=5)
-    for marker in ("OBSERVATION_RELEASE_PASS", "NATIVE_SESSION_OPEN_PASS", "NATIVE_SESSION_CLOSE_PASS", "OBSERVATION_MAPPING_ADMITTED", "NATIVE_OBSERVATION_PASS world=1 player=1 target=1", "NATIVE_CXX_PREFLIGHT_PASS", "NATIVE_GAME_THREAD_CXX_PASS", "GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS",
+    for marker in ("OBSERVATION_RELEASE_PASS", "NATIVE_SESSION_OPEN_PASS", "NATIVE_SESSION_CLOSE_PASS", "OBSERVATION_MAPPING_ADMITTED", "NATIVE_OBSERVATION_PASS world=1 player=1 target=1", "NATIVE_CXX_PREFLIGHT_PASS", "NATIVE_GAME_THREAD_CXX_PASS", "GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS ticks=20", "DIAGNOSTIC_TICK_LIMIT=120",
+                   "GAME_THREAD_TICK_120_PASS ticks=120",
                    "CLASS_BYTECODE_RESTORE_PASS", "GAME_THREAD_HOOK_CLEANUP_PASS"):
         if marker not in tail:
             raise AssertionError("Missing tick hook or restoration marker " + marker +
                                  ": " + tail[-1600:])
-    print("PASS: bounded game-thread tick callback and original-bytecode restoration")
+    if tail.count("CLASS_BYTECODE_RESTORE_PASS") != 2 or tail.count("GAME_THREAD_HOOK_CLEANUP_PASS") != 2:
+        raise AssertionError("Both bounded hook sessions must restore exact class bytes twice")
+    print("PASS: 20-tick default and opt-in 120-tick native observation; twice-restored bytecode")
 
     print("PASS: standalone Windows loader -> Java 8 Attach API -> native JVMTI agent")
 finally:
