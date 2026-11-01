@@ -21,6 +21,8 @@ public final class AttachTarget {
     public static void main(String[] args) throws Exception {
         System.out.println("SLINKYWINKY_ATTACH_TARGET_READY");
         System.out.flush();
-        for(int i=0;i<1000;i++){INSTANCE.tick();Thread.sleep(30L);}
+        // Long enough for three independent Attach API sessions under slow CI.
+        // The Python fixture still terminates only its own disposable process.
+        for(int i=0;i<4000;i++){INSTANCE.tick();Thread.sleep(30L);}
     }
 }
