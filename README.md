@@ -61,3 +61,9 @@ R64 adds a **non-injected**, SHA-1-gated Java 8 verifier for the original Mojang
 R65 adds a generated Java 8 render-method test fixture with an exact `(FJ)V` callback, owner-thread-only frame counting, an explicit 1–64-frame cap, per-session epoch gates, wrong-thread/invalid-frame rejection and SHA-256 preservation of original fixture class bytes. This **test-only** ASM implementation is compiled into the offline Java 8 acceptance classpath, **not** the production injected agent. See [R65 test and remaining gates](docs/R65_RENDER_CALLBACK_FIXTURE.md).
 
 The Minecraft original-JAR verification from R64 and live game-world/render acceptance are still outstanding while the Windows desktop is offline. **No in-game GUI, GL hook, combat actions or original Slinky binary parity is claimed by these synthetic tests.**
+
+## R66 — disposable Java 8 render lifecycle regression
+
+R66 adds a second, independent Java 8 process to the Windows CI suite. A test-only agent exercises the synthetic renderer's eight-frame bound, preserves the original method's behavior, verifies the restored class SHA-256, and exits cleanly. The new `native_render_fixture_attach` CTest passed, bringing the Windows suite to **16/16** on R66 commit `2668a16`.
+
+This fixture is **not Minecraft**: no original 1.8.9 renderer mapping, in-game GUI or graphics-context teardown has been verified. The test-only agent stays outside the release artifact; PR #1 remains draft.
