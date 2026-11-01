@@ -9,11 +9,12 @@
 
 namespace slinkywinky {
 namespace {
-bool stack_available(GLenum depth, GLenum capacity) noexcept {
+bool stack_available(GLenum depth, GLenum capacity,
+                     GLint minimum_depth) noexcept {
     GLint current=0, max=0;
     glGetIntegerv(depth,&current);
     glGetIntegerv(capacity,&max);
-    return current>=1 && max>current;
+    return current>=minimum_depth && max>current;
 }
 
 // This only draws opaque first-party rectangles. No text renderer,
@@ -47,11 +48,14 @@ public:
            original_mode_!=GL_PROJECTION &&
            original_mode_!=GL_TEXTURE)
             return;
-        if(!stack_available(GL_ATTRIB_STACK_DEPTH,GL_MAX_ATTRIB_STACK_DEPTH) ||
-           !stack_available(GL_CLIENT_ATTRIB_STACK_DEPTH,GL_MAX_CLIENT_ATTRIB_STACK_DEPTH) ||
-           !stack_available(GL_MODELVIEW_STACK_DEPTH,GL_MAX_MODELVIEW_STACK_DEPTH) ||
-           !stack_available(GL_PROJECTION_STACK_DEPTH,GL_MAX_PROJECTION_STACK_DEPTH) ||
-           !stack_available(GL_TEXTURE_STACK_DEPTH,GL_MAX_TEXTURE_STACK_DEPTH))
+        // GL attribute stacks begin at depth 0; matrix stacks begin at 1.
+        // Confusing these rejected a valid fresh WGL context.
+        if(!stack_available(GL_ATTRIB_STACK_DEPTH,GL_MAX_ATTRIB_STACK_DEPTH,0) ||
+           !stack_available(GL_CLIENT_ATTRIB_STACK_DEPTH,
+                            GL_MAX_CLIENT_ATTRIB_STACK_DEPTH,0) ||
+           !stack_available(GL_MODELVIEW_STACK_DEPTH,GL_MAX_MODELVIEW_STACK_DEPTH,1) ||
+           !stack_available(GL_PROJECTION_STACK_DEPTH,GL_MAX_PROJECTION_STACK_DEPTH,1) ||
+           !stack_available(GL_TEXTURE_STACK_DEPTH,GL_MAX_TEXTURE_STACK_DEPTH,1))
             return;
         glPushAttrib(GL_ALL_ATTRIB_BITS);
         server_=true;
