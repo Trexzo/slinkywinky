@@ -28,12 +28,14 @@ int wmain(int argc, wchar_t** argv) {
     const std::wstring option = argc == 5 ? argv[4] : L"";
     const bool hook_option = option == L"--hook-probe" ||
                              option == L"--hook-probe=120" ||
-                             option == L"--hook-probe=600";
+                             option == L"--hook-probe=600" ||
+                             option == L"--hook-probe=continuous";
+    const bool stop_option = option == L"--stop-observation";
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
         (argc == 5 && option != L"--tick-probe" &&
-         option != L"--instrument-probe" && !hook_option)) {
+         option != L"--instrument-probe" && !hook_option && !stop_option)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation]\n";
         return 2;
     }
     const std::filesystem::path home = list ? argv[2] : argv[3];
@@ -46,7 +48,7 @@ int wmain(int argc, wchar_t** argv) {
     const auto instrument = folder / L"slinkywinky_instrument.jar";
     const auto classes = folder / L"attach-classes";
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
-        (argc == 5 && (option == L"--instrument-probe" || hook_option) &&
+        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option) &&
          !regular_file_exists(instrument)) ||
         (argc == 5 && hook_option &&
          !regular_file_exists(folder / L"slinkywinky_jni.dll")) ||
