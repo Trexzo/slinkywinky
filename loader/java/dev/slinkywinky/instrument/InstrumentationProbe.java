@@ -19,6 +19,9 @@ import org.objectweb.asm.Opcodes;
 public final class InstrumentationProbe {
     private static final String PREFIX = "[SlinkyWinkyInstrument] ";
     private static final AtomicInteger ticks = new AtomicInteger();
+    private static final int DEFAULT_TICK_LIMIT = 20;
+    // An extended diagnostic is bounded and explicitly authorized by the loader.
+    private static volatile int tickLimit = DEFAULT_TICK_LIMIT;
     private static final AtomicBoolean cleanupStarted = new AtomicBoolean();
     private static final AtomicBoolean hookInstalled = new AtomicBoolean();
     private static volatile boolean active;
@@ -61,6 +64,12 @@ public final class InstrumentationProbe {
             ("runTick".equals(method)||"func_71407_l".equals(method));
     }
 
+    private static int parseExtendedLimit(String value) {
+        if ("120".equals(value)) return 120;
+        if ("600".equals(value)) return 600;
+        throw new IllegalArgumentException("Unsupported diagnostic tick limit");
+    }
+
     /** Runs on the actual target thread. Never changes Minecraft state. */
     public static void onGameTick() {
         if (!active) return;
@@ -100,7 +109,7 @@ public final class InstrumentationProbe {
                 Thread.currentThread().getName());
             System.out.flush();
         }
-        if ((n >= 20 || !nativeOk) && cleanupStarted.compareAndSet(false, true)) {
+        if ((n >= tickLimit || !nativeOk) && cleanupStarted.compareAndSet(false, true)) {
             active = false;
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
@@ -118,7 +127,8 @@ public final class InstrumentationProbe {
             System.out.println(PREFIX+"OBSERVATION_RELEASE_PASS");
             if(closed) System.out.println(PREFIX+"NATIVE_SESSION_CLOSE_PASS");
             else System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_REJECTED");
-            if(n>=20 && nativeOk) System.out.println(PREFIX+"GAME_THREAD_TICK_20_PASS ticks="+n);
+            if(n>=tickLimit && nativeOk)
+                System.out.println(PREFIX+"GAME_THREAD_TICK_"+tickLimit+"_PASS ticks="+n);
             else System.err.println(PREFIX+"GAME_THREAD_HOOK_ABORT ticks="+n);
             System.out.flush();
             final Instrumentation instrumentation = installedVia;
@@ -271,9 +281,16 @@ public final class InstrumentationProbe {
                 if (delimiter < 0 || delimiter == options.length() - 1)
                     throw new IllegalArgumentException("Missing exact JNI library path");
                 String path = options.substring(delimiter + 1);
+                int requestedLimit = DEFAULT_TICK_LIMIT;
+                final int durationDelimiter = path.indexOf('|');
+                if (durationDelimiter >= 0) {
+                    requestedLimit = parseExtendedLimit(path.substring(durationDelimiter + 1));
+                    path = path.substring(0, durationDelimiter);
+                }
                 if (!path.endsWith("slinkywinky_jni.dll"))
                     throw new IllegalArgumentException("Unexpected JNI library path");
                 System.load(path);
+                tickLimit = requestedLimit;
                 if (nativeZeroActionTick() != 1)
                     throw new IllegalStateException("Disabled C++ decision returned action/error");
                 System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
@@ -290,6 +307,7 @@ public final class InstrumentationProbe {
             }
         }
         if (hook) {
+            System.out.println(PREFIX+"DIAGNOSTIC_TICK_LIMIT="+tickLimit);
             ticks.set(0);
             cleanupStarted.set(false);
             nativeContext=0;
