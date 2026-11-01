@@ -82,6 +82,42 @@ def attachable_games(loader, jdk):
     return games
 
 
+def validate_observation_evidence(log_text, attempts, expected_ticks,
+                                  require_world=False, require_ray_entity=False):
+    """Validate original-process markers; never infer a world from attachment alone."""
+    if any(marker in log_text for marker in (
+        "GAME_THREAD_HOOK_ABORT", "NATIVE_GAME_THREAD_PROBE_REJECTED",
+        "GAME_THREAD_HOOK_CLEANUP_FAIL", "NATIVE_SESSION_CLOSE_REJECTED"
+    )):
+        raise RuntimeError("Game hook rejection, native close, or restoration failure")
+    evidence = re.findall(
+        r"NATIVE_OBSERVATION_SUMMARY accepted=(\\d+) worldPlayer=(\\d+) "
+        r"rayEntity=(\\d+) generations=(\\d+)", log_text
+    )
+    if len(evidence) != attempts:
+        raise RuntimeError("Expected exactly one accepted-frame summary per attachment")
+    for accepted, world_frames, ray_frames, generations in evidence:
+        accepted, world_frames, ray_frames, generations = map(
+            int, (accepted, world_frames, ray_frames, generations)
+        )
+        if accepted != expected_ticks:
+            raise RuntimeError("Unexpected native-accepted callback count")
+        if world_frames > accepted or ray_frames > world_frames or generations >= accepted:
+            raise RuntimeError("Inconsistent native-accepted observation counters")
+        if require_world and world_frames == 0:
+            raise RuntimeError("No native-accepted world+player frames: menu-only is not world acceptance")
+        if require_ray_entity and ray_frames == 0:
+            raise RuntimeError("No native-accepted ray-selected entity frames")
+    fingerprints = re.findall(
+        r"CLASS_BYTECODE_RESTORE_PASS sha256=([a-f0-9]{64})", log_text
+    )
+    if len(fingerprints) != attempts or len(set(fingerprints)) != 1:
+        raise RuntimeError("Original class fingerprint not restored for every attachment")
+    if log_text.count("GAME_THREAD_HOOK_CLEANUP_PASS") != attempts:
+        raise RuntimeError("Missing successful hook cleanup for an attachment")
+    return evidence, fingerprints
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Original vanilla 1.8.9 native-injector manual acceptance"
@@ -252,29 +288,10 @@ def main():
                 if "Game crashed!" in read_log() or "NoClassDefFoundError" in read_log():
                     raise RuntimeError("Crash signature detected")
                 print("VANILLA_INJECT_PASS", iteration, flush=True)
-            evidence = re.findall(
-                r"NATIVE_OBSERVATION_SUMMARY accepted=(\\d+) worldPlayer=(\\d+) "
-                r"rayEntity=(\\d+) generations=(\\d+)", read_log()
+            evidence, fingerprints = validate_observation_evidence(
+                read_log(), attempts, expected_ticks, args.world_observation,
+                args.require_ray_entity
             )
-            if len(evidence) != attempts:
-                raise RuntimeError("Expected exactly one accepted-frame summary per attachment")
-            for accepted, world_frames, ray_frames, generations in evidence:
-                accepted, world_frames, ray_frames = (
-                    int(accepted), int(world_frames), int(ray_frames)
-                )
-                if accepted != expected_ticks:
-                    raise RuntimeError("Unexpected accepted tick count")
-                if world_frames > accepted or ray_frames > world_frames:
-                    raise RuntimeError("Inconsistent native-accepted world/ray counts")
-                if args.world_observation and world_frames == 0:
-                    raise RuntimeError("No native-accepted world+player frames: menu-only is not world acceptance")
-                if args.require_ray_entity and ray_frames == 0:
-                    raise RuntimeError("No native-accepted ray-selected entity frames")
-            fingerprints = re.findall(
-                r"CLASS_BYTECODE_RESTORE_PASS sha256=([a-f0-9]{64})", read_log()
-            )
-            if len(fingerprints) != attempts or len(set(fingerprints)) != 1:
-                raise RuntimeError("Original class fingerprint not restored for every attachment")
             if game.poll() is not None:
                 raise RuntimeError("Minecraft exited unexpectedly after cleanup")
             if args.world_observation:
