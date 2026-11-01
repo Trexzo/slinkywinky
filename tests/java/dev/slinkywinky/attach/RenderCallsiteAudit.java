@@ -71,11 +71,25 @@ public final class RenderCallsiteAudit {
                 if((access & (Opcodes.ACC_STATIC|Opcodes.ACC_ABSTRACT|Opcodes.ACC_NATIVE))!=0)
                     return null;
                 return new MethodVisitor(Opcodes.ASM5) {
+                    final Set<String> actuallyReadFields=new HashSet<String>();
+                    final List<Candidate> possible=new ArrayList<Candidate>();
+                    @Override public void visitFieldInsn(int opcode,String owner,
+                            String field,String descriptor) {
+                        if(opcode==Opcodes.GETFIELD && GAME_CLASS.equals(owner) &&
+                           descriptor.startsWith("L") && descriptor.endsWith(";"))
+                            actuallyReadFields.add(
+                                descriptor.substring(1,descriptor.length()-1));
+                    }
                     @Override public void visitMethodInsn(int opcode,String owner,
                             String method,String descriptor,boolean itf) {
                         if(opcode==Opcodes.INVOKEVIRTUAL && !itf &&
                            RENDER_DESCRIPTOR.equals(descriptor))
-                            calls.add(new Candidate(name,owner,method));
+                            possible.add(new Candidate(name,owner,method));
+                    }
+                    @Override public void visitEnd() {
+                        for(Candidate candidate:possible)
+                            if(actuallyReadFields.contains(candidate.renderer))
+                                calls.add(candidate);
                     }
                 };
             }
