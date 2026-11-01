@@ -2,15 +2,58 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "slinkywinky/hud.hpp"
+#include "slinkywinky/hud_snapshot.hpp"
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <atomic>
+#include <thread>
+#include <memory>
+#include <mutex>
+#include <chrono>
 
 namespace {
 constexpr wchar_t class_name[]=L"SlinkyWinkyNativeHudPreview";
 constexpr int width=444, height=406;
-struct Preview { int page=3; std::uint64_t tick=0; bool compact=false,angles=true; };
+struct Preview { std::atomic<int> page{3}; bool compact=false,angles=true; };
 Preview preview;
+std::atomic<bool> producerRunning{true};
+std::mutex mailboxAccess;
+std::shared_ptr<slinkywinky::HudSnapshotMailbox> publishedMailbox;
+
+// A fake game-thread producer for the OFFLINE preview only. The GDI thread
+// never calls the state engine: it reads immutable, owner-published copies.
+void synthetic_producer() {
+    auto mailbox=std::make_shared<slinkywinky::HudSnapshotMailbox>();
+    {
+        std::lock_guard<std::mutex> guard(mailboxAccess);
+        publishedMailbox=mailbox;
+    }
+    std::uint64_t tick=0, generation=1, transitions=0;
+    std::uint32_t previousFlags=0;
+    while(producerRunning.load()) {
+        const int page=preview.page.load();
+        const std::uint32_t flags=page<=1?0u:(page==2?3u:7u);
+        if(((previousFlags^flags)&3u)!=0) {++generation;++transitions;}
+        previousFlags=flags;
+        slinkywinky::ObservationStatus sample{};
+        sample.valid_ticks=++tick;
+        sample.generation=generation;
+        sample.session_transitions=transitions;
+        sample.time_ms=1000+tick*50;
+        sample.flags=flags;
+        sample.eye_y=65.62;
+        sample.yaw=42.0f;
+        sample.pitch=-8.0f;
+        if(flags==7)
+            sample.target_distance=3.3+0.5*std::sin(static_cast<double>(tick)*0.05);
+        if(!mailbox->publish(sample)) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    mailbox->revoke();
+    std::lock_guard<std::mutex> guard(mailboxAccess);
+    publishedMailbox.reset();
+}
 std::wstring widen(const std::string& s) {return std::wstring(s.begin(),s.end());}
 void fill(HDC dc,RECT r,COLORREF color) {
     HBRUSH brush=CreateSolidBrush(color);
@@ -25,17 +68,18 @@ HFONT make_font(int size,int weight){
         DEFAULT_PITCH|FF_DONTCARE,L"Segoe UI");
 }
 slinkywinky::HudPanel model(){
-    if(preview.page==0) return slinkywinky::make_hud_panel(std::nullopt);
-    slinkywinky::ObservationStatus s{};
-    s.valid_ticks=preview.tick+1;
-    s.generation=3;
-    s.session_transitions=2;
-    s.time_ms=1000+preview.tick*50;
-    s.flags=preview.page==1?0u:(preview.page==2?3u:7u);
-    s.eye_y=65.62;
-    s.yaw=42.0f;s.pitch=-8.0f;
-    if(preview.page==3) s.target_distance=3.3+0.5*std::sin(static_cast<double>(preview.tick)*0.05);
-    return slinkywinky::make_hud_panel(s,{preview.angles,true,preview.compact});
+    const slinkywinky::HudOptions options{preview.angles,true,preview.compact};
+    if(preview.page.load()==0) return slinkywinky::make_hud_panel(std::nullopt,options);
+    std::shared_ptr<slinkywinky::HudSnapshotMailbox> box;
+    {
+        std::lock_guard<std::mutex> guard(mailboxAccess);
+        box=publishedMailbox;
+    }
+    if(!box) return slinkywinky::make_hud_panel(std::nullopt,options);
+    const auto copied=box->read(); // UI thread consumes an immutable copy.
+    return slinkywinky::make_hud_panel(
+        copied ? std::optional<slinkywinky::ObservationStatus>(copied->status) :
+                 std::nullopt,options);
 }
 void paint(HWND hwnd,HDC dc){
     RECT bounds{};GetClientRect(hwnd,&bounds);
@@ -91,10 +135,10 @@ LRESULT CALLBACK procedure(HWND hwnd,UINT message,WPARAM wp,LPARAM lp){
     switch(message){
         case WM_CREATE: SetTimer(hwnd,1,50,nullptr);return 0;
         case WM_TIMER:
-            if(wp==1){++preview.tick;InvalidateRect(hwnd,nullptr,FALSE);}return 0;
+            if(wp==1)InvalidateRect(hwnd,nullptr,FALSE);return 0;
         case WM_KEYDOWN:
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
-            if(wp>=L'1'&&wp<=L'4')preview.page=static_cast<int>(wp-L'1');
+            if(wp>=L'1'&&wp<=L'4')preview.page.store(static_cast<int>(wp-L'1'));
             if(wp==L'C')preview.compact=!preview.compact;
             if(wp==L'A')preview.angles=!preview.angles;
             InvalidateRect(hwnd,nullptr,FALSE);return 0;
@@ -125,9 +169,12 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show){
         WS_POPUP,x,y,width,height,nullptr,nullptr,instance,nullptr);
     if(!hwnd)return 2;
     SetLayeredWindowAttributes(hwnd,RGB(0,0,0),248,LWA_ALPHA);
+    std::thread producer(synthetic_producer);
     ShowWindow(hwnd,show==SW_HIDE?SW_SHOWNORMAL:show);
     UpdateWindow(hwnd);SetFocus(hwnd);
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){TranslateMessage(&msg);DispatchMessageW(&msg);}
+    producerRunning.store(false);
+    producer.join(); // No detached render/publication threads after window exit.
     return static_cast<int>(msg.wParam);
 }
