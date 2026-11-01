@@ -103,6 +103,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ObservationSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeObservationSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/Vanilla189MappingSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java")
@@ -145,6 +146,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/Vanilla189MappingSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java"

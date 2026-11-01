@@ -37,6 +37,13 @@ try:
         raise AssertionError("Exact vanilla name profile regression: " +
                              vanilla.stdout + vanilla.stderr)
     print("PASS: vanilla 1.8.9 obfuscated tick, world, player and target fields")
+    admission = subprocess.run(
+        [str(java), "-cp", classpath, "dev.slinkywinky.attach.HookAdmissionSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if admission.returncode != 0 or "HOOK_ADMISSION_RACE_GUARD_PASS" not in admission.stdout:
+        raise AssertionError("Hook overlap admission regression: " +
+                             admission.stdout + admission.stderr)
+    print("PASS: duplicate hook rejected before shared state mutation; preflight rollback")
     jni_contract = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.NativeObservationSmoke",
          str(loader.parent / "slinkywinky_jni.dll")],
