@@ -1,5 +1,7 @@
 #include "slinkywinky/menu.hpp"
 #include <set>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <cmath>
 #include <limits>
@@ -73,6 +75,44 @@ int main() {
     CHECK(state.set_accent(0xFF7D30u));
     CHECK(!state.set_accent(0x1000000u));
     CHECK(state.appearance().accent_rgb==0xFF7D30u);
+    // Strict round trip, independent of game profiles and no module toggles.
+    MenuAppearance stored=state.appearance(), parsed{};
+    const auto serialized=serialize_menu_appearance(stored);
+    CHECK(serialized.find("version=1")!=std::string::npos);
+    CHECK(serialized.find("accent=ff7d30")!=std::string::npos);
+    CHECK(serialized.find("auto_clicker")==std::string::npos);
+    CHECK(parse_menu_appearance(serialized,parsed));
+    CHECK(parsed.compact && parsed.wide && parsed.allow_input_while_open);
+    CHECK(parsed.accent_rgb==0xFF7D30u);
+    CHECK(std::abs(parsed.scale-1.8f)<0.001f);
+    auto before=parsed;
+    for(const auto& invalid:std::vector<std::string>{
+        "", "version=2\n", "version=1\ncompact=maybe\n",
+        "version=1\ncompact=true\ncompact=false\n",
+        "version=1\ncompact=true\nwide=true\nallow_input=true\naccent=xyz123\nscale=1.0\n",
+        "version=1\ncompact=true\nwide=true\nallow_input=true\naccent=ffffff\nscale=inf\n",
+        "version=1\ncompact=true\nwide=true\nallow_input=true\naccent=ffffff\nscale=0.2\n",
+        "version=1\ncompact=true\nwide=true\nallow_input=true\naccent=ffffff\nscale=1.0\nextra=3\n"
+    }) {
+        CHECK(!parse_menu_appearance(invalid,parsed));
+        CHECK(parsed.accent_rgb==before.accent_rgb && parsed.scale==before.scale);
+    }
+    const auto file=std::filesystem::temp_directory_path()/
+        "slinkywinky-r62-test-menu-pref.ini";
+    std::error_code ignored;
+    std::filesystem::remove(file,ignored);
+    CHECK(save_menu_appearance(file,stored));
+    MenuAppearance fileCopy{};
+    CHECK(load_menu_appearance(file,fileCopy));
+    CHECK(fileCopy.accent_rgb==stored.accent_rgb &&
+          fileCopy.compact==stored.compact && fileCopy.wide==stored.wide);
+    {
+        std::ofstream invalidFile(file,std::ios::binary|std::ios::trunc);
+        invalidFile<<"not an appearance document";
+    }
+    CHECK(!load_menu_appearance(file,fileCopy));
+    CHECK(fileCopy.accent_rgb==stored.accent_rgb);
+    std::filesystem::remove(file,ignored);
     // UI is strictly an inert model: no game/JVM or network dependencies.
     return 0;
 }
