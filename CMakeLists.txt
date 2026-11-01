@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(slinkywinky VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/menu.cpp)
+add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/menu.cpp src/menu_prefs.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(slinkywinky_core PUBLIC Threads::Threads)
 target_include_directories(slinkywinky_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
