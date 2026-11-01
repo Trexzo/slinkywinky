@@ -55,3 +55,9 @@ The first-party C++ renderer-neutral `MenuRenderSession` provides an explicit gr
 R64 adds a **non-injected**, SHA-1-gated Java 8 verifier for the original Mojang 1.8.9 client JAR. It inspects the `ave` Minecraft class via ASM, requires a renderer field actually read in the same Minecraft method, finds uniquely matching virtual `(FJ)V` calls, then checks that the target renderer class contains exactly one public, concrete method with that signature. Zero or ambiguous matches fail closed. A separate `slinkywinky_render_audit.jar` is included in the Windows preview package. The source and fixture tests are in `tests/java/dev/slinkywinky/attach/RenderCallsiteAudit*.java`; see [R64 offline procedure](docs/R64_VANILLA_RENDER_CALLSITE_AUDIT.md).
 
 **This is an offline candidate-finding tool, not an injected render hook, in-game ClickGUI or original-Slinky fidelity claim.** It does not download or distribute Minecraft binaries. Running it against a user-owned exact original client JAR and confirming the candidate against the live game are still separate gates.
+
+## R65 — bounded read-only render callback fixture
+
+R65 adds a generated Java 8 render-method test fixture with an exact `(FJ)V` callback, owner-thread-only frame counting, an explicit 1–64-frame cap, per-session epoch gates, wrong-thread/invalid-frame rejection and SHA-256 preservation of original fixture class bytes. This **test-only** ASM implementation is compiled into the offline Java 8 acceptance classpath, **not** the production injected agent. See [R65 test and remaining gates](docs/R65_RENDER_CALLBACK_FIXTURE.md).
+
+The Minecraft original-JAR verification from R64 and live game-world/render acceptance are still outstanding while the Windows desktop is offline. **No in-game GUI, GL hook, combat actions or original Slinky binary parity is claimed by these synthetic tests.**
