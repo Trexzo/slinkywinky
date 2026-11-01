@@ -23,3 +23,14 @@ Both injections completed 20 client-thread callbacks, native session close and e
 **Not yet proven:** populated single-player or multiplayer world/player/target fields inside real Minecraft (both test cycles were at the main menu); production actions or combat modules, game rendering/ClickGUI, packet protocol, reliable full DLL unload, anti-cheat compatibility, or original Slinky authenticity/1:1 behavior.
 
 This result does **not** turn the diagnostic into a playable replacement; the injector remains opt-in and action-disabled. A reproducible **manual-only** vanilla acceptance harness will be retained in the repository once cleaned for portable invocation; ordinary CI must not start Minecraft.
+
+## R49 — portable manual acceptance harness
+
+The original R48 acceptance script had been held only in the temporary Windows development workspace. R49 commits an independently rewritten, parameterized manual harness at `tests/windows_vanilla189_isolated_manual.py`. Running it always requires the explicit `--run` flag, an external workspace, a full Java 8 JDK, and an already installed official vanilla 1.8.9 JAR with the **pinned exact SHA-256**. It does not download or redistribute Minecraft and refuses existing attachable Minecraft JVMs. Only its own game process is eligible for cleanup.
+
+Example:
+```powershell
+python tests/windows_vanilla189_isolated_manual.py --workspace "C:\path\to\slinkywinky" --jdk8 "C:\path\to\jdk8" --minecraft-dir "$env:APPDATA\.minecraft" --run
+```
+
+The automated CI job only compiles the Python source and prints `--help`; it never passes `--run` and does not start Minecraft. The R48 in-game success predates this refactored harness; it must not be described as a successful live execution of the new R49 file until independently repeated.

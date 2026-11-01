@@ -14,6 +14,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+      - name: Static-check manual vanilla acceptance script (never launch game)
+        run: |
+          python -m py_compile tests/windows_vanilla189_isolated_manual.py
+          python tests/windows_vanilla189_isolated_manual.py --help
       - name: Configure injectable architecture
         run: cmake -S . -B build-inject -A x64 -DSLINKYWINKY_BUILD_ATTACH=ON -DSLINKYWINKY_BUILD_JNI=ON
       - name: Build native loader and JVMTI DLL
