@@ -59,6 +59,17 @@ if(SLINKYWINKY_BUILD_JNI)
   endif()
 endif()
 
+# Read-only native Windows/GDI preview. Never injects or reads Minecraft.
+if(WIN32)
+  option(SLINKYWINKY_BUILD_HUD_PREVIEW "Build standalone native HUD preview" ON)
+  if(SLINKYWINKY_BUILD_HUD_PREVIEW)
+    add_executable(slinkywinky_hud_preview WIN32 examples/windows_hud_preview.cpp)
+    target_compile_features(slinkywinky_hud_preview PRIVATE cxx_std_17)
+    target_link_libraries(slinkywinky_hud_preview PRIVATE slinkywinky_core user32 gdi32)
+    target_include_directories(slinkywinky_hud_preview PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  endif()
+endif()
+
 # Injectable Windows architecture: official Java 8 Attach API -> JVMTI native agent.
 # Forge is optional test code only and is NOT a runtime dependency.
 option(SLINKYWINKY_BUILD_ATTACH "Build the standalone JVM attach loader and agent" OFF)

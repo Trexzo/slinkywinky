@@ -33,6 +33,7 @@ jobs:
             "slinkywinky_agent.dll",
             "slinkywinky_instrument.jar",
             "slinkywinky_jni.dll",
+            "slinkywinky_hud_preview.exe",
             "attach-classes/dev/slinkywinky/attach/AttachMain.class")
           $hashes = foreach ($f in $files) {
             $full = Join-Path $d $f
@@ -58,6 +59,7 @@ jobs:
             build-inject/Release/slinkywinky_agent.dll
             build-inject/Release/slinkywinky_instrument.jar
             build-inject/Release/slinkywinky_jni.dll
+            build-inject/Release/slinkywinky_hud_preview.exe
             build-inject/Release/attach-classes/**
             build-inject/Release/SHA256SUMS.txt
           if-no-files-found: error
