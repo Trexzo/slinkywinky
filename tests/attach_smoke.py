@@ -128,6 +128,41 @@ try:
     # AttachTarget advances one game tick per ~30 ms. Permit 120 observed ticks
     # plus asynchronous class fingerprint restoration before termination.
     time.sleep(5.0)
+    # R61: a stop with no active continuous session must fail closed.
+    no_session_stop = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--stop-observation"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if no_session_stop.returncode == 0:
+        raise AssertionError("Stop must not succeed without continuous ownership")
+    no_continuous_gate = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe=continuous"],
+        capture_output=True, text=True, env=hook_env, timeout=15)
+    if (no_continuous_gate.returncode == 0 or
+        "SLINKYWINKY_CONTINUOUS_OBSERVATION" not in no_continuous_gate.stderr):
+        raise AssertionError("Continuous session bypassed its separate opt-in")
+    continuous_env = hook_env.copy()
+    continuous_env["SLINKYWINKY_CONTINUOUS_OBSERVATION"] = "1"
+    continuous = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--hook-probe=continuous"],
+        capture_output=True, text=True, env=continuous_env, timeout=22)
+    if continuous.returncode != 0 or "mode=hook-probe" not in continuous.stdout:
+        raise AssertionError("Continuous read-only start refused: " +
+                             continuous.stdout + continuous.stderr)
+    # Let the disposable target advance well beyond the default 20 callbacks,
+    # but do NOT wait for the 36,000-tick independent upper bound.
+    time.sleep(1.3)
+    stop = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--stop-observation"],
+        capture_output=True, text=True, env=env, timeout=22)
+    if stop.returncode != 0 or "mode=stop-observation" not in stop.stdout:
+        raise AssertionError("Explicit continuous stop command failed: " +
+                             stop.stdout + stop.stderr)
+    time.sleep(1.8)
+    duplicate_stop = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--stop-observation"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if duplicate_stop.returncode == 0:
+        raise AssertionError("Duplicate stop must reject after native cleanup")
     target.terminate()
     tail, _ = target.communicate(timeout=5)
     for marker in ("OBSERVATION_RELEASE_PASS", "NATIVE_SESSION_OPEN_PASS", "NATIVE_SESSION_CLOSE_PASS", "OBSERVATION_MAPPING_ADMITTED", "NATIVE_OBSERVATION_PASS world=1 player=1 target=1", "NATIVE_CXX_PREFLIGHT_PASS", "NATIVE_GAME_THREAD_CXX_PASS", "GAME_THREAD_TICK_ENTRY_PASS", "GAME_THREAD_TICK_20_PASS ticks=20", "DIAGNOSTIC_TICK_LIMIT=120",
@@ -136,21 +171,34 @@ try:
         if marker not in tail:
             raise AssertionError("Missing tick hook or restoration marker " + marker +
                                  ": " + tail[-1600:])
-    if tail.count("CLASS_BYTECODE_RESTORE_PASS") != 2 or tail.count("GAME_THREAD_HOOK_CLEANUP_PASS") != 2:
-        raise AssertionError("Both bounded hook sessions must restore exact class bytes twice")
+    if tail.count("CLASS_BYTECODE_RESTORE_PASS") != 3 or tail.count("GAME_THREAD_HOOK_CLEANUP_PASS") != 3:
+        raise AssertionError("Bounded and stop-driven sessions must restore exact class bytes three times")
+    if tail.count("CONTINUOUS_STOP_REQUEST_ACCEPTED") != 1 or (
+        tail.count("CONTINUOUS_STOP_ON_CLIENT_THREAD_PASS") != 1):
+        raise AssertionError("Stop request must be honored on the original client thread")
+    if "GAME_THREAD_TICK_36000_PASS" in tail or "GAME_THREAD_HOOK_ABORT" in tail:
+        raise AssertionError("Stop-driven session reached cap or aborted unexpectedly")
     # R60: inspect only frame counts. Never trust a world/target marker from a
     # rejected native frame, or treat a mock ray hit as attack eligibility.
     import re
     summaries = re.findall(
         r"NATIVE_OBSERVATION_SUMMARY accepted=(\d+) worldPlayer=(\d+) "
         r"rayEntity=(\d+) generations=(\d+)", tail)
-    if summaries != [("20", "20", "20", "0"), ("120", "120", "120", "0")]:
-        raise AssertionError("Expected two exact validated synthetic world/target summaries: " +
+    if len(summaries) != 3 or summaries[:2] != [
+        ("20", "20", "20", "0"), ("120", "120", "120", "0")
+    ]:
+        raise AssertionError("Expected two exact bounded plus one continuous summary: " +
                              repr(summaries))
-    if tail.count("NATIVE_WORLD_PLAYER_OBSERVED tick=1") != 2 or (
-        tail.count("NATIVE_RAY_ENTITY_OBSERVED tick=1") != 2):
+    continuous_count = int(summaries[2][0])
+    if (not 21 <= continuous_count < 36000 or
+        summaries[2] != (str(continuous_count), str(continuous_count),
+                         str(continuous_count), "0")):
+        raise AssertionError("Continuous accepted-frame summary inconsistent: " +
+                             repr(summaries[2]))
+    if tail.count("NATIVE_WORLD_PLAYER_OBSERVED tick=1") != 3 or (
+        tail.count("NATIVE_RAY_ENTITY_OBSERVED tick=1") != 3):
         raise AssertionError("Per-attachment world and ray markers were not reset")
-    print("PASS: 20-tick default and opt-in 120-tick native observation; twice-restored bytecode")
+    print("PASS: 20, 120, and stop-driven continuous native observation; restored bytecode x3")
 
     print("PASS: standalone Windows loader -> Java 8 Attach API -> native JVMTI agent")
 finally:
