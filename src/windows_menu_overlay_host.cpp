@@ -29,6 +29,8 @@ bool WglMenuOverlayHost::open(HGLRC ctx,HDC dc,unsigned w,unsigned h) noexcept {
     context_=ctx;
     dc_=dc;
     owner_=std::this_thread::get_id();
+    width_=w;
+    height_=h;
     last_epoch_=next;
     return true;
 }
@@ -40,10 +42,21 @@ bool WglMenuOverlayHost::resize(unsigned w,unsigned h) noexcept {
        viewport[2]!=static_cast<GLint>(w) ||
        viewport[3]!=static_cast<GLint>(h))
         return false;
-    return session_.resize(w,h);
+    if(!session_.resize(w,h))return false;
+    width_=w;
+    height_=h;
+    return true;
 }
 bool WglMenuOverlayHost::draw(const MenuState& menu) {
     if(!current())return false;
+    // R70: refuse desynchronized host viewports BEFORE taking a numbered
+    // frame snapshot. Context/size mismatches must not consume sequences.
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewport);
+    if(viewport[0]!=0 || viewport[1]!=0 ||
+       viewport[2]!=static_cast<GLint>(width_) ||
+       viewport[3]!=static_cast<GLint>(height_))
+        return false;
     const auto frame=session_.next(menu);
     if(!frame)return false;
     return draw_menu_gl11(*frame,context_,dc_,MenuGL11Mode::BoundedOverlay);
@@ -56,6 +69,7 @@ bool WglMenuOverlayHost::close() noexcept {
     if(!session_.detach())return false;
     context_=nullptr;
     dc_=nullptr;
+    width_=height_=0;
     owner_=std::thread::id{};
     return true;
 }
