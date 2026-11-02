@@ -9,6 +9,7 @@
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <cstdint>
 #include <filesystem>
 
@@ -16,6 +17,7 @@ namespace {
 using slinkywinky::MenuTab;
 slinkywinky::MenuState menu;
 slinkywinky::MenuRenderSession session;
+slinkywinky::WglMenuOverlayHost overlayHost;
 constexpr wchar_t title[]=L"SlinkyWinky GL1.1 Menu Preview - Offline";
 constexpr wchar_t className[]=L"SlinkyWinkyGL11Preview";
 HDC device=nullptr;
@@ -57,6 +59,7 @@ bool create_context(HWND hwnd) {
 }
 void close_context(HWND hwnd) {
     // Window proc always runs on the same UI thread that owns the WGL context.
+    overlayHost.close();
     session.detach();
     if(wglGetCurrentContext()==graphics)wglMakeCurrent(nullptr,nullptr);
     if(graphics){wglDeleteContext(graphics);graphics=nullptr;}
@@ -85,6 +88,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             glViewport(0,0,static_cast<GLsizei>(width),
                        static_cast<GLsizei>(height));
             session.resize(width,height);
+            if(overlayDemo)overlayHost.resize(width,height);
             request_paint(hwnd);
             return 0;
         }
@@ -99,18 +103,19 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 // acquires the GL context from an unknown thread.
                 session.resize(static_cast<unsigned>(client.right),
                                static_cast<unsigned>(client.bottom));
-                const auto frame=session.next(menu);
-                // In this standalone test window only, optionally paint a
-                // sky-colored background to demonstrate that bounded mode
-                // preserves pixels outside its inset panel.
+                // Only the standalone demo application clears this test
+                // background. The bounded host itself never clears anything.
                 if(overlayDemo) {
                     glClearColor(0.10f,0.38f,0.69f,1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
+                    if(overlayHost.draw(menu))SwapBuffers(device);
+                } else {
+                    const auto frame=session.next(menu);
+                    if(frame && slinkywinky::draw_menu_gl11(
+                        *frame,graphics,device,
+                        slinkywinky::MenuGL11Mode::StandalonePreview))
+                        SwapBuffers(device);
                 }
-                if(frame && slinkywinky::draw_menu_gl11(*frame,graphics,device,
-                    overlayDemo?slinkywinky::MenuGL11Mode::BoundedOverlay:
-                                slinkywinky::MenuGL11Mode::StandalonePreview))
-                    SwapBuffers(device);
             }
             EndPaint(hwnd,&paint);
             return 0;
@@ -146,7 +151,16 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(wp==VK_UP)menu.scroll_by(-1);
             if(wp==VK_DOWN)menu.scroll_by(1);
             if(wp==L'O'){
-                overlayDemo=!overlayDemo;
+                if(overlayDemo) {
+                    overlayHost.close();
+                    overlayDemo=false;
+                } else if(graphics && device &&
+                          wglGetCurrentContext()==graphics) {
+                    RECT bounds{};GetClientRect(hwnd,&bounds);
+                    overlayDemo=overlayHost.open(graphics,device,
+                        static_cast<unsigned>(bounds.right),
+                        static_cast<unsigned>(bounds.bottom));
+                }
                 SetWindowTextW(hwnd,overlayDemo?
                     L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)":
                     title);
