@@ -257,12 +257,14 @@ int main() {
         // resized both the real GL viewport and the admitted session.
         glViewport(0,0,650,610);
         REQUIRE(!host.draw(menu));
+        REQUIRE(host.last_sequence()==1);
         REQUIRE(!host.resize(676,630));
         REQUIRE(host.resize(650,610));
         REQUIRE(host.draw(menu));
         REQUIRE(glGetError()==GL_NO_ERROR);
         glViewport(0,0,676,630);
         REQUIRE(!host.draw(menu));
+        REQUIRE(host.last_sequence()==2);
         REQUIRE(host.resize(676,630));
         REQUIRE(host.draw(menu));
         same(before,snapshot());
@@ -273,7 +275,7 @@ int main() {
         glViewport(0,0,676,630);
         REQUIRE(!host.draw(menu));
         REQUIRE(!host.resize(676,630));
-        REQUIRE(host.last_sequence()==1);
+        REQUIRE(host.last_sequence()==3);
         bool otherClosed=false;
         std::thread foreign([&] {
             otherClosed=host.close(); // failure required: wrong owner
