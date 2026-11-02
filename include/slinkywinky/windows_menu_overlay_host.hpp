@@ -36,6 +36,8 @@ private:
     std::thread::id owner_{};
     HGLRC context_=nullptr;
     HDC dc_=nullptr;
+    unsigned width_=0;
+    unsigned height_=0;
     std::uint64_t last_epoch_=0;
 };
 } // namespace slinkywinky
