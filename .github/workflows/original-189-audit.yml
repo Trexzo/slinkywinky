@@ -32,9 +32,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
-      - name: Parse original-JAR downloader
+      - name: Parse original-JAR downloader without writing cache files
         shell: pwsh
-        run: python -m py_compile tests/official_189_render_audit.py
+        run: |
+          python -c "import ast,pathlib;ast.parse(pathlib.Path('tests/official_189_render_audit.py').read_text(encoding='utf-8'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build exact read-only ASM verifier (no game files)
         shell: pwsh
         run: |
