@@ -253,6 +253,19 @@ int main() {
         REQUIRE(host.last_sequence()==1);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+        // A host viewport change is forbidden until the graphics owner has
+        // resized both the real GL viewport and the admitted session.
+        glViewport(0,0,650,610);
+        REQUIRE(!host.draw(menu));
+        REQUIRE(!host.resize(676,630));
+        REQUIRE(host.resize(650,610));
+        REQUIRE(host.draw(menu));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        glViewport(0,0,676,630);
+        REQUIRE(!host.draw(menu));
+        REQUIRE(host.resize(676,630));
+        REQUIRE(host.draw(menu));
+        same(before,snapshot());
         // A second context cannot hijack the admitted graphics session.
         HGLRC alternate=wglCreateContext(context.dc);
         REQUIRE(alternate!=nullptr && alternate!=context.gl);
