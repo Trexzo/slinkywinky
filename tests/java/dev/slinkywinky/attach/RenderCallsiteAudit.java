@@ -124,6 +124,15 @@ public final class RenderCallsiteAudit {
                 valid.size()+" candidates="+calls.size());
         return valid.values().iterator().next();
     }
+    static String sha256Hex(byte[] bytes) throws Exception {
+        final byte[] digest=MessageDigest.getInstance("SHA-256").digest(bytes);
+        final StringBuilder result=new StringBuilder(64);
+        for(byte value:digest) {
+            result.append(Character.forDigit((value>>>4)&15,16));
+            result.append(Character.forDigit(value&15,16));
+        }
+        return result.toString();
+    }
     static byte[] decodeHex(String value) {
         if((value.length() & 1)!=0) throw new IllegalArgumentException("bad hex");
         byte[] out=new byte[value.length()/2];
@@ -168,7 +177,8 @@ public final class RenderCallsiteAudit {
         ZipFile archive=new ZipFile(path.toFile());
         try {
             final ZipFile safe=archive;
-            Candidate mapped=inspect(entry(archive,"ave.class"),new ClassBytes(){
+            final byte[] minecraftBytes=entry(archive,"ave.class");
+            Candidate mapped=inspect(minecraftBytes,new ClassBytes(){
                 @Override public byte[] get(String owner)throws Exception {
                     if(owner.indexOf('/')>=0 || owner.indexOf('\\')>=0 ||
                        owner.indexOf('.')>=0 || owner.length()>64)return null;
@@ -176,7 +186,15 @@ public final class RenderCallsiteAudit {
                     return e==null?null:entry(safe,owner+".class");
                 }
             });
+            // These are unmodified classfile digests; they can later be
+            // matched against a live loaded-class snapshot without shipping
+            // any proprietary client bytecode or decrypted resources.
+            final byte[] rendererBytes=entry(archive,mapped.renderer+".class");
             System.out.println("R64_RENDER_CALLSITE_CANDIDATE "+mapped);
+            System.out.println("R71_ORIGINAL_MINECRAFT_CLASS_SHA256="+
+                sha256Hex(minecraftBytes));
+            System.out.println("R71_ORIGINAL_RENDERER_CLASS_SHA256="+
+                sha256Hex(rendererBytes));
             System.out.println("R64_ORIGINAL_JAR_SHA1_VALIDATED");
             System.out.println("R64_NOTE=OFFLINE_CANDIDATE_NOT_LIVE_RENDER_OR_GL_CERTIFICATION");
         } finally {archive.close();}
