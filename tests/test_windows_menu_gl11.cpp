@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -236,6 +237,62 @@ int main() {
         REQUIRE(!foreignAccepted);
         same(before,snapshot());
         REQUIRE(admitted.detach());
+
+        // R70: integrate the model, owner session, and GL draw through a
+        // single admission boundary, without any attached game process.
+        WglMenuOverlayHost host;
+        REQUIRE(!host.draw(menu));
+        REQUIRE(!host.close());
+        REQUIRE(!host.open(nullptr,context.dc,676,630));
+        REQUIRE(!host.open(context.gl,nullptr,676,630));
+        REQUIRE(!host.open(context.gl,context.dc,999,630));
+        REQUIRE(host.open(context.gl,context.dc,676,630));
+        REQUIRE(!host.open(context.gl,context.dc,676,630));
+        REQUIRE(host.active() && host.last_sequence()==0);
+        REQUIRE(host.draw(menu));
+        REQUIRE(host.last_sequence()==1);
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
+        // A second context cannot hijack the admitted graphics session.
+        HGLRC alternate=wglCreateContext(context.dc);
+        REQUIRE(alternate!=nullptr && alternate!=context.gl);
+        REQUIRE(wglMakeCurrent(context.dc,alternate));
+        glViewport(0,0,676,630);
+        REQUIRE(!host.draw(menu));
+        REQUIRE(!host.resize(676,630));
+        REQUIRE(host.last_sequence()==1);
+        bool otherClosed=false;
+        std::thread foreign([&] {
+            otherClosed=host.close(); // failure required: wrong owner
+        });
+        foreign.join();
+        REQUIRE(!otherClosed && host.active());
+        // Closing after an external context loss is permitted on the same
+        // owner thread without trying to use the no-longer-current context.
+        REQUIRE(host.close());
+        REQUIRE(!host.active() && host.last_sequence()==0);
+        REQUIRE(!host.close());
+        REQUIRE(host.open(alternate,context.dc,676,630));
+        REQUIRE(host.draw(menu));
+        REQUIRE(host.last_sequence()==1);
+        const State secondBefore=snapshot();
+        REQUIRE(host.draw(menu));
+        same(secondBefore,snapshot());
+        REQUIRE(wglMakeCurrent(nullptr,nullptr));
+        REQUIRE(!host.draw(menu));
+        REQUIRE(host.close());
+        REQUIRE(wglMakeCurrent(context.dc,context.gl));
+        REQUIRE(wglDeleteContext(alternate));
+        // Reattach must consume a new context epoch and make no assumption
+        // that a stale frame or old DC is still current.
+        REQUIRE(host.open(context.gl,context.dc,676,630));
+        REQUIRE(host.draw(menu));
+        REQUIRE(host.close());
+        REQUIRE(!host.draw(menu));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
+        std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";
+        std::cout<<"R70_WGL_CONTEXT_LOSS_FAIL_CLOSED_PASS\n";
         std::cout<<"R67_ISOLATED_WGL_CONTEXT_PASS\n";
         std::cout<<"R67_FIXED_FUNCTION_GL_STATE_RESTORED_PASS\n";
         std::cout<<"R67_NO_GAME_RENDER_HOOK_OR_INPUT\n";
