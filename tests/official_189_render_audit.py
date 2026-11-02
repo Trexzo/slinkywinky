@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import pathlib
 import subprocess
 import sys
@@ -120,6 +121,11 @@ def main():
         if (result.stdout.count("R64_RENDER_CALLSITE_CANDIDATE ") != 1
                 or "R64_ORIGINAL_JAR_SHA1_VALIDATED" not in result.stdout):
             raise RuntimeError("R64 renderer audit evidence incomplete")
+        for label in ("R71_ORIGINAL_MINECRAFT_CLASS_SHA256",
+                      "R71_ORIGINAL_RENDERER_CLASS_SHA256"):
+            if len(re.findall(r"(?m)^" + label + r"=[0-9a-f]{64}$",
+                              result.stdout)) != 1:
+                raise RuntimeError("Missing exact original class SHA256: " + label)
         print(result.stdout.rstrip(), flush=True)
         print("R71_OFFLINE_ORIGINAL_JAR_RENDER_PREFLIGHT_PASS", flush=True)
 
