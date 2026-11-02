@@ -56,7 +56,7 @@ struct Context {
     }
 };
 struct State {
-    GLint viewport[4]{},mode=0,serverDepth=0,clientDepth=0;
+    GLint viewport[4]{},scissorBox[4]{},mode=0,serverDepth=0,clientDepth=0;
     GLint modelDepth=0,projectionDepth=0,textureDepth=0;
     GLint blendSrc=0,blendDst=0;
     GLboolean depth=FALSE,blend=FALSE,texture=FALSE,scissor=FALSE;
@@ -67,6 +67,7 @@ struct State {
 State snapshot() {
     State s{};
     glGetIntegerv(GL_VIEWPORT,s.viewport);
+    glGetIntegerv(GL_SCISSOR_BOX,s.scissorBox);
     glGetIntegerv(GL_MATRIX_MODE,&s.mode);
     glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&s.serverDepth);
     glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&s.clientDepth);
@@ -92,6 +93,7 @@ State snapshot() {
 void same(const State& a,const State& b) {
     for(int i=0;i<4;++i) {
         REQUIRE(a.viewport[i]==b.viewport[i]);
+        REQUIRE(a.scissorBox[i]==b.scissorBox[i]);
         REQUIRE(std::fabs(a.color[i]-b.color[i])<0.001f);
     }
     REQUIRE(a.mode==b.mode);
@@ -181,6 +183,46 @@ int main() {
         REQUIRE(draw_menu_gl11(*changed,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+
+        // R69: draw a translucent inset menu *over* an existing frame.
+        // Explicitly prove that pixels beyond the menu panel are untouched.
+        glClearColor(0.10f,0.38f,0.69f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        const auto outsideLeft=readback(0,315);
+        const auto outsideRight=readback(675,315);
+        const auto outsideTop=readback(335,625);
+        const auto outsideBottom=readback(335,5);
+        const State beforeOverlay=snapshot();
+        REQUIRE(!draw_menu_gl11(*changed,context.gl,context.dc,
+                   static_cast<MenuGL11Mode>(99)));
+        same(beforeOverlay,snapshot());
+        REQUIRE(draw_menu_gl11(*changed,context.gl,context.dc,
+                   MenuGL11Mode::BoundedOverlay));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(beforeOverlay,snapshot());
+        REQUIRE(readback(0,315)==outsideLeft);
+        REQUIRE(readback(675,315)==outsideRight);
+        REQUIRE(readback(335,625)==outsideTop);
+        REQUIRE(readback(335,5)==outsideBottom);
+        const auto overlayAccent=readback(15,615);
+        REQUIRE(overlayAccent[0]>outsideLeft[0]);
+        REQUIRE(overlayAccent[1]>outsideLeft[1]);
+        REQUIRE(overlayAccent[2]<outsideLeft[2]);
+        const auto panelInk=readback(40,588);
+        REQUIRE(panelInk!=outsideLeft);
+        // Redraw with a different active tab. Original scene outside the
+        // requested menu bounds must remain byte-identical.
+        REQUIRE(menu.select(MenuTab::Visual));
+        const auto nextTab=admitted.next(menu);
+        REQUIRE(nextTab && nextTab->tab==MenuTab::Visual);
+        REQUIRE(draw_menu_gl11(*nextTab,context.gl,context.dc,
+                   MenuGL11Mode::BoundedOverlay));
+        REQUIRE(readback(0,315)==outsideLeft);
+        REQUIRE(readback(675,315)==outsideRight);
+        same(beforeOverlay,snapshot());
+        std::cout<<"R69_BOUNDED_GL_OVERLAY_UNTOUCHED_OUTSIDE_PIXELS_PASS\\n";
+        std::cout<<"R69_TRANSPARENT_GL_PANEL_STATE_RESTORE_PASS\\n";
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));
         REQUIRE(!draw_menu_gl11(*changed,context.gl,context.dc));
