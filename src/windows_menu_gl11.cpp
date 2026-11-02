@@ -29,10 +29,13 @@ void quad(float x,float y,float w,float h) noexcept {
     glVertex2f(x,y+h);
     glEnd();
 }
-void rgb(std::uint32_t c) noexcept {
+void rgba(std::uint32_t c,GLubyte alpha=255) noexcept {
     glColor4ub(static_cast<GLubyte>((c>>16)&255),
                static_cast<GLubyte>((c>>8)&255),
-               static_cast<GLubyte>(c&255),255);
+               static_cast<GLubyte>(c&255),alpha);
+}
+void rgb(std::uint32_t c) noexcept {
+    rgba(c);
 }
 
 // Draw original 5x7 block glyphs in the currently admitted GL1.1 context.
@@ -127,9 +130,11 @@ private:
 }
 
 bool draw_menu_gl11(const MenuRenderFrame& frame,
-                    HGLRC expected_context,HDC expected_dc) noexcept {
+                    HGLRC expected_context,HDC expected_dc,
+                    MenuGL11Mode mode) noexcept {
     // Never use a context inferred only from a PID. Require exact equality.
-    if(!expected_context || !expected_dc ||
+    if((mode!=MenuGL11Mode::StandalonePreview &&
+        mode!=MenuGL11Mode::BoundedOverlay) || !expected_context || !expected_dc ||
        wglGetCurrentContext()!=expected_context ||
        wglGetCurrentDC()!=expected_dc ||
        frame.epoch==0 || frame.sequence==0 ||
@@ -159,8 +164,29 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     glDisable(GL_CULL_FACE);
     glDisable(GL_FOG);
     glDisable(GL_ALPHA_TEST);
-    glDisable(GL_BLEND);
-    glDisable(GL_SCISSOR_TEST);
+    const bool overlay=mode==MenuGL11Mode::BoundedOverlay;
+    // Leave at least a 12 px border in overlay mode. The standalone preview
+    // intentionally retains the earlier full-canvas behavior.
+    const unsigned paneWidth=overlay?
+        std::min<unsigned>(frame.appearance.wide?844u:676u,
+                           frame.viewport_width-24u):frame.viewport_width;
+    const unsigned paneHeight=overlay?
+        std::min<unsigned>(630u,frame.viewport_height-24u):
+        frame.viewport_height;
+    const unsigned paneLeft=(frame.viewport_width-paneWidth)/2u;
+    const unsigned paneTop=(frame.viewport_height-paneHeight)/2u;
+    if(overlay) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(static_cast<GLint>(paneLeft),
+                  static_cast<GLint>(frame.viewport_height-paneTop-paneHeight),
+                  static_cast<GLsizei>(paneWidth),
+                  static_cast<GLsizei>(paneHeight));
+    }else{
+        glDisable(GL_BLEND);
+        glDisable(GL_SCISSOR_TEST);
+    }
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     const GLdouble width=static_cast<GLdouble>(frame.viewport_width);
@@ -168,12 +194,15 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     glOrtho(0,width,height,0,-1,1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    const float w=static_cast<float>(frame.viewport_width);
-    rgb(0x161617);
-    quad(0,0,w,static_cast<float>(frame.viewport_height));
+    glTranslatef(static_cast<GLfloat>(paneLeft),
+                 static_cast<GLfloat>(paneTop),0.0f);
+    const float w=static_cast<float>(paneWidth);
+    const float h=static_cast<float>(paneHeight);
+    rgba(0x161617,overlay?static_cast<GLubyte>(225):static_cast<GLubyte>(255));
+    quad(0,0,w,h);
     rgb(frame.appearance.accent_rgb);
     quad(0,0,w,4);
-    rgb(0x101011);
+    rgba(0x101011,overlay?static_cast<GLubyte>(238):static_cast<GLubyte>(255));
     quad(18,78,w-36,42);
     const auto selected=static_cast<unsigned>(frame.tab);
     if(selected<6u) {
@@ -184,7 +213,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     for(std::size_t i=0;i<frame.visible.size();++i) {
         const auto& item=frame.visible[i];
         const float y=153.0f+static_cast<float>(i)*49.0f;
-        rgb(i%2==0?0x1c1c1d:0x252526);
+        rgba(i%2==0?0x1c1c1d:0x252526,
+             overlay?static_cast<GLubyte>(235):static_cast<GLubyte>(255));
         quad(18,y,w-36,44);
         if(item.preview_enabled) {
             rgb(frame.appearance.accent_rgb);
