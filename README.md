@@ -81,3 +81,11 @@ The first-party Windows OpenGL 1.1 menu now renders its own **5×7 textureless A
 Regression checks include `native_menu_bitmap_font` (all-platform alphabet/catalog integrity) and the isolated Windows `isolated_wgl_menu_state_restore` test with real GL pixel readbacks proving white labels render above the dark panels without leaving GL11 state mutated. Details and controls: [R68 original GL text and visual preview](docs/R68_GL11_BITMAP_TEXT_PREVIEW.md).
 
 **R68 is still NOT a Minecraft in-game GUI.** The original vanilla 1.8.9 renderer callback remains unverified because the authoritative desktop is offline and the user-owned Mojang client JAR could not be accessed. This is a first-party interim font and render preview, not commercial Slinky UI parity.
+
+## R69 — bounded translucent OpenGL overlay without scene destruction
+
+The original R67/R68 menu covered the entire viewport. R69 adds an explicit opt-in `MenuGL11Mode::BoundedOverlay`: the first-party menu is drawn into a centered, clipped, translucent panel, with no framebuffer clearing, context switching or GL viewport changes. The R67 scoped state guard restores blending, scissor, matrices and GL11 attributes. A second `StandalonePreview` mode retains the original full-canvas visual testing path. The native `slinkywinky_gl11_menu_preview.exe` now has an **`O` key** for a standalone blue-scene overlay demo; it does not attach to or launch Minecraft.
+
+The isolated WGL CTest compares the unmodified outer-scene pixels on all four sides before/after overlay drawing and verifies state restoration, while explicitly rejecting malformed frame/mode data. See [R69 bounded OpenGL overlay and limitations](docs/R69_BOUNDED_OPENGL_OVERLAY.md).
+
+**This is not yet an injected or validated Minecraft 1.8.9 GUI.** The real renderer callback remains unverified because the authorized desktop and original vanilla JAR are inaccessible. GL11 fixed-function preservation does not certify modern GL/LWJGL state caching. UI toggles remain inert; draft PR #1 remains unmerged.
