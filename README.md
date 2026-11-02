@@ -97,3 +97,9 @@ R70 adds `WglMenuOverlayHost` as the explicit **native graphics admission and te
 The Windows WGL regression exercises a second real disposable graphics context, wrong-thread close, forced context loss, viewport mismatch and explicit reattachment, while retaining the previous pixel-compositing and GL state checks. See [R70 owner-session handoff and remaining original-game gates](docs/R70_WGL_OVERLAY_OWNER_HANDOFF.md).
 
 **No Minecraft render hook has been installed.** The real vanilla 1.8.9 renderer class and in-world OpenGL/LWJGL compatibility still require an original JAR scan and an authorized desktop runtime. Production Java agent and gameplay paths are unchanged.
+
+## R71 — confirmed original vanilla 1.8.9 renderer identity
+
+An **independent, read-only GitHub Actions audit** successfully downloaded the original 1.8.9 client from Mojang, verified its published SHA-1 and length, and found the **actual shipped obfuscated renderer method**: `ave.av` calls `bfk.a(FJ)V`. It also recorded and now pins exact SHA-256 fingerprints of the original `ave.class` and `bfk.class`, so the next development stage can refuse altered or incompatible class bytes. The Mojang JAR is downloaded to a temporary runner directory, immediately discarded and **never uploaded or included in release artifacts**. See [R71 exact original-game render mapping and provenance](docs/R71_ORIGINAL_RENDERER_189_VERIFIED.md) and [successful original audit](https://github.com/Trexzo/slinkywinky/actions/runs/41424516271).
+
+This closes the **original bytecode mapping** gap, **not** the runtime rendering gap. Live Minecraft 1.8.9 graphical callback, LWJGL context ownership and shutdown are still unverified. The production injector remains unchanged; PR #1 remains draft.
