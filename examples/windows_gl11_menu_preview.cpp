@@ -22,6 +22,7 @@ HDC device=nullptr;
 HGLRC graphics=nullptr;
 HWND window=nullptr;
 std::filesystem::path preferences;
+bool overlayDemo=false; // Standalone-only demonstration, never attached to Minecraft.
 
 std::filesystem::path settings_file() {
     wchar_t buffer[32768]{};
@@ -99,7 +100,16 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 session.resize(static_cast<unsigned>(client.right),
                                static_cast<unsigned>(client.bottom));
                 const auto frame=session.next(menu);
-                if(frame && slinkywinky::draw_menu_gl11(*frame,graphics,device))
+                // In this standalone test window only, optionally paint a
+                // sky-colored background to demonstrate that bounded mode
+                // preserves pixels outside its inset panel.
+                if(overlayDemo) {
+                    glClearColor(0.10f,0.38f,0.69f,1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                }
+                if(frame && slinkywinky::draw_menu_gl11(*frame,graphics,device,
+                    overlayDemo?slinkywinky::MenuGL11Mode::BoundedOverlay:
+                                slinkywinky::MenuGL11Mode::StandalonePreview))
                     SwapBuffers(device);
             }
             EndPaint(hwnd,&paint);
@@ -135,6 +145,12 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 menu.select(static_cast<MenuTab>(wp-L'1'));
             if(wp==VK_UP)menu.scroll_by(-1);
             if(wp==VK_DOWN)menu.scroll_by(1);
+            if(wp==L'O'){
+                overlayDemo=!overlayDemo;
+                SetWindowTextW(hwnd,overlayDemo?
+                    L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)":
+                    title);
+            }
             if(wp==L'C'){
                 menu.set_compact(!menu.appearance().compact);persist();
             }
