@@ -89,3 +89,11 @@ The original R67/R68 menu covered the entire viewport. R69 adds an explicit opt-
 The isolated WGL CTest compares the unmodified outer-scene pixels on all four sides before/after overlay drawing and verifies state restoration, while explicitly rejecting malformed frame/mode data. See [R69 bounded OpenGL overlay and limitations](docs/R69_BOUNDED_OPENGL_OVERLAY.md).
 
 **This is not yet an injected or validated Minecraft 1.8.9 GUI.** The real renderer callback remains unverified because the authorized desktop and original vanilla JAR are inaccessible. GL11 fixed-function preservation does not certify modern GL/LWJGL state caching. UI toggles remain inert; draft PR #1 remains unmerged.
+
+## R70 — native WGL owner-session integration
+
+R70 adds `WglMenuOverlayHost` as the explicit **native graphics admission and teardown bridge** between the R63 menu snapshots and R69 scene-preserving GL11 renderer. It binds one owner thread, one exact WGL HGLRC/HDC and a monotonic context epoch; refuses duplicate opens, changed contexts, lost contexts and unsynchronized viewport changes; and closes safely on its owner thread even when no graphics context remains current. Each admitted frame is freshly created from the preview-only `MenuState` and rendered solely in bounded overlay mode. The standalone GL11 preview's **O-key** mode now uses the same bridge.
+
+The Windows WGL regression exercises a second real disposable graphics context, wrong-thread close, forced context loss, viewport mismatch and explicit reattachment, while retaining the previous pixel-compositing and GL state checks. See [R70 owner-session handoff and remaining original-game gates](docs/R70_WGL_OVERLAY_OWNER_HANDOFF.md).
+
+**No Minecraft render hook has been installed.** The real vanilla 1.8.9 renderer class and in-world OpenGL/LWJGL compatibility still require an original JAR scan and an authorized desktop runtime. Production Java agent and gameplay paths are unchanged.
