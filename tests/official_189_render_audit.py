@@ -9,7 +9,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import pathlib
 import subprocess
 import sys
@@ -20,6 +19,16 @@ import urllib.request
 SHA1 = "3870888a6c3d349d3771a3e9d16c9bf5e076b908"
 SIZE = 8461484
 VERSION = "1.8.9"
+# Exact classfile digests independently measured by R71 GitHub Actions
+# from the SHA-1-verified original Mojang client. Never use these as proof
+# that a modified third-party launcher or a running JVM is equivalent.
+EXPECTED_CLASSES = {
+    "R71_ORIGINAL_MINECRAFT_CLASS_SHA256":
+        "430a17aa1911bcd0251aa4dcecb013b6c5b251bb5d0122c7305de0e36dc33e82",
+    "R71_ORIGINAL_RENDERER_CLASS_SHA256":
+        "8a4ce93bbf272398ea298d2ed363f75211dd469fcd3b66682a387e4738a419a2",
+}
+EXPECTED_CALLSITE = "caller=ave.av renderer=bfk method=a descriptor=(FJ)V"
 MANIFEST = (
     "https://piston-meta.mojang.com/v1/packages/"
     "d546f1707a3f2b7d034eece5ea2e311eda875787/1.8.9.json"
@@ -121,11 +130,13 @@ def main():
         if (result.stdout.count("R64_RENDER_CALLSITE_CANDIDATE ") != 1
                 or "R64_ORIGINAL_JAR_SHA1_VALIDATED" not in result.stdout):
             raise RuntimeError("R64 renderer audit evidence incomplete")
-        for label in ("R71_ORIGINAL_MINECRAFT_CLASS_SHA256",
-                      "R71_ORIGINAL_RENDERER_CLASS_SHA256"):
-            if len(re.findall(r"(?m)^" + label + r"=[0-9a-f]{64}$",
-                              result.stdout)) != 1:
-                raise RuntimeError("Missing exact original class SHA256: " + label)
+        for label, expected in EXPECTED_CLASSES.items():
+            if result.stdout.count(label + "=" + expected + "\n") != 1:
+                raise RuntimeError("Original class digest mismatch: " + label)
+        if result.stdout.count(
+                "R64_RENDER_CALLSITE_CANDIDATE " + EXPECTED_CALLSITE + "\n"
+        ) != 1:
+            raise RuntimeError("Original 1.8.9 renderer fingerprint changed")
         print(result.stdout.rstrip(), flush=True)
         print("R71_OFFLINE_ORIGINAL_JAR_RENDER_PREFLIGHT_PASS", flush=True)
 
