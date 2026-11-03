@@ -149,7 +149,7 @@ try:
     if (no_render_gate.returncode == 0 or
         "SLINKYWINKY_RENDER_PREFLIGHT" not in no_render_gate.stderr):
         raise AssertionError("Render preflight bypassed explicit opt-in")
-    render_env=env.copy()
+    render_env=production_env.copy()
     render_env["SLINKYWINKY_RENDER_PREFLIGHT"]="1"
     render_wrong_target = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home), "--render-preflight"],
