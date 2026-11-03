@@ -153,6 +153,24 @@ def main():
             raise RuntimeError("R72 original-class memory-only weave was not certified: " +
                                weave.stdout[-1600:] + weave.stderr[-1600:])
         print("R72_ORIGINAL_RENDERER_OFFLINE_WEAVE_PASS", flush=True)
+        # R73: verify that the SHA-gated, strict loaded-class admission
+        # policy accepts exactly the original Mojang ave/bfk class bytes.
+        # No Java Attach, class loading, Minecraft process, or graphics used.
+        static_admission = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.RendererLivePreflightExactAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40
+        )
+        if (static_admission.returncode != 0 or
+                static_admission.stdout.count(
+                    "R73_STATIC_ORIGINAL_RENDERER_ADMISSION_PASS") != 1 or
+                static_admission.stdout.count(
+                    "R73_STATIC_AUDIT_IS_NOT_LIVE_GAME_EVIDENCE") != 1):
+            raise RuntimeError("R73 original class preflight policy mismatch: " +
+                               static_admission.stdout[-1600:] +
+                               static_admission.stderr[-1600:])
+        print("R73_STATIC_ORIGINAL_RENDERER_PREFLIGHT_PASS", flush=True)
 
 
 if __name__ == "__main__":
