@@ -187,6 +187,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachLauncher.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/render-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/render_attach_live_smoke.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r74_render_attach_smoke.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r74-render-attach-agent.mf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/bfk.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderAttachAgent.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74AttachLauncher.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderTarget.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
@@ -255,9 +261,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R65Fixture.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderAttachAgent.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/bfk.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/AttachTarget.java"
@@ -266,10 +275,15 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -cp "${SW_TOOLS_JAR}"
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachLauncher.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74AttachLauncher.java"
     # The test-agent bundle is deliberately NOT shipped in package artifacts.
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r66_test_agent.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/render-attach-agent.mf"
+      -C "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes" .
+    COMMAND "${Java_JAR_EXECUTABLE}" cfm
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r74_test_agent.jar"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/r74-render-attach-agent.mf"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes" .
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:slinkywinky_agent>"
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_agent.dll"
@@ -286,6 +300,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/render_attach_live_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(native_render_fixture_attach PROPERTIES TIMEOUT 70)
+      # R74: generated original-name ave/bfk, disposable JVM only.
+      add_test(NAME native_r74_obfuscated_render_attach
+        COMMAND "${Python3_EXECUTABLE}" -u
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/r74_render_attach_smoke.py"
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+      set_tests_properties(native_r74_obfuscated_render_attach PROPERTIES TIMEOUT 80)
     endif()
   endif()
 endif()
