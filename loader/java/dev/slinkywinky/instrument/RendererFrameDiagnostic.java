@@ -151,6 +151,7 @@ public final class RendererFrameDiagnostic {
         activeGate=session;
         boolean added=false;
         Throwable installationFailure=null;
+        boolean weaveRemoved=false;
         try {
             instrumentation.addTransformer(transformer,true);
             added=true;
@@ -161,8 +162,8 @@ public final class RendererFrameDiagnostic {
             // Never restore while the weaving transformer remains registered.
             if(added) {
                 try {
-                    if(!instrumentation.removeTransformer(transformer) &&
-                       installationFailure==null)
+                    weaveRemoved=instrumentation.removeTransformer(transformer);
+                    if(!weaveRemoved && installationFailure==null)
                         installationFailure=new IllegalStateException(
                             "R75 weaving transformer removal unconfirmed");
                 } catch(Throwable removalError) {
@@ -174,7 +175,8 @@ public final class RendererFrameDiagnostic {
             activeGate=null;
             session.stop();
             boolean recovered=restore(instrumentation,target);
-            InstrumentationProbe.finishRenderDiagnostic(recovered);
+            // Uncertain removal means the weaving transformer may remain active.
+            InstrumentationProbe.finishRenderDiagnostic(recovered && weaveRemoved);
             if(installationFailure!=null)
                 throw new IllegalStateException(
                     "R75 renderer callback installation refused",installationFailure);
