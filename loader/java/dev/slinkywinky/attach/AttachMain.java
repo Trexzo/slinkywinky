@@ -31,12 +31,15 @@ public final class AttachMain {
                 throw new IllegalArgumentException("Usage: list | attach PID ABSOLUTE_DLL");
             final boolean tickProbe = args.length == 4 && "--tick-probe".equals(args[3]);
             final boolean instrumentProbe = args.length == 4 && "--instrument-probe".equals(args[3]);
+            final boolean renderPreflight = args.length == 4 && "--render-preflight".equals(args[3]);
             final String requestedOption = args.length == 4 ? args[3] : "";
             final boolean extendedHook = "--hook-probe=120".equals(requestedOption) ||
                                          "--hook-probe=600".equals(requestedOption);
             final boolean continuousHook = "--hook-probe=continuous".equals(requestedOption);
             final boolean hookProbe = "--hook-probe".equals(requestedOption) ||
                                       extendedHook || continuousHook;
+            if (renderPreflight && !"1".equals(System.getenv("SLINKYWINKY_RENDER_PREFLIGHT")))
+                throw new IllegalArgumentException("Render preflight requires SLINKYWINKY_RENDER_PREFLIGHT=1");
             if (hookProbe && !"1".equals(System.getenv("SLINKYWINKY_EXPERIMENTAL_HOOK")))
                 throw new IllegalArgumentException("Unverified hook requires explicit SLINKYWINKY_EXPERIMENTAL_HOOK=1");
             if (extendedHook && !"1".equals(System.getenv("SLINKYWINKY_EXTENDED_DIAGNOSTIC")))
@@ -44,7 +47,7 @@ public final class AttachMain {
             if (continuousHook && !"1".equals(System.getenv("SLINKYWINKY_CONTINUOUS_OBSERVATION")))
                 throw new IllegalArgumentException("Continuous hook requires SLINKYWINKY_CONTINUOUS_OBSERVATION=1");
             if (args.length == 4 && !tickProbe && !instrumentProbe &&
-                !hookProbe) throw new IllegalArgumentException("Unknown option");
+                !renderPreflight && !hookProbe) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
                 throw new IllegalArgumentException("Numeric PID required");
@@ -58,11 +61,12 @@ public final class AttachMain {
                 throw new IllegalArgumentException("Refusing non-Minecraft target: " + target.displayName());
             VirtualMachine vm = VirtualMachine.attach(target);
             try {
-                if (instrumentProbe || hookProbe) {
+                if (instrumentProbe || hookProbe || renderPreflight) {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
-                    String options = test ? "probe" : "minecraft";
+                    String options = renderPreflight ? "minecraft-render-preflight" :
+                                     (test ? "probe" : "minecraft");
                     if (hookProbe) {
                         File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
                         if (!jniLibrary.isFile())
@@ -79,7 +83,7 @@ public final class AttachMain {
             } finally {
                 vm.detach();
             }
-            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))));
+            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft"))))));
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
             System.exit(2);
