@@ -171,6 +171,23 @@ def main():
                                static_admission.stdout[-1600:] +
                                static_admission.stderr[-1600:])
         print("R73_STATIC_ORIGINAL_RENDERER_PREFLIGHT_PASS", flush=True)
+        # R75: certify the actual (not marker-only) production callback prefix,
+        # against the exact Mojang class, entirely in memory. Do not attach.
+        real_prefix = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.OriginalRendererFrameDiagnosticAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40
+        )
+        if (real_prefix.returncode != 0 or
+                real_prefix.stdout.count(
+                    "R75_PINNED_ORIGINAL_RENDER_CALLBACK_PREFIX_PASS") != 1 or
+                real_prefix.stdout.count(
+                    "R75_MEMORY_ONLY_NO_GAME_ATTACH_PASS") != 1):
+            raise RuntimeError("R75 pinned production callback prefix mismatch: " +
+                               real_prefix.stdout[-1800:] +
+                               real_prefix.stderr[-1800:])
+        print("R75_ORIGINAL_RENDERER_CALLBACK_PREFIX_OFFLINE_PASS", flush=True)
 
 
 if __name__ == "__main__":
