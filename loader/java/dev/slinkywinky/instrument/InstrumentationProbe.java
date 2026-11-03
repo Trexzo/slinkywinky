@@ -237,7 +237,7 @@ public final class InstrumentationProbe {
      * exclusion API makes the agent's existing system-loaded class visible to
      * the Minecraft class loader. Validate exact identity *before* retransform.
      */
-    private static void verifyCallbackVisibility(Class<?> target) {
+    static void verifyCallbackVisibility(Class<?> target) {
         final ClassLoader loader = target.getClassLoader();
         if (loader == null) throw new IllegalStateException("Unexpected bootstrap target");
         if (loader != InstrumentationProbe.class.getClassLoader()) {
@@ -261,7 +261,26 @@ public final class InstrumentationProbe {
         }
     }
 
+    /** R75 hook gate stays held permanently if restoration cannot be proven. */
+    static void finishRenderDiagnostic(boolean restorationVerified) {
+        if(restorationVerified) hookInstalled.set(false);
+    }
+
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R75: explicit finite original-only renderer diagnostic. Neither
+        // continuous nor auto-enabled. Does not render or read game state.
+        if ("minecraft-render-callback-r75".equals(options)) {
+            if (!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation);
+            } catch(Exception error) {
+                // A failed installation may have touched class bytes. Only
+                // RendererFrameDiagnostic's verified restore releases the gate.
+                throw new IllegalStateException("R75 render diagnostic refused",error);
+            }
+            return;
+        }
         // R73: strictly passive, explicitly opted-in loaded renderer fingerprint
         // preflight. This never installs a render callback or loads native GL.
         if ("minecraft-render-preflight".equals(options)) {
