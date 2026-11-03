@@ -141,24 +141,25 @@ public final class RendererFrameDiagnostic {
         };
         activeGate=session;
         boolean added=false;
+        Throwable installationFailure=null;
         try {
             instrumentation.addTransformer(transformer,true);
             added=true;
             instrumentation.retransformClasses(target);
         } catch(Throwable problem) {
-            activeGate=null;
-            session.stop();
-            boolean recovered=restore(instrumentation,target);
-            InstrumentationProbe.finishRenderDiagnostic(recovered);
-            throw new IllegalStateException("R75 renderer callback installation refused",problem);
+            installationFailure=problem;
         } finally {
+            // Never restore while the weaving transformer remains registered.
             if(added)instrumentation.removeTransformer(transformer);
         }
-        if(changed.get()!=1) {
+        if(installationFailure!=null || changed.get()!=1) {
             activeGate=null;
             session.stop();
             boolean recovered=restore(instrumentation,target);
             InstrumentationProbe.finishRenderDiagnostic(recovered);
+            if(installationFailure!=null)
+                throw new IllegalStateException(
+                    "R75 renderer callback installation refused",installationFailure);
             throw new IllegalStateException("R75 renderer not transformed exactly once");
         }
 
