@@ -139,6 +139,20 @@ def main():
             raise RuntimeError("Original 1.8.9 renderer fingerprint changed")
         print(result.stdout.rstrip(), flush=True)
         print("R71_OFFLINE_ORIGINAL_JAR_RENDER_PREFLIGHT_PASS", flush=True)
+        # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
+        # method. The Java helper never writes modified game class bytes.
+        weave = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.OriginalRendererWeaveAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40
+        )
+        if (weave.returncode != 0 or
+                weave.stdout.count("R72_ORIGINAL_BFK_OFFLINE_WEAVE_PREFLIGHT_PASS") != 1 or
+                weave.stdout.count("R72_NO_GAME_ATTACH_OR_TRANSFORMED_BINARY_OUTPUT") != 1):
+            raise RuntimeError("R72 original-class memory-only weave was not certified: " +
+                               weave.stdout[-1600:] + weave.stderr[-1600:])
+        print("R72_ORIGINAL_RENDERER_OFFLINE_WEAVE_PASS", flush=True)
 
 
 if __name__ == "__main__":
