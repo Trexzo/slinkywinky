@@ -33,11 +33,12 @@ int wmain(int argc, wchar_t** argv) {
                              option == L"--hook-probe=600" ||
                              option == L"--hook-probe=continuous";
     const bool stop_option = option == L"--stop-observation";
+    const bool render_preflight = option == L"--render-preflight";
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
         (argc == 5 && option != L"--tick-probe" &&
-         option != L"--instrument-probe" && !hook_option && !stop_option)) {
+         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation]\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight]\n";
         return 2;
     }
     // Never enter the Java Attach API for an active continuous session. It may
@@ -72,7 +73,7 @@ int wmain(int argc, wchar_t** argv) {
     const auto instrument = folder / L"slinkywinky_instrument.jar";
     const auto classes = folder / L"attach-classes";
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
-        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option) &&
+        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight) &&
          !regular_file_exists(instrument)) ||
         (argc == 5 && hook_option &&
          !regular_file_exists(folder / L"slinkywinky_jni.dll")) ||
