@@ -50,8 +50,13 @@ public final class RendererLivePreflight {
                 ave.length<=1000000 && bfk.length<=1000000,"Invalid classfile lengths");
         require(sha256(ave).equals(aveExpected) &&
                 sha256(bfk).equals(bfkExpected),"Loaded original-class SHA-256 mismatch");
-        final ClassReader game=new ClassReader(ave);
-        final ClassReader renderer=new ClassReader(bfk);
+        final ClassReader game,renderer;
+        try {
+            game=new ClassReader(ave);
+            renderer=new ClassReader(bfk);
+        } catch(RuntimeException malformed) {
+            throw new IllegalStateException("Malformed original renderer classfile",malformed);
+        }
         require("ave".equals(game.getClassName()) &&
                 "bfk".equals(renderer.getClassName()),"Wrong original obfuscated owners");
         final int[] invocations={0};
@@ -90,6 +95,11 @@ public final class RendererLivePreflight {
         },ClassReader.SKIP_CODE|ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
         require(ownedRendererField[0]==1 && invocations[0]==1 && methods[0]==1,
             "Original renderer shape mismatch");
+    }
+
+    /** Only this pinned admission is used on a live target. */
+    public static void checkPinnedOriginal(byte[] ave, byte[] bfk) throws Exception {
+        checkExactClasses(ave,bfk,AVE_SHA,BFK_SHA);
     }
 
     public static void run(final Instrumentation instrumentation) throws Exception {
@@ -141,7 +151,7 @@ public final class RendererLivePreflight {
         }
         require(gameSeen.get()==1 && renderSeen.get()==1,
                 "Original classes not observed exactly once");
-        checkExactClasses(captured[0],captured[1],AVE_SHA,BFK_SHA);
+        checkPinnedOriginal(captured[0],captured[1]);
         // Does not prove a live game render-frame callback or GL context.
         System.out.println("R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS");
         System.out.println("R73_NO_RENDER_HOOK_OR_GRAPHICS_SIDE_EFFECTS");
