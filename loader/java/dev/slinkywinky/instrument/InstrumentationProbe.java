@@ -262,6 +262,20 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R73: strictly passive, explicitly opted-in loaded renderer fingerprint
+        // preflight. This never installs a render callback or loads native GL.
+        if ("minecraft-render-preflight".equals(options)) {
+            if (!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererLivePreflight.run(instrumentation);
+            } catch (Exception error) {
+                throw new IllegalStateException("R73 renderer preflight refused",error);
+            } finally {
+                hookInstalled.set(false);
+            }
+            return;
+        }
         final int delimiter = options == null ? -1 : options.indexOf('|');
         final String mode = delimiter < 0 ? options : options.substring(0, delimiter);
         // A stop request is delivered through a separate, stop-only Win32
