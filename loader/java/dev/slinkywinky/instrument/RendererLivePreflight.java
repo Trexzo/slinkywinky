@@ -102,7 +102,8 @@ public final class RendererLivePreflight {
         checkExactClasses(ave,bfk,AVE_SHA,BFK_SHA);
     }
 
-    public static void run(final Instrumentation instrumentation) throws Exception {
+    /** R75: admission returns the exact loaded class only after all R73 checks. */
+    public static Class<?> admit(final Instrumentation instrumentation) throws Exception {
         require(instrumentation!=null && instrumentation.isRetransformClassesSupported(),
                 "Read-only retransformation unsupported");
         Class<?> game=null,renderer=null;
@@ -152,6 +153,11 @@ public final class RendererLivePreflight {
         require(gameSeen.get()==1 && renderSeen.get()==1,
                 "Original classes not observed exactly once");
         checkPinnedOriginal(captured[0],captured[1]);
+        return renderClass;
+    }
+
+    public static void run(final Instrumentation instrumentation) throws Exception {
+        admit(instrumentation);
         // Does not prove a live game render-frame callback or GL context.
         System.out.println("R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS");
         System.out.println("R73_NO_RENDER_HOOK_OR_GRAPHICS_SIDE_EFFECTS");
