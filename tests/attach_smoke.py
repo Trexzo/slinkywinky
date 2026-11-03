@@ -77,6 +77,19 @@ try:
         raise AssertionError("R73 passive renderer admission regression failed: " +
                              render_preflight.stdout + render_preflight.stderr)
     print("PASS: R73 exact loaded renderer fingerprint and shape denials")
+    # R75: finite owner-callsite gate must reject invalid samples and unknown
+    # renderer class bytes. No game or graphics process is involved.
+    r75_gate = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.RenderFrameGateSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (r75_gate.returncode != 0 or
+        "R75_RENDER_OWNER_STACK_AND_EIGHT_FRAME_LIMIT_PASS" not in r75_gate.stdout or
+        "R75_CROSS_THREAD_INVALID_INPUT_AND_STOP_FAIL_CLOSED_PASS" not in r75_gate.stdout or
+        "R75_ORIGINAL_RENDERER_HASH_NEGATIVE_CONTROL_PASS" not in r75_gate.stdout):
+        raise AssertionError("R75 passive owner-callsite gate failed: " +
+                             r75_gate.stdout + r75_gate.stderr)
+    print("PASS: R75 original render-callsite owner, cap and rejection safeguards")
     # R65: bounded, read-only render callback test in generated classfiles.
     # The production JVM agent is intentionally not involved.
     render_callback = subprocess.run(
@@ -158,6 +171,31 @@ try:
         "Refusing non-Minecraft target" not in render_wrong_target.stderr):
         raise AssertionError("Render preflight admitted a non-Minecraft process")
     print("PASS: R73 operator opt-in enforced and unrelated JVM refused")
+    # R75 has an entirely separate exact-frame operator opt-in; neither a
+    # test PID nor a production non-Minecraft PID can pass through the CLI.
+    no_r75_gate = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-callback=8"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if no_r75_gate.returncode == 0 or (
+        "SLINKYWINKY_RENDER_CALLBACK" not in no_r75_gate.stderr):
+        raise AssertionError("R75 live callback bypassed separate opt-in")
+    r75_env = production_env.copy()
+    r75_env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
+    wrong_target = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-callback=8"],
+        capture_output=True, text=True, env=r75_env, timeout=15)
+    if wrong_target.returncode == 0 or (
+        "Refusing non-Minecraft target" not in wrong_target.stderr):
+        raise AssertionError("R75 live callback admitted a non-Minecraft JVM")
+    test_bypass_env = env.copy()
+    test_bypass_env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
+    bypass = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-callback=8"],
+        capture_output=True, text=True, env=test_bypass_env, timeout=15)
+    if bypass.returncode == 0 or (
+        "cannot run in Attach test mode" not in bypass.stderr):
+        raise AssertionError("R75 original renderer allowed synthetic Attach bypass")
+    print("PASS: R75 explicit gate, production PID refusal and test-bypass refusal")
 
     # The unverified Minecraft tick hook must be explicitly developer-enabled.
     print("R61_TEST_PHASE=initial-hook-denial", flush=True)
