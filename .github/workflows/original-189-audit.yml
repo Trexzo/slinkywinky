@@ -44,15 +44,15 @@ jobs:
         run: |
           cmake -S . -B build-original-189 -A x64 -DSLINKYWINKY_BUILD_ATTACH=ON -DSLINKYWINKY_BUILD_JNI=ON
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build-r71 --config Release --parallel
+          cmake --build build-original-189 --config Release --parallel
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Download verified Mojang 1.8.9 original and audit memory-only renderer weave
         shell: pwsh
         run: |
           python tests/official_189_render_audit.py `
             --java8 "$env:JAVA_HOME/bin/java.exe" `
-            --audit-jar "build-r71/Release/slinkywinky_render_audit.jar" `
-            --instrument-jar "build-r71/Release/slinkywinky_instrument.jar"
+            --audit-jar "build-original-189/Release/slinkywinky_render_audit.jar" `
+            --instrument-jar "build-original-189/Release/slinkywinky_instrument.jar"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Confirm no original JAR entered the repository
         if: always()
