@@ -134,11 +134,11 @@ public final class RendererLivePreflight {
             @Override public byte[] transform(ClassLoader owner,String name,
                     Class<?> current,ProtectionDomain protection,byte[] raw) {
                 if(current==gameClass) {
-                    gameSeen.incrementAndGet();
                     captured[0]=raw==null?null:raw.clone();
+                    gameSeen.incrementAndGet();
                 } else if(current==renderClass) {
-                    renderSeen.incrementAndGet();
                     captured[1]=raw==null?null:raw.clone();
+                    renderSeen.incrementAndGet();
                 }
                 return null; // Passive observation only. No transformed bytes.
             }
