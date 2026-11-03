@@ -65,6 +65,18 @@ try:
         raise AssertionError("Offline renderer ASM preflight controls failed: " +
                              offline_weave.stdout + offline_weave.stderr)
     print("PASS: R72 original-renderer dry-run weave safety on synthetic classes")
+    # R73 passive live-loaded renderer fingerprint verifier; this isolated JVM
+    # provides ONLY synthetic ASM fixtures and refuses unrelated game classes.
+    render_preflight = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.RendererLivePreflightSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (render_preflight.returncode != 0 or
+        "R73_RENDERER_PREFLIGHT_SYNTHETIC_GUARDS_PASS" not in render_preflight.stdout or
+        "R73_UNRELATED_JVM_REJECTED_BEFORE_TRANSFORM_PASS" not in render_preflight.stdout):
+        raise AssertionError("R73 passive renderer admission regression failed: " +
+                             render_preflight.stdout + render_preflight.stderr)
+    print("PASS: R73 exact loaded renderer fingerprint and shape denials")
     # R65: bounded, read-only render callback test in generated classfiles.
     # The production JVM agent is intentionally not involved.
     render_callback = subprocess.run(
@@ -130,6 +142,23 @@ try:
     if denied.returncode == 0 or "Refusing non-Minecraft target" not in denied.stderr:
         raise AssertionError("Unrelated JVM target unexpectedly admitted")
     print("PASS: non-Minecraft target rejected in production mode")
+    # R73 must not be accessible without a separate, explicit operator gate.
+    no_render_gate = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-preflight"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (no_render_gate.returncode == 0 or
+        "SLINKYWINKY_RENDER_PREFLIGHT" not in no_render_gate.stderr):
+        raise AssertionError("Render preflight bypassed explicit opt-in")
+    render_env=env.copy()
+    render_env["SLINKYWINKY_RENDER_PREFLIGHT"]="1"
+    render_wrong_target = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-preflight"],
+        capture_output=True, text=True, env=render_env, timeout=15)
+    if (render_wrong_target.returncode == 0 or
+        "Refusing non-Minecraft target" not in render_wrong_target.stderr):
+        raise AssertionError("Render preflight admitted a non-Minecraft process")
+    print("PASS: R73 operator opt-in enforced and unrelated JVM refused")
+
     # The unverified Minecraft tick hook must be explicitly developer-enabled.
     print("R61_TEST_PHASE=initial-hook-denial", flush=True)
     no_gate = subprocess.run(
