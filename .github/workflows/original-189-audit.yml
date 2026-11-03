@@ -1,4 +1,4 @@
-name: R71-R72 original vanilla 1.8.9 render audit
+name: R71-R73 original vanilla 1.8.9 render audit
 
 # Independent from release CI. Original Mojang game bytes are downloaded to
 # runner temp storage, validated, inspected read-only and NEVER uploaded.
@@ -9,6 +9,8 @@ on:
       - 'tests/official_189_render_audit.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java'
       - 'CMakeLists.txt'
   pull_request:
     paths:
@@ -16,6 +18,8 @@ on:
       - 'tests/official_189_render_audit.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java'
       - 'CMakeLists.txt'
   workflow_dispatch:
 
