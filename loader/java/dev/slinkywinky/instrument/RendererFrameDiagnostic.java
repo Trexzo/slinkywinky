@@ -107,17 +107,26 @@ public final class RendererFrameDiagnostic {
             }
         };
         boolean installed=false;
+        boolean verified=false;
+        boolean removed=false;
         try {
             instrumentation.addTransformer(passive,true);
             installed=true;
             instrumentation.retransformClasses(target);
-            return observed.get()==1 && exact.get();
+            verified=observed.get()==1 && exact.get();
         } catch(Throwable failure) {
             System.err.println("R75_RENDER_RESTORE_FAIL "+failure.getClass().getSimpleName());
-            return false;
         } finally {
-            if(installed)instrumentation.removeTransformer(passive);
+            if(installed) {
+                try {removed=instrumentation.removeTransformer(passive);}
+                catch(Throwable failure) {
+                    System.err.println("R75_RESTORE_INSPECTOR_REMOVE_FAIL "+
+                                       failure.getClass().getSimpleName());
+                }
+            }
         }
+        // Never release the shared hook gate if our passive inspector leaked.
+        return verified && removed;
     }
 
     /** Existing agent admission guard must already have been acquired. */
@@ -150,7 +159,16 @@ public final class RendererFrameDiagnostic {
             installationFailure=problem;
         } finally {
             // Never restore while the weaving transformer remains registered.
-            if(added)instrumentation.removeTransformer(transformer);
+            if(added) {
+                try {
+                    if(!instrumentation.removeTransformer(transformer) &&
+                       installationFailure==null)
+                        installationFailure=new IllegalStateException(
+                            "R75 weaving transformer removal unconfirmed");
+                } catch(Throwable removalError) {
+                    installationFailure=removalError;
+                }
+            }
         }
         if(installationFailure!=null || changed.get()!=1) {
             activeGate=null;
@@ -190,7 +208,17 @@ public final class RendererFrameDiagnostic {
             }
         },"SlinkyWinky-R75-Finite-Restore");
         cleanup.setDaemon(true);
-        cleanup.start();
+        try {
+            cleanup.start();
+        } catch(Throwable workerFailure) {
+            activeGate=null;
+            session.stop();
+            final boolean restored=restore(instrumentation,target);
+            InstrumentationProbe.finishRenderDiagnostic(restored);
+            throw new IllegalStateException(
+                "R75 cleanup worker unavailable; original renderer restored="+restored,
+                workerFailure);
+        }
         System.out.println("R75_RENDER_CALLBACK_ARMED_LIMIT=8");
         System.out.flush();
     }
