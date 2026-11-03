@@ -53,6 +53,18 @@ try:
         raise AssertionError("Render mapping admission negative controls failed: " +
                              render_audit.stdout + render_audit.stderr)
     print("PASS: offline renderer callsite uniqueness and wrong-target rejection")
+    # R72: generated bfk class only; source and transformed bytes stay in
+    # the disposable JVM heap. The real Mojang JAR is tested separately in CI.
+    offline_weave = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.OriginalRendererWeaveSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (offline_weave.returncode != 0 or
+        "R72_OFFLINE_WEAVE_SYNTHETIC_NEGATIVE_CONTROLS_PASS"
+        not in offline_weave.stdout):
+        raise AssertionError("Offline renderer ASM preflight controls failed: " +
+                             offline_weave.stdout + offline_weave.stderr)
+    print("PASS: R72 original-renderer dry-run weave safety on synthetic classes")
     # R65: bounded, read-only render callback test in generated classfiles.
     # The production JVM agent is intentionally not involved.
     render_callback = subprocess.run(
