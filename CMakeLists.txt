@@ -179,6 +179,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RendererLivePreflightSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackProbe.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R65Fixture.java"
@@ -232,6 +233,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/render-audit-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java"
     COMMAND "${Java_JAR_EXECUTABLE}" cf
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_render_audit.jar"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/render-audit-classes" .
@@ -249,6 +251,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RendererLivePreflightSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R65Fixture.java"
