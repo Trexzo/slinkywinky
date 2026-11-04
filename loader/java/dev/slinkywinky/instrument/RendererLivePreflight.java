@@ -156,7 +156,15 @@ public final class RendererLivePreflight {
                 return null; // Passive observation only. No transformed bytes.
             }
         };
-        instrumentation.addTransformer(reader,true);
+        try {
+            instrumentation.addTransformer(reader,true);
+        } catch(Throwable installFailure) {
+            // The API threw before confirming installation. Do not assume a
+            // failed registration left no passive inspector behind.
+            throw new InspectorRemovalUncertain(
+                "Passive original-renderer inspector registration uncertain",
+                installFailure);
+        }
         try {
             instrumentation.retransformClasses(gameClass,renderClass);
         } finally {
