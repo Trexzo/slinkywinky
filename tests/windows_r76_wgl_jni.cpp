@@ -78,6 +78,8 @@ bool setup() {
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeBegin(JNIEnv*,jclass) {
+    // A duplicate request must never tear down the active owner context.
+    if(state.hwnd || probe)return JNI_FALSE;
     if(!setup()){
         dispose();
         return JNI_FALSE;
