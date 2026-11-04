@@ -156,13 +156,17 @@ public final class RendererFrameDiagnostic {
             // registering a bytecode-changing transformer. Never draw.
             evidence=contextDllPath==null?null:
                 RendererWglEvidence.open(contextDllPath);
+        } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
+            // The read-only class inspector may still be installed. Do not
+            // allow another attach while its removal is unproven.
+            throw uncertain;
         } catch(Exception preWeaveFailure) {
-            InstrumentationProbe.finishUnmodifiedRenderAdmission();
-            throw preWeaveFailure;
-        } catch(LinkageError preWeaveFailure) {
+            // Original SHA/classloader/JNI admission did not weave game bytes.
             InstrumentationProbe.finishUnmodifiedRenderAdmission();
             throw preWeaveFailure;
         }
+        // An unexpected VM LinkageError is not known to be recoverable:
+        // leave admission locked instead of guessing about transformer state.
         final RenderFrameGate session=new RenderFrameGate(8);
         final RenderCallbackFence fence=new RenderCallbackFence(session,
             evidence==null ? null : new Runnable() {
