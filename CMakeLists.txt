@@ -213,7 +213,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
     target_include_directories(slinkywinky_r76_wgl_fixture PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/include ${JNI_INCLUDE_DIRS})
     target_compile_features(slinkywinky_r76_wgl_fixture PRIVATE cxx_std_17)
-    target_link_libraries(slinkywinky_r76_wgl_fixture PRIVATE opengl32 gdi32 user32)
+    target_link_libraries(slinkywinky_r76_wgl_fixture PRIVATE
+      slinkywinky_menu_gl11 opengl32 gdi32 user32)
   endif()
   add_executable(slinkywinky_loader src/windows_loader.cpp)
   target_include_directories(slinkywinky_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
