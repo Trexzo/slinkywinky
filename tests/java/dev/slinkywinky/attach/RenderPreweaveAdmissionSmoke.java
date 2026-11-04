@@ -1,0 +1,151 @@
+package dev.slinkywinky.attach;
+
+import dev.slinkywinky.instrument.InstrumentationProbe;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.lang.instrument.ClassFileTransformer;
+import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * R80: fully synthetic Java 8 JVMTI proxy. Tests clean early refusal vs.
+ * uncertain passive-inspector installation/removal, with NO actual Attach,
+ * native loading, Minecraft, class bytecode mutation or GL.
+ */
+public final class RenderPreweaveAdmissionSmoke {
+    private static void check(boolean ok,String reason) {
+        if(!ok)throw new AssertionError("R80 "+reason);
+    }
+    private static byte[] bytes(Class<?> type) throws Exception {
+        final String resource="/"+type.getName().replace('.','/')+".class";
+        try(InputStream input=type.getResourceAsStream(resource)) {
+            if(input==null)throw new IllegalStateException("Missing generated "+resource);
+            ByteArrayOutputStream output=new ByteArrayOutputStream();
+            byte[] block=new byte[2048];int n;
+            while((n=input.read(block))!=-1)output.write(block,0,n);
+            return output.toByteArray();
+        }
+    }
+    private enum Mode {
+        UNRELATED, GENERATED_HASH_MISMATCH,
+        REMOVE_FALSE, REMOVE_THROWS, ADD_THROWS, RETRANSFORM_UNSUPPORTED
+    }
+    private static final class Fake implements InvocationHandler {
+        final Mode mode;
+        ClassFileTransformer registered;
+        int added,removed,retransformed;
+        Fake(Mode mode){this.mode=mode;}
+        Instrumentation instrumentation() {
+            return (Instrumentation)Proxy.newProxyInstance(
+                Instrumentation.class.getClassLoader(),
+                new Class<?>[]{Instrumentation.class},this);
+        }
+        @Override public Object invoke(Object proxy,Method method,Object[] arguments)
+                throws Throwable {
+            final String name=method.getName();
+            if("isRetransformClassesSupported".equals(name))
+                return mode!=Mode.RETRANSFORM_UNSUPPORTED;
+            if("getAllLoadedClasses".equals(name))
+                return mode==Mode.UNRELATED ?
+                    new Class<?>[]{RenderPreweaveAdmissionSmoke.class} :
+                    new Class<?>[]{Class.forName("ave"),Class.forName("bfk")};
+            if("isModifiableClass".equals(name))return true;
+            if("addTransformer".equals(name)) {
+                added++;
+                if(mode==Mode.ADD_THROWS)
+                    throw new IllegalStateException("Simulated uncertain registration");
+                check(registered==null,"Unexpected duplicate passive inspector");
+                registered=(ClassFileTransformer)arguments[0];
+                return null;
+            }
+            if("removeTransformer".equals(name)) {
+                removed++;
+                check(registered==arguments[0],"Removed unexpected inspector");
+                if(mode==Mode.REMOVE_THROWS)
+                    throw new IllegalStateException("Simulated uncertain removal");
+                if(mode==Mode.REMOVE_FALSE)return false;
+                registered=null;
+                return true;
+            }
+            if("retransformClasses".equals(name)) {
+                check(registered!=null,"Retransformation before inspector installed");
+                Class<?>[] chosen=(Class<?>[])arguments[0];
+                check(chosen.length==2,"Unexpected original admission read count");
+                for(Class<?> type:chosen) {
+                    final byte[] source=bytes(type);
+                    byte[] modified=registered.transform(type.getClassLoader(),
+                        type.getName().replace('.','/'),type,
+                        type.getProtectionDomain(),source);
+                    check(modified==null,"Passive preflight modified original bytes");
+                    retransformed++;
+                }
+                return null;
+            }
+            throw new AssertionError("Unexpected pre-weave instrumentation method: "+name);
+        }
+    }
+
+    private static boolean denied(Fake fake,String option) {
+        try {
+            InstrumentationProbe.agentmain(option,fake.instrumentation());
+        } catch(IllegalStateException expected) {
+            return true;
+        }
+        return false;
+    }
+    private static void caseClean(AtomicBoolean gate,Mode mode,String modeArg,
+                                  int expectedAdds,int expectedRemoves) {
+        gate.set(false);
+        Fake fake=new Fake(mode);
+        check(denied(fake,modeArg),"Clean pre-weave refusal unexpectedly succeeded");
+        check(!gate.get(),"Clean pre-weave failure stranded global admission");
+        check(fake.added==expectedAdds && fake.removed==expectedRemoves,
+              "Wrong passive inspector lifecycle");
+        check(fake.registered==null,
+              "Clean failed preflight leaked passive inspector");
+    }
+    private static void caseUncertain(AtomicBoolean gate,Mode mode) {
+        gate.set(false);
+        Fake fake=new Fake(mode);
+        check(denied(fake,"minecraft-render-callback-r75"),
+              "Unconfirmed passive registration/removal passed");
+        check(gate.get(),"Uncertain passive inspector released admission");
+        final int addedBefore=fake.added;
+        check(denied(fake,"minecraft-render-callback-r75"),
+              "Concurrent renderer hook bypassed uncertain preflight gate");
+        check(fake.added==addedBefore,
+              "Second attachment touched instrumentation after unresolved failure");
+    }
+    public static void main(String[] args) throws Exception {
+        Field field=InstrumentationProbe.class.getDeclaredField("hookInstalled");
+        field.setAccessible(true);
+        AtomicBoolean gate=(AtomicBoolean)field.get(null);
+        check(!gate.get(),"R80 test starts with active hook");
+        try {
+            caseClean(gate,Mode.UNRELATED,"minecraft-render-callback-r75",0,0);
+            caseClean(gate,Mode.UNRELATED,
+                      "minecraft-render-context-r78|X:\\missing\\slinkywinky_jni.dll",0,0);
+            caseClean(gate,Mode.RETRANSFORM_UNSUPPORTED,
+                      "minecraft-render-callback-r75",0,0);
+            caseClean(gate,Mode.GENERATED_HASH_MISMATCH,
+                      "minecraft-render-callback-r75",1,1);
+            caseClean(gate,Mode.GENERATED_HASH_MISMATCH,
+                      "minecraft-render-context-r78|X:\\missing\\slinkywinky_jni.dll",1,1);
+            System.out.println("R80_CLEAN_ORIGINAL_SHA_REFUSAL_RELEASES_ADMISSION_PASS");
+            caseUncertain(gate,Mode.REMOVE_FALSE);
+            caseUncertain(gate,Mode.REMOVE_THROWS);
+            caseUncertain(gate,Mode.ADD_THROWS);
+            System.out.println("R80_UNCERTAIN_PASSIVE_INSPECTOR_RETAINS_HOOK_GATE_PASS");
+            System.out.println("R80_R75_R78_PREWEAVE_FAILURE_ISOLATION_PASS");
+            System.out.println("R80_GENERATED_CLASSES_ONLY_NO_MINECRAFT_OR_GRAPHICS");
+        } finally {
+            // Isolated smoke JVM only; reset fake gate for other tests.
+            gate.set(false);
+        }
+    }
+    private RenderPreweaveAdmissionSmoke(){}
+}
