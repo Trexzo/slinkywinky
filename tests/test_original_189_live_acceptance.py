@@ -51,7 +51,7 @@ class ReceiptChecks(unittest.TestCase):
 
     def test_conflicting_fake_receipt_even_after_true_receipt_is_denied(self):
         for option, good, counterfeit in [
-            ("--render-preflight",P,"noise "+harness.PREFLIGHT+"\\n"),
+            ("--render-preflight",P,"noise "+harness.PREFLIGHT+"\n"),
             ("--render-callback=8",C,harness.CALLBACK+"0 owner=bad#5\\n"),
             ("--render-context=8",W,harness.STABLE+"_TRAILING\\n")
         ]:
@@ -70,7 +70,7 @@ class ReceiptChecks(unittest.TestCase):
                     tuple(harness.STAGES["context"][
                         ("--render-preflight","--render-callback=8","--render-context=8").index(option)
                     ][1]),
-                    harness.validate_receipt(option,log.replace("\\n","\\r\\n")))
+                    harness.validate_receipt(option,log.replace("\n","\r\n")))
 
     def test_old_or_partial_receipts_never_pass(self):
         for option, text in [
