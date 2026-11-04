@@ -187,6 +187,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererFrameDiagnosticAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderFrameGateSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackFenceSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderPreweaveAdmissionSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackProbe.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R65Fixture.java"
@@ -295,6 +296,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererFrameDiagnosticAudit.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderFrameGateSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackFenceSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderPreweaveAdmissionSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallbackSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R65Fixture.java"
@@ -380,6 +382,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
           -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes;$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
           dev.slinkywinky.attach.RenderCallbackFenceSmoke)
       set_tests_properties(native_r79_admission_before_wgl_and_drain PROPERTIES TIMEOUT 20)
+      # R80: synthetic Java8 Instrumentation proxy, no game/native DLL needed.
+      add_test(NAME native_r80_preweave_clean_release_and_uncertain_lockout
+        COMMAND "${Java_JAVA_EXECUTABLE}"
+          -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes;$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+          dev.slinkywinky.attach.RenderPreweaveAdmissionSmoke)
+      set_tests_properties(native_r80_preweave_clean_release_and_uncertain_lockout
+        PROPERTIES TIMEOUT 20)
     endif()
   endif()
 endif()
