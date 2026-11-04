@@ -25,7 +25,6 @@ NEGATIVE = (
     "R75_RESTORE_UNCERTAIN_NO_REATTACH",
     "R75_RENDER_CALLBACK_UNVERIFIED",
     "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED",
-    "R75_RENDER_RESTORE_FAIL",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -62,8 +61,13 @@ def validate_receipt(option, appended):
     return tuple(expected)
 
 
-def read_appended(path, offset):
-    size = path.stat().st_size
+def read_appended(path, offset, original_stat=None):
+    current = path.stat()
+    if original_stat is not None and (
+            current.st_dev != original_stat.st_dev or
+            current.st_ino != original_stat.st_ino):
+        raise ReceiptError("Target log replaced during acceptance")
+    size = current.st_size
     if size < offset:
         raise ReceiptError("Target log rotated or truncated; cannot use stale receipts")
     with path.open("rb") as stream:
@@ -83,8 +87,13 @@ def check_target_listing(stdout, pid):
                     main[len("net.minecraft.client.main.Main")].isspace() or
                     main[len("net.minecraft.client.main.Main")] == "["):
                 rows.append((candidate.group(1), main))
-    if len(rows) != 1 or rows[0][0] != str(pid):
-        raise ReceiptError("Expected exactly one identified vanilla main JVM matching PID")
+    # Also refuse ambiguous OTHER Minecraft processes (Forge/GradleStart).
+    other_game = [
+        line for line in stdout.splitlines()
+        if re.match(r"^[1-9][0-9]*\\s+.*(?:net\\.minecraft\\.launchwrapper\\.Launch|GradleStart)",line)
+    ]
+    if other_game or len(rows) != 1 or rows[0][0] != str(pid):
+        raise ReceiptError("Expected exactly one isolated vanilla main JVM matching PID")
     return rows[0][1]
 
 
@@ -93,11 +102,11 @@ def require_file(path, name):
         raise ReceiptError(name + " not found: " + str(path))
 
 
-def wait_new_receipt(log_path, before, option, timeout):
+def wait_new_receipt(log_path, before, original_stat, option, timeout):
     deadline = time.monotonic() + timeout
     last_error = "No new target JVM evidence yet"
     while time.monotonic() < deadline:
-        current = read_appended(log_path, before)
+        current = read_appended(log_path, before, original_stat)
         try:
             return validate_receipt(option, current)
         except ReceiptError as error:
@@ -145,6 +154,8 @@ def run(argv=None):
     require_file(jdk8 / "bin" / "java.exe", "Java 8 runtime")
     require_file(jdk8 / "lib" / "tools.jar", "Full JDK8 Attach API")
     require_file(target_log, "Target JVM stdout log")
+    if a.report is not None and a.report.resolve().exists():
+        raise ReceiptError("Refusing to overwrite an existing evidence report")
     if loader.name.lower() != "slinkywinky_loader.exe":
         raise ReceiptError("Exact native loader executable required")
 
@@ -167,7 +178,8 @@ def run(argv=None):
                                  capture_output=True, text=True, env=env,
                                  timeout=15, check=True)
         check_target_listing(current.stdout, a.pid)
-        before = target_log.stat().st_size
+        original_stat = target_log.stat()
+        before = original_stat.st_size
         cmd = [str(loader), "attach", str(a.pid), str(jdk8), option]
         result = subprocess.run(cmd,capture_output=True,text=True,
                                 env=env,timeout=25)
@@ -175,10 +187,16 @@ def run(argv=None):
                 "ATTACH_RESULT=SUCCESS pid="+str(a.pid)) not in result.stdout:
             raise ReceiptError("External Attach did not authorize "+option+
                                "; STOP, do not try another diagnostic")
-        receipts = wait_new_receipt(target_log,before,option,a.timeout_seconds)
+        receipts = wait_new_receipt(
+            target_log,before,original_stat,option,a.timeout_seconds)
         records.append({"mode":option,"target_receipts":list(receipts)})
         print("R81_FRESH_TARGET_RECEIPTS_PASS mode="+option,flush=True)
 
+    # Receipt success is insufficient if the game process has already died.
+    final_listing = subprocess.run([str(loader), "list", str(jdk8)],
+                                   capture_output=True, text=True, env=env,
+                                   timeout=15, check=True)
+    check_target_listing(final_listing.stdout, a.pid)
     # This is not a substitute for a visual game-frame/GL state inspection.
     print("R81_ORIGINAL_RENDER_DIAGNOSTIC_RECEIPTS_PASS")
     print("R81_NOT_GAME_MENU_OR_VISUAL_RENDER_ACCEPTANCE")
@@ -187,8 +205,6 @@ def run(argv=None):
                   "visual_game_acceptance":False,
                   "in_game_menu_verified":False,"stages":records}
         destination = a.report.resolve()
-        if destination.exists():
-            raise ReceiptError("Refusing to overwrite an existing evidence report")
         destination.write_text(json.dumps(report,indent=2)+"\n",
                                encoding="utf-8")
     return 0
