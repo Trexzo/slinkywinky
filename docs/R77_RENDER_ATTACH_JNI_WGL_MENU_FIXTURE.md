@@ -20,3 +20,9 @@ R74 established synthetic original-name Java 8 Attach and restoration. R76 indep
 It still does **not** verify that a live vanilla Minecraft 1.8.9 renderer thread has a current WGL context when `bfk.a(FJ)V` is entered, nor that inserting any actual UI into Minecraft is safe. It is not a Forge mod. It does not enable gameplay modules or install a production overlay.
 
 Before real in-game activation, separately verify R75's SHA-pinned production callback and restoration in the original game and inspect the callback's WGL context and GL state under game load. Do not merge PR #1 while desktop-only acceptance is outstanding.
+
+## R81 CI stabilization
+
+The original R77 test process used to invoke `ave.av(...)` repeatedly **before** `R74RenderAttachAgent.ready()` became true. Under a fast external Attach, that could execute the freshly installed `bfk.a(FJ)V` callback during the polling loop, then make the later absolute `entries()==16` assertion fail even though the eight-frame JNI menu draw worked. The observed intermittent Windows CI failure was `R77_EXACT_GENERATED_WGL_RENDER_HOOK_PASS` followed by `AssertionError: Expected eight JNI-render callbacks and sixteen original frames`.
+
+R81 removes the unnecessary pre-admission synthetic render calls: the target classes are already explicitly loaded before Attach, so the wait loop now sleeps only. It asserts **zero premature callback entries**, counts the next sixteen method entries relative to a snapshot, and proves **no additional callback entries** after exact original-bytecode restoration relative to a separate restoration baseline. The isolated fixture and first-party GL11 drawing behavior are unchanged.
