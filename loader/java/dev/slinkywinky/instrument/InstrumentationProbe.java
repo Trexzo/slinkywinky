@@ -267,6 +267,21 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R78 is an entirely separate, explicitly gated read-only native WGL
+        // observation mode. Original Mojang class SHA admission is still
+        // required before loading JNI or weaving any bytecode.
+        final String contextPrefix="minecraft-render-context-r78|";
+        if(options!=null && options.startsWith(contextPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(contextPrefix.length()));
+            } catch(Exception error) {
+                throw new IllegalStateException("R78 passive render-context audit refused",error);
+            }
+            return;
+        }
         // R75: explicit finite original-only renderer diagnostic. Neither
         // continuous nor auto-enabled. Does not render or read game state.
         if ("minecraft-render-callback-r75".equals(options)) {
