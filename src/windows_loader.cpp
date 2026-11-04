@@ -35,11 +35,12 @@ int wmain(int argc, wchar_t** argv) {
     const bool stop_option = option == L"--stop-observation";
     const bool render_preflight = option == L"--render-preflight";
     const bool render_callback = option == L"--render-callback=8";
+    const bool render_context = option == L"--render-context=8";
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
         (argc == 5 && option != L"--tick-probe" &&
-         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback)) {
+         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8]\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8]\n";
         return 2;
     }
     // Never enter the Java Attach API for an active continuous session. It may
@@ -74,9 +75,9 @@ int wmain(int argc, wchar_t** argv) {
     const auto instrument = folder / L"slinkywinky_instrument.jar";
     const auto classes = folder / L"attach-classes";
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
-        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight || render_callback) &&
+        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight || render_callback || render_context) &&
          !regular_file_exists(instrument)) ||
-        (argc == 5 && hook_option &&
+        (argc == 5 && (hook_option || render_context) &&
          !regular_file_exists(folder / L"slinkywinky_jni.dll")) ||
         !regular_file_exists(classes / L"dev" / L"slinkywinky" / L"attach" / L"AttachMain.class")) {
         std::wcerr << L"Missing JDK8 tools.jar, executable, native agent or attach helper.\n";
