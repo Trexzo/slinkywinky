@@ -24,6 +24,18 @@ public final class RendererLivePreflight {
     private static final String BFK_SHA =
         "8a4ce93bbf272398ea298d2ed363f75211dd469fcd3b66682a387e4738a419a2";
 
+    /**
+     * An inspector removal failure is different from a clean pre-weave SHA
+     * refusal: the passive transformer might still be registered on the JVM.
+     * Never release the global hook admission gate in this uncertain state.
+     */
+    public static final class InspectorRemovalUncertain extends IllegalStateException {
+        public InspectorRemovalUncertain(String message) {super(message);}
+        public InspectorRemovalUncertain(String message,Throwable why) {
+            super(message,why);
+        }
+    }
+
     private static void require(boolean ok, String message) {
         if(!ok) throw new IllegalStateException(message);
     }
@@ -148,7 +160,18 @@ public final class RendererLivePreflight {
         try {
             instrumentation.retransformClasses(gameClass,renderClass);
         } finally {
-            instrumentation.removeTransformer(reader);
+            // R80: even a read-only transformer must not leak onto the game.
+            // A false return or throwable means admission remains locked.
+            final boolean removed;
+            try {
+                removed=instrumentation.removeTransformer(reader);
+            } catch(Throwable removalFailure) {
+                throw new InspectorRemovalUncertain(
+                    "Passive original-renderer inspector removal failed",removalFailure);
+            }
+            if(!removed)
+                throw new InspectorRemovalUncertain(
+                    "Passive original-renderer inspector removal unconfirmed");
         }
         require(gameSeen.get()==1 && renderSeen.get()==1,
                 "Original classes not observed exactly once");
