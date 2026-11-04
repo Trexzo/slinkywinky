@@ -52,8 +52,8 @@ class ReceiptChecks(unittest.TestCase):
     def test_conflicting_fake_receipt_even_after_true_receipt_is_denied(self):
         for option, good, counterfeit in [
             ("--render-preflight",P,"noise "+harness.PREFLIGHT+"\n"),
-            ("--render-callback=8",C,harness.CALLBACK+"0 owner=bad#5\\n"),
-            ("--render-context=8",W,harness.STABLE+"_TRAILING\\n")
+            ("--render-callback=8",C,harness.CALLBACK+"0 owner=bad#5\n"),
+            ("--render-context=8",W,harness.STABLE+"_TRAILING\n")
         ]:
             with self.subTest(option=option):
                 with self.assertRaises(harness.ReceiptError):
