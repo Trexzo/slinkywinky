@@ -37,6 +37,7 @@ public final class R77WglRenderTarget {
               "External test-only Java8 agent never admitted");
         int original=work.getInt(null);
         final int entryBaseline=R77WglRenderReceiver.entries();
+        check(entryBaseline==0,"Render callback fired before observed frame window");
         for(int i=0;i<16;i++) {
             frame.invoke(game,0.5f,clock++);
             Thread.sleep(12L);
