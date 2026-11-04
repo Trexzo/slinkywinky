@@ -147,6 +147,13 @@ class ReceiptChecks(unittest.TestCase):
             with self.assertRaises(harness.ReceiptError):
                 harness.read_appended(log,baseline)
 
+    def test_target_stdout_evidence_window_is_bounded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log=Path(folder)/"target-stdout.log"
+            log.write_bytes(b"x"*(harness.MAX_STAGE_STDOUT_BYTES+1))
+            with self.assertRaises(harness.ReceiptError):
+                harness.read_appended(log,0)
+
     def test_replaced_log_with_larger_stale_receipts_is_denied(self):
         with tempfile.TemporaryDirectory() as folder:
             log=Path(folder)/"stdout.log"
@@ -176,7 +183,7 @@ class ReceiptChecks(unittest.TestCase):
             def fake(cmd,**kwargs):
                 self.assertNotIn("SLINKYWINKY_ATTACH_TEST",kwargs["env"])
                 self.assertNotIn("SLINKYWINKY_EXPERIMENTAL_HOOK",kwargs["env"])
-                self.assertEqual(cmd[0],str(loader))
+                self.assertEqual(cmd[0],str(loader.resolve()))
                 if cmd[1]=="list":
                     return harness.subprocess.CompletedProcess(
                         cmd,0,"123 net.minecraft.client.main.Main\n","")
