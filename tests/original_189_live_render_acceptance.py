@@ -51,6 +51,11 @@ def validate_receipt(option, appended):
     for marker in expected:
         if appended.count(marker) != 1:
             raise ReceiptError("Expected exactly one new target marker: " + marker)
+    # A cross-stage callback or stale preflight receipt in this fresh span is
+    # ambiguous; never mistake overlapping asynchronous sessions for proof.
+    for marker in (PREFLIGHT, RESTORED, CALLBACK, STABLE):
+        if marker not in expected and marker in appended:
+            raise ReceiptError("Unexpected diagnostic stage marker: " + marker)
     if option == "--render-context=8":
         matches = re.findall(r"R78_READ_ONLY_WGL_CONTEXT_(?:STABLE_PASS|UNVERIFIED)", appended)
         if len(matches) != 1:
@@ -209,8 +214,10 @@ def run(argv=None):
                   "visual_game_acceptance":False,
                   "in_game_menu_verified":False,"stages":records}
         destination = a.report.resolve()
-        destination.write_text(json.dumps(report,indent=2)+"\n",
-                               encoding="utf-8")
+        # Exclusive creation prevents a race between the earlier existence
+        # check and a new report supplied by another local process.
+        with destination.open("x",encoding="utf-8") as stream:
+            stream.write(json.dumps(report,indent=2)+"\n")
     return 0
 
 
