@@ -40,6 +40,16 @@ class ReceiptChecks(unittest.TestCase):
                 with self.assertRaises(harness.ReceiptError):
                     harness.validate_receipt(option,text)
 
+    def test_overlapping_diagnostic_stages_do_not_count_as_fresh_proof(self):
+        for option, text in [
+            ("--render-preflight",P+C),
+            ("--render-callback=8",P+C),
+            ("--render-context=8",P+W)
+        ]:
+            with self.subTest(option=option):
+                with self.assertRaises(harness.ReceiptError):
+                    harness.validate_receipt(option,text)
+
     def test_negative_target_markers_win_over_positive(self):
         for bad in harness.NEGATIVE:
             with self.subTest(bad=bad):
