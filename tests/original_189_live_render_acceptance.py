@@ -18,6 +18,7 @@ import time
 PREFLIGHT = "R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS"
 RESTORED = "R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS"
 CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
+RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
 STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
           "attempts=8 current=8 absent=0 invalid=0 changed=0 stable=true")
 NEGATIVE = (
@@ -31,10 +32,10 @@ NEGATIVE = (
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT,)),),
     "callback": (("--render-preflight", (PREFLIGHT,)),
-                 ("--render-callback=8", (RESTORED, CALLBACK))),
+                 ("--render-callback=8", (RESTORED, CALLBACK, RELEASED))),
     "context": (("--render-preflight", (PREFLIGHT,)),
-                ("--render-callback=8", (RESTORED, CALLBACK)),
-                ("--render-context=8", (RESTORED, CALLBACK, STABLE))),
+                ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
+                ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED))),
 }
 
 
@@ -53,7 +54,7 @@ def validate_receipt(option, appended):
             raise ReceiptError("Expected exactly one new target marker: " + marker)
     # A cross-stage callback or stale preflight receipt in this fresh span is
     # ambiguous; never mistake overlapping asynchronous sessions for proof.
-    for marker in (PREFLIGHT, RESTORED, CALLBACK, STABLE):
+    for marker in (PREFLIGHT, RESTORED, CALLBACK, STABLE, RELEASED):
         if marker not in expected and marker in appended:
             raise ReceiptError("Unexpected diagnostic stage marker: " + marker)
     if option == "--render-context=8":
