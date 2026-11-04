@@ -56,7 +56,7 @@ jobs:
       - name: Verify R81 original-game acceptance receipts offline (NO Attach)
         shell: pwsh
         run: |
-          python -m unittest discover -s tests -p "test_original_189_live_acceptance.py" -v
+          python -B -m unittest discover -s tests -p "test_original_189_live_acceptance.py" -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build exact read-only ASM verifier (no game files)
         shell: pwsh
