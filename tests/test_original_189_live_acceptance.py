@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """R81 acceptance checks. Never calls GitHub, Java, JNI, Attach or Minecraft."""
 import importlib.util
+import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -155,6 +157,87 @@ class ReceiptChecks(unittest.TestCase):
             replacement.replace(log)
             with self.assertRaises(harness.ReceiptError):
                 harness.read_appended(log,original.st_size,original)
+
+    @unittest.skipUnless(os.name=="nt", "R82 simulated --execute requires Windows")
+    def test_execute_mocked_three_stage_acceptance_emits_sanitized_report(self):
+        # Mock ONLY the external loader process; do not start a JVM or game.
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            loader=root/"slinkywinky_loader.exe"
+            java=root/"jdk8"/"bin"/"java.exe"
+            tools=root/"jdk8"/"lib"/"tools.jar"
+            log=root/"target-stdout.log"
+            report=root/"r82-evidence.json"
+            java.parent.mkdir(parents=True)
+            tools.parent.mkdir(parents=True)
+            for file in (loader,java,tools,log):
+                file.touch()
+            attached=[]
+            def fake(cmd,**kwargs):
+                self.assertNotIn("SLINKYWINKY_ATTACH_TEST",kwargs["env"])
+                self.assertNotIn("SLINKYWINKY_EXPERIMENTAL_HOOK",kwargs["env"])
+                self.assertEqual(cmd[0],str(loader))
+                if cmd[1]=="list":
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"123 net.minecraft.client.main.Main\\n","")
+                self.assertEqual(cmd[1],"attach")
+                self.assertEqual(cmd[2],"123")
+                option=cmd[-1]
+                attached.append(option)
+                stage={"--render-preflight":P,
+                       "--render-callback=8":C,
+                       "--render-context=8":W}[option]
+                with log.open("a",encoding="utf-8") as output:
+                    output.write(stage)
+                return harness.subprocess.CompletedProcess(
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode=fixture\\n","")
+            with patch.object(harness.subprocess,"run",side_effect=fake):
+                result=harness.run([
+                    "--loader",str(loader),"--jdk8",str(root/"jdk8"),
+                    "--pid","123","--target-stdout-log",str(log),
+                    "--mode","context","--execute","--report",str(report)])
+            self.assertEqual(result,0)
+            self.assertEqual(attached,
+                             ["--render-preflight","--render-callback=8",
+                              "--render-context=8"])
+            data=json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["stages"]),3)
+            self.assertFalse(data["visual_game_acceptance"])
+            self.assertFalse(data["in_game_menu_verified"])
+            self.assertNotIn("pointer",report.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(os.name=="nt", "R82 simulated failure requires Windows")
+    def test_execute_mocked_restoration_failure_never_starts_wgl_stage(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            loader=root/"slinkywinky_loader.exe"
+            java=root/"jdk8"/"bin"/"java.exe"
+            tools=root/"jdk8"/"lib"/"tools.jar"
+            log=root/"target-stdout.log"
+            java.parent.mkdir(parents=True)
+            tools.parent.mkdir(parents=True)
+            for file in (loader,java,tools,log):
+                file.touch()
+            attached=[]
+            def fake(cmd,**kwargs):
+                if cmd[1]=="list":
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"123 net.minecraft.client.main.Main\\n","")
+                option=cmd[-1]
+                attached.append(option)
+                with log.open("a",encoding="utf-8") as output:
+                    output.write(P if option=="--render-preflight" else
+                                 "R75_RESTORE_UNCERTAIN_NO_REATTACH\\n")
+                return harness.subprocess.CompletedProcess(
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123\\n","")
+            with patch.object(harness.subprocess,"run",side_effect=fake):
+                with self.assertRaises(harness.ReceiptError):
+                    harness.run([
+                        "--loader",str(loader),"--jdk8",str(root/"jdk8"),
+                        "--pid","123","--target-stdout-log",str(log),
+                        "--mode","context","--execute"])
+            self.assertEqual(attached,["--render-preflight",
+                                       "--render-callback=8"])
 
     def test_plan_never_launches_attach_or_reads_process(self):
         with patch.object(harness.subprocess,"run",
