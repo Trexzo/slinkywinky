@@ -108,12 +108,12 @@ public final class RenderPreweaveAdmissionSmoke {
         check(fake.registered==null,
               "Clean failed preflight leaked passive inspector");
     }
-    private static void caseUncertain(AtomicBoolean gate,Mode mode) {
+    private static void caseUncertain(AtomicBoolean gate,Mode mode,String option) {
         gate.set(false);
         Fake fake=new Fake(mode);
-        check(denied(fake,"minecraft-render-callback-r75"),
-              "Unconfirmed passive registration/removal passed");
-        check(gate.get(),"Uncertain passive inspector released admission");
+        check(denied(fake,option),
+              "Unconfirmed passive registration/removal passed: "+option);
+        check(gate.get(),"Uncertain passive inspector released admission: "+option);
         final int addedBefore=fake.added;
         check(denied(fake,"minecraft-render-callback-r75"),
               "Concurrent renderer hook bypassed uncertain preflight gate");
@@ -127,6 +127,7 @@ public final class RenderPreweaveAdmissionSmoke {
         check(!gate.get(),"R80 test starts with active hook");
         try {
             caseClean(gate,Mode.UNRELATED,"minecraft-render-callback-r75",0,0);
+            caseClean(gate,Mode.UNRELATED,"minecraft-render-preflight",0,0);
             caseClean(gate,Mode.UNRELATED,
                       "minecraft-render-context-r78|X:\\missing\\slinkywinky_jni.dll",0,0);
             caseClean(gate,Mode.RETRANSFORM_UNSUPPORTED,
@@ -134,13 +135,20 @@ public final class RenderPreweaveAdmissionSmoke {
             caseClean(gate,Mode.GENERATED_HASH_MISMATCH,
                       "minecraft-render-callback-r75",1,1);
             caseClean(gate,Mode.GENERATED_HASH_MISMATCH,
+                      "minecraft-render-preflight",1,1);
+            caseClean(gate,Mode.GENERATED_HASH_MISMATCH,
                       "minecraft-render-context-r78|X:\\missing\\slinkywinky_jni.dll",1,1);
             System.out.println("R80_CLEAN_ORIGINAL_SHA_REFUSAL_RELEASES_ADMISSION_PASS");
-            caseUncertain(gate,Mode.REMOVE_FALSE);
-            caseUncertain(gate,Mode.REMOVE_THROWS);
-            caseUncertain(gate,Mode.ADD_THROWS);
+            caseUncertain(gate,Mode.REMOVE_FALSE,"minecraft-render-callback-r75");
+            caseUncertain(gate,Mode.REMOVE_THROWS,"minecraft-render-callback-r75");
+            caseUncertain(gate,Mode.ADD_THROWS,"minecraft-render-callback-r75");
+            caseUncertain(gate,Mode.REMOVE_FALSE,"minecraft-render-preflight");
+            caseUncertain(gate,Mode.REMOVE_THROWS,"minecraft-render-preflight");
+            caseUncertain(gate,Mode.ADD_THROWS,"minecraft-render-preflight");
+            caseUncertain(gate,Mode.REMOVE_FALSE,
+                          "minecraft-render-context-r78|X:\\missing\\slinkywinky_jni.dll");
             System.out.println("R80_UNCERTAIN_PASSIVE_INSPECTOR_RETAINS_HOOK_GATE_PASS");
-            System.out.println("R80_R75_R78_PREWEAVE_FAILURE_ISOLATION_PASS");
+            System.out.println("R80_R73_R75_R78_PREWEAVE_FAILURE_ISOLATION_PASS");
             System.out.println("R80_GENERATED_CLASSES_ONLY_NO_MINECRAFT_OR_GRAPHICS");
         } finally {
             // Isolated smoke JVM only; reset fake gate for other tests.
