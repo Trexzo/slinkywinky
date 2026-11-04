@@ -137,17 +137,32 @@ public final class RendererFrameDiagnostic {
     /** Non-null DLL path enables only R78 read-only current-WGL sampling. */
     public static void start(final Instrumentation instrumentation,
                              final String contextDllPath) throws Exception {
-        final Class<?> target=RendererLivePreflight.admit(instrumentation);
-        InstrumentationProbe.verifyCallbackVisibility(target);
-        final ClassLoader loader=target.getClassLoader();
-        if(Class.forName(RendererFrameDiagnostic.class.getName(),false,loader)!=
-                RendererFrameDiagnostic.class)
-            throw new IllegalStateException("R75 render callback resolves to wrong loader");
+        // R80: before the weaving transformer is registered, no renderer
+        // bytes have been altered by this diagnostic. An original-class SHA,
+        // callback visibility, or native-library admission failure must NOT
+        // strand the process-wide admission gate forever. Installation and
+        // restoration failures below remain fail-closed independently.
+        final Class<?> target;
+        final RendererWglEvidence evidence;
+        try {
+            target=RendererLivePreflight.admit(instrumentation);
+            InstrumentationProbe.verifyCallbackVisibility(target);
+            final ClassLoader loader=target.getClassLoader();
+            if(Class.forName(RendererFrameDiagnostic.class.getName(),false,loader)!=
+                    RendererFrameDiagnostic.class)
+                throw new IllegalStateException("R75 render callback resolves to wrong loader");
 
-        // Load AFTER original Mojang SHA and classloader admission, BEFORE
-        // registering any bytecode transformer. Never draw from this path.
-        final RendererWglEvidence evidence=contextDllPath==null?null:
-            RendererWglEvidence.open(contextDllPath);
+            // Load AFTER original Mojang SHA and classloader admission, BEFORE
+            // registering a bytecode-changing transformer. Never draw.
+            evidence=contextDllPath==null?null:
+                RendererWglEvidence.open(contextDllPath);
+        } catch(Exception preWeaveFailure) {
+            InstrumentationProbe.finishUnmodifiedRenderAdmission();
+            throw preWeaveFailure;
+        } catch(LinkageError preWeaveFailure) {
+            InstrumentationProbe.finishUnmodifiedRenderAdmission();
+            throw preWeaveFailure;
+        }
         final RenderFrameGate session=new RenderFrameGate(8);
         final RenderCallbackFence fence=new RenderCallbackFence(session,
             evidence==null ? null : new Runnable() {
