@@ -57,6 +57,14 @@ def validate_receipt(option, appended):
     for marker in (PREFLIGHT, RESTORED, CALLBACK, STABLE, RELEASED):
         if marker not in expected and marker in appended:
             raise ReceiptError("Unexpected diagnostic stage marker: " + marker)
+    # The post-release marker is emitted only after the agent actually
+    # releases the shared instrumentation gate. Order is part of the receipt.
+    if option != "--render-preflight":
+        ordered = (RESTORED, CALLBACK, STABLE, RELEASED) if (
+            option == "--render-context=8") else (RESTORED, CALLBACK, RELEASED)
+        positions = [appended.index(marker) for marker in ordered]
+        if positions != sorted(positions):
+            raise ReceiptError("Renderer restoration / release receipts out of order")
     if option == "--render-context=8":
         matches = re.findall(r"R78_READ_ONLY_WGL_CONTEXT_(?:STABLE_PASS|UNVERIFIED)", appended)
         if len(matches) != 1:
