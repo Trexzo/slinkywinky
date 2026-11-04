@@ -91,7 +91,7 @@ if(WIN32)
   target_compile_features(slinkywinky_hud_ipc PUBLIC cxx_std_17)
   target_link_libraries(slinkywinky_hud_ipc PUBLIC slinkywinky_core)
   if(SLINKYWINKY_BUILD_JNI)
-    target_link_libraries(slinkywinky_jni PRIVATE slinkywinky_hud_ipc)
+    target_link_libraries(slinkywinky_jni PRIVATE slinkywinky_hud_ipc opengl32)
   endif()
   if(BUILD_TESTING)
     add_executable(slinkywinky_hud_ipc_tests tests/test_windows_hud_ipc.cpp)
@@ -168,6 +168,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderFrameGate.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/attach/AttachMain.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/net/minecraft/launchwrapper/LaunchClassLoader.java"
@@ -247,6 +248,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderFrameGate.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
     COMMAND ${CMAKE_COMMAND} -E chdir "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
       "${Java_JAR_EXECUTABLE}" xf "${SW_ASM_JAR}"
     COMMAND ${CMAKE_COMMAND} -E rm -rf
@@ -297,6 +299,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R76WglJvmSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglRenderReceiver.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglRenderTarget.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R78WglEvidenceSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
@@ -357,6 +360,16 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/r77_render_attach_wgl_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(native_r77_attached_render_jni_wgl_menu PROPERTIES TIMEOUT 90)
+      add_test(NAME native_r78_passive_wgl_evidence
+        COMMAND "${CMAKE_COMMAND}" -E env
+          "SLINKYWINKY_R76_WGL_FIXTURE=1"
+          "SLINKYWINKY_R78_WGL_FIXTURE=1"
+          "${Java_JAVA_EXECUTABLE}"
+          "-Djava.library.path=$<TARGET_FILE_DIR:slinkywinky_r76_wgl_fixture>"
+          -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes;$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+          dev.slinkywinky.attach.R78WglEvidenceSmoke
+          "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_jni.dll")
+      set_tests_properties(native_r78_passive_wgl_evidence PROPERTIES TIMEOUT 35)
     endif()
   endif()
 endif()
