@@ -9,6 +9,8 @@
 #include <cstdlib>
 #include <memory>
 #include "slinkywinky/windows_wgl_frame_probe.hpp"
+#include "slinkywinky/windows_menu_overlay_host.hpp"
+#include <cmath>
 
 /*
  * R76 TEST DLL ONLY. Creates/destroys a disposable WGL context belonging to
@@ -91,6 +93,44 @@ Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeBegin(JNIEnv*,jclass) {
         return JNI_FALSE;
     }
     return JNI_TRUE;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeDrawPreview(JNIEnv*,jclass) {
+    // Test-only bridge to the existing original first-party native GL1.1
+    // menu renderer. Never call on a game process or without eight accepted
+    // WGL owner samples, and never create or activate a context here.
+    if(!probe || !state.rc || !state.dc ||
+       probe->invalid() || probe->active() || probe->accepted()!=8 ||
+       wglGetCurrentContext()!=state.rc ||
+       wglGetCurrentDC()!=state.dc)return JNI_FALSE;
+    GLint beforeViewport[4]{},afterViewport[4]{};
+    GLint beforeMode=0,afterMode=0,beforeAttrib=0,afterAttrib=0;
+    GLint beforeClient=0,afterClient=0;
+    GLfloat beforeColor[4]{},afterColor[4]{};
+    glGetIntegerv(GL_VIEWPORT,beforeViewport);
+    glGetIntegerv(GL_MATRIX_MODE,&beforeMode);
+    glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&beforeAttrib);
+    glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&beforeClient);
+    glGetFloatv(GL_CURRENT_COLOR,beforeColor);
+    slinkywinky::WglMenuOverlayHost host;
+    if(!host.open(state.rc,state.dc,640,480))return JNI_FALSE;
+    slinkywinky::MenuState menu;
+    const bool drawn=host.draw(menu);
+    const bool closed=host.close();
+    glGetIntegerv(GL_VIEWPORT,afterViewport);
+    glGetIntegerv(GL_MATRIX_MODE,&afterMode);
+    glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&afterAttrib);
+    glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&afterClient);
+    glGetFloatv(GL_CURRENT_COLOR,afterColor);
+    if(!drawn || !closed || beforeMode!=afterMode ||
+       beforeAttrib!=afterAttrib || beforeClient!=afterClient)return JNI_FALSE;
+    for(unsigned i=0;i<4;i++) {
+        if(beforeViewport[i]!=afterViewport[i] ||
+           std::fabs(beforeColor[i]-afterColor[i])>0.00001f)
+            return JNI_FALSE;
+    }
+    return (wglGetCurrentContext()==state.rc &&
+            wglGetCurrentDC()==state.dc)?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT jint JNICALL
 Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeSample(JNIEnv*,jclass) {
