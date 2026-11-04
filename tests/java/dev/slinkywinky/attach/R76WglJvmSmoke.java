@@ -14,6 +14,8 @@ public final class R76WglJvmSmoke {
     private static native boolean nativeClearCurrent();
     private static native boolean nativeRestoreCurrent();
     private static native boolean nativeMismatchViewport();
+    private static native boolean nativeUseAlternate();
+    private static native boolean nativeReturnOriginal();
     private static native boolean nativeFinish();
 
     private static void require(boolean ok,String why) {
@@ -59,6 +61,16 @@ public final class R76WglJvmSmoke {
                 "Lost context was silently re-admitted in the same epoch");
         require(!nativeFinish(),"Context-loss epoch incorrectly marked clean");
         System.out.println("R76_WGL_CONTEXT_LOSS_STICKY_REFUSAL_PASS");
+
+        require(nativeBegin(),"Context-switch fixture unavailable");
+        require(nativeSample()==1,"Initial admitted context sample denied");
+        require(nativeUseAlternate(),"Unable to switch to disposable alternate WGL context");
+        require(nativeSample()==0 && nativeCount()==1,
+                "Different WGL context admitted to original owner epoch");
+        require(nativeReturnOriginal(),"Unable to return to original owner WGL context");
+        require(nativeSample()==0,"New WGL context invalidation incorrectly cleared");
+        require(!nativeFinish(),"Changed WGL context epoch marked clean");
+        System.out.println("R76_ALTERNATE_WGL_CONTEXT_SWITCH_FAIL_CLOSED_PASS");
 
         require(nativeBegin(),"Viewport fixture unavailable");
         require(nativeMismatchViewport(),"Could not exercise viewport mutation");
