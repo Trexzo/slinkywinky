@@ -37,6 +37,21 @@ public final class R76WglJvmSmoke {
     static boolean r77Draw() {r77Gate();return nativeDrawPreview();}
     static boolean r77Finish() {r77Gate();return nativeFinish();}
 
+    /** R78: isolated native WGL fixture controls, not shipped to the game. */
+    private static void r78Gate() {
+        if(!"1".equals(System.getenv("SLINKYWINKY_R76_WGL_FIXTURE")) ||
+           !"1".equals(System.getenv("SLINKYWINKY_R78_WGL_FIXTURE")))
+            throw new IllegalStateException("R78 disposable WGL fixture gate absent");
+    }
+    static void r78Load() {r78Gate();System.loadLibrary("slinkywinky_r76_wgl_fixture");}
+    static boolean r78Begin() {r78Gate();return nativeBegin();}
+    static boolean r78Finish() {r78Gate();return nativeFinish();}
+    static boolean r78Clear() {r78Gate();return nativeClearCurrent();}
+    static boolean r78Restore() {r78Gate();return nativeRestoreCurrent();}
+    static boolean r78ChangeViewport() {r78Gate();return nativeMismatchViewport();}
+    static boolean r78Switch() {r78Gate();return nativeUseAlternate();}
+    static boolean r78Return() {r78Gate();return nativeReturnOriginal();}
+
     private static void require(boolean ok,String why) {
         if(!ok)throw new AssertionError(why);
     }
