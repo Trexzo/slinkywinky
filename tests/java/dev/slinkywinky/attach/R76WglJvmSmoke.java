@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * R76 actual Java 8 -> JNI -> WGL fixture acceptance.
  * Dedicated native library creates its own invisible window/context.
- * There is NO Minecraft Attach and NO OpenGL menu drawing.
+ * There is NO Minecraft Attach. The optional R77 fixture draws only in its\n * own disposable WGL window.
  */
 public final class R76WglJvmSmoke {
     private static native boolean nativeBegin();
@@ -18,6 +18,24 @@ public final class R76WglJvmSmoke {
     private static native boolean nativeUseAlternate();
     private static native boolean nativeReturnOriginal();
     private static native boolean nativeFinish();
+
+    /** R77: permitted only for a disposable, system-classloader Java 8 fixture.
+     * JNI calls here are never part of the shipped Minecraft instrumentation JAR.
+     */
+    private static void r77Gate() {
+        if(!"1".equals(System.getenv("SLINKYWINKY_R76_WGL_FIXTURE")) ||
+           !"1".equals(System.getenv("SLINKYWINKY_R77_DISPOSABLE_FIXTURE")))
+            throw new IllegalStateException("R77 disposable JNI gate absent");
+    }
+    static void r77Load() {
+        r77Gate();
+        System.loadLibrary("slinkywinky_r76_wgl_fixture");
+    }
+    static boolean r77Begin() {r77Gate();return nativeBegin();}
+    static int r77Sample() {r77Gate();return nativeSample();}
+    static int r77Count() {r77Gate();return nativeCount();}
+    static boolean r77Draw() {r77Gate();return nativeDrawPreview();}
+    static boolean r77Finish() {r77Gate();return nativeFinish();}
 
     private static void require(boolean ok,String why) {
         if(!ok)throw new AssertionError(why);
