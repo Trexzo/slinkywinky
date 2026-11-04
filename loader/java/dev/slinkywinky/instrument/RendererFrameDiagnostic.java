@@ -14,16 +14,15 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 /**
- * R75: opt-in, finite, Java-only callback diagnostic on exact ORIGINAL bfk.
- *
- * No GL, LWJGL, WGL, JNI, UI drawing, input interception or game state access.
+ * R75: opt-in, finite Java-only callback diagnostic on exact ORIGINAL bfk.
+ * R78 optionally observes current WGL/viewport through read-only JNI after
+ * strict R79 render-thread admission. Neither path draws UI or changes GL.
  * A daemon retransform restores original bytecode (or locks future admission).
  */
 public final class RendererFrameDiagnostic {
     private static final String PINNED_BFK_SHA256 =
         "8a4ce93bbf272398ea298d2ed363f75211dd469fcd3b66682a387e4738a419a2";
-    private static volatile RenderFrameGate activeGate;
-    private static volatile RendererWglEvidence activeEvidence;
+    private static volatile RenderCallbackFence activeFence;
 
     private static byte[] hash(byte[] data) {
         try {return MessageDigest.getInstance("SHA-256").digest(data);}
@@ -35,25 +34,16 @@ public final class RendererFrameDiagnostic {
         return result.toString();
     }
 
-    /** Called only by the opt-in classfile prefix, never performs side effects. */
+    /** Only a validated renderer entry can issue the optional WGL read. */
     public static void onRender(float partialTicks,long frameTime) {
-        final RenderFrameGate gate=activeGate;
-        if(gate==null)return;
+        final RenderCallbackFence fence=activeFence;
+        if(fence==null)return;
         try {
             final Thread thread=Thread.currentThread();
-            final StackTraceElement[] stack=thread.getStackTrace();
-            // Sample BEFORE gate completion unlocks the cleanup watcher.
-            // Never touch graphics APIs if the original callsite fails.
-            final RendererWglEvidence evidence=activeEvidence;
-            if(evidence!=null && gate.accepted()<8 && !gate.invalid() &&
-               RenderFrameGate.hasOriginalCallsite(stack) &&
-               !Float.isNaN(partialTicks) && !Float.isInfinite(partialTicks) &&
-               partialTicks>=0f && partialTicks<=1f && frameTime>=0L)
-                evidence.sample();
-            gate.sample(thread,partialTicks,frameTime,stack);
+            fence.sample(thread,partialTicks,frameTime,thread.getStackTrace());
         } catch(Throwable unexpected) {
-            // Do not throw into Mojang rendering. Stop all further sampling.
-            gate.stop();
+            // A callback exception must never escape into Mojang code.
+            fence.abort();
         }
     }
 
@@ -159,6 +149,10 @@ public final class RendererFrameDiagnostic {
         final RendererWglEvidence evidence=contextDllPath==null?null:
             RendererWglEvidence.open(contextDllPath);
         final RenderFrameGate session=new RenderFrameGate(8);
+        final RenderCallbackFence fence=new RenderCallbackFence(session,
+            evidence==null ? null : new Runnable() {
+                @Override public void run() {evidence.sample();}
+            });
         final AtomicInteger changed=new AtomicInteger();
         final ClassFileTransformer transformer=new ClassFileTransformer() {
             @Override public byte[] transform(ClassLoader owner,String name,
@@ -168,8 +162,7 @@ public final class RendererFrameDiagnostic {
                 return weavePinnedOriginal(raw);
             }
         };
-        activeEvidence=evidence;
-        activeGate=session;
+        activeFence=fence;
         boolean added=false;
         Throwable installationFailure=null;
         boolean weaveRemoved=false;
@@ -193,9 +186,8 @@ public final class RendererFrameDiagnostic {
             }
         }
         if(installationFailure!=null || changed.get()!=1) {
-            activeGate=null;
-            activeEvidence=null;
-            session.stop();
+            activeFence=null;
+            fence.stopAndDrain(); // No in-flight observer at restore entry.
             boolean recovered=restore(instrumentation,target);
             // Uncertain removal means the weaving transformer may remain active.
             InstrumentationProbe.finishRenderDiagnostic(recovered && weaveRemoved);
@@ -210,17 +202,15 @@ public final class RendererFrameDiagnostic {
                 boolean completed=false;
                 try {completed=session.await(12,TimeUnit.SECONDS);}
                 catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
-                activeGate=null; // Disable callback before attempting bytecode restoration.
-                activeEvidence=null;
-                session.stop();
-                try {Thread.sleep(100L);}
-                catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
+                activeFence=null; // Future callbacks immediately become no-ops.
+                fence.stopAndDrain(); // Also joins an in-flight native WGL read.
                 final boolean restored=restore(instrumentation,target);
                 if(restored)
                     System.out.println("R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS");
                 else
                     System.err.println("R75_RESTORE_UNCERTAIN_NO_REATTACH");
-                if(completed && session.accepted()==8 && !session.invalid() && restored)
+                if(completed && session.accepted()==8 && !session.invalid() &&
+                   !fence.failed() && restored)
                     System.out.println("R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8 owner="+
                                        session.ownerThread());
                 else
@@ -229,8 +219,8 @@ public final class RendererFrameDiagnostic {
                                        " complete="+completed);
                 if(evidence!=null) {
                     final boolean stable=completed && !session.invalid() &&
-                                         session.accepted()==8 && restored &&
-                                         evidence.fullyStable();
+                                         !fence.failed() && session.accepted()==8 &&
+                                         restored && evidence.fullyStable();
                     System.out.println((stable?
                         "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS ":
                         "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")+
@@ -247,9 +237,8 @@ public final class RendererFrameDiagnostic {
         try {
             cleanup.start();
         } catch(Throwable workerFailure) {
-            activeGate=null;
-            activeEvidence=null;
-            session.stop();
+            activeFence=null;
+            fence.stopAndDrain();
             final boolean restored=restore(instrumentation,target);
             InstrumentationProbe.finishRenderDiagnostic(restored);
             throw new IllegalStateException(
