@@ -197,6 +197,35 @@ try:
         raise AssertionError("R75 original renderer allowed synthetic Attach bypass")
     print("PASS: R75 explicit gate, production PID refusal and test-bypass refusal")
 
+    # R78 native WGL read-only inspection requires TWO independent explicit
+    # gates and must never attach to a non-Minecraft or synthetic test target.
+    r78_denied = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-context=8"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (r78_denied.returncode == 0 or
+        "SLINKYWINKY_RENDER_CONTEXT" not in r78_denied.stderr):
+        raise AssertionError("R78 bypassed dual explicit operator gate")
+    r78_test = env.copy()
+    r78_test["SLINKYWINKY_RENDER_CONTEXT"] = "1"
+    r78_test["SLINKYWINKY_RENDER_CALLBACK"] = "1"
+    r78_wrong = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-context=8"],
+        capture_output=True, text=True, env=r78_test, timeout=15)
+    if (r78_wrong.returncode == 0 or
+        "cannot run in Attach test mode" not in r78_wrong.stderr):
+        raise AssertionError("R78 admitted synthetic Attach target")
+    r78_production = production_env.copy()
+    r78_production["SLINKYWINKY_RENDER_CONTEXT"] = "1"
+    r78_production["SLINKYWINKY_RENDER_CALLBACK"] = "1"
+    r78_non_game = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home), "--render-context=8"],
+        capture_output=True, text=True, env=r78_production, timeout=15)
+    if (r78_non_game.returncode == 0 or
+        "Refusing non-Minecraft target" not in r78_non_game.stderr):
+        raise AssertionError("R78 admitted a non-Minecraft process")
+    print("PASS: R78 double operator gate, synthetic and non-Minecraft PID denial")
+
+
     # The unverified Minecraft tick hook must be explicitly developer-enabled.
     print("R61_TEST_PHASE=initial-hook-denial", flush=True)
     no_gate = subprocess.run(
