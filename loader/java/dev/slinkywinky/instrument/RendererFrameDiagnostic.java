@@ -250,6 +250,13 @@ public final class RendererFrameDiagnostic {
                     "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS");
                 System.out.flush();
                 InstrumentationProbe.finishRenderDiagnostic(restored);
+                // R81: consumer must not start the next Attach merely from a
+                // restoration receipt printed before the admission release.
+                // Emit this marker ONLY after the verified gate is released.
+                if(restored) {
+                    System.out.println("R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS");
+                    System.out.flush();
+                }
             }
         },"SlinkyWinky-R75-Finite-Restore");
         cleanup.setDaemon(true);
