@@ -10,7 +10,7 @@ import java.io.File;
 public final class RendererWglEvidence {
     private static native long[] nativeCurrentWglSnapshot();
 
-    private final Thread owner;
+    private Thread owner;
     private int attempts;
     private int current;
     private int absent;
@@ -23,9 +23,7 @@ public final class RendererWglEvidence {
     private boolean pinned;
     private boolean poisoned;
 
-    private RendererWglEvidence() {
-        owner=Thread.currentThread();
-    }
+    private RendererWglEvidence() {}
 
     /** Must be called only after R73 has admitted exact loaded original classes. */
     public static RendererWglEvidence open(String dllPath) throws Exception {
@@ -46,7 +44,8 @@ public final class RendererWglEvidence {
     public synchronized void sample() {
         if(poisoned || attempts>=8)return;
         attempts++;
-        if(Thread.currentThread()!=owner) {
+        if(owner==null)owner=Thread.currentThread();
+        else if(Thread.currentThread()!=owner) {
             poisoned=true;
             invalid++;
             return;
