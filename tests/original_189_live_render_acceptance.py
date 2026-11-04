@@ -21,6 +21,10 @@ CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
 RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
 STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
           "attempts=8 current=8 absent=0 invalid=0 changed=0 stable=true")
+# Cap per-stage stdout to prevent unbounded reads or very noisy JVM logs
+# being mistaken for a clean, short diagnostic session.
+MAX_STAGE_STDOUT_BYTES = 262144
+
 NEGATIVE = (
     "R75_RENDER_RESTORE_FAIL",
     "R75_RESTORE_UNCERTAIN_NO_REATTACH",
@@ -102,9 +106,14 @@ def read_appended(path, offset, original_stat=None):
     size = current.st_size
     if size < offset:
         raise ReceiptError("Target log rotated or truncated; cannot use stale receipts")
+    if size - offset > MAX_STAGE_STDOUT_BYTES:
+        raise ReceiptError("Excessive target stdout during one finite diagnostic")
     with path.open("rb") as stream:
         stream.seek(offset)
-        return stream.read().decode("utf-8", errors="replace")
+        raw = stream.read(MAX_STAGE_STDOUT_BYTES + 1)
+        if len(raw) > MAX_STAGE_STDOUT_BYTES:
+            raise ReceiptError("Target stdout grew beyond bounded evidence window")
+        return raw.decode("utf-8", errors="replace")
 
 
 def check_target_listing(stdout, pid):
