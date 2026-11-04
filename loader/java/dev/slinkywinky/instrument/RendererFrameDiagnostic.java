@@ -236,7 +236,9 @@ public final class RendererFrameDiagnostic {
                         "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")+
                         evidence.result());
                 }
-                System.out.println("R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS");
+                System.out.println(evidence==null?
+                    "R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS":
+                    "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS");
                 System.out.flush();
                 InstrumentationProbe.finishRenderDiagnostic(restored);
             }
