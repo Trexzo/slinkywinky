@@ -310,12 +310,19 @@ public final class InstrumentationProbe {
         if ("minecraft-render-preflight".equals(options)) {
             if (!hookInstalled.compareAndSet(false,true))
                 throw new IllegalStateException("Minecraft instrumentation already active");
+            boolean inspectorRemovalConfirmed=true;
             try {
                 RendererLivePreflight.run(instrumentation);
+            } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
+                // R80: the passive inspector might still be registered; do
+                // not admit another Attach while this cannot be ruled out.
+                inspectorRemovalConfirmed=false;
+                throw new IllegalStateException(
+                    "R73 passive renderer inspector removal unconfirmed",uncertain);
             } catch (Exception error) {
                 throw new IllegalStateException("R73 renderer preflight refused",error);
             } finally {
-                hookInstalled.set(false);
+                if(inspectorRemovalConfirmed)hookInstalled.set(false);
             }
             return;
         }
