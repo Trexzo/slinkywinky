@@ -8,6 +8,7 @@
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include <windows.h>
+#include <GL/gl.h>
 #include <cstdlib>
 #include <cstring>
 #endif
@@ -430,3 +431,33 @@ Java_dev_slinkywinky_instrument_InstrumentationProbe_nativeReadPublishedStatus(
     if(result) env->SetDoubleArrayRegion(result,0,10,values);
     return result;
 }
+
+#ifdef _WIN32
+/**
+ * R78: read-only snapshot of the caller's CURRENT WGL context.
+ *
+ * No wglMakeCurrent, hook, GL mutation, input interception, or framebuffer read.
+ * Opaque native HGLRC/HDC values are used only for comparison inside Java and
+ * never logged. Missing context produces an all-zero tuple, not a GL call.
+ */
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCurrentWglSnapshot(
+    JNIEnv* env,jclass) {
+    const HGLRC context=wglGetCurrentContext();
+    const HDC dc=wglGetCurrentDC();
+    jlong sample[6]{};
+    if(context!=nullptr && dc!=nullptr) {
+        GLint viewport[4]{};
+        glGetIntegerv(GL_VIEWPORT,viewport);
+        sample[0]=static_cast<jlong>(reinterpret_cast<std::uintptr_t>(context));
+        sample[1]=static_cast<jlong>(reinterpret_cast<std::uintptr_t>(dc));
+        sample[2]=static_cast<jlong>(viewport[0]);
+        sample[3]=static_cast<jlong>(viewport[1]);
+        sample[4]=static_cast<jlong>(viewport[2]);
+        sample[5]=static_cast<jlong>(viewport[3]);
+    }
+    jlongArray result=env->NewLongArray(6);
+    if(result)env->SetLongArrayRegion(result,0,6,sample);
+    return result;
+}
+#endif
