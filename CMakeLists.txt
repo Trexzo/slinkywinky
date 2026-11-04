@@ -197,10 +197,24 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderAttachAgent.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74AttachLauncher.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderTarget.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R76WglJvmSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/windows_r76_wgl_jni.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/windows_wgl_frame_probe.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/slinkywinky/windows_wgl_frame_probe.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java")
+  # R76: disposable Java 8 JNI -> current-WGL validation only.
+  # Deliberately built in testing mode; excluded from any runtime release.
+  if(BUILD_TESTING)
+    add_library(slinkywinky_r76_wgl_fixture SHARED
+      src/windows_wgl_frame_probe.cpp tests/windows_r76_wgl_jni.cpp)
+    target_include_directories(slinkywinky_r76_wgl_fixture PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include ${JNI_INCLUDE_DIRS})
+    target_compile_features(slinkywinky_r76_wgl_fixture PRIVATE cxx_std_17)
+    target_link_libraries(slinkywinky_r76_wgl_fixture PRIVATE opengl32 gdi32 user32)
+  endif()
   add_executable(slinkywinky_loader src/windows_loader.cpp)
   target_include_directories(slinkywinky_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   if(SLINKYWINKY_BUILD_JNI)
@@ -208,6 +222,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
   endif()
   target_compile_features(slinkywinky_loader PRIVATE cxx_std_17)
   add_dependencies(slinkywinky_loader slinkywinky_agent)
+  if(BUILD_TESTING)
+    add_dependencies(slinkywinky_loader slinkywinky_r76_wgl_fixture)
+  endif()
   add_custom_command(TARGET slinkywinky_loader POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-classes"
     COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8 -cp "${SW_TOOLS_JAR}"
@@ -272,6 +289,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R65Fixture.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderTarget.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R76WglJvmSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
@@ -315,6 +333,15 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/r74_render_attach_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(native_r74_obfuscated_render_attach PROPERTIES TIMEOUT 80)
+      # No PID, Minecraft, or hook. Java 8 runs on its own current WGL context.
+      add_test(NAME native_r76_java8_wgl_context_admission
+        COMMAND "${CMAKE_COMMAND}" -E env
+          "SLINKYWINKY_R76_WGL_FIXTURE=1"
+          "${Java_JAVA_EXECUTABLE}"
+          "-Djava.library.path=$<TARGET_FILE_DIR:slinkywinky_r76_wgl_fixture>"
+          -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
+          dev.slinkywinky.attach.R76WglJvmSmoke)
+      set_tests_properties(native_r76_java8_wgl_context_admission PROPERTIES TIMEOUT 35)
     endif()
   endif()
 endif()
