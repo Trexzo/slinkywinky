@@ -23,6 +23,7 @@ public final class RendererFrameDiagnostic {
     private static final String PINNED_BFK_SHA256 =
         "8a4ce93bbf272398ea298d2ed363f75211dd469fcd3b66682a387e4738a419a2";
     private static volatile RenderFrameGate activeGate;
+    private static volatile RendererWglEvidence activeEvidence;
 
     private static byte[] hash(byte[] data) {
         try {return MessageDigest.getInstance("SHA-256").digest(data);}
@@ -39,8 +40,17 @@ public final class RendererFrameDiagnostic {
         final RenderFrameGate gate=activeGate;
         if(gate==null)return;
         try {
-            gate.sample(Thread.currentThread(),partialTicks,frameTime,
-                Thread.currentThread().getStackTrace());
+            final Thread thread=Thread.currentThread();
+            final StackTraceElement[] stack=thread.getStackTrace();
+            // Sample BEFORE gate completion unlocks the cleanup watcher.
+            // Never touch graphics APIs if the original callsite fails.
+            final RendererWglEvidence evidence=activeEvidence;
+            if(evidence!=null && gate.accepted()<8 && !gate.invalid() &&
+               RenderFrameGate.hasOriginalCallsite(stack) &&
+               !Float.isNaN(partialTicks) && !Float.isInfinite(partialTicks) &&
+               partialTicks>=0f && partialTicks<=1f && frameTime>=0L)
+                evidence.sample();
+            gate.sample(thread,partialTicks,frameTime,stack);
         } catch(Throwable unexpected) {
             // Do not throw into Mojang rendering. Stop all further sampling.
             gate.stop();
@@ -131,6 +141,12 @@ public final class RendererFrameDiagnostic {
 
     /** Existing agent admission guard must already have been acquired. */
     public static void start(final Instrumentation instrumentation) throws Exception {
+        start(instrumentation,null);
+    }
+
+    /** Non-null DLL path enables only R78 read-only current-WGL sampling. */
+    public static void start(final Instrumentation instrumentation,
+                             final String contextDllPath) throws Exception {
         final Class<?> target=RendererLivePreflight.admit(instrumentation);
         InstrumentationProbe.verifyCallbackVisibility(target);
         final ClassLoader loader=target.getClassLoader();
@@ -138,6 +154,10 @@ public final class RendererFrameDiagnostic {
                 RendererFrameDiagnostic.class)
             throw new IllegalStateException("R75 render callback resolves to wrong loader");
 
+        // Load AFTER original Mojang SHA and classloader admission, BEFORE
+        // registering any bytecode transformer. Never draw from this path.
+        final RendererWglEvidence evidence=contextDllPath==null?null:
+            RendererWglEvidence.open(contextDllPath);
         final RenderFrameGate session=new RenderFrameGate(8);
         final AtomicInteger changed=new AtomicInteger();
         final ClassFileTransformer transformer=new ClassFileTransformer() {
@@ -148,6 +168,7 @@ public final class RendererFrameDiagnostic {
                 return weavePinnedOriginal(raw);
             }
         };
+        activeEvidence=evidence;
         activeGate=session;
         boolean added=false;
         Throwable installationFailure=null;
@@ -173,6 +194,7 @@ public final class RendererFrameDiagnostic {
         }
         if(installationFailure!=null || changed.get()!=1) {
             activeGate=null;
+            activeEvidence=null;
             session.stop();
             boolean recovered=restore(instrumentation,target);
             // Uncertain removal means the weaving transformer may remain active.
@@ -189,6 +211,7 @@ public final class RendererFrameDiagnostic {
                 try {completed=session.await(12,TimeUnit.SECONDS);}
                 catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
                 activeGate=null; // Disable callback before attempting bytecode restoration.
+                activeEvidence=null;
                 session.stop();
                 try {Thread.sleep(100L);}
                 catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
@@ -204,6 +227,15 @@ public final class RendererFrameDiagnostic {
                     System.err.println("R75_RENDER_CALLBACK_UNVERIFIED frames="+
                                        session.accepted()+" invalid="+session.invalid()+
                                        " complete="+completed);
+                if(evidence!=null) {
+                    final boolean stable=completed && !session.invalid() &&
+                                         session.accepted()==8 && restored &&
+                                         evidence.fullyStable();
+                    System.out.println((stable?
+                        "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS ":
+                        "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")+
+                        evidence.result());
+                }
                 System.out.println("R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS");
                 System.out.flush();
                 InstrumentationProbe.finishRenderDiagnostic(restored);
@@ -214,6 +246,7 @@ public final class RendererFrameDiagnostic {
             cleanup.start();
         } catch(Throwable workerFailure) {
             activeGate=null;
+            activeEvidence=null;
             session.stop();
             final boolean restored=restore(instrumentation,target);
             InstrumentationProbe.finishRenderDiagnostic(restored);
