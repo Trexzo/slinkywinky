@@ -27,31 +27,35 @@ public final class R77WglRenderTarget {
         System.out.flush();
 
         long clock=1L;
+        // R81: class objects are already loaded, so do not run renderer
+        // frames during Attach admission. The R77 callback is always counting
+        // before its eight-frame cap and could otherwise race with ready=true.
         for(int i=0;i<2300 && !R74RenderAttachAgent.ready();i++) {
-            frame.invoke(game,0.5f,clock++);
             Thread.sleep(10L);
         }
         check(R74RenderAttachAgent.ready(),
               "External test-only Java8 agent never admitted");
         int original=work.getInt(null);
+        final int entryBaseline=R77WglRenderReceiver.entries();
         for(int i=0;i<16;i++) {
             frame.invoke(game,0.5f,clock++);
             Thread.sleep(12L);
         }
         check(R77WglRenderReceiver.completeOwner()==8 &&
-              R77WglRenderReceiver.entries()==16 &&
+              R77WglRenderReceiver.entries()-entryBaseline==16 &&
               work.getInt(null)-original==16,
               "Expected eight JNI-render callbacks and sixteen original frames");
         System.out.println("R77_ATTACHED_BFK_CALLBACK_TO_NATIVE_GL11_MENU_PASS");
         System.out.println("R77_JAVA8_RENDER_OWNER_AND_WGL_STATE_RESTORE_PASS");
         System.out.flush();
 
+        final int restoredBaseline=R77WglRenderReceiver.entries();
         R74RenderAttachAgent.restoreOnOwner();
         int before=work.getInt(null);
         for(int i=0;i<12;i++)frame.invoke(game,0.5f,clock++);
         check(work.getInt(null)-before==12 &&
               R77WglRenderReceiver.count()==8 &&
-              R77WglRenderReceiver.entries()==16 &&
+              R77WglRenderReceiver.entries()==restoredBaseline &&
               !R77WglRenderReceiver.invalid() &&
               R76WglJvmSmoke.r77Count()==8,
               "Generated renderer after retransformation was not restored");
