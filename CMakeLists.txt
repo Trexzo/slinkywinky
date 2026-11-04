@@ -198,6 +198,10 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74AttachLauncher.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderTarget.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R76WglJvmSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglRenderReceiver.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglRenderTarget.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglAttachLauncher.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r77_render_attach_wgl_smoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/windows_r76_wgl_jni.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/windows_wgl_frame_probe.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/slinkywinky/windows_wgl_frame_probe.hpp"
@@ -291,6 +295,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74RenderTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R76WglJvmSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglRenderReceiver.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglRenderTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
@@ -304,6 +310,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachLauncher.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74AttachLauncher.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglAttachLauncher.java"
     # The test-agent bundle is deliberately NOT shipped in package artifacts.
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r66_test_agent.jar"
@@ -343,6 +350,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
           -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
           dev.slinkywinky.attach.R76WglJvmSmoke)
       set_tests_properties(native_r76_java8_wgl_context_admission PROPERTIES TIMEOUT 35)
+      # R77: Java8 external Attach -> generated bfk.a callback -> JNI WGL ->
+      # first-party menu render on the original Java owner -> exact restoration.
+      add_test(NAME native_r77_attached_render_jni_wgl_menu
+        COMMAND "${Python3_EXECUTABLE}" -u
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/r77_render_attach_wgl_smoke.py"
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+      set_tests_properties(native_r77_attached_render_jni_wgl_menu PROPERTIES TIMEOUT 90)
     endif()
   endif()
 endif()
