@@ -39,6 +39,7 @@ public final class R77WglRenderTarget {
             Thread.sleep(12L);
         }
         check(R77WglRenderReceiver.completeOwner()==8 &&
+              R77WglRenderReceiver.entries()==16 &&
               work.getInt(null)-original==16,
               "Expected eight JNI-render callbacks and sixteen original frames");
         System.out.println("R77_ATTACHED_BFK_CALLBACK_TO_NATIVE_GL11_MENU_PASS");
@@ -50,6 +51,7 @@ public final class R77WglRenderTarget {
         for(int i=0;i<12;i++)frame.invoke(game,0.5f,clock++);
         check(work.getInt(null)-before==12 &&
               R77WglRenderReceiver.count()==8 &&
+              R77WglRenderReceiver.entries()==16 &&
               !R77WglRenderReceiver.invalid() &&
               R76WglJvmSmoke.r77Count()==8,
               "Generated renderer after retransformation was not restored");
