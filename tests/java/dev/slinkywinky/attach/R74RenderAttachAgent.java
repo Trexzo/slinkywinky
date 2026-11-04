@@ -35,7 +35,7 @@ public final class R74RenderAttachAgent {
     }
     public static boolean ready(){return ready;}
 
-    private static byte[] weave(byte[] raw) {
+    private static byte[] weave(byte[] raw,final boolean r77) {
         if(raw==null || raw.length==0 || raw.length>65536)
             throw new IllegalArgumentException("Invalid generated renderer length");
         ClassReader reader=new ClassReader(raw);
@@ -59,7 +59,8 @@ public final class R74RenderAttachAgent {
                         super.visitVarInsn(Opcodes.FLOAD,1);
                         super.visitVarInsn(Opcodes.LLOAD,2);
                         super.visitMethodInsn(Opcodes.INVOKESTATIC,
-                            "dev/slinkywinky/instrument/RenderCallbackProbe",
+                            r77 ? "dev/slinkywinky/attach/R77WglRenderReceiver" :
+                                  "dev/slinkywinky/instrument/RenderCallbackProbe",
                             "onRender","(FJ)V",false);
                     }
                 };
@@ -71,9 +72,14 @@ public final class R74RenderAttachAgent {
     }
 
     public static void agentmain(String option,Instrumentation inst) throws Exception {
-        if(!"R74_DISPOSABLE_OBFUSCATED_ONLY".equals(option) ||
-           !"1".equals(System.getenv("SLINKYWINKY_R74_DISPOSABLE_FIXTURE")))
-            throw new IllegalArgumentException("R74 exact disposable opt-in required");
+        final boolean r77="R77_DISPOSABLE_WGL_ONLY".equals(option);
+        if((!r77 && !"R74_DISPOSABLE_OBFUSCATED_ONLY".equals(option)) ||
+           !"1".equals(System.getenv("SLINKYWINKY_R74_DISPOSABLE_FIXTURE")) ||
+           (r77 && (!"1".equals(System.getenv("SLINKYWINKY_R76_WGL_FIXTURE")) ||
+                     !"1".equals(System.getenv("SLINKYWINKY_R77_DISPOSABLE_FIXTURE")) ||
+                     !"dev.slinkywinky.attach.R77WglRenderTarget".equals(
+                         System.getProperty("sun.java.command")))))
+            throw new IllegalArgumentException("R74/R77 exact disposable opt-in required");
         if(inst==null || !inst.isRetransformClassesSupported())
             throw new IllegalStateException("R74 Java 8 retransformation unavailable");
         if(!admitted.compareAndSet(false,true))
@@ -121,7 +127,7 @@ public final class R74RenderAttachAgent {
                 if(current!=selected)return null;
                 modified.incrementAndGet();
                 baselineHash=hash(bytes);
-                return weave(bytes);
+                return weave(bytes,r77);
             }
         };
         inst.addTransformer(worker,true);
@@ -132,7 +138,8 @@ public final class R74RenderAttachAgent {
         attached=inst;
         targetClass=selected;
         ready=true;
-        System.out.println("R74_EXACT_OBFUSCATED_FIXTURE_HOOK_PASS");
+        System.out.println(r77 ? "R77_EXACT_GENERATED_WGL_RENDER_HOOK_PASS" :
+                                 "R74_EXACT_OBFUSCATED_FIXTURE_HOOK_PASS");
         System.out.flush();
     }
 
