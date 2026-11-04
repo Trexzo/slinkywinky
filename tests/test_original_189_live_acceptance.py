@@ -179,7 +179,7 @@ class ReceiptChecks(unittest.TestCase):
                 self.assertEqual(cmd[0],str(loader))
                 if cmd[1]=="list":
                     return harness.subprocess.CompletedProcess(
-                        cmd,0,"123 net.minecraft.client.main.Main\\n","")
+                        cmd,0,"123 net.minecraft.client.main.Main\n","")
                 self.assertEqual(cmd[1],"attach")
                 self.assertEqual(cmd[2],"123")
                 option=cmd[-1]
@@ -190,7 +190,7 @@ class ReceiptChecks(unittest.TestCase):
                 with log.open("a",encoding="utf-8") as output:
                     output.write(stage)
                 return harness.subprocess.CompletedProcess(
-                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode=fixture\\n","")
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode=fixture\n","")
             with patch.object(harness.subprocess,"run",side_effect=fake):
                 result=harness.run([
                     "--loader",str(loader),"--jdk8",str(root/"jdk8"),
@@ -222,14 +222,14 @@ class ReceiptChecks(unittest.TestCase):
             def fake(cmd,**kwargs):
                 if cmd[1]=="list":
                     return harness.subprocess.CompletedProcess(
-                        cmd,0,"123 net.minecraft.client.main.Main\\n","")
+                        cmd,0,"123 net.minecraft.client.main.Main\n","")
                 option=cmd[-1]
                 attached.append(option)
                 with log.open("a",encoding="utf-8") as output:
                     output.write(P if option=="--render-preflight" else
-                                 "R75_RESTORE_UNCERTAIN_NO_REATTACH\\n")
+                                 "R75_RESTORE_UNCERTAIN_NO_REATTACH\n")
                 return harness.subprocess.CompletedProcess(
-                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123\\n","")
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123\n","")
             with patch.object(harness.subprocess,"run",side_effect=fake):
                 with self.assertRaises(harness.ReceiptError):
                     harness.run([
