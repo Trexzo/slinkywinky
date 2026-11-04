@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class R76WglJvmSmoke {
     private static native boolean nativeBegin();
     private static native int nativeSample();
+    private static native boolean nativeDrawPreview();
     private static native int nativeCount();
     private static native boolean nativeClearCurrent();
     private static native boolean nativeRestoreCurrent();
@@ -26,12 +27,25 @@ public final class R76WglJvmSmoke {
             throw new IllegalStateException("Disposable WGL fixture opt-in missing");
         System.loadLibrary("slinkywinky_r76_wgl_fixture");
         require(nativeSample()==0,"No-context sample unexpectedly accepted");
+        require(!nativeDrawPreview(),"Native menu rendered without WGL context");
         require(nativeBegin(),"Unable to create isolated Java8 owned WGL context");
         require(!nativeBegin(),"Double WGL admission accepted");
         for(int i=1;i<=8;i++)
             require(nativeSample()==(i==8?2:1),"Unexpected finite WGL sample "+i);
         require(nativeSample()==0 && nativeCount()==8,
                 "WGL sample cap failed closed");
+        AtomicInteger foreignMenu=new AtomicInteger(-1);
+        Thread foreignDraw=new Thread(new Runnable() {
+            @Override public void run() {
+                foreignMenu.set(nativeDrawPreview()?1:0);
+            }
+        },"R76-offthread-menu-denial");
+        foreignDraw.start();foreignDraw.join(5000L);
+        require(!foreignDraw.isAlive() && foreignMenu.get()==0,
+                "GL11 menu accepted a non-owner Java render thread");
+        require(nativeDrawPreview(),
+                "JNI native GL11 menu draw failed to restore admitted WGL state");
+        System.out.println("R76_JAVA8_JNI_GL11_MENU_RENDER_OWNER_AND_STATE_PASS");
         require(nativeFinish(),"Clean bounded context was not released");
         System.out.println("R76_JAVA8_JNI_WGL_CONTEXT_EIGHT_FRAME_PASS");
 
