@@ -11,7 +11,8 @@ The inverse failure also matters: the passive, read-only class fingerprint inspe
 - `RendererFrameDiagnostic.start(...)` now gives a clean **pre-weave** failure its own catch boundary. A missing or fingerprint-mismatched original renderer, unsupported instrumentation, or other ordinary pre-weave exception releases the unused admission flag via `finishUnmodifiedRenderAdmission()`.
 - The hook gate is **not** released for a failure after a bytecode-changing transformer was registered or retransformation attempted. Such paths still require independent exact original `bfk` SHA restoration proof through `finishRenderDiagnostic(restored)`.
 - `RendererLivePreflight.admit(...)` now checks that its passive inspector was removed, and distinguishes a false removal return, thrown removal or uncertain registration with `InspectorRemovalUncertain`. These cases leave the admission flag claimed, even though the inspector only returns `null` bytecode. An unexpected VM linkage failure is also left fail-closed rather than presumed recoverable.
-- These rules apply equally to R75 Java-only callbacks and the R78 opt-in passive WGL diagnostic. They do not add a renderer menu hook, change game state or weaken the original SHA pin.
+- R73's standalone passive `minecraft-render-preflight` mode now also preserves the global admission lock if its inspector registration/removal is uncertain. Its former unconditional `finally { hookInstalled.set(false); }` could release admission despite a leaked passive transformer. Clean R73 preflight refusals still release the gate.
+- These rules apply equally to R73 passive preflight, R75 Java-only callbacks and the R78 opt-in passive WGL diagnostic. They do not add a renderer menu hook, change game state or weaken the original SHA pin.
 
 ## Java 8 regression
 
@@ -21,7 +22,7 @@ The test checks that:
 1. A missing original renderer leaves the claim unheld for both R75 and R78.
 2. A JVM without retransformation support cleanly releases the claim.
 3. Generated, structurally valid but **wrong-SHA** classes receive one read-only transform pass and a confirmed inspector removal; they are rejected without locking out a new preflight.
-4. A passive inspector `removeTransformer` returning `false` or throwing retains the claim, and a concurrent second attach is denied before any new instrumentation.
-5. An uncertain `addTransformer` call also retains the claim, and later attempts are refused until external recovery.
+4. A passive inspector `removeTransformer` returning `false` or throwing retains the claim in R73/R75/R78, and a concurrent second attach is denied before new instrumentation.
+5. An uncertain `addTransformer` call also retains the claim in R73/R75/R78, and later attempts are refused until external recovery.
 
 This is a **test of control flow and failure semantics** using synthetic class files; it does not establish original Minecraft compatibility or in-game WGL behavior. PR #1 remains draft until real original Java 8 game acceptance and exact restored renderer evidence are obtained.
