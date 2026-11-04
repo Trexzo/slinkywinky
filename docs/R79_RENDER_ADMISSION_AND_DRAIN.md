@@ -5,7 +5,7 @@
 ## Changes
 
 - `RenderCallbackFence` is a **pure Java 8**, synchronized guard binding one existing `RenderFrameGate` to one optional observation function. For each callback:
-  1. Validate the exact `ave.av → bfk.a(FJ)V` stack, partial-tick arguments, monotonic-nonnegative frame-time requirement and Java owner thread through `RenderFrameGate.sample()`.
+  1. Validate the exact `ave.av → bfk.a(FJ)V` stack, partial-tick arguments, nonnegative frame-time requirement and Java owner thread through `RenderFrameGate.sample()`.
   2. Only if that specific invocation **increased** the accepted count and the gate did not invalidate may it issue the optional R78 native WGL/viewport snapshot.
   3. Catch observer exceptions without throwing into original game rendering. Record an observer failure and permanently stop the gate.
 - The callback's `stopAndDrain()` uses the **same Java monitor** as admission and observation. When cleanup wakes after eight callbacks (or the finite 12-second timeout), it disables future callbacks and **joins any in-flight JNI observation** before initiating original `bfk` bytecode retransformation. Removed the old 100 ms sleep, which was neither a safe join nor a reliable restore boundary.
