@@ -20,6 +20,7 @@ struct Context {
     HWND hwnd=nullptr;
     HDC dc=nullptr;
     HGLRC rc=nullptr;
+    HGLRC alternate=nullptr;
     bool registered=false;
 };
 Context state;
@@ -34,6 +35,11 @@ bool enabled() noexcept {
 }
 void dispose() noexcept {
     probe.reset();
+    if(state.alternate){
+        if(wglGetCurrentContext()==state.alternate)
+            wglMakeCurrent(nullptr,nullptr);
+        wglDeleteContext(state.alternate);
+    }
     if(state.rc) {
         if(wglGetCurrentContext()==state.rc)
             wglMakeCurrent(nullptr,nullptr);
@@ -109,6 +115,29 @@ Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeMismatchViewport(JNIEnv*,jclass
     if(!state.rc || wglGetCurrentContext()!=state.rc)return JNI_FALSE;
     glViewport(0,0,400,300);
     return JNI_TRUE;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeUseAlternate(JNIEnv*,jclass) {
+    if(!state.rc || !state.dc || state.alternate ||
+       wglGetCurrentContext()!=state.rc)return JNI_FALSE;
+    state.alternate=wglCreateContext(state.dc);
+    if(!state.alternate)return JNI_FALSE;
+    if(!wglMakeCurrent(state.dc,state.alternate)){
+        wglDeleteContext(state.alternate);
+        state.alternate=nullptr;
+        return JNI_FALSE;
+    }
+    glViewport(0,0,640,480);
+    return JNI_TRUE;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeReturnOriginal(JNIEnv*,jclass) {
+    if(!state.alternate || !state.rc || !state.dc ||
+       wglGetCurrentContext()!=state.alternate)return JNI_FALSE;
+    if(!wglMakeCurrent(state.dc,state.rc))return JNI_FALSE;
+    const BOOL deleted=wglDeleteContext(state.alternate);
+    state.alternate=nullptr;
+    return deleted?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeFinish(JNIEnv*,jclass) {
