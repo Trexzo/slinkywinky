@@ -27,6 +27,51 @@ class ReceiptChecks(unittest.TestCase):
         self.assertEqual(len(harness.validate_receipt("--render-callback=8",C)),3)
         self.assertEqual(len(harness.validate_receipt("--render-context=8",W)),4)
 
+    def test_exact_stdout_receipt_lines_resist_prefix_and_suffix_collisions(self):
+        wrong = [
+            ("--render-preflight",P.replace("PREFLIGHT_PASS","PREFLIGHT_PASS_FAKE")),
+            ("--render-preflight","[INFO] "+P),
+            ("--render-preflight","fake"+P),
+            ("--render-callback=8",C.replace("accepted=8","accepted=80")),
+            ("--render-callback=8",C.replace("accepted=8","accepted=8x")),
+            ("--render-callback=8",C.replace("owner=synthetic#1","owner=synthetic")),
+            ("--render-callback=8",C.replace("owner=synthetic#1","owner=synthetic#0")),
+            ("--render-callback=8",C.replace(
+                harness.RESTORED,harness.RESTORED+"_FAKE")),
+            ("--render-callback=8",C.replace(
+                harness.RELEASED,harness.RELEASED+"_FAKE")),
+            ("--render-context=8",W.replace("stable=true","stable=trueee")),
+            ("--render-context=8",W.replace("current=8","current=80")),
+            ("--render-context=8",W.replace("changed=0","changed=00")),
+        ]
+        for option, log in wrong:
+            with self.subTest(option=option, log=log):
+                with self.assertRaises(harness.ReceiptError):
+                    harness.validate_receipt(option,log)
+
+    def test_conflicting_fake_receipt_even_after_true_receipt_is_denied(self):
+        for option, good, counterfeit in [
+            ("--render-preflight",P,"noise "+harness.PREFLIGHT+"\\n"),
+            ("--render-callback=8",C,harness.CALLBACK+"0 owner=bad#5\\n"),
+            ("--render-context=8",W,harness.STABLE+"_TRAILING\\n")
+        ]:
+            with self.subTest(option=option):
+                with self.assertRaises(harness.ReceiptError):
+                    harness.validate_receipt(option,good+counterfeit)
+
+    def test_windows_crlf_and_owner_with_spaces_are_accepted(self):
+        callback=C.replace("synthetic#1","Client thread#23")
+        for option,log in [
+            ("--render-preflight",P),("--render-callback=8",callback),
+            ("--render-context=8",W.replace("synthetic#1","Client thread#23"))
+        ]:
+            with self.subTest(option=option):
+                self.assertEqual(
+                    tuple(harness.STAGES["context"][
+                        ("--render-preflight","--render-callback=8","--render-context=8").index(option)
+                    ][1]),
+                    harness.validate_receipt(option,log.replace("\\n","\\r\\n")))
+
     def test_old_or_partial_receipts_never_pass(self):
         for option, text in [
             ("--render-preflight",""),
