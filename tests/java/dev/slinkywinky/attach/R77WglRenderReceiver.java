@@ -8,6 +8,7 @@ package dev.slinkywinky.attach;
 public final class R77WglRenderReceiver {
     private static Thread owner;
     private static int callbacks;
+    private static int entryCount;
     private static boolean drawn;
     private static boolean invalid;
     private static boolean closed;
@@ -19,6 +20,9 @@ public final class R77WglRenderReceiver {
         owner=Thread.currentThread();
     }
     public static void onRender(float partialTicks,long frameTime) {
+        // Count EVERY transformed-method entry, including after the sample
+        // cap and after test close. This independently proves restoration.
+        entryCount++;
         // Test-only WGL calls must happen directly on the admitted render thread.
         if(closed || invalid || callbacks>=8)return;
         if(Thread.currentThread()!=owner ||
@@ -52,6 +56,7 @@ public final class R77WglRenderReceiver {
         return callbacks;
     }
     public static synchronized int count() {return callbacks;}
+    public static synchronized int entries() {return entryCount;}
     public static synchronized boolean invalid() {return invalid;}
     private R77WglRenderReceiver(){}
 }
