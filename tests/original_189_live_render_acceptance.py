@@ -87,11 +87,15 @@ def check_target_listing(stdout, pid):
                     main[len("net.minecraft.client.main.Main")].isspace() or
                     main[len("net.minecraft.client.main.Main")] == "["):
                 rows.append((candidate.group(1), main))
-    # Also refuse ambiguous OTHER Minecraft processes (Forge/GradleStart).
-    other_game = [
-        line for line in stdout.splitlines()
-        if re.match(r"^[1-9][0-9]*\\s+.*(?:net\\.minecraft\\.launchwrapper\\.Launch|GradleStart)",line)
-    ]
+    # Reject an additional Gradle/Forge JVM even when vanilla PID matches.
+    # Reuse the same tested PID/descriptor extraction as vanilla candidates.
+    other_game = []
+    for line in stdout.splitlines():
+        candidate = re.match(r"^([1-9][0-9]*)\s+(.+?)\s*$", line)
+        if candidate and (
+                "net.minecraft.launchwrapper.Launch" in candidate.group(2) or
+                "GradleStart" in candidate.group(2)):
+            other_game.append(candidate.group(1))
     if other_game or len(rows) != 1 or rows[0][0] != str(pid):
         raise ReceiptError("Expected exactly one isolated vanilla main JVM matching PID")
     return rows[0][1]
