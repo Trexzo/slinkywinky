@@ -61,7 +61,9 @@ class ReceiptChecks(unittest.TestCase):
             ("",123),
             ("123 net.minecraft.client.main.Main\n456 net.minecraft.client.main.Main\n",123),
             ("123 GradleStart\n",123),
-            ("123 net.minecraft.client.main.MainMalicious\n",123)
+            ("123 net.minecraft.client.main.MainMalicious\n",123),
+            ("123 net.minecraft.client.main.Main\n456 GradleStart\n",123),
+            ("123 net.minecraft.client.main.Main\n456 net.minecraft.launchwrapper.Launch\n",123)
         ]:
             with self.subTest(listing=listing):
                 with self.assertRaises(harness.ReceiptError):
@@ -80,6 +82,17 @@ class ReceiptChecks(unittest.TestCase):
             log.write_text("rotated",encoding="utf-8")
             with self.assertRaises(harness.ReceiptError):
                 harness.read_appended(log,baseline)
+
+    def test_replaced_log_with_larger_stale_receipts_is_denied(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log=Path(folder)/"stdout.log"
+            replacement=Path(folder)/"replacement.log"
+            log.write_text(P,encoding="utf-8")
+            original=log.stat()
+            replacement.write_text(P+C+W,encoding="utf-8")
+            replacement.replace(log)
+            with self.assertRaises(harness.ReceiptError):
+                harness.read_appended(log,original.st_size,original)
 
     def test_plan_never_launches_attach_or_reads_process(self):
         with patch.object(harness.subprocess,"run",
