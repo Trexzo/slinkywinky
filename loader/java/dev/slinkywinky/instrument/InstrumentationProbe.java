@@ -266,6 +266,15 @@ public final class InstrumentationProbe {
         if(restorationVerified) hookInstalled.set(false);
     }
 
+    /**
+     * R80: only RendererFrameDiagnostic's pre-weave catch may use this path.
+     * It has not registered the bytecode-changing transformer. Never call
+     * this after a transformation attempt, even if that attempt throws.
+     */
+    static void finishUnmodifiedRenderAdmission() {
+        hookInstalled.set(false);
+    }
+
     public static void agentmain(String options, Instrumentation instrumentation) {
         // R78 is an entirely separate, explicitly gated read-only native WGL
         // observation mode. Original Mojang class SHA admission is still
