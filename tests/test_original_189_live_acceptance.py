@@ -14,15 +14,18 @@ harness = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(harness)
 
 P = harness.PREFLIGHT + "\n"
-C = harness.RESTORED + "\n" + harness.CALLBACK + " owner=synthetic#1\n"
-W = C + harness.STABLE + "\n"
+C = (harness.RESTORED + "\n" + harness.CALLBACK +
+     " owner=synthetic#1\n" + harness.RELEASED + "\n")
+W = (harness.RESTORED + "\n" + harness.CALLBACK +
+     " owner=synthetic#1\n" + harness.STABLE + "\n" +
+     harness.RELEASED + "\n")
 
 
 class ReceiptChecks(unittest.TestCase):
     def test_valid_stages(self):
         self.assertEqual(len(harness.validate_receipt("--render-preflight",P)),1)
-        self.assertEqual(len(harness.validate_receipt("--render-callback=8",C)),2)
-        self.assertEqual(len(harness.validate_receipt("--render-context=8",W)),3)
+        self.assertEqual(len(harness.validate_receipt("--render-callback=8",C)),3)
+        self.assertEqual(len(harness.validate_receipt("--render-context=8",W)),4)
 
     def test_old_or_partial_receipts_never_pass(self):
         for option, text in [
@@ -32,6 +35,10 @@ class ReceiptChecks(unittest.TestCase):
             ("--render-context=8",C),
             ("--render-context=8",harness.STABLE),
             ("--render-context=8",harness.RESTORED+"\n"+harness.STABLE),
+            ("--render-callback=8",harness.RESTORED+"\n"+harness.CALLBACK+"\n"),
+            ("--render-context=8",harness.RESTORED+"\n"+harness.CALLBACK+"\n"+harness.STABLE+"\n"),
+            ("--render-callback=8",harness.RELEASED+"\n"+harness.RESTORED+"\n"+harness.CALLBACK+"\n"),
+            ("--render-context=8",harness.RELEASED+"\n"+harness.RESTORED+"\n"+harness.CALLBACK+"\n"+harness.STABLE+"\n"),
             ("--render-preflight",P+P),
             ("--render-callback=8",C+C),
             ("--render-context=8",W+W)
@@ -88,7 +95,7 @@ class ReceiptChecks(unittest.TestCase):
                 stream.write(W.encode())
             self.assertEqual(harness.read_appended(log,baseline),W)
             self.assertEqual(len(harness.validate_receipt(
-                "--render-context=8",harness.read_appended(log,baseline))),3)
+                "--render-context=8",harness.read_appended(log,baseline))),4)
             log.write_text("rotated",encoding="utf-8")
             with self.assertRaises(harness.ReceiptError):
                 harness.read_appended(log,baseline)
