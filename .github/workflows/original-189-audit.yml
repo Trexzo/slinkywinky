@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/original-189-audit.yml'
       - 'tests/official_189_render_audit.py'
+      - 'tests/original_189_live_render_acceptance.py'
+      - 'tests/test_original_189_live_acceptance.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
       - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
@@ -19,6 +21,8 @@ on:
     paths:
       - '.github/workflows/original-189-audit.yml'
       - 'tests/official_189_render_audit.py'
+      - 'tests/original_189_live_render_acceptance.py'
+      - 'tests/test_original_189_live_acceptance.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
       - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
@@ -48,6 +52,11 @@ jobs:
         shell: pwsh
         run: |
           python -c "import ast,pathlib;ast.parse(pathlib.Path('tests/official_189_render_audit.py').read_text(encoding='utf-8'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify R81 original-game acceptance receipts offline (NO Attach)
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -p "test_original_189_live_acceptance.py" -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build exact read-only ASM verifier (no game files)
         shell: pwsh
