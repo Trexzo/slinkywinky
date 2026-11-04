@@ -43,37 +43,55 @@ class ReceiptError(RuntimeError):
     pass
 
 
+# R82: validate complete JVM stdout LINES, never permissive substrings.
+# In particular, accepted=80 must not satisfy accepted=8; prefixes like
+# R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS_FAKE are not valid receipts.
+RECEIPT_LINES = {
+    PREFLIGHT: re.compile(r"^" + re.escape(PREFLIGHT) + r"\r?$", re.MULTILINE),
+    RESTORED: re.compile(r"^" + re.escape(RESTORED) + r"\r?$", re.MULTILINE),
+    CALLBACK: re.compile(
+        r"^" + re.escape(CALLBACK) +
+        r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
+    RELEASED: re.compile(r"^" + re.escape(RELEASED) + r"\r?$", re.MULTILINE),
+    STABLE: re.compile(r"^" + re.escape(STABLE) + r"\r?$", re.MULTILINE),
+}
+
+
 def validate_receipt(option, appended):
-    """Require one fresh target-side marker for EACH required receipt."""
+    """Require one full, fresh target-side line for each expected receipt."""
     expected = dict(STAGES["context"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
-    for marker in expected:
-        if appended.count(marker) != 1:
-            raise ReceiptError("Expected exactly one new target marker: " + marker)
-    # A cross-stage callback or stale preflight receipt in this fresh span is
-    # ambiguous; never mistake overlapping asynchronous sessions for proof.
-    for marker in (PREFLIGHT, RESTORED, CALLBACK, STABLE, RELEASED):
-        if marker not in expected and marker in appended:
+    # A partial/truncated record that resembles a recognized pass marker
+    # is never accepted. Count exact structured lines, including owner fields.
+    found = {}
+    for marker, pattern in RECEIPT_LINES.items():
+        matched = list(pattern.finditer(appended))
+        if marker in expected:
+            if len(matched) != 1:
+                raise ReceiptError("Expected exactly one full target receipt line: " + marker)
+            found[marker] = matched[0].start()
+        elif matched:
             raise ReceiptError("Unexpected diagnostic stage marker: " + marker)
-    # The post-release marker is emitted only after the agent actually
-    # releases the shared instrumentation gate. Order is part of the receipt.
+    # Reject a malformed "pass"-looking line even if a genuine pass line
+    # also appears. A target producing conflicting diagnostics is unverified.
+    for line in appended.splitlines():
+        if any(marker in line for marker in RECEIPT_LINES):
+            if not any(
+                pattern.fullmatch(line) for pattern in RECEIPT_LINES.values()
+            ):
+                raise ReceiptError("Malformed or conflicting pass-looking target receipt")
     if option != "--render-preflight":
         ordered = (RESTORED, CALLBACK, STABLE, RELEASED) if (
             option == "--render-context=8") else (RESTORED, CALLBACK, RELEASED)
-        positions = [appended.index(marker) for marker in ordered]
+        positions = [found[marker] for marker in ordered]
         if positions != sorted(positions):
             raise ReceiptError("Renderer restoration / release receipts out of order")
-    if option == "--render-context=8":
-        matches = re.findall(r"R78_READ_ONLY_WGL_CONTEXT_(?:STABLE_PASS|UNVERIFIED)", appended)
-        if len(matches) != 1:
-            raise ReceiptError("Ambiguous R78 context evidence")
     if "ATTACH_RESULT=SUCCESS" in appended:
-        # This marker is from the EXTERNAL launcher, not evidence of game state.
+        # This belongs to the EXTERNAL loader, not the target JVM.
         raise ReceiptError("Target log contaminated by external loader receipt")
     return tuple(expected)
-
 
 def read_appended(path, offset, original_stat=None):
     current = path.stat()
