@@ -2,15 +2,18 @@ package dev.slinkywinky.instrument;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.MessageDigest;
 import java.security.ProtectionDomain;
 import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -145,6 +148,126 @@ public final class RendererLivePreflight {
         return sha256(writer.toByteArray());
     }
 
+    private static void trace(StringBuilder out,String... values) {
+        for(String value:values) {
+            final String item=String.valueOf(value);
+            out.append(item.length()).append(':').append(item);
+        }
+        out.append(';');
+    }
+
+    /**
+     * Diagnostic-only execution-shape transcript. References are resolved by
+     * ASM, not raw constant-pool indexes. No native class bytes are written.
+     * Does NOT yet authorize any production load or renderer hook.
+     */
+    private static String bytecodeShapeSha256(byte[] bytes) throws Exception {
+        final StringBuilder out=new StringBuilder(bytes.length*2);
+        final ClassReader reader=new ClassReader(bytes);
+        reader.accept(new ClassVisitor(Opcodes.ASM5) {
+            @Override public void visit(int version,int access,String name,
+                    String signature,String parent,String[] interfaces) {
+                trace(out,"C",String.valueOf(version),String.valueOf(access),
+                    name,signature,parent,Arrays.toString(interfaces));
+            }
+            @Override public org.objectweb.asm.FieldVisitor visitField(
+                    int access,String name,String desc,String signature,Object value) {
+                trace(out,"F",String.valueOf(access),name,desc,signature,
+                      String.valueOf(value));
+                return null;
+            }
+            @Override public MethodVisitor visitMethod(int access,String name,
+                    String desc,String signature,String[] exceptions) {
+                trace(out,"M",String.valueOf(access),name,desc,signature,
+                      Arrays.toString(exceptions));
+                return new MethodVisitor(Opcodes.ASM5) {
+                    final IdentityHashMap<Label,Integer> ids=
+                        new IdentityHashMap<Label,Integer>();
+                    int nextLabel=0;
+                    int id(Label label) {
+                        Integer existing=ids.get(label);
+                        if(existing!=null)return existing;
+                        int assigned=++nextLabel;
+                        ids.put(label,assigned);
+                        return assigned;
+                    }
+                    void emit(String... items) {trace(out,items);}
+                    @Override public void visitCode() {emit("code");}
+                    @Override public void visitInsn(int op) {
+                        emit("I",String.valueOf(op));
+                    }
+                    @Override public void visitIntInsn(int op,int operand) {
+                        emit("N",String.valueOf(op),String.valueOf(operand));
+                    }
+                    @Override public void visitVarInsn(int op,int var) {
+                        emit("V",String.valueOf(op),String.valueOf(var));
+                    }
+                    @Override public void visitTypeInsn(int op,String type) {
+                        emit("T",String.valueOf(op),type);
+                    }
+                    @Override public void visitFieldInsn(int op,String owner,
+                            String field,String desc) {
+                        emit("F",String.valueOf(op),owner,field,desc);
+                    }
+                    @Override public void visitMethodInsn(int op,String owner,
+                            String method,String desc,boolean itf) {
+                        emit("Q",String.valueOf(op),owner,method,desc,
+                             String.valueOf(itf));
+                    }
+                    @Override public void visitInvokeDynamicInsn(
+                            String method,String desc,org.objectweb.asm.Handle bootstrap,
+                            Object... args) {
+                        emit("D",method,desc,String.valueOf(bootstrap),
+                             Arrays.deepToString(args));
+                    }
+                    @Override public void visitJumpInsn(int op,Label dest) {
+                        emit("J",String.valueOf(op),String.valueOf(id(dest)));
+                    }
+                    @Override public void visitLabel(Label label) {
+                        emit("L",String.valueOf(id(label)));
+                    }
+                    @Override public void visitLdcInsn(Object value) {
+                        if(value instanceof Float)
+                            emit("LD","float",String.valueOf(
+                                 Float.floatToRawIntBits((Float)value)));
+                        else if(value instanceof Double)
+                            emit("LD","double",String.valueOf(
+                                 Double.doubleToRawLongBits((Double)value)));
+                        else
+                            emit("LD",value.getClass().getName(),String.valueOf(value));
+                    }
+                    @Override public void visitIincInsn(int var,int increment) {
+                        emit("C",String.valueOf(var),String.valueOf(increment));
+                    }
+                    @Override public void visitTableSwitchInsn(int min,int max,
+                            Label other,Label... targets) {
+                        emit("S",String.valueOf(min),String.valueOf(max),
+                             String.valueOf(id(other)));
+                        for(Label label:targets)emit("SL",String.valueOf(id(label)));
+                    }
+                    @Override public void visitLookupSwitchInsn(Label other,
+                            int[] keys,Label[] targets) {
+                        emit("K",String.valueOf(id(other)),Arrays.toString(keys));
+                        for(Label label:targets)emit("KL",String.valueOf(id(label)));
+                    }
+                    @Override public void visitMultiANewArrayInsn(String desc,int dims) {
+                        emit("A",desc,String.valueOf(dims));
+                    }
+                    @Override public void visitTryCatchBlock(Label begin,Label end,
+                            Label handler,String type) {
+                        emit("X",String.valueOf(id(begin)),String.valueOf(id(end)),
+                             String.valueOf(id(handler)),type);
+                    }
+                    @Override public void visitMaxs(int stack,int locals) {
+                        emit("MAX",String.valueOf(stack),String.valueOf(locals));
+                    }
+                    @Override public void visitEnd() {emit("END");}
+                };
+            }
+        },ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
+        return sha256(out.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
     private static String mismatchDiagnostics(Class<?> game,Class<?> render,
                                                byte[] gameCaptured,byte[] renderCaptured)
         throws Exception {
@@ -164,6 +287,8 @@ public final class RendererLivePreflight {
             summary.append("_bytes_changed=").append(differences);
             summary.append("_asm_equal=").append(
                 asmRoundtripSha256(a).equals(asmRoundtripSha256(b)));
+            summary.append("_code_shape_equal=").append(
+                bytecodeShapeSha256(a).equals(bytecodeShapeSha256(b)));
         }
         return summary.toString();
     }
