@@ -117,12 +117,13 @@ RECEIPT_LINES = {
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     RELEASED: re.compile(r"^" + re.escape(RELEASED) + r"\r?$", re.MULTILINE),
     STABLE: re.compile(r"^" + re.escape(STABLE) + r"\r?$", re.MULTILINE),
+    OVERLAY: re.compile(r"^" + re.escape(OVERLAY) + r"\r?$", re.MULTILINE),
 }
 
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["context"])[option]
+    expected = dict(STAGES["overlay"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
