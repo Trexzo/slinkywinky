@@ -25,17 +25,31 @@ public final class RendererWglEvidence {
     private boolean pinned;
     private boolean poisoned;
     private final boolean overlayRequested;
+    private final boolean multiFrame;
+    private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
+    private int overlayFrames;
 
-    private RendererWglEvidence(boolean requested) {overlayRequested=requested;}
+    private RendererWglEvidence(boolean requested,boolean multi) {
+        overlayRequested=requested;
+        multiFrame=multi;
+        maxSamples=multi?72:8;
+    }
 
     /** Must be called only after R73 has admitted exact loaded original classes. */
     public static RendererWglEvidence open(String dllPath) throws Exception {
-        return open(dllPath,false);
+        return open(dllPath,false,false);
     }
 
     public static RendererWglEvidence open(String dllPath,boolean overlay) throws Exception {
+        return open(dllPath,overlay,false);
+    }
+
+    public static RendererWglEvidence open(String dllPath,boolean overlay,
+                                            boolean multi) throws Exception {
+        if(multi && !overlay)
+            throw new IllegalArgumentException("R92 requires overlay admission");
         if(dllPath==null || !dllPath.endsWith("slinkywinky_jni.dll"))
             throw new IllegalArgumentException("R78 exact JNI DLL required");
         File dll=new File(dllPath).getCanonicalFile();
@@ -43,7 +57,7 @@ public final class RendererWglEvidence {
            !"slinkywinky_jni.dll".equalsIgnoreCase(dll.getName()))
             throw new IllegalArgumentException("R78 JNI DLL missing");
         System.load(dll.getAbsolutePath());
-        return new RendererWglEvidence(overlay);
+        return new RendererWglEvidence(overlay,multi);
     }
 
     /**
@@ -51,7 +65,7 @@ public final class RendererWglEvidence {
      * callsite before observation. Never draws or mutates WGL/GL state.
      */
     public synchronized void sample() {
-        if(poisoned || attempts>=8)return;
+        if(poisoned || attempts>=maxSamples)return;
         attempts++;
         if(owner==null)owner=Thread.currentThread();
         else if(Thread.currentThread()!=owner) {
@@ -91,17 +105,22 @@ public final class RendererWglEvidence {
             // The visual R91 experiment is a distinct explicit mode. Exactly
             // ONE draw may occur, after all eight source/callsite/owner/WGL
             // snapshots have passed the established passive R78 gate.
-            if(overlayRequested && attempts==8 && fullyStable()) {
+            if(overlayRequested &&
+               ((multiFrame && attempts>8 && preflightStable()) ||
+                (!multiFrame && attempts==8 && preflightStable()))) {
+                boolean drawn=false;
                 try {
-                    overlayDrawn=nativeDrawReadOnlyOverlay(
-                        context,dc,width,height);
+                    drawn=nativeDrawReadOnlyOverlay(context,dc,width,height);
                 } catch(Throwable drawing) {
-                    overlayDrawn=false;
+                    drawn=false;
                 }
-                if(!overlayDrawn) {
+                if(!drawn) {
                     overlayFailed=true;
                     poisoned=true;
                     invalid++;
+                } else {
+                    overlayDrawn=true;
+                    overlayFrames++;
                 }
             }
         } catch(Throwable error) {
@@ -111,19 +130,28 @@ public final class RendererWglEvidence {
     }
 
     public synchronized boolean overlayRequested(){return overlayRequested;}
-    public synchronized boolean overlayDrawn(){return overlayDrawn && !overlayFailed;}
+    public synchronized boolean multiFrame(){return multiFrame;}
+    public synchronized int overlayFrames(){return overlayFrames;}
+    public synchronized boolean overlayDrawn(){
+        return overlayDrawn && !overlayFailed &&
+               overlayFrames==(multiFrame?64:1);
+    }
     public synchronized int attempts(){return attempts;}
     public synchronized int present(){return current;}
     public synchronized int absent(){return absent;}
     public synchronized int invalid(){return invalid;}
     public synchronized int changed(){return changed;}
-    public synchronized boolean fullyStable() {
-        return attempts==8 && current==8 && absent==0 &&
+    private boolean preflightStable() {
+        return attempts>=8 && current==attempts && absent==0 &&
                invalid==0 && changed==0 && pinned && !poisoned;
+    }
+    public synchronized boolean fullyStable() {
+        return attempts==maxSamples && preflightStable();
     }
     public synchronized String result() {
         return "attempts="+attempts+" current="+current+" absent="+absent+
                " invalid="+invalid+" changed="+changed+
-               " stable="+fullyStable();
+               " stable="+fullyStable()+
+               (multiFrame?" frames="+overlayFrames:"");
     }
 }
