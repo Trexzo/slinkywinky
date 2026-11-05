@@ -15,7 +15,7 @@ SPEC = importlib.util.spec_from_file_location(
 harness = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(harness)
 
-P = harness.PREFLIGHT + "\n"
+P = harness.PREFLIGHT + "\n" + harness.PREFLIGHT_RELEASED + "\n"
 C = (harness.RESTORED + "\n" + harness.CALLBACK +
      " owner=synthetic#1\n" + harness.RELEASED + "\n")
 W = (harness.RESTORED + "\n" + harness.CALLBACK +
@@ -25,7 +25,7 @@ W = (harness.RESTORED + "\n" + harness.CALLBACK +
 
 class ReceiptChecks(unittest.TestCase):
     def test_valid_stages(self):
-        self.assertEqual(len(harness.validate_receipt("--render-preflight",P)),1)
+        self.assertEqual(len(harness.validate_receipt("--render-preflight",P)),2)
         self.assertEqual(len(harness.validate_receipt("--render-callback=8",C)),3)
         self.assertEqual(len(harness.validate_receipt("--render-context=8",W)),4)
 
@@ -77,6 +77,9 @@ class ReceiptChecks(unittest.TestCase):
     def test_old_or_partial_receipts_never_pass(self):
         for option, text in [
             ("--render-preflight",""),
+            ("--render-preflight",harness.PREFLIGHT+"\n"),
+            ("--render-preflight",harness.PREFLIGHT_RELEASED+"\n"),
+            ("--render-preflight",harness.PREFLIGHT_RELEASED+"\n"+harness.PREFLIGHT+"\n"),
             ("--render-callback=8",harness.RESTORED+"\n"),
             ("--render-callback=8",harness.CALLBACK+"\n"),
             ("--render-context=8",C),
@@ -109,6 +112,29 @@ class ReceiptChecks(unittest.TestCase):
             with self.subTest(bad=bad):
                 with self.assertRaises(harness.ReceiptError):
                     harness.validate_receipt("--render-context=8",W+bad+"\n")
+
+    def test_loader_receipt_must_match_exact_pid_and_diagnostic_mode(self):
+        for option in ("--render-preflight","--render-callback=8",
+                       "--render-context=8"):
+            valid=("ATTACH_RESULT=SUCCESS pid=123 mode="+
+                   harness.LOADER_MODES[option]+"\n")
+            harness.validate_loader_receipt(option,123,valid)
+            invalid=[
+                valid.replace("pid=123 ","pid=1234 "),
+                valid.replace("pid=123 ","pid=12 "),
+                valid.replace("SUCCESS","FAIL"),
+                valid.replace("mode="+harness.LOADER_MODES[option],
+                              "mode=some-other-diagnostic"),
+                valid+"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\n",
+                "noise "+valid,
+                valid.replace("\n"," trailing text\n"),
+                valid.replace("pid=123 ","pid=123x "),
+            ]
+            for output in invalid:
+                with self.subTest(option=option,output=output):
+                    with self.assertRaises(harness.ReceiptError):
+                        harness.validate_loader_receipt(option,123,output)
 
     def test_external_attach_receipt_cannot_substitute_target_log(self):
         with self.assertRaises(harness.ReceiptError):
@@ -197,7 +223,8 @@ class ReceiptChecks(unittest.TestCase):
                 with log.open("a",encoding="utf-8") as output:
                     output.write(stage)
                 return harness.subprocess.CompletedProcess(
-                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode=fixture\n","")
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\n","")
             with patch.object(harness.subprocess,"run",side_effect=fake):
                 result=harness.run([
                     "--loader",str(loader),"--jdk8",str(root/"jdk8"),
@@ -236,7 +263,8 @@ class ReceiptChecks(unittest.TestCase):
                     output.write(P if option=="--render-preflight" else
                                  "R75_RESTORE_UNCERTAIN_NO_REATTACH\n")
                 return harness.subprocess.CompletedProcess(
-                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123\n","")
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\n","")
             with patch.object(harness.subprocess,"run",side_effect=fake):
                 with self.assertRaises(harness.ReceiptError):
                     harness.run([
