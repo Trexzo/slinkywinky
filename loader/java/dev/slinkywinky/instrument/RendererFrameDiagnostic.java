@@ -55,6 +55,11 @@ public final class RendererFrameDiagnostic {
         if(raw==null || raw.length==0 || raw.length>1000000 ||
            !PINNED_BFK_SHA256.equals(hex(hash(raw))))
             throw new IllegalArgumentException("R75 original bfk fingerprint mismatch");
+        return weaveValidatedRuntime(raw);
+    }
+
+    /** Called ONLY after original-source and loaded-code shape admission. */
+    private static byte[] weaveValidatedRuntime(byte[] raw) {
         final ClassReader reader=new ClassReader(raw);
         if(!"bfk".equals(reader.getClassName()))
             throw new IllegalArgumentException("R75 unexpected renderer class");
@@ -101,7 +106,15 @@ public final class RendererFrameDiagnostic {
                     Class<?> type,ProtectionDomain protection,byte[] raw) {
                 if(type==target) {
                     observed.incrementAndGet();
-                    exact.set(raw!=null && PINNED_BFK_SHA256.equals(hex(hash(raw))));
+                    // HotSpot often reorders constant-pool and method entries
+                    // on retransformation. Require the source-pinned original
+                    // runtime execution shape, not unstable VM raw SHA bytes.
+                    try {
+                        RendererLivePreflight.checkPinnedRuntimeRenderer(target,raw);
+                        exact.set(true);
+                    } catch(Exception mismatch) {
+                        exact.set(false);
+                    }
                 }
                 return null;
             }
@@ -194,7 +207,14 @@ public final class RendererFrameDiagnostic {
                     Class<?> type,ProtectionDomain protection,byte[] raw) {
                 if(type!=target)return null;
                 changed.incrementAndGet();
-                return weavePinnedOriginal(raw);
+                try {
+                    RendererLivePreflight.checkPinnedRuntimeRenderer(target,raw);
+                } catch(Exception mismatch) {
+                    throw new IllegalStateException(
+                        "R90 original-source/loaded-code admission failed before weave",
+                        mismatch);
+                }
+                return weaveValidatedRuntime(raw);
             }
         };
         activeFence=fence;
@@ -244,7 +264,7 @@ public final class RendererFrameDiagnostic {
                 fence.stopAndDrain(); // Also joins an in-flight native WGL read.
                 final boolean restored=restore(instrumentation,target);
                 if(restored)
-                    System.out.println("R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS");
+                    System.out.println("R90_RESTORED_SOURCE_PINNED_EXECUTION_PASS");
                 else
                     System.err.println("R75_RESTORE_UNCERTAIN_NO_REATTACH");
                 if(completed && session.accepted()==8 && !session.invalid() &&
