@@ -20,6 +20,7 @@ import time
 PREFLIGHT = "R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS"
 PREFLIGHT_RELEASED = "R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS"
 RESTORED = "R90_RESTORED_SOURCE_PINNED_EXECUTION_PASS"
+OVERLAY = "R91_ORIGINAL_RENDER_OVERLAY_DRAW_PASS frames=1"
 CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
 RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
 STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
@@ -36,6 +37,7 @@ NEGATIVE = (
     "R75_RESTORE_UNCERTAIN_NO_REATTACH",
     "R75_RENDER_CALLBACK_UNVERIFIED",
     "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED",
+    "R91_RENDER_OVERLAY_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -45,6 +47,7 @@ LOADER_MODES = {
     "--render-preflight": "render-preflight",
     "--render-callback=8": "render-callback-r75",
     "--render-context=8": "render-context-r78",
+    "--render-overlay=8": "render-overlay-r91",
 }
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
@@ -53,6 +56,10 @@ STAGES = {
     "context": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
                 ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
                 ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED))),
+    "overlay": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
+                ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
+                ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
+                ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED))),
 }
 
 
