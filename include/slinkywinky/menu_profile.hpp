@@ -3,6 +3,7 @@
 #include "slinkywinky/settings.hpp"
 #include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace slinkywinky {
@@ -10,6 +11,17 @@ namespace slinkywinky {
 // First-party configuration binding for modules already modeled by the C++
 // engine. This is NOT a gameplay/injection bridge and does not send input.
 bool module_has_profile_setting(std::size_t catalog_index) noexcept;
+
+// One bounded, first-party numeric tuning control for each implemented
+// module. Values are local profile data, not live gameplay commands.
+struct MenuPrimaryParameter {
+    const char* name;
+    float value;
+    float minimum;
+    float maximum;
+    float step;
+    bool integral;
+};
 
 // Owner-thread menu controller: only selected, visible, implemented settings
 // may change. Unsupported catalog entries remain off and cannot be enabled.
@@ -22,6 +34,9 @@ public:
     bool scroll_by(int delta);
     bool toggle(std::size_t catalog_index);
     bool enabled(std::size_t catalog_index) const noexcept;
+    std::optional<MenuPrimaryParameter> primary(std::size_t catalog_index) const noexcept;
+    // Only the currently visible, expanded module may be adjusted by one step.
+    bool adjust_primary(std::size_t catalog_index, int direction);
     bool adopt(const ClientSettings& settings);
     bool load(const std::filesystem::path& path);
     bool save(const std::filesystem::path& path, std::string* error=nullptr) const;
