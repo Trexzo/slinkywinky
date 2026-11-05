@@ -34,6 +34,13 @@ NEGATIVE = (
     "Exception in thread",
     "NoClassDefFoundError",
 )
+# The external Java8 Attach helper uses a single exact receipt line. It is
+# not target-JVM evidence, and the PID/mode must match the stage requested.
+LOADER_MODES = {
+    "--render-preflight": "render-preflight",
+    "--render-callback=8": "render-callback-r75",
+    "--render-context=8": "render-context-r78",
+}
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
     "callback": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
@@ -147,6 +154,20 @@ def check_target_listing(stdout, pid):
     return rows[0][1]
 
 
+def validate_loader_receipt(option, pid, stdout):
+    expected = (
+        "ATTACH_RESULT=SUCCESS pid=" + str(pid) +
+        " mode=" + LOADER_MODES[option]
+    )
+    # A different PID or mode (including 1234 when expecting 123), duplicate
+    # lines, failure marker or a forged suffix is never a valid Attach receipt.
+    lines = stdout.splitlines()
+    if len(lines) != 1 or lines[0] != expected:
+        raise ReceiptError(
+            "External Attach receipt missing, ambiguous or wrong target/mode"
+        )
+
+
 def require_file(path, name):
     if not path.is_file():
         raise ReceiptError(name + " not found: " + str(path))
@@ -233,10 +254,10 @@ def run(argv=None):
         cmd = [str(loader), "attach", str(a.pid), str(jdk8), option]
         result = subprocess.run(cmd,capture_output=True,text=True,
                                 env=env,timeout=25)
-        if result.returncode != 0 or (
-                "ATTACH_RESULT=SUCCESS pid="+str(a.pid)) not in result.stdout:
-            raise ReceiptError("External Attach did not authorize "+option+
+        if result.returncode != 0:
+            raise ReceiptError("External Attach failed for "+option+
                                "; STOP, do not try another diagnostic")
+        validate_loader_receipt(option,a.pid,result.stdout)
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
         records.append({"mode":option,"target_receipts":list(receipts)})
