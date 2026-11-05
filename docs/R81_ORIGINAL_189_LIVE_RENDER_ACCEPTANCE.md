@@ -1,6 +1,6 @@
 # R81 — supervised original vanilla 1.8.9 render-evidence acceptance
 
-**Status:** manual-only, disabled by default. No game started by the harness and no in-game native menu drawing enabled.
+**Status:** manual-only, disabled by default. The R81 checker itself never starts Minecraft. R90 adds a separate explicitly opted-in isolated original-client launcher; see `R90_SUPERVISED_ORIGINAL_189_RENDER_ACCEPTANCE.md`. No in-game native menu drawing is enabled.
 
 The R73/R75/R78 modes have offline fixture CI but **still require real original-game acceptance**. The older `tests/windows_minecraft_tick_acceptance.py` launches a Forge/Gradle development client and validates a separate tick path; it must **not** be treated as evidence for original vanilla renderer WGL ownership. R81 introduces a strictly separate verification script for a manually started, already-running original Mojang Minecraft 1.8.9 Java 8 process.
 
@@ -31,7 +31,7 @@ For `--mode context`, it performs these diagnostics **sequentially**:
 | Step | Original-only loader argument | Target JVM receipts required |
 |---|---|---|
 | 1 | `--render-preflight` | Exactly one fresh `R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS` **followed by** `R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS` |
-| 2 | `--render-callback=8` | Exactly one fresh `R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS`, `R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8`, **and** `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` |
+| 2 | `--render-callback=8` | Exactly one fresh `R90_RESTORED_SOURCE_PINNED_EXECUTION_PASS`, `R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8`, **and** `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` |
 | 3 | `--render-context=8` | The same two fresh R75 receipts **plus** `R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS attempts=8 current=8 absent=0 invalid=0 changed=0 stable=true` and **finally** `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` |
 
 `--mode preflight` runs only step 1. `--mode callback` runs steps 1–2. All three diagnostics remain bounded by the production Java agent's existing eight-frame sampling and cleanup/restore requirements. The CLI sets only the required passive/original render opt-ins; it removes the synthetic Attach bypass and experimental gameplay hook opt-in.
