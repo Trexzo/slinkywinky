@@ -35,6 +35,24 @@ public final class RenderFrameGateSmoke {
             catch(IllegalArgumentException expected){denied=true;}
             check(denied,"Invalid frame cap admitted");
         }
+        // R92: only an explicitly marked 72-frame epoch may exceed R75's
+        // default eight callbacks. No Minecraft JVM or JNI is involved.
+        for(int cap:new int[]{8,64,73,999}) {
+            boolean denied=false;
+            try{new RenderFrameGate(cap,true);}
+            catch(IllegalArgumentException expected){denied=true;}
+            check(denied,"R92 invalid finite cap admitted");
+        }
+        RenderFrameGate multi=new RenderFrameGate(72,true);
+        sample(multi,100);
+        check(multi.accepted()==72 && !multi.invalid() &&
+              multi.await(1,TimeUnit.MILLISECONDS),
+              "R92 exact 72-frame finite cap failed");
+        RenderFrameGate multiWrong=new RenderFrameGate(72,true);
+        multiWrong.sample(Thread.currentThread(),0.2f,1L,BAD);
+        check(multiWrong.invalid() && multiWrong.accepted()==0,
+              "R92 wrong original callsite admitted");
+        System.out.println("R92_ONLY_EXPLICIT_72_FRAME_OWNER_GATE_PASS");
         RenderFrameGate capped=new RenderFrameGate(8);
         sample(capped,15);
         check(capped.accepted()==8 && !capped.invalid() &&
