@@ -30,15 +30,15 @@ For `--mode context`, it performs these diagnostics **sequentially**:
 
 | Step | Original-only loader argument | Target JVM receipts required |
 |---|---|---|
-| 1 | `--render-preflight` | Exactly one fresh `R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS` |
+| 1 | `--render-preflight` | Exactly one fresh `R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS` **followed by** `R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS` |
 | 2 | `--render-callback=8` | Exactly one fresh `R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS`, `R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8`, **and** `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` |
 | 3 | `--render-context=8` | The same two fresh R75 receipts **plus** `R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS attempts=8 current=8 absent=0 invalid=0 changed=0 stable=true` and **finally** `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` |
 
 `--mode preflight` runs only step 1. `--mode callback` runs steps 1–2. All three diagnostics remain bounded by the production Java agent's existing eight-frame sampling and cleanup/restore requirements. The CLI sets only the required passive/original render opt-ins; it removes the synthetic Attach bypass and experimental gameplay hook opt-in.
 
-**Do not initiate the next Attach until the post-release marker appears.** The renderer cleanup prints restoration and sample receipts *before* releasing the global instrumentation gate. R81 adds the new `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` marker **only after** that release is confirmed, and the harness requires the receipts in order. This avoids an immediate follow-up Attach racing with the prior renderer cleanup.
+**Do not initiate the next Attach until the relevant post-release marker appears.** R73 prints its successful original-class preflight before releasing the shared instrumentation gate; R83 therefore adds `R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS` after the preflight lock release. Likewise, renderer cleanup prints restoration and sample receipts *before* releasing the gate; R81 adds `R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS` only after that release. The harness requires these receipts in order, avoiding immediate follow-up Attach races with either prior stage.
 
-**Fail closed** if any command rejects, if an exact receipt is absent/duplicated/out of order, if the target reports restoration uncertainty or callback failure, if target stdout rotates/truncates/is replaced, if a different JVM appears, or if the original process is no longer listed after the diagnostic sequence. A second Attach is never attempted after an unverified first/previous step. The script does not attempt to remove a leaked transformer or override a locked failed session.
+**Fail closed** if any command rejects, if the **complete external Attach receipt** does not name the expected PID and mode on one exact line, if an exact target receipt is absent/duplicated/out of order, if the target reports restoration uncertainty or callback failure, if target stdout rotates/truncates/is replaced, if a different JVM appears, or if the original process is no longer listed after the diagnostic sequence. A second Attach is never attempted after an unverified first/previous step. The script does not attempt to remove a leaked transformer or override a locked failed session.
 
 Evidence is read starting at the file's **byte length immediately before each Attach**; older pass markers do not count. A supplied target stdout stream must not be redirected together with the external loader stdout, because those are independent proof levels.
 
