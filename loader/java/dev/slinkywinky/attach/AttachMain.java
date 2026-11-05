@@ -34,12 +34,17 @@ public final class AttachMain {
             final boolean renderPreflight = args.length == 4 && "--render-preflight".equals(args[3]);
             final boolean renderCallback = args.length == 4 && "--render-callback=8".equals(args[3]);
             final boolean renderContext = args.length == 4 && "--render-context=8".equals(args[3]);
+            final boolean renderOverlay = args.length == 4 && "--render-overlay=8".equals(args[3]);
             final String requestedOption = args.length == 4 ? args[3] : "";
             final boolean extendedHook = "--hook-probe=120".equals(requestedOption) ||
                                          "--hook-probe=600".equals(requestedOption);
             final boolean continuousHook = "--hook-probe=continuous".equals(requestedOption);
             final boolean hookProbe = "--hook-probe".equals(requestedOption) ||
                                       extendedHook || continuousHook;
+            if (renderOverlay && (!"1".equals(System.getenv("SLINKYWINKY_RENDER_OVERLAY")) ||
+                                  !"1".equals(System.getenv("SLINKYWINKY_RENDER_CONTEXT")) ||
+                                  !"1".equals(System.getenv("SLINKYWINKY_RENDER_CALLBACK"))))
+                throw new IllegalArgumentException("R91 requires explicitly enabled overlay, context and callback");
             if (renderContext && (!"1".equals(System.getenv("SLINKYWINKY_RENDER_CONTEXT")) ||
                                   !"1".equals(System.getenv("SLINKYWINKY_RENDER_CALLBACK"))))
                 throw new IllegalArgumentException("R78 requires SLINKYWINKY_RENDER_CONTEXT=1 and SLINKYWINKY_RENDER_CALLBACK=1");
@@ -54,7 +59,7 @@ public final class AttachMain {
             if (continuousHook && !"1".equals(System.getenv("SLINKYWINKY_CONTINUOUS_OBSERVATION")))
                 throw new IllegalArgumentException("Continuous hook requires SLINKYWINKY_CONTINUOUS_OBSERVATION=1");
             if (args.length == 4 && !tickProbe && !instrumentProbe &&
-                !renderPreflight && !renderCallback && !renderContext && !hookProbe) throw new IllegalArgumentException("Unknown option");
+                !renderPreflight && !renderCallback && !renderContext && !renderOverlay && !hookProbe) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
                 throw new IllegalArgumentException("Numeric PID required");
@@ -65,22 +70,24 @@ public final class AttachMain {
             if (target == null) throw new IllegalArgumentException("Target is not an attachable JVM owned by this user");
             final boolean test = "1".equals(System.getenv("SLINKYWINKY_ATTACH_TEST"));
             // Never allow the synthetic Attach-test bypass for the original-only R75 hook.
-            if ((renderCallback || renderContext) && test)
+            if ((renderCallback || renderContext || renderOverlay) && test)
                 throw new IllegalArgumentException("R75 cannot run in Attach test mode");
             if (!test && !recognizedMinecraft(target.displayName()))
                 throw new IllegalArgumentException("Refusing non-Minecraft target: " + target.displayName());
             VirtualMachine vm = VirtualMachine.attach(target);
             try {
-                if (instrumentProbe || hookProbe || renderPreflight || renderCallback || renderContext) {
+                if (instrumentProbe || hookProbe || renderPreflight || renderCallback || renderContext || renderOverlay) {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
-                    String options = renderContext ? "minecraft-render-context-r78|" +
+                    String options = renderOverlay ? "minecraft-render-overlay-r91|" +
+                        new File(dll.getParentFile(),"slinkywinky_jni.dll").getCanonicalPath() :
+                                     (renderContext ? "minecraft-render-context-r78|" +
                         new File(dll.getParentFile(),"slinkywinky_jni.dll").getCanonicalPath() :
                                      (renderCallback ? "minecraft-render-callback-r75" :
                                      (renderPreflight ? "minecraft-render-preflight" :
-                                     (test ? "probe" : "minecraft")));
-                    if (renderContext && !new File(dll.getParentFile(),"slinkywinky_jni.dll").isFile())
+                                     (test ? "probe" : "minecraft"))));
+                    if ((renderContext || renderOverlay) && !new File(dll.getParentFile(),"slinkywinky_jni.dll").isFile())
                         throw new IllegalArgumentException("R78 requires standalone JNI library");
                     if (hookProbe) {
                         File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
@@ -98,7 +105,7 @@ public final class AttachMain {
             } finally {
                 vm.detach();
             }
-            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (renderContext ? " mode=render-context-r78" : (renderCallback ? " mode=render-callback-r75" : (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft"))))))));
+            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (renderOverlay ? " mode=render-overlay-r91" : (renderContext ? " mode=render-context-r78" : (renderCallback ? " mode=render-callback-r75" : (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))))))));
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
             System.exit(2);
