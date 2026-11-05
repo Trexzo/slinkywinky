@@ -149,8 +149,11 @@ def validate_receipt(option, appended):
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
     else:
-        ordered = (RESTORED, CALLBACK, STABLE, RELEASED) if (
-            option == "--render-context=8") else (RESTORED, CALLBACK, RELEASED)
+        ordered = ((RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)
+                   if option == "--render-overlay=8" else
+                   ((RESTORED, CALLBACK, STABLE, RELEASED)
+                    if option == "--render-context=8" else
+                    (RESTORED, CALLBACK, RELEASED)))
     positions = [found[marker] for marker in ordered]
     if positions != sorted(positions):
         raise ReceiptError("Renderer restoration / release receipts out of order")
