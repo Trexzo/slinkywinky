@@ -115,13 +115,12 @@ int main() {
     CHECK(editorMenu.toggle_expanded(6));
     CHECK(editor.adjust_primary(6,1));
     CHECK(editor.settings().combat.hit_select_min_hurt==1);
-    CHECK(editorMenu.toggle_expanded(15)); // Wrong tab, refused.
+    CHECK(editorMenu.toggle_expanded(15)); // Off-screen expansion alone is insufficient.
     CHECK(!editor.adjust_primary(15,-1));
     CHECK(editor.scroll_by(9));
     CHECK(!editor.adjust_primary(6,-1)); // Expanded, but off-screen.
     CHECK(editorMenu.toggle_expanded(12));
     CHECK(editor.adjust_primary(12,1));
-    CHECK(editorMenu.toggle_expanded(15));
     CHECK(editor.adjust_primary(15,-1));
     CHECK(std::fabs(editor.settings().velocity.horizontal-0.95f)<0.0001f);
     CHECK(editor.primary(15)->name!=nullptr);
