@@ -32,7 +32,8 @@ public final class RenderPreweaveAdmissionSmoke {
     }
     private enum Mode {
         UNRELATED, GENERATED_HASH_MISMATCH,
-        REMOVE_FALSE, REMOVE_THROWS, ADD_THROWS, RETRANSFORM_UNSUPPORTED
+        REMOVE_FALSE, REMOVE_THROWS, ADD_THROWS, RETRANSFORM_UNSUPPORTED,
+        VM_ERROR_ON_CLASS_DISCOVERY
     }
     private static final class Fake implements InvocationHandler {
         final Mode mode;
@@ -49,10 +50,13 @@ public final class RenderPreweaveAdmissionSmoke {
             final String name=method.getName();
             if("isRetransformClassesSupported".equals(name))
                 return mode!=Mode.RETRANSFORM_UNSUPPORTED;
-            if("getAllLoadedClasses".equals(name))
+            if("getAllLoadedClasses".equals(name)) {
+                if(mode==Mode.VM_ERROR_ON_CLASS_DISCOVERY)
+                    throw new LinkageError("Synthetic unrecoverable VM discovery error");
                 return mode==Mode.UNRELATED ?
                     new Class<?>[]{RenderPreweaveAdmissionSmoke.class} :
                     new Class<?>[]{Class.forName("ave"),Class.forName("bfk")};
+            }
             if("isModifiableClass".equals(name))return true;
             if("addTransformer".equals(name)) {
                 added++;
@@ -120,6 +124,23 @@ public final class RenderPreweaveAdmissionSmoke {
         check(fake.added==addedBefore,
               "Second attachment touched instrumentation after unresolved failure");
     }
+    private static void caseUnexpectedVmError(AtomicBoolean gate) {
+        gate.set(false);
+        Fake fake=new Fake(Mode.VM_ERROR_ON_CLASS_DISCOVERY);
+        boolean errorObserved=false;
+        try {
+            InstrumentationProbe.agentmain("minecraft-render-preflight",
+                                           fake.instrumentation());
+        } catch(LinkageError expected) {
+            errorObserved=true;
+        }
+        check(errorObserved,"Simulated JVM error was unexpectedly swallowed");
+        check(gate.get(),"Unexpected JVM error improperly released R73 admission");
+        check(fake.added==0,"VM error unexpectedly registered class inspector");
+        check(denied(fake,"minecraft-render-callback-r75"),
+              "Next Attach admitted following unrecoverable preflight error");
+    }
+
     public static void main(String[] args) throws Exception {
         Field field=InstrumentationProbe.class.getDeclaredField("hookInstalled");
         field.setAccessible(true);
@@ -149,6 +170,8 @@ public final class RenderPreweaveAdmissionSmoke {
                           "minecraft-render-context-r78|X:\\missing\\slinkywinky_jni.dll");
             System.out.println("R80_UNCERTAIN_PASSIVE_INSPECTOR_RETAINS_HOOK_GATE_PASS");
             System.out.println("R80_R73_R75_R78_PREWEAVE_FAILURE_ISOLATION_PASS");
+            caseUnexpectedVmError(gate);
+            System.out.println("R83_R73_VM_ERROR_PRESERVES_ADMISSION_PASS");
             System.out.println("R80_GENERATED_CLASSES_ONLY_NO_MINECRAFT_OR_GRAPHICS");
         } finally {
             // Isolated smoke JVM only; reset fake gate for other tests.
