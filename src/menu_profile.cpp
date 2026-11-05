@@ -1,5 +1,6 @@
 #include "slinkywinky/menu_profile.hpp"
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace slinkywinky {
@@ -84,6 +85,51 @@ bool MenuProfileBridge::toggle(std::size_t index) {
         return false;
     *stored=next;
     return true;
+}
+std::optional<MenuPrimaryParameter> MenuProfileBridge::primary(
+    std::size_t index) const noexcept {
+    // Keep one intentionally limited, documented parameter per supported
+    // module. This must remain a native profile editor, not a game action.
+    const auto& c=settings_.combat;
+    switch(index) {
+        case 0: return MenuPrimaryParameter{"Aim range",c.aim_range,0.f,6.f,0.25f,false};
+        case 1: return MenuPrimaryParameter{"Block range",c.block_range,0.f,6.f,0.25f,false};
+        case 2: return MenuPrimaryParameter{"Clicks/sec",c.clicks_per_second,1.f,30.f,0.5f,false};
+        case 4: return MenuPrimaryParameter{"Backtrack ms",static_cast<float>(settings_.backtrack_ms),0.f,1000.f,25.f,true};
+        case 6: return MenuPrimaryParameter{"Min hurt",static_cast<float>(c.hit_select_min_hurt),0.f,10.f,1.f,true};
+        case 12: return MenuPrimaryParameter{"Reach",c.reach.distance,0.f,6.f,0.1f,false};
+        case 15: return MenuPrimaryParameter{"Velocity H",settings_.velocity.horizontal,0.f,1.f,0.05f,false};
+        default: return std::nullopt;
+    }
+}
+bool MenuProfileBridge::adjust_primary(std::size_t index,int direction) {
+    if(direction!=1 && direction!=-1)return false;
+    const auto parameter=primary(index);
+    if(!parameter || menu_.tab()!=official_module_catalog()[index].tab ||
+       !menu_.expanded(index))return false;
+    const auto page=menu_.page();
+    if(std::none_of(page.begin(),page.end(),
+                    [index](const MenuItem& row){return row.catalog_index==index;}))
+        return false;
+    // Round to hundredths for stable UI steps (1/2, 1/4, 1/10, 1/20)
+    // rather than accumulating floating-point drift in saved profiles.
+    const float next=std::round((parameter->value+
+        static_cast<float>(direction)*parameter->step)*100.f)/100.f;
+    if(next<parameter->minimum || next>parameter->maximum ||
+       std::fabs(next-parameter->value)<0.0001f)return false;
+    ClientSettings updated=settings_;
+    switch(index) {
+        case 0: updated.combat.aim_range=next;break;
+        case 1: updated.combat.block_range=next;break;
+        case 2: updated.combat.clicks_per_second=next;break;
+        case 4: updated.backtrack_ms=static_cast<unsigned>(next);break;
+        case 6: updated.combat.hit_select_min_hurt=static_cast<int>(next);break;
+        case 12: updated.combat.reach.distance=next;break;
+        case 15: updated.velocity.horizontal=next;break;
+        default:return false;
+    }
+    // Transactional strict schema validation, no partial UI or profile edit.
+    return adopt(updated);
 }
 bool MenuProfileBridge::adopt(const ClientSettings& settings) {
     // Roundtrip through the existing strict parser; no partial import.
