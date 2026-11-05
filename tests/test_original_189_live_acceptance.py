@@ -200,10 +200,11 @@ class ReceiptChecks(unittest.TestCase):
             java=root/"jdk8"/"bin"/"java.exe"
             tools=root/"jdk8"/"lib"/"tools.jar"
             log=root/"target-stdout.log"
+            client=root/"fixture-original-client.jar"
             report=root/"r82-evidence.json"
             java.parent.mkdir(parents=True)
             tools.parent.mkdir(parents=True)
-            for file in (loader,java,tools,log):
+            for file in (loader,java,tools,log,client):
                 file.touch()
             attached=[]
             def fake(cmd,**kwargs):
@@ -231,6 +232,7 @@ class ReceiptChecks(unittest.TestCase):
                 result=harness.run([
                     "--loader",str(loader),"--jdk8",str(root/"jdk8"),
                     "--pid","123","--target-stdout-log",str(log),
+                    "--original-client-jar",str(client),
                     "--mode","context","--execute","--report",str(report)])
             self.assertEqual(result,0)
             self.assertEqual(attached,
@@ -250,9 +252,10 @@ class ReceiptChecks(unittest.TestCase):
             java=root/"jdk8"/"bin"/"java.exe"
             tools=root/"jdk8"/"lib"/"tools.jar"
             log=root/"target-stdout.log"
+            client=root/"fixture-original-client.jar"
             java.parent.mkdir(parents=True)
             tools.parent.mkdir(parents=True)
-            for file in (loader,java,tools,log):
+            for file in (loader,java,tools,log,client):
                 file.touch()
             attached=[]
             def fake(cmd,**kwargs):
@@ -274,6 +277,7 @@ class ReceiptChecks(unittest.TestCase):
                     harness.run([
                         "--loader",str(loader),"--jdk8",str(root/"jdk8"),
                         "--pid","123","--target-stdout-log",str(log),
+                    "--original-client-jar",str(client),
                         "--mode","context","--execute"])
             self.assertEqual(attached,["--render-preflight",
                                        "--render-callback=8"])
@@ -288,9 +292,10 @@ class ReceiptChecks(unittest.TestCase):
             java=root/"jdk8"/"bin"/"java.exe"
             tools=root/"jdk8"/"lib"/"tools.jar"
             log=root/"target-stdout.log"
+            client=root/"fixture-original-client.jar"
             java.parent.mkdir(parents=True)
             tools.parent.mkdir(parents=True)
-            for file in (loader,java,tools,log):
+            for file in (loader,java,tools,log,client):
                 file.touch()
             attached=[]
             def fake(cmd,**kwargs):
@@ -315,6 +320,7 @@ class ReceiptChecks(unittest.TestCase):
                     harness.run([
                         "--loader",str(loader),"--jdk8",str(root/"jdk8"),
                         "--pid","123","--target-stdout-log",str(log),
+                    "--original-client-jar",str(client),
                         "--mode","context","--execute"])
             self.assertEqual(check_birth.call_count,5)
             self.assertEqual(attached,["--render-preflight"])
@@ -339,9 +345,10 @@ class ReceiptChecks(unittest.TestCase):
             java=root/"jdk8"/"bin"/"java.exe"
             tools=root/"jdk8"/"lib"/"tools.jar"
             log=root/"target-stdout.log"
+            client=root/"fixture-original-client.jar"
             java.parent.mkdir(parents=True)
             tools.parent.mkdir(parents=True)
-            for file in (loader,java,tools,log):
+            for file in (loader,java,tools,log,client):
                 file.touch()
             attached=[]
             def fake(cmd,**kwargs):
@@ -366,6 +373,7 @@ class ReceiptChecks(unittest.TestCase):
                     harness.run([
                         "--loader",str(loader),"--jdk8",str(root/"jdk8"),
                         "--pid","123","--target-stdout-log",str(log),
+                    "--original-client-jar",str(client),
                         "--mode","context","--execute"])
             self.assertEqual(attached,["--render-preflight"])
 
