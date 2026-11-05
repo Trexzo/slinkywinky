@@ -22,9 +22,9 @@ class RuntimeEvidenceTests(unittest.TestCase):
         return fields
 
     def test_r90_exact_verbose_renderer_readiness(self):
-        vanilla = ("[Loaded ave from file:/C:/User/.minecraft/versions/1.8.9/1.8.9.jar]\\n"
-                   "[Loaded bfk from file:/C:/User/.minecraft/versions/1.8.9/1.8.9.jar]\\n"
-                   "[10:00:00] [Client thread/INFO]: LWJGL Version: 2.9.4\\n")
+        vanilla = ("[Loaded ave from file:/C:/User/.minecraft/versions/1.8.9/1.8.9.jar]\n"
+                   "[Loaded bfk from file:/C:/User/.minecraft/versions/1.8.9/1.8.9.jar]\n"
+                   "[10:00:00] [Client thread/INFO]: LWJGL Version: 2.9.4\n")
         self.assertTrue(original_render_classes_loaded(vanilla))
         invalid = (
             vanilla.replace("Loaded bfk", "Loaded bfkx"),
@@ -32,7 +32,7 @@ class RuntimeEvidenceTests(unittest.TestCase):
             vanilla.replace("1.8.9.jar", "1.8.8.jar"),
             vanilla.replace("LWJGL Version:", "Starting LWJGL"),
             vanilla.replace("[Loaded ave from", "[INFO] [Loaded ave from"),
-            vanilla.replace("file:/C:", "file:/untrusted-bundle.jar/C:"),
+            vanilla.replace("from file:/", "from jar:file:/"),
             vanilla.replace("1.8.9.jar]", "1.8.9.jar.fake]"),
         )
         for candidate in invalid:
