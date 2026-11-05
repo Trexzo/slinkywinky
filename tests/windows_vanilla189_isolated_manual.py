@@ -283,8 +283,8 @@ def main():
         # (which occurs earlier) as a loaded Minecraft renderer.
         text = read_log()
         return ("LWJGL Version:" in text and
-                re.search(r"(?m)^\\[Loaded ave from ", text) is not None and
-                re.search(r"(?m)^\\[Loaded bfk from ", text) is not None)
+                re.search(r"(?m)^\[Loaded ave from ", text) is not None and
+                re.search(r"(?m)^\[Loaded bfk from ", text) is not None)
 
 
     def wait_for(process, marker, count, seconds):
