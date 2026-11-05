@@ -86,6 +86,30 @@ public final class OriginalRendererFrameDiagnosticAudit implements Opcodes {
             throw new IllegalStateException(
                 "R75 bytecode prefix altered original renderer behavior");
     }
+    /** Independent exact-original audit for R92's AFTER-scene callback. */
+    public static void checkExit(byte[] original) {
+        Trace before=trace(original);
+        Trace after=trace(RendererFrameDiagnostic.weavePinnedOriginalAtExit(original));
+        List<String> expected=new ArrayList<String>();
+        int returns=0;
+        for(String instruction:before.instructions) {
+            if(("I:"+Opcodes.RETURN).equals(instruction)) {
+                expected.add("V:"+Opcodes.FLOAD+":1");
+                expected.add("V:"+Opcodes.LLOAD+":2");
+                expected.add("M:"+Opcodes.INVOKESTATIC+":"+PREFIX_OWNER+
+                             ":onRender:(FJ)V:false");
+                returns++;
+            }
+            expected.add(instruction);
+        }
+        if(!"bfk".equals(before.cls) || !"bfk".equals(after.cls) ||
+           before.targets!=1 || after.targets!=1 || returns<1 ||
+           !before.methods.equals(after.methods) ||
+           !expected.equals(after.instructions))
+            throw new IllegalStateException(
+                "R92 render-exit callback changed original renderer instructions");
+    }
+
     public static void main(String[] args) throws Exception {
         if(args.length!=1)throw new IllegalArgumentException(
             "Expected original Mojang 1.8.9 JAR path");
@@ -94,9 +118,12 @@ public final class OriginalRendererFrameDiagnosticAudit implements Opcodes {
             throw new IllegalArgumentException("Missing exact original client");
         RenderCallsiteAudit.main(args);
         try(ZipFile zip=new ZipFile(path.toFile())){
-            check(RenderCallsiteAudit.entry(zip,"bfk.class"));
+            final byte[] original=RenderCallsiteAudit.entry(zip,"bfk.class");
+            check(original);
+            checkExit(original);
         }
         System.out.println("R75_PINNED_ORIGINAL_RENDER_CALLBACK_PREFIX_PASS");
+        System.out.println("R92_PINNED_ORIGINAL_RENDER_CALLBACK_EXIT_PASS");
         System.out.println("R75_MEMORY_ONLY_NO_GAME_ATTACH_PASS");
     }
     private OriginalRendererFrameDiagnosticAudit(){}
