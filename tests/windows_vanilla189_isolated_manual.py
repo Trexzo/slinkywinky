@@ -137,6 +137,8 @@ def main():
                         help="Existing official Minecraft installation (read-only)")
     parser.add_argument("--run", action="store_true",
                         help="Explicitly authorize launching one disposable vanilla client")
+    parser.add_argument("--render-context-acceptance", action="store_true",
+                        help="Opt-in R90: isolated vanilla process with bounded R81 renderer diagnostics; never draw the menu")
     parser.add_argument("--world-observation", action="store_true",
                         help="Manual-only: enter a local single-player world, then run a 600-tick read-only probe")
     parser.add_argument("--require-ray-entity", action="store_true",
@@ -148,6 +150,10 @@ def main():
         parser.error("Refusing to start Minecraft: pass --run explicitly")
     if os.name != "nt":
         parser.error("Windows x64 only")
+    if args.render_context_acceptance and (args.world_observation or
+                                           args.require_ray_entity or
+                                           args.continuous_observation):
+        parser.error("R90 renderer acceptance must run alone, not with world/tick probes")
     if args.require_ray_entity and not args.world_observation:
         parser.error("--require-ray-entity requires --world-observation")
     if args.continuous_observation and not args.world_observation:
@@ -253,7 +259,11 @@ def main():
     ]
     environment = os.environ.copy()
     environment.pop("SLINKYWINKY_ATTACH_TEST", None)
-    environment["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
+    if args.render_context_acceptance:
+        # Native gameplay hooks are not part of renderer admission.
+        environment.pop("SLINKYWINKY_EXPERIMENTAL_HOOK", None)
+    else:
+        environment["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
     if args.world_observation:
         environment["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
     if args.continuous_observation:
@@ -284,6 +294,48 @@ def main():
                      if pid == game.pid]
             if len(exact) != 1:
                 raise RuntimeError("The newly launched vanilla PID was not uniquely enumerated")
+            if args.render_context_acceptance:
+                # The game must reach actual LWJGL initialization rather than
+                # stopping at a generic launcher/user-info startup marker.
+                if not wait_for(game, "LWJGL Version:", 1, 45):
+                    raise RuntimeError("Original vanilla 1.8.9 did not establish LWJGL initialization")
+                harness = Path(__file__).with_name("original_189_live_render_acceptance.py")
+                if not harness.is_file():
+                    raise RuntimeError("Missing in-repository original renderer receipt checker")
+                report = sandbox / ("r90-render-receipts-" + str(game.pid) + ".json")
+                if report.exists():
+                    raise RuntimeError("Refusing to overwrite existing R90 diagnostic evidence")
+                command = [
+                    sys.executable, str(harness),
+                    "--loader", str(launcher), "--jdk8", str(jdk),
+                    "--pid", str(game.pid), "--target-stdout-log", str(log),
+                    "--original-client-jar", str(client_jar),
+                    "--mode", "context", "--timeout-seconds", "45",
+                    "--execute", "--report", str(report)
+                ]
+                # The R81 harness independently checks exact class hashes,
+                # target PID birth, fresh JVM stdout, WGL ownership and the
+                # original-bytecode restoration before each subsequent stage.
+                result = subprocess.run(command, capture_output=True,
+                                        text=True, timeout=210,
+                                        env=environment)
+                if result.returncode != 0 or (
+                        "R81_ORIGINAL_RENDER_DIAGNOSTIC_RECEIPTS_PASS"
+                        not in result.stdout):
+                    raise RuntimeError(
+                        "Supervised original renderer admission rejected: " +
+                        (result.stderr + result.stdout)[-5000:])
+                evidence = json.loads(report.read_text(encoding="utf-8"))
+                if (len(evidence.get("stages", [])) != 3 or
+                        evidence.get("in_game_menu_verified") is not False or
+                        evidence.get("visual_game_acceptance") is not False):
+                    raise RuntimeError("Unexpected renderer evidence scope")
+                if game.poll() is not None:
+                    raise RuntimeError("Vanilla JVM exited during renderer verification")
+                print("R90_ORIGINAL_189_RENDER_DIAGNOSTIC_RECEIPTS_PASS",
+                      "pid=" + str(game.pid), "report=" + str(report), flush=True)
+                print("R90_NOT_VISUAL_OR_IN_GAME_CLICKGUI_CERTIFICATION", flush=True)
+                return
             if args.world_observation:
                 print("Open a LOCAL single-player world in the isolated client.", flush=True)
                 print("The probe will record counts only; it will not control the game.", flush=True)
