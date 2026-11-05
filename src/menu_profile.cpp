@@ -33,8 +33,8 @@ const bool* setting(const ClientSettings& settings, std::size_t index) noexcept 
 } // namespace
 
 bool module_has_profile_setting(std::size_t index) noexcept {
-    ClientSettings placeholder;
-    return setting(placeholder,index)!=nullptr;
+    return index==0 || index==1 || index==2 || index==4 ||
+           index==6 || index==12 || index==15;
 }
 
 MenuProfileBridge::MenuProfileBridge(MenuState& menu) noexcept : menu_(menu) {
