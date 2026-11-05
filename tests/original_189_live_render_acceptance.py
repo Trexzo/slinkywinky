@@ -16,6 +16,7 @@ import sys
 import time
 
 PREFLIGHT = "R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS"
+PREFLIGHT_RELEASED = "R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS"
 RESTORED = "R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS"
 CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
 RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
@@ -34,10 +35,10 @@ NEGATIVE = (
     "NoClassDefFoundError",
 )
 STAGES = {
-    "preflight": (("--render-preflight", (PREFLIGHT,)),),
-    "callback": (("--render-preflight", (PREFLIGHT,)),
+    "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
+    "callback": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
                  ("--render-callback=8", (RESTORED, CALLBACK, RELEASED))),
-    "context": (("--render-preflight", (PREFLIGHT,)),
+    "context": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
                 ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
                 ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED))),
 }
@@ -52,6 +53,8 @@ class ReceiptError(RuntimeError):
 # R75_ORIGINAL_RENDER_CLASS_RESTORE_SHA256_PASS_FAKE are not valid receipts.
 RECEIPT_LINES = {
     PREFLIGHT: re.compile(r"^" + re.escape(PREFLIGHT) + r"\r?$", re.MULTILINE),
+    PREFLIGHT_RELEASED: re.compile(
+        r"^" + re.escape(PREFLIGHT_RELEASED) + r"\r?$", re.MULTILINE),
     RESTORED: re.compile(r"^" + re.escape(RESTORED) + r"\r?$", re.MULTILINE),
     CALLBACK: re.compile(
         r"^" + re.escape(CALLBACK) +
@@ -86,12 +89,14 @@ def validate_receipt(option, appended):
                 pattern.fullmatch(line) for pattern in RECEIPT_LINES.values()
             ):
                 raise ReceiptError("Malformed or conflicting pass-looking target receipt")
-    if option != "--render-preflight":
+    if option == "--render-preflight":
+        ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    else:
         ordered = (RESTORED, CALLBACK, STABLE, RELEASED) if (
             option == "--render-context=8") else (RESTORED, CALLBACK, RELEASED)
-        positions = [found[marker] for marker in ordered]
-        if positions != sorted(positions):
-            raise ReceiptError("Renderer restoration / release receipts out of order")
+    positions = [found[marker] for marker in ordered]
+    if positions != sorted(positions):
+        raise ReceiptError("Renderer restoration / release receipts out of order")
     if "ATTACH_RESULT=SUCCESS" in appended:
         # This belongs to the EXTERNAL loader, not the target JVM.
         raise ReceiptError("Target log contaminated by external loader receipt")
