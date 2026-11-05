@@ -16,8 +16,14 @@ public final class RenderFrameGate {
     private boolean stopped;
 
     public RenderFrameGate(int limit) {
-        if(limit<1 || limit>8)
-            throw new IllegalArgumentException("R75 permits only 1..8 frame samples");
+        this(limit,false);
+    }
+
+    /** R92 permits a single explicit 8-preflight + 64-draw epoch. */
+    public RenderFrameGate(int limit,boolean multiOverlay) {
+        if(multiOverlay ? limit!=72 : (limit<1 || limit>8))
+            throw new IllegalArgumentException(
+                "Only R75 1..8 or explicit R92 72-frame diagnostic allowed");
         this.limit=limit;
     }
 
