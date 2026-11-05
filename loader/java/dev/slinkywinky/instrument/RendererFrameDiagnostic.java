@@ -129,6 +129,22 @@ public final class RendererFrameDiagnostic {
         return verified && removed;
     }
 
+    /**
+     * R85: Never trigger another class retransformation when we cannot prove
+     * the bytecode-weaving transformer was removed. A leaked transformer
+     * could reweave the original method while "restoring" it. In that case
+     * the shared admission lock must remain held for this JVM.
+     */
+    private static boolean restoreIfWeaverRemoved(boolean removalConfirmed,
+                                                   Instrumentation instrumentation,
+                                                   Class<?> target) {
+        if(!removalConfirmed) {
+            System.err.println("R85_UNCERTAIN_WEAVE_REMOVAL_SKIP_RETRANSFORM");
+            return false;
+        }
+        return restore(instrumentation,target);
+    }
+
     /** Existing agent admission guard must already have been acquired. */
     public static void start(final Instrumentation instrumentation) throws Exception {
         start(instrumentation,null);
@@ -207,9 +223,12 @@ public final class RendererFrameDiagnostic {
         if(installationFailure!=null || changed.get()!=1) {
             activeFence=null;
             fence.stopAndDrain(); // No in-flight observer at restore entry.
-            boolean recovered=restore(instrumentation,target);
-            // Uncertain removal means the weaving transformer may remain active.
-            InstrumentationProbe.finishRenderDiagnostic(recovered && weaveRemoved);
+            // A leaking transformer MUST NOT see a new retransformation.
+            // In particular addTransformer() may have registered it before
+            // throwing, or removeTransformer() may have returned false/thrown.
+            boolean recovered=restoreIfWeaverRemoved(
+                weaveRemoved,instrumentation,target);
+            InstrumentationProbe.finishRenderDiagnostic(recovered);
             if(installationFailure!=null)
                 throw new IllegalStateException(
                     "R75 renderer callback installation refused",installationFailure);
@@ -265,7 +284,8 @@ public final class RendererFrameDiagnostic {
         } catch(Throwable workerFailure) {
             activeFence=null;
             fence.stopAndDrain();
-            final boolean restored=restore(instrumentation,target);
+            final boolean restored=restoreIfWeaverRemoved(
+                weaveRemoved,instrumentation,target);
             InstrumentationProbe.finishRenderDiagnostic(restored);
             throw new IllegalStateException(
                 "R75 cleanup worker unavailable; original renderer restored="+restored,
