@@ -7,6 +7,7 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
@@ -16,6 +17,7 @@
 namespace {
 using slinkywinky::MenuTab;
 slinkywinky::MenuState menu;
+slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuRenderSession session;
 slinkywinky::WglMenuOverlayHost overlayHost;
 constexpr wchar_t title[]=L"SlinkyWinky GL1.1 Menu Preview - Offline";
@@ -24,6 +26,7 @@ HDC device=nullptr;
 HGLRC graphics=nullptr;
 HWND window=nullptr;
 std::filesystem::path preferences;
+std::filesystem::path profilePreferences;
 bool overlayDemo=false; // Standalone-only demonstration, never attached to Minecraft.
 
 std::filesystem::path settings_file() {
@@ -31,6 +34,13 @@ std::filesystem::path settings_file() {
     const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",buffer,32768);
     if(len==0 || len>=32768)return {};
     return std::filesystem::path(buffer)/L"SlinkyWinky"/L"menu-gl-preview.conf";
+}
+std::filesystem::path profile_file() {
+    wchar_t buffer[32768]{};
+    const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",buffer,32768);
+    if(len==0 || len>=32768)return {};
+    return std::filesystem::path(buffer)/L"SlinkyWinky"/
+           L"module-profile-preview.conf";
 }
 void persist() {
     if(!preferences.empty())
@@ -121,7 +131,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
-            menu.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1);
+            profile.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1);
             request_paint(hwnd);return 0;
         }
         case WM_LBUTTONDOWN:{
@@ -131,13 +141,13 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             const int y=static_cast<short>(HIWORD(lp));
             if(y>=78 && y<120 && x>=18 && x<width-18) {
                 const int tab=(x-18)*7/(width-36);
-                if(tab>=0 && tab<6)menu.select(static_cast<MenuTab>(tab));
+                if(tab>=0 && tab<6)profile.select(static_cast<MenuTab>(tab));
             } else if(y>=153 && y<545 && menu.tab()!=MenuTab::Profiles){
                 const auto rows=menu.page();
                 const int index=(y-153)/49;
                 if(index>=0 && static_cast<std::size_t>(index)<rows.size()) {
                     if(x>=width-92 && x<=width-19)
-                        menu.toggle_preview(rows[index].catalog_index);
+                        profile.toggle(rows[index].catalog_index);
                     else if(x>=width-145 && x<width-92)
                         menu.toggle_expanded(rows[index].catalog_index);
                 }
@@ -147,9 +157,15 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_KEYDOWN:{
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
             if(wp>=L'1' && wp<=L'6')
-                menu.select(static_cast<MenuTab>(wp-L'1'));
-            if(wp==VK_UP)menu.scroll_by(-1);
-            if(wp==VK_DOWN)menu.scroll_by(1);
+                profile.select(static_cast<MenuTab>(wp-L'1'));
+            if(wp==VK_UP)profile.scroll_by(-1);
+            if(wp==VK_DOWN)profile.scroll_by(1);
+            // The only effect of P/L is saving/loading a local native
+            // configuration document. No module action is dispatched to MC.
+            if(wp==L'P' && !profilePreferences.empty())
+                profile.save(profilePreferences);
+            if(wp==L'L' && !profilePreferences.empty())
+                profile.load(profilePreferences);
             if(wp==L'O'){
                 if(overlayDemo) {
                     overlayHost.close();
@@ -192,6 +208,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR arguments,int show) {
     // Refuse any external process argument: this is never a loader or injector.
     if(arguments && *arguments)return 3;
     preferences=settings_file();
+    profilePreferences=profile_file();
+    if(!profilePreferences.empty())profile.load(profilePreferences);
     slinkywinky::MenuAppearance stored{};
     if(!preferences.empty() &&
        slinkywinky::load_menu_appearance(preferences,stored))
