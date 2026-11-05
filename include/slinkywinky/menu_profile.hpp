@@ -41,6 +41,7 @@ public:
     bool load(const std::filesystem::path& path);
     bool save(const std::filesystem::path& path, std::string* error=nullptr) const;
     const ClientSettings& settings() const noexcept { return settings_; }
+    bool owns(const MenuState& menu) const noexcept {return &menu_==&menu;}
 private:
     bool* flag(std::size_t catalog_index) noexcept;
     const bool* flag(std::size_t catalog_index) const noexcept;
