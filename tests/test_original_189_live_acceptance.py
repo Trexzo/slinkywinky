@@ -294,14 +294,14 @@ class ReceiptChecks(unittest.TestCase):
             def fake(cmd,**kwargs):
                 if cmd[1]=="list":
                     return harness.subprocess.CompletedProcess(
-                        cmd,0,"123 net.minecraft.client.main.Main\\n","")
+                        cmd,0,"123 net.minecraft.client.main.Main\n","")
                 option=cmd[-1]
                 attached.append(option)
                 with log.open("a",encoding="utf-8") as output:
                     output.write(P)
                 return harness.subprocess.CompletedProcess(
                     cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
-                    harness.LOADER_MODES[option]+"\\n","")
+                    harness.LOADER_MODES[option]+"\n","")
             # Startup, preflight pre-Attach, post-Attach, post-receipt,
             # then mismatched creation token before callback Attach.
             births=[101,101,101,101,202]
