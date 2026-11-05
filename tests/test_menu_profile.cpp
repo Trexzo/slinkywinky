@@ -1,4 +1,5 @@
 #include "slinkywinky/menu_profile.hpp"
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -87,6 +88,65 @@ int main() {
     invalid.combat.clicks_per_second=9999.f;
     CHECK(!fresh.adopt(invalid));
     CHECK(fresh.enabled(2) && fresh.enabled(12));
+
+    // R87: primary numeric controls are source-backed settings, never
+    // preview-only counters or Minecraft input. Enforce focus and visibility.
+    MenuState editorMenu;
+    MenuProfileBridge editor(editorMenu);
+    CHECK(!editor.primary(3).has_value());
+    CHECK(!editor.primary(65).has_value());
+    CHECK(!editor.adjust_primary(3,1));
+    CHECK(!editor.adjust_primary(65,1));
+    CHECK(!editor.adjust_primary(0,1)); // Must expand before editing.
+    CHECK(editorMenu.toggle_expanded(0));
+    CHECK(!editor.adjust_primary(0,0));
+    CHECK(!editor.adjust_primary(0,2));
+    CHECK(editor.adjust_primary(0,1));
+    CHECK(std::fabs(editor.settings().combat.aim_range-4.25f)<0.0001f);
+    CHECK(editorMenu.toggle_expanded(1));
+    CHECK(editor.adjust_primary(1,1));
+    CHECK(std::fabs(editor.settings().combat.block_range-3.35f)<0.0001f);
+    CHECK(editorMenu.toggle_expanded(2));
+    CHECK(editor.adjust_primary(2,1));
+    CHECK(std::fabs(editor.settings().combat.clicks_per_second-12.5f)<0.0001f);
+    CHECK(editorMenu.toggle_expanded(4));
+    CHECK(editor.adjust_primary(4,1));
+    CHECK(editor.settings().backtrack_ms==125u);
+    CHECK(editorMenu.toggle_expanded(6));
+    CHECK(editor.adjust_primary(6,1));
+    CHECK(editor.settings().combat.hit_select_min_hurt==1);
+    CHECK(editorMenu.toggle_expanded(15)); // Wrong tab, refused.
+    CHECK(!editor.adjust_primary(15,-1));
+    CHECK(editor.scroll_by(9));
+    CHECK(!editor.adjust_primary(6,-1)); // Expanded, but off-screen.
+    CHECK(editorMenu.toggle_expanded(12));
+    CHECK(editor.adjust_primary(12,1));
+    CHECK(editorMenu.toggle_expanded(15));
+    CHECK(editor.adjust_primary(15,-1));
+    CHECK(std::fabs(editor.settings().velocity.horizontal-0.95f)<0.0001f);
+    CHECK(editor.primary(15)->name!=nullptr);
+    CHECK(editor.primary(4)->integral);
+    CHECK(!editor.primary(12)->integral);
+    CHECK(editor.select(MenuTab::Move));
+    CHECK(!editor.adjust_primary(15,-1)); // Expanded but wrong tab.
+    CHECK(editor.select(MenuTab::Combat));
+    CHECK(editor.scroll_by(9));
+    CHECK(editor.adjust_primary(15,1));
+    CHECK(!editor.adjust_primary(15,1)); // Max 1.0 reached.
+    CHECK(editor.adjust_primary(15,-1));
+    const auto primaryFile=std::filesystem::temp_directory_path()/
+        "slinkywinky-r87-primary-settings.ini";
+    std::filesystem::remove(primaryFile,ignored);
+    CHECK(editor.save(primaryFile));
+    MenuState loadedMenu;
+    MenuProfileBridge loadedEditor(loadedMenu);
+    CHECK(loadedEditor.load(primaryFile));
+    CHECK(std::fabs(loadedEditor.settings().combat.aim_range-4.25f)<0.0001f);
+    CHECK(loadedEditor.settings().backtrack_ms==125u);
+    CHECK(loadedEditor.settings().combat.hit_select_min_hurt==1);
+    CHECK(std::fabs(loadedEditor.settings().velocity.horizontal-0.95f)<0.0001f);
+    std::filesystem::remove(primaryFile,ignored);
+    std::filesystem::remove(std::filesystem::path(primaryFile.string()+".bak"),ignored);
 
     // Exported settings are native models only; no Minecraft actions.
     const std::string serialized=serialize_settings(fresh.settings());
