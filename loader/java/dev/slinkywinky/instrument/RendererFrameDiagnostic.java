@@ -160,12 +160,21 @@ public final class RendererFrameDiagnostic {
 
     /** Existing agent admission guard must already have been acquired. */
     public static void start(final Instrumentation instrumentation) throws Exception {
-        start(instrumentation,null);
+        start(instrumentation,null,false);
     }
 
     /** Non-null DLL path enables only R78 read-only current-WGL sampling. */
     public static void start(final Instrumentation instrumentation,
                              final String contextDllPath) throws Exception {
+        start(instrumentation,contextDllPath,false);
+    }
+
+    /** R91 is a distinct explicit, finite, first-party GL11 visual probe. */
+    public static void start(final Instrumentation instrumentation,
+                             final String contextDllPath,
+                             final boolean renderOverlay) throws Exception {
+        if(renderOverlay && contextDllPath==null)
+            throw new IllegalArgumentException("R91 native WGL DLL required");
         // R80: before the weaving transformer is registered, no renderer
         // bytes have been altered by this diagnostic. An original-class SHA,
         // callback visibility, or native-library admission failure must NOT
@@ -184,7 +193,7 @@ public final class RendererFrameDiagnostic {
             // Load AFTER original Mojang SHA and classloader admission, BEFORE
             // registering a bytecode-changing transformer. Never draw.
             evidence=contextDllPath==null?null:
-                RendererWglEvidence.open(contextDllPath);
+                RendererWglEvidence.open(contextDllPath,renderOverlay);
         } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
             // The read-only class inspector may still be installed. Do not
             // allow another attach while its removal is unproven.
@@ -283,6 +292,12 @@ public final class RendererFrameDiagnostic {
                         "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS ":
                         "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")+
                         evidence.result());
+                    if(evidence.overlayRequested()) {
+                        if(stable && evidence.overlayDrawn())
+                            System.out.println("R91_ORIGINAL_RENDER_OVERLAY_DRAW_PASS frames=1");
+                        else
+                            System.err.println("R91_RENDER_OVERLAY_UNVERIFIED");
+                    }
                 }
                 System.out.println(evidence==null?
                     "R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS":
