@@ -255,9 +255,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         text(item.title,31.0f,y+9.0f,2.0f,w-208.0f);
         if(!frame.appearance.compact) {
             rgb(0x929295);
-            text(item.expanded?"SAVE OR LOAD PROFILE":
-                 (module_has_profile_setting(item.catalog_index) ?
-                     "NATIVE SETTING ONLY" : "NOT IMPLEMENTED"),
+            text(!module_has_profile_setting(item.catalog_index) ?
+                 "NOT IMPLEMENTED" :
+                 (item.expanded?"P SAVE  L LOAD PROFILE":"NATIVE SETTING ONLY"),
                  31.0f,y+31.0f,1.1f,w-208.0f);
         }
         rgb(0xf0f0f0);
