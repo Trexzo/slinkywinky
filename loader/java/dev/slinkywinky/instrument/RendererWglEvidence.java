@@ -9,6 +9,8 @@ import java.io.File;
  */
 public final class RendererWglEvidence {
     private static native long[] nativeCurrentWglSnapshot();
+    private static native boolean nativeDrawReadOnlyOverlay(
+        long context,long dc,int width,int height);
 
     private Thread owner;
     private int attempts;
@@ -22,11 +24,18 @@ public final class RendererWglEvidence {
     private int height;
     private boolean pinned;
     private boolean poisoned;
+    private final boolean overlayRequested;
+    private boolean overlayDrawn;
+    private boolean overlayFailed;
 
-    private RendererWglEvidence() {}
+    private RendererWglEvidence(boolean requested) {overlayRequested=requested;}
 
     /** Must be called only after R73 has admitted exact loaded original classes. */
     public static RendererWglEvidence open(String dllPath) throws Exception {
+        return open(dllPath,false);
+    }
+
+    public static RendererWglEvidence open(String dllPath,boolean overlay) throws Exception {
         if(dllPath==null || !dllPath.endsWith("slinkywinky_jni.dll"))
             throw new IllegalArgumentException("R78 exact JNI DLL required");
         File dll=new File(dllPath).getCanonicalFile();
@@ -34,7 +43,7 @@ public final class RendererWglEvidence {
            !"slinkywinky_jni.dll".equalsIgnoreCase(dll.getName()))
             throw new IllegalArgumentException("R78 JNI DLL missing");
         System.load(dll.getAbsolutePath());
-        return new RendererWglEvidence();
+        return new RendererWglEvidence(overlay);
     }
 
     /**
@@ -79,12 +88,30 @@ public final class RendererWglEvidence {
                 // Same opaque handles and same exact viewport.
             }
             current++;
+            // The visual R91 experiment is a distinct explicit mode. Exactly
+            // ONE draw may occur, after all eight source/callsite/owner/WGL
+            // snapshots have passed the established passive R78 gate.
+            if(overlayRequested && attempts==8 && fullyStable()) {
+                try {
+                    overlayDrawn=nativeDrawReadOnlyOverlay(
+                        context,dc,width,height);
+                } catch(Throwable drawing) {
+                    overlayDrawn=false;
+                }
+                if(!overlayDrawn) {
+                    overlayFailed=true;
+                    poisoned=true;
+                    invalid++;
+                }
+            }
         } catch(Throwable error) {
             poisoned=true;
             invalid++;
         }
     }
 
+    public synchronized boolean overlayRequested(){return overlayRequested;}
+    public synchronized boolean overlayDrawn(){return overlayDrawn && !overlayFailed;}
     public synchronized int attempts(){return attempts;}
     public synchronized int present(){return current;}
     public synchronized int absent(){return absent;}
