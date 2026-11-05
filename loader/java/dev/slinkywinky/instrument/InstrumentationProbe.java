@@ -276,6 +276,21 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R91: one-frame GL11 renderer, never on by default. The original
+        // source-pinned R90 renderer, owner thread, finite callback and native
+        // WGL context gates remain mandatory. No combat or input controls.
+        final String overlayPrefix="minecraft-render-overlay-r91|";
+        if(options!=null && options.startsWith(overlayPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(overlayPrefix.length()),true);
+            } catch(Exception error) {
+                throw new IllegalStateException("R91 one-frame native overlay refused",error);
+            }
+            return;
+        }
         // R78 is an entirely separate, explicitly gated read-only native WGL
         // observation mode. Original Mojang class SHA admission is still
         // required before loading JNI or weaving any bytecode.
