@@ -1,6 +1,7 @@
 package dev.slinkywinky.attach;
 
 import dev.slinkywinky.instrument.InstrumentationProbe;
+import dev.slinkywinky.instrument.RendererFrameDiagnostic;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
@@ -33,7 +34,7 @@ public final class RenderPreweaveAdmissionSmoke {
     private enum Mode {
         UNRELATED, GENERATED_HASH_MISMATCH,
         REMOVE_FALSE, REMOVE_THROWS, ADD_THROWS, RETRANSFORM_UNSUPPORTED,
-        VM_ERROR_ON_CLASS_DISCOVERY
+        VM_ERROR_ON_CLASS_DISCOVERY, R85_RESTORE_SYNTHETIC
     }
     private static final class Fake implements InvocationHandler {
         final Mode mode;
@@ -78,13 +79,15 @@ public final class RenderPreweaveAdmissionSmoke {
             if("retransformClasses".equals(name)) {
                 check(registered!=null,"Retransformation before inspector installed");
                 Class<?>[] chosen=(Class<?>[])arguments[0];
-                check(chosen.length==2,"Unexpected original admission read count");
+                check(chosen.length==(mode==Mode.R85_RESTORE_SYNTHETIC?1:2),
+                      "Unexpected original admission/restore read count");
                 for(Class<?> type:chosen) {
                     final byte[] source=bytes(type);
                     byte[] modified=registered.transform(type.getClassLoader(),
                         type.getName().replace('.','/'),type,
                         type.getProtectionDomain(),source);
-                    check(modified==null,"Passive preflight modified original bytes");
+                    check(modified==null,
+                          "Passive preflight/restore inspector modified class bytes");
                     retransformed++;
                 }
                 return null;
@@ -141,6 +144,34 @@ public final class RenderPreweaveAdmissionSmoke {
               "Next Attach admitted following unrecoverable preflight error");
     }
 
+    /**
+     * An uncertain weave removal must never invoke even the passive restore
+     * transformer (its retransform could execute a still-registered weaver).
+     * The synthetic class deliberately fails the pinned-original SHA when a
+     * confirmed-removal test does reach the restoration verifier.
+     */
+    private static void caseRestoreSkippedOnUncertainWeaverRemoval() throws Exception {
+        Method gated=RendererFrameDiagnostic.class.getDeclaredMethod(
+            "restoreIfWeaverRemoved",boolean.class,Instrumentation.class,Class.class);
+        gated.setAccessible(true);
+        Fake fake=new Fake(Mode.R85_RESTORE_SYNTHETIC);
+        Instrumentation instrument=fake.instrumentation();
+        boolean refused=(Boolean)gated.invoke(null,false,instrument,
+                                               RenderPreweaveAdmissionSmoke.class);
+        check(!refused,"Unremoved weaver incorrectly certified restored");
+        check(fake.added==0 && fake.removed==0 && fake.retransformed==0,
+              "Uncertain weaving-removal triggered unsafe retransform");
+        check(fake.registered==null,
+              "Unexpected passive transformer after skipped restore");
+        boolean restored=(Boolean)gated.invoke(null,true,instrument,
+                                                RenderPreweaveAdmissionSmoke.class);
+        check(!restored,"Generated fixture incorrectly passed pinned SHA");
+        check(fake.added==1 && fake.removed==1 && fake.retransformed==1,
+              "Confirmed weave removal did not attempt bounded passive restore");
+        check(fake.registered==null,
+              "Confirmed-removal passive inspector was not cleaned up");
+    }
+
     public static void main(String[] args) throws Exception {
         Field field=InstrumentationProbe.class.getDeclaredField("hookInstalled");
         field.setAccessible(true);
@@ -172,6 +203,9 @@ public final class RenderPreweaveAdmissionSmoke {
             System.out.println("R80_R73_R75_R78_PREWEAVE_FAILURE_ISOLATION_PASS");
             caseUnexpectedVmError(gate);
             System.out.println("R83_R73_VM_ERROR_PRESERVES_ADMISSION_PASS");
+            caseRestoreSkippedOnUncertainWeaverRemoval();
+            System.out.println("R85_UNCONFIRMED_WEAVE_REMOVAL_SKIPS_RETRANSFORM_PASS");
+            System.out.println("R85_CONFIRMED_REMOVAL_PERMITS_PINNED_RESTORE_CHECK_PASS");
             System.out.println("R80_GENERATED_CLASSES_ONLY_NO_MINECRAFT_OR_GRAPHICS");
         } finally {
             // Isolated smoke JVM only; reset fake gate for other tests.
