@@ -8,6 +8,12 @@ See [native injection architecture, build and explicit limitations](docs/R24_NAT
 
 The tested C++ combat decision engine, native C API, Java JNI smoke bridge, session and input ownership regressions remain available. They are not yet connected to live vanilla Minecraft client hooks or an in-game GUI. The supplied candidate decrypted DLL is a local research reference, not redistributed or verified as an official artifact; OpenSlinky+ 2.2 is excluded.
 
+## R86 — native menu-to-profile settings bridge (still not playable)
+
+The first-party native C++ GUI previews now connect seven **existing engine configuration fields** to menu switches: Aim Assist, Auto Block, Auto Clicker, Backtrack, Hit Select, Reach and Velocity. The remaining **58 catalog names** are explicitly unavailable, rather than falsely showing working modules. The two native preview programs share a local versioned profile at `%LOCALAPPDATA%\\SlinkyWinky\\module-profile-preview.conf`; press **P** to save and **L** to load. Profile appearance remains independent, and corrupt profile loads are rejected.
+
+The new `native_menu_profile_binding` CTest validates mapping, visible-only writes, tab/scroll sync, persistence and rollback. **These settings are not yet connected to Minecraft gameplay or a live injected in-game ClickGUI.** The shipped injector architecture remains standalone Java 8/JVMTI/JNI, not Forge. See [R86 details](docs/R86_NATIVE_MENU_PROFILE_BINDING.md).
+
 ## Build
 
 On Windows x64 with a complete Java 8 JDK and MSVC:
