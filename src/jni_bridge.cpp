@@ -7,6 +7,8 @@
 #endif
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
+#include "slinkywinky/windows_menu_overlay_host.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
 #include <GL/gl.h>
 #include <cstdlib>
@@ -460,4 +462,60 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCurrentWglSnapshot(
     if(result)env->SetLongArrayRegion(result,0,6,sample);
     return result;
 }
+/**
+ * R91 explicitly opted-in, ONE finite GL1.1 overlay frame on the admitted
+ * original renderer thread after eight stable R78 context snapshots.
+ *
+ * No WGL context switching, framebuffer clear, input, networking or game
+ * settings. A fresh owner-bound host is closed on the same callback; no
+ * native renderer state is retained between frames.
+ */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+    JNIEnv*,jclass,jlong expectedContext,jlong expectedDc,jint width,jint height) {
+    if(expectedContext==0 || expectedDc==0 ||
+       width<320 || width>8192 || height<240 || height>8192)
+        return JNI_FALSE;
+    const HGLRC context=reinterpret_cast<HGLRC>(
+        static_cast<std::uintptr_t>(expectedContext));
+    const HDC dc=reinterpret_cast<HDC>(
+        static_cast<std::uintptr_t>(expectedDc));
+    if(wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc)
+        return JNI_FALSE;
+    GLint viewportBefore[4]{},viewportAfter[4]{};
+    GLint modeBefore=0,modeAfter=0;
+    GLint attribBefore=0,attribAfter=0,clientBefore=0,clientAfter=0;
+    GLfloat colorBefore[4]{},colorAfter[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewportBefore);
+    if(viewportBefore[0]!=0 || viewportBefore[1]!=0 ||
+       viewportBefore[2]!=width || viewportBefore[3]!=height)
+        return JNI_FALSE;
+    glGetIntegerv(GL_MATRIX_MODE,&modeBefore);
+    glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&attribBefore);
+    glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&clientBefore);
+    glGetFloatv(GL_CURRENT_COLOR,colorBefore);
+    slinkywinky::WglMenuOverlayHost host;
+    slinkywinky::MenuState menu;
+    slinkywinky::MenuProfileBridge profile(menu);
+    if(!host.open(context,dc,static_cast<unsigned>(width),
+                  static_cast<unsigned>(height)))
+        return JNI_FALSE;
+    const bool drawn=host.draw(menu,&profile);
+    const bool closed=host.close();
+    glGetIntegerv(GL_VIEWPORT,viewportAfter);
+    glGetIntegerv(GL_MATRIX_MODE,&modeAfter);
+    glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&attribAfter);
+    glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&clientAfter);
+    glGetFloatv(GL_CURRENT_COLOR,colorAfter);
+    if(!drawn || !closed || modeBefore!=modeAfter ||
+       attribBefore!=attribAfter || clientBefore!=clientAfter ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc)
+        return JNI_FALSE;
+    for(int i=0;i<4;i++)
+        if(viewportBefore[i]!=viewportAfter[i] ||
+           std::fabs(colorBefore[i]-colorAfter[i])>0.00001f)
+            return JNI_FALSE;
+    return JNI_TRUE;
+}
+
 #endif
