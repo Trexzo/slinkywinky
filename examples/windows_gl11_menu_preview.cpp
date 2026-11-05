@@ -140,9 +140,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 if(overlayDemo) {
                     glClearColor(0.10f,0.38f,0.69f,1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
-                    if(overlayHost.draw(menu))SwapBuffers(device);
+                    if(overlayHost.draw(menu,&profile))SwapBuffers(device);
                 } else {
-                    const auto frame=session.next(menu);
+                    const auto frame=session.next(menu,&profile);
                     if(frame && slinkywinky::draw_menu_gl11(
                         *frame,graphics,device,
                         slinkywinky::MenuGL11Mode::StandalonePreview))
