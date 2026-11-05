@@ -132,10 +132,10 @@ void redraw(HWND hwnd,HDC target) {
             draw(buffer,widen(item.title),31,y+5,w-206,23,bright);
             SelectObject(buffer,small);
             if(!frame->appearance.compact)
-                draw(buffer,item.expanded?L"Parameters are in the saved profile":
-                     (slinkywinky::module_has_profile_setting(item.catalog_index)
-                         ? L"Native profile setting - not active in Minecraft"
-                         : L"Not implemented - unavailable"),
+                draw(buffer,!slinkywinky::module_has_profile_setting(item.catalog_index)
+                         ? L"Not implemented - unavailable" :
+                     (item.expanded?L"P: save profile  /  L: load profile":
+                         L"Native profile setting - not active in Minecraft"),
                      31,y+24,w-206,16,muted);
             // Dedicated + expansion and inert preview-switch affordances.
             draw(buffer,item.expanded?L"-":L"+",w-122,y+9,32,28,muted,
