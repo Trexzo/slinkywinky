@@ -1,5 +1,7 @@
 package dev.slinkywinky.instrument;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.MessageDigest;
@@ -8,6 +10,7 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
@@ -117,6 +120,54 @@ public final class RendererLivePreflight {
             "Original renderer shape mismatch");
     }
 
+    // R90 read-only diagnostics: distinguish a JVM constant-pool rewrite from
+    // changed class bytecode. This NEVER grants admission, even if equal.
+    private static byte[] sourceBytes(Class<?> type) throws Exception {
+        InputStream stream=type.getResourceAsStream("/"+type.getName().replace('.','/')+".class");
+        if(stream==null) throw new IllegalStateException("Source class resource absent");
+        try {
+            ByteArrayOutputStream copy=new ByteArrayOutputStream();
+            byte[] chunk=new byte[8192];
+            int count;
+            while((count=stream.read(chunk))!=-1) {
+                if(copy.size()+count>1000000)
+                    throw new IllegalStateException("Oversized source class resource");
+                copy.write(chunk,0,count);
+            }
+            return copy.toByteArray();
+        } finally {stream.close();}
+    }
+
+    private static String asmRoundtripSha256(byte[] bytes) throws Exception {
+        ClassReader reader=new ClassReader(bytes);
+        ClassWriter writer=new ClassWriter(0);
+        reader.accept(writer,0);
+        return sha256(writer.toByteArray());
+    }
+
+    private static String mismatchDiagnostics(Class<?> game,Class<?> render,
+                                               byte[] gameCaptured,byte[] renderCaptured)
+        throws Exception {
+        final byte[] gameSource=sourceBytes(game);
+        final byte[] renderSource=sourceBytes(render);
+        if(!AVE_SHA.equals(sha256(gameSource)) || !BFK_SHA.equals(sha256(renderSource)))
+            return "R90_SOURCE_BYTES_NOT_PINNED";
+        final byte[][] sources={gameSource,renderSource};
+        final byte[][] seen={gameCaptured,renderCaptured};
+        final StringBuilder summary=new StringBuilder("R90_RETRANSFORM_DIFF");
+        for(int i=0;i<2;i++) {
+            byte[] a=sources[i],b=seen[i];
+            int differences=Math.abs(a.length-b.length);
+            for(int at=0;at<Math.min(a.length,b.length);at++)
+                if(a[at]!=b[at]) differences++;
+            summary.append(i==0?" ave":" bfk");
+            summary.append("_bytes_changed=").append(differences);
+            summary.append("_asm_equal=").append(
+                asmRoundtripSha256(a).equals(asmRoundtripSha256(b)));
+        }
+        return summary.toString();
+    }
+
     /** Only this pinned admission is used on a live target. */
     public static void checkPinnedOriginal(byte[] ave, byte[] bfk) throws Exception {
         checkExactClasses(ave,bfk,AVE_SHA,BFK_SHA);
@@ -191,7 +242,22 @@ public final class RendererLivePreflight {
         }
         require(gameSeen.get()==1 && renderSeen.get()==1,
                 "Original classes not observed exactly once");
-        checkPinnedOriginal(captured[0],captured[1]);
+        try {
+            checkPinnedOriginal(captured[0],captured[1]);
+        } catch(IllegalStateException mismatch) {
+            // No compatibility fallback; observed runtime bytes must still
+            // pass the exact pinned policy until source-level equivalence is
+            // explicitly defined and validated in independent tests.
+            try {
+                System.err.println(mismatchDiagnostics(
+                    gameClass,renderClass,captured[0],captured[1]));
+            } catch(Exception unavailable) {
+                System.err.println("R90_RETRANSFORM_DIFF_DIAGNOSTIC_UNAVAILABLE "+
+                                   unavailable.getClass().getSimpleName());
+            }
+            System.err.flush();
+            throw mismatch;
+        }
         return renderClass;
     }
 
