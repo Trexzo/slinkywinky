@@ -3,6 +3,7 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include <GL/gl.h>
 #include <algorithm>
@@ -254,14 +255,16 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         text(item.title,31.0f,y+9.0f,2.0f,w-208.0f);
         if(!frame.appearance.compact) {
             rgb(0x929295);
-            text(item.expanded?"SETTINGS PREVIEW":"UI DEMO ONLY",
+            text(item.expanded?"SAVE OR LOAD PROFILE":
+                 (module_has_profile_setting(item.catalog_index) ?
+                     "NATIVE SETTING ONLY" : "NOT IMPLEMENTED"),
                  31.0f,y+31.0f,1.1f,w-208.0f);
         }
         rgb(0xf0f0f0);
         text(item.expanded?"-":"+",w-117.0f,y+17.0f,1.5f,25.0f);
     }
     rgb(0x929295);
-    text("UI PREVIEW - NO GAME ACTIONS",23,585,1.2f,w-46.0f);
+    text("P SAVE  L LOAD  /  NO GAME ACTIONS",23,585,1.2f,w-46.0f);
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture
     // selection or app-managed caches; state restoration is GL1.1 only.
     return true;
