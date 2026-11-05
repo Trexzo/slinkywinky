@@ -8,6 +8,7 @@ must be provided. Only fresh appended bytes count as receipts.
 """
 import argparse
 import ctypes
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,6 +27,9 @@ STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
 # Cap per-stage stdout to prevent unbounded reads or very noisy JVM logs
 # being mistaken for a clean, short diagnostic session.
 MAX_STAGE_STDOUT_BYTES = 262144
+PINNED_VANILLA_189_BYTES = 8461484
+PINNED_VANILLA_189_SHA1 = "3870888a6c3d349d3771a3e9d16c9bf5e076b908"
+PINNED_VANILLA_189_SHA256 = "14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298"
 
 NEGATIVE = (
     "R75_RENDER_RESTORE_FAIL",
@@ -54,6 +58,43 @@ STAGES = {
 
 class ReceiptError(RuntimeError):
     pass
+
+
+def verify_original_client_jar(path):
+    """Read-only local vanilla provenance check; loaded bytecode checked separately."""
+    before = path.stat()
+    if not path.is_file() or before.st_size != PINNED_VANILLA_189_BYTES:
+        raise ReceiptError("Exact original vanilla 1.8.9 client JAR required")
+    sha1 = hashlib.sha1()
+    sha256 = hashlib.sha256()
+    with path.open("rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if (opened.st_dev, opened.st_ino, opened.st_size) != (
+                before.st_dev, before.st_ino, before.st_size):
+            raise ReceiptError("Vanilla JAR changed before hashing")
+        while True:
+            data = stream.read(65536)
+            if not data:
+                break
+            sha1.update(data)
+            sha256.update(data)
+        after_read = os.fstat(stream.fileno())
+    after = path.stat()
+    def identity(st):
+        return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+    if (identity(before) != identity(opened) or
+            identity(opened) != identity(after_read) or
+            identity(after_read) != identity(after)):
+        raise ReceiptError("Vanilla JAR changed during verification")
+    if (sha1.hexdigest() != PINNED_VANILLA_189_SHA1 or
+            sha256.hexdigest() != PINNED_VANILLA_189_SHA256):
+        raise ReceiptError("Vanilla 1.8.9 client JAR digest mismatch")
+    return identity(after)
+
+
+def require_same_original_jar(path, original_identity):
+    if verify_original_client_jar(path) != original_identity:
+        raise ReceiptError("Vanilla JAR replaced between diagnostics")
 
 
 # R82: validate complete JVM stdout LINES, never permissive substrings.
@@ -243,6 +284,8 @@ def run(argv=None):
     p.add_argument("--jdk8", required=True, type=Path)
     p.add_argument("--pid", required=True, type=int)
     p.add_argument("--target-stdout-log", required=True, type=Path)
+    p.add_argument("--original-client-jar", type=Path,
+                   help="Optional explicit original Mojang 1.8.9 client JAR path")
     p.add_argument("--mode", choices=sorted(STAGES), default="context")
     p.add_argument("--timeout-seconds", type=int, default=30)
     p.add_argument("--execute", action="store_true",
@@ -275,6 +318,16 @@ def run(argv=None):
         raise ReceiptError("Refusing to overwrite an existing evidence report")
     if loader.name.lower() != "slinkywinky_loader.exe":
         raise ReceiptError("Exact native loader executable required")
+    if a.original_client_jar is None:
+        if not os.environ.get("APPDATA"):
+            raise ReceiptError("APPDATA missing; supply --original-client-jar")
+        client_path = Path(os.environ["APPDATA"]) / ".minecraft" / (
+            "versions/1.8.9/1.8.9.jar")
+    else:
+        client_path = a.original_client_jar
+    client_path = client_path.resolve(strict=True)
+    original_client_identity = verify_original_client_jar(client_path)
+    print("R89_PINNED_LOCAL_ORIGINAL_189_CLIENT_PASS", flush=True)
 
     # Do NOT allow a synthetic fixture bypass or an extra gameplay hook gate.
     env = os.environ.copy()
@@ -297,6 +350,7 @@ def run(argv=None):
                                  timeout=15, check=True)
         check_target_listing(current.stdout, a.pid)
         require_same_process(a.pid,original_birth)
+        require_same_original_jar(client_path,original_client_identity)
         original_stat = target_log.stat()
         before = original_stat.st_size
         cmd = [str(loader), "attach", str(a.pid), str(jdk8), option]
@@ -310,6 +364,7 @@ def run(argv=None):
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
         require_same_process(a.pid,original_birth)
+        require_same_original_jar(client_path,original_client_identity)
         records.append({"mode":option,"target_receipts":list(receipts)})
         print("R81_FRESH_TARGET_RECEIPTS_PASS mode="+option,flush=True)
 
@@ -319,6 +374,7 @@ def run(argv=None):
                                    timeout=15, check=True)
     check_target_listing(final_listing.stdout, a.pid)
     require_same_process(a.pid,original_birth)
+    require_same_original_jar(client_path,original_client_identity)
     # This is not a substitute for a visual game-frame/GL state inspection.
     print("R81_ORIGINAL_RENDER_DIAGNOSTIC_RECEIPTS_PASS")
     print("R81_NOT_GAME_MENU_OR_VISUAL_RENDER_ACCEPTANCE")
