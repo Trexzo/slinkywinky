@@ -21,6 +21,10 @@ PREFLIGHT = "R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS"
 PREFLIGHT_RELEASED = "R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS"
 RESTORED = "R90_RESTORED_SOURCE_PINNED_EXECUTION_PASS"
 OVERLAY = "R91_ORIGINAL_RENDER_OVERLAY_DRAW_PASS frames=1"
+R92_CALLBACK = "R92_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
+R92_STABLE = ("R92_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
+              "absent=0 invalid=0 changed=0 stable=true frames=64")
+R92_OVERLAY = "R92_MULTIFRAME_OVERLAY_DRAW_PASS frames=64"
 CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
 RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
 STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
@@ -38,6 +42,8 @@ NEGATIVE = (
     "R75_RENDER_CALLBACK_UNVERIFIED",
     "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED",
     "R91_RENDER_OVERLAY_UNVERIFIED",
+    "R92_WGL_CONTEXT_UNVERIFIED",
+    "R92_MULTIFRAME_OVERLAY_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -48,6 +54,7 @@ LOADER_MODES = {
     "--render-callback=8": "render-callback-r75",
     "--render-context=8": "render-context-r78",
     "--render-overlay=8": "render-overlay-r91",
+    "--render-overlay=72": "render-overlay-r92",
 }
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
@@ -60,6 +67,12 @@ STAGES = {
                 ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
                 ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
                 ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED))),
+    "multiframe": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
+                   ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
+                   ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
+                   ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)),
+                   ("--render-overlay=72",
+                    (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED))),
 }
 
 
@@ -118,12 +131,17 @@ RECEIPT_LINES = {
     RELEASED: re.compile(r"^" + re.escape(RELEASED) + r"\r?$", re.MULTILINE),
     STABLE: re.compile(r"^" + re.escape(STABLE) + r"\r?$", re.MULTILINE),
     OVERLAY: re.compile(r"^" + re.escape(OVERLAY) + r"\r?$", re.MULTILINE),
+    R92_CALLBACK: re.compile(
+        r"^" + re.escape(R92_CALLBACK) +
+        r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
+    R92_STABLE: re.compile(r"^" + re.escape(R92_STABLE) + r"\r?$", re.MULTILINE),
+    R92_OVERLAY: re.compile(r"^" + re.escape(R92_OVERLAY) + r"\r?$", re.MULTILINE),
 }
 
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["overlay"])[option]
+    expected = dict(STAGES["multiframe"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
@@ -148,6 +166,8 @@ def validate_receipt(option, appended):
                 raise ReceiptError("Malformed or conflicting pass-looking target receipt")
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    elif option == "--render-overlay=72":
+        ordered = (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)
     else:
         ordered = ((RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)
                    if option == "--render-overlay=8" else
@@ -345,11 +365,14 @@ def run(argv=None):
     env.pop("SLINKYWINKY_ATTACH_TEST", None)
     env.pop("SLINKYWINKY_EXPERIMENTAL_HOOK", None)
     env.pop("SLINKYWINKY_RENDER_OVERLAY", None)
+    env.pop("SLINKYWINKY_RENDER_MULTIFRAME", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
-    if a.mode=="overlay":
+    if a.mode in ("overlay","multiframe"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
+    if a.mode=="multiframe":
+        env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
