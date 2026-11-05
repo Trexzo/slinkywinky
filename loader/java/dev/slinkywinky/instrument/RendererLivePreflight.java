@@ -336,6 +336,53 @@ public final class RendererLivePreflight {
         return summary.toString();
     }
 
+    /**
+     * R90: the ORIGINAL source class is SHA-pinned byte-for-byte. HotSpot's
+     * retransformation input may reorder methods and constant-pool entries;
+     * compare the actual loaded execution shape without treating its raw
+     * serialized classfile hash as the original JAR entry's hash.
+     *
+     * This method is pure: no Instrumentation, Attach, or native code.
+     */
+    public static void checkEquivalentClassBytes(byte[] source,byte[] current,
+                                                  String expectedSha) throws Exception {
+        require(source!=null && current!=null &&
+                source.length>0 && source.length<=1000000 &&
+                current.length>0 && current.length<=1000000,
+                "Missing or oversized loaded original-class bytes");
+        require(sha256(source).equals(expectedSha),
+                "Original source class did not match its pinned SHA-256");
+        final ClassReader pinned=new ClassReader(source);
+        final ClassReader live=new ClassReader(current);
+        require(pinned.getClassName().equals(live.getClassName()),
+                "Runtime class identity differs from pinned source");
+        if(!Arrays.equals(source,current))
+            require(bytecodeShapeSha256(source).equals(bytecodeShapeSha256(current)),
+                    "Runtime original-class execution-shape mismatch");
+    }
+
+    private static void requireOriginalJarSource(Class<?> target) {
+        final ProtectionDomain domain=target.getProtectionDomain();
+        final java.security.CodeSource source=domain==null?null:domain.getCodeSource();
+        final java.net.URL location=source==null?null:source.getLocation();
+        require(location!=null && "file".equalsIgnoreCase(location.getProtocol()) &&
+                location.getPath().endsWith("/1.8.9.jar"),
+                "Loaded original class is not sourced from vanilla 1.8.9.jar");
+    }
+
+    /**
+     * R90 restore/weave validation for a *single* live renderer class.
+     * Caller must separately have admitted ave+bfk on the same ClassLoader.
+     * This fails closed on either a replaced source resource or changed code.
+     */
+    public static void checkPinnedRuntimeRenderer(Class<?> renderer,byte[] current)
+        throws Exception {
+        require(renderer!=null && "bfk".equals(renderer.getName()),
+                "Not an original vanilla renderer class");
+        requireOriginalJarSource(renderer);
+        checkEquivalentClassBytes(sourceBytes(renderer),current,BFK_SHA);
+    }
+
     /** Only this pinned admission is used on a live target. */
     public static void checkPinnedOriginal(byte[] ave, byte[] bfk) throws Exception {
         checkExactClasses(ave,bfk,AVE_SHA,BFK_SHA);
@@ -411,7 +458,20 @@ public final class RendererLivePreflight {
         require(gameSeen.get()==1 && renderSeen.get()==1,
                 "Original classes not observed exactly once");
         try {
-            checkPinnedOriginal(captured[0],captured[1]);
+            requireOriginalJarSource(gameClass);
+            requireOriginalJarSource(renderClass);
+            require(gameClass.getProtectionDomain().getCodeSource().getLocation()
+                    .toExternalForm().equals(
+                    renderClass.getProtectionDomain().getCodeSource().getLocation()
+                    .toExternalForm()),
+                    "Minecraft and renderer have different vanilla JAR sources");
+            final byte[] gameSource=sourceBytes(gameClass);
+            final byte[] renderSource=sourceBytes(renderClass);
+            // Retain exact bytes/SHA+structure verification on Mojang's
+            // immutable source. Never treat a renamed/mutated JAR as official.
+            checkPinnedOriginal(gameSource,renderSource);
+            checkEquivalentClassBytes(gameSource,captured[0],AVE_SHA);
+            checkEquivalentClassBytes(renderSource,captured[1],BFK_SHA);
         } catch(IllegalStateException mismatch) {
             // No compatibility fallback; observed runtime bytes must still
             // pass the exact pinned policy until source-level equivalence is
@@ -431,7 +491,8 @@ public final class RendererLivePreflight {
 
     public static void run(final Instrumentation instrumentation) throws Exception {
         admit(instrumentation);
-        // Does not prove a live game render-frame callback or GL context.
+        // Does not prove a live callback, context, or a working game menu.
+        System.out.println("R90_SOURCE_PINNED_VM_EXECUTION_SHAPE_PASS");
         System.out.println("R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS");
         System.out.println("R73_NO_RENDER_HOOK_OR_GRAPHICS_SIDE_EFFECTS");
         System.out.flush();
