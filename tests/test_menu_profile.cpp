@@ -1,5 +1,4 @@
 #include "slinkywinky/menu_profile.hpp"
-#include <array>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -11,7 +10,6 @@ using namespace slinkywinky;
 int main() {
     MenuState menu;
     MenuProfileBridge profile(menu);
-    const std::array<std::size_t,7> supported{{0,1,2,4,6,12,15}};
     for(std::size_t i=0;i<official_module_catalog().size();++i) {
         const bool expected=(i==0||i==1||i==2||i==4||i==6||i==12||i==15);
         CHECK(module_has_profile_setting(i)==expected);
