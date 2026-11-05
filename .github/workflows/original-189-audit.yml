@@ -12,10 +12,14 @@ on:
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
       - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
+      - 'loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java'
+      - 'loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java'
       - 'loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java'
       - 'loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java'
       - 'loader/java/dev/slinkywinky/instrument/RenderFrameGate.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererFrameDiagnosticAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RenderPreweaveAdmissionSmoke.java'
       - 'CMakeLists.txt'
   pull_request:
     paths:
@@ -26,10 +30,14 @@ on:
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
       - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
+      - 'loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java'
+      - 'loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java'
       - 'loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java'
       - 'loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java'
       - 'loader/java/dev/slinkywinky/instrument/RenderFrameGate.java'
       - 'tests/java/dev/slinkywinky/attach/OriginalRendererFrameDiagnosticAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RenderPreweaveAdmissionSmoke.java'
       - 'CMakeLists.txt'
   workflow_dispatch:
 
