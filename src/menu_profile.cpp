@@ -37,7 +37,7 @@ bool module_has_profile_setting(std::size_t index) noexcept {
            index==6 || index==12 || index==15;
 }
 
-MenuProfileBridge::MenuProfileBridge(MenuState& menu) noexcept : menu_(menu) {
+MenuProfileBridge::MenuProfileBridge(MenuState& menu) : menu_(menu) {
     synchronize_visible();
 }
 bool* MenuProfileBridge::flag(std::size_t index) noexcept {
@@ -46,7 +46,7 @@ bool* MenuProfileBridge::flag(std::size_t index) noexcept {
 const bool* MenuProfileBridge::flag(std::size_t index) const noexcept {
     return setting(settings_,index);
 }
-void MenuProfileBridge::synchronize_visible() noexcept {
+void MenuProfileBridge::synchronize_visible() {
     // All page writes are preview flags. In particular nothing executes an
     // attack, changes client inputs or mutates any injected Minecraft state.
     for(const auto& item:menu_.page()) {
@@ -56,12 +56,12 @@ void MenuProfileBridge::synchronize_visible() noexcept {
             menu_.toggle_preview(item.catalog_index);
     }
 }
-bool MenuProfileBridge::select(MenuTab tab) noexcept {
+bool MenuProfileBridge::select(MenuTab tab) {
     if(!menu_.select(tab))return false;
     synchronize_visible();
     return true;
 }
-bool MenuProfileBridge::scroll_by(int delta) noexcept {
+bool MenuProfileBridge::scroll_by(int delta) {
     if(!menu_.scroll_by(delta))return false;
     synchronize_visible();
     return true;
@@ -70,7 +70,7 @@ bool MenuProfileBridge::enabled(std::size_t index) const noexcept {
     const bool* stored=flag(index);
     return stored!=nullptr && *stored;
 }
-bool MenuProfileBridge::toggle(std::size_t index) noexcept {
+bool MenuProfileBridge::toggle(std::size_t index) {
     bool* stored=flag(index);
     if(stored==nullptr || official_module_catalog()[index].tab!=menu_.tab())
         return false;
