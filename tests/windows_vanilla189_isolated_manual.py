@@ -244,9 +244,14 @@ def main():
     (game_dir / "options.txt").write_text(
         "fullscreen:false\nfancyGraphics:false\nrenderDistance:2\n", encoding="ascii"
     )
-    log = sandbox / "vanilla-run.log"
+    log = sandbox / (
+        "r90-render-" + str(time.time_ns()) + ".log"
+        if args.render_context_acceptance else "vanilla-run.log"
+    )
     cmd = [
-        str(jdk / "bin" / "java.exe"), "-Xmx768M",
+        str(jdk / "bin" / "java.exe"),
+        *(["-verbose:class"] if args.render_context_acceptance else []),
+        "-Xmx768M",
         "-Djava.library.path=" + str(native_dir),
         "-Dlog4j2.formatMsgNoLookups=true",
         "-cp", os.pathsep.join(classpath),
@@ -272,6 +277,16 @@ def main():
     def read_log():
         return log.read_text(encoding="utf-8", errors="replace")
 
+    def loaded_exact_original_render_classes():
+        # Java 8 -verbose:class prints an exact class name at the start of
+        # its own [Loaded ...] line. This avoids treating LWJGL initialization
+        # (which occurs earlier) as a loaded Minecraft renderer.
+        text = read_log()
+        return ("LWJGL Version:" in text and
+                re.search(r"(?m)^\\[Loaded ave from ", text) is not None and
+                re.search(r"(?m)^\\[Loaded bfk from ", text) is not None)
+
+
     def wait_for(process, marker, count, seconds):
         end = time.monotonic() + seconds
         while time.monotonic() < end and process.poll() is None:
@@ -281,7 +296,7 @@ def main():
         return False
 
     print("Launching one isolated vanilla 1.8.9 JVM; no Forge.", flush=True)
-    with log.open("wb") as output:
+    with log.open("xb" if args.render_context_acceptance else "wb") as output:
         game = subprocess.Popen(
             cmd, cwd=str(sandbox), env=environment, stdout=output,
             stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
@@ -295,10 +310,18 @@ def main():
             if len(exact) != 1:
                 raise RuntimeError("The newly launched vanilla PID was not uniquely enumerated")
             if args.render_context_acceptance:
-                # The game must reach actual LWJGL initialization rather than
-                # stopping at a generic launcher/user-info startup marker.
-                if not wait_for(game, "LWJGL Version:", 1, 45):
-                    raise RuntimeError("Original vanilla 1.8.9 did not establish LWJGL initialization")
+                # A Java 8 renderer starts later than the LWJGL log line.
+                # Require real JVM class-load receipts for both exact original
+                # obfuscated classes before sending the first Attach.
+                end = time.monotonic() + 50
+                while (time.monotonic() < end and game.poll() is None and
+                       not loaded_exact_original_render_classes()):
+                    time.sleep(0.2)
+                if not loaded_exact_original_render_classes():
+                    raise RuntimeError("Original vanilla renderer classes were not loaded before first Attach")
+                print("R90_ORIGINAL_189_RENDER_CLASSES_LOADED_PASS",
+                      "pid=" + str(game.pid), flush=True)
+
                 harness = Path(__file__).with_name("original_189_live_render_acceptance.py")
                 if not harness.is_file():
                     raise RuntimeError("Missing in-repository original renderer receipt checker")
