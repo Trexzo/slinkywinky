@@ -6,6 +6,7 @@
 #endif
 #include <windows.h>
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include <array>
 #include <cstdint>
@@ -16,6 +17,7 @@
 namespace {
 using slinkywinky::MenuTab;
 slinkywinky::MenuState menu;
+slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuRenderSession renderSession;
 constexpr int baseWidth=676, wideWidth=844, panelHeight=630;
 constexpr int navY=78, navH=42, rowStart=153, rowH=49, visibleRows=8;
@@ -23,10 +25,18 @@ constexpr wchar_t klass[]=L"SlinkyWinkyMenuPreview";
 bool alternateAccent=false;
 int windowWidth=baseWidth;
 std::filesystem::path prefsPath;
+std::filesystem::path profilePath;
 
 void save_prefs() {
     if(!prefsPath.empty())
         slinkywinky::save_menu_appearance(prefsPath,menu.appearance());
+}
+std::filesystem::path profile_path() {
+    wchar_t buffer[32768]{};
+    const DWORD n=GetEnvironmentVariableW(L"LOCALAPPDATA",buffer,32768);
+    if(n==0 || n>=32768)return {};
+    return std::filesystem::path(buffer)/L"SlinkyWinky"/
+           L"module-profile-preview.conf";
 }
 std::filesystem::path prefs_path() {
     wchar_t buffer[32768]{};
@@ -103,7 +113,7 @@ void redraw(HWND hwnd,HDC target) {
          w-160,24,bright);
     SelectObject(buffer,small);
     draw(buffer,frame->is_placeholder?L"Profiles not wired to gameplay":
-         L"PREVIEW-ONLY SWITCHES",w-225,125,202,24,muted,
+         L"PROFILE SETTINGS ONLY",w-225,125,202,24,muted,
          DT_RIGHT|DT_SINGLELINE|DT_VCENTER);
     const auto& page=frame->visible;
     if(frame->is_placeholder) {
@@ -122,8 +132,10 @@ void redraw(HWND hwnd,HDC target) {
             draw(buffer,widen(item.title),31,y+5,w-206,23,bright);
             SelectObject(buffer,small);
             if(!frame->appearance.compact)
-                draw(buffer,item.expanded?L"Settings UI: not connected":
-                     L"UI catalog only - no module implementation",
+                draw(buffer,item.expanded?L"Parameters are in the saved profile":
+                     (slinkywinky::module_has_profile_setting(item.catalog_index)
+                         ? L"Native profile setting - not active in Minecraft"
+                         : L"Not implemented - unavailable"),
                      31,y+24,w-206,16,muted);
             // Dedicated + expansion and inert preview-switch affordances.
             draw(buffer,item.expanded?L"-":L"+",w-122,y+9,32,28,muted,
@@ -137,9 +149,9 @@ void redraw(HWND hwnd,HDC target) {
     }
     rect(buffer,18,565,w-36,1,RGB(61,61,63));
     SelectObject(buffer,small);
-    draw(buffer,L"1-6 tabs  |  Scroll wheel  |  C compact  |  W wide  |  G accent  |  Esc close",
+    draw(buffer,L"1-6 tabs | Scroll | P save profile | L load | C compact | W wide | G accent",
          21,575,w-42,18,muted);
-    draw(buffer,L"Preview switches never enable Minecraft modules. Unload is disabled here.",
+    draw(buffer,L"7 native settings supported; other switches unavailable. NO GAME ACTIONS.",
          21,594,w-42,18,RGB(203,137,90));
     BitBlt(target,0,0,client.right,client.bottom,buffer,0,0,SRCCOPY);
     SelectObject(buffer,prevFont);
@@ -164,7 +176,7 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_MOUSEWHEEL:{
             const int sign=GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1;
-            menu.scroll_by(sign);repaint(hwnd);return 0;
+            profile.scroll_by(sign);repaint(hwnd);return 0;
         }
         case WM_LBUTTONDOWN:{
             const int x=static_cast<short>(LOWORD(lp));
@@ -173,14 +185,14 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             const int clientWidth=client.right;
             if(y>=navY && y<navY+navH && x>=18 && x<clientWidth-18) {
                 const int idx=(x-18)*7/(clientWidth-36);
-                if(idx>=0 && idx<6)menu.select(static_cast<MenuTab>(idx));
+                if(idx>=0 && idx<6)profile.select(static_cast<MenuTab>(idx));
             } else if(y>=rowStart && y<rowStart+8*rowH &&
                      menu.tab()!=MenuTab::Profiles) {
                 const auto rows=menu.page();
                 const int idx=(y-rowStart)/rowH;
                 if(idx>=0 && static_cast<std::size_t>(idx)<rows.size()) {
                     if(x>=clientWidth-92 && x<=clientWidth-19)
-                        menu.toggle_preview(rows[idx].catalog_index);
+                        profile.toggle(rows[idx].catalog_index);
                     else if(x>=clientWidth-145 && x<clientWidth-92)
                         menu.toggle_expanded(rows[idx].catalog_index);
                 }
@@ -189,7 +201,7 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_KEYDOWN:{
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
-            if(wp>=L'1'&&wp<=L'6')menu.select(static_cast<MenuTab>(wp-L'1'));
+            if(wp>=L'1'&&wp<=L'6')profile.select(static_cast<MenuTab>(wp-L'1'));
             if(wp==L'C'){
                 menu.set_compact(!menu.appearance().compact);
                 save_prefs();
@@ -206,8 +218,10 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                              SWP_NOMOVE|SWP_NOZORDER);
                 save_prefs();
             }
-            if(wp==VK_UP)menu.scroll_by(-1);
-            if(wp==VK_DOWN)menu.scroll_by(1);
+            if(wp==VK_UP)profile.scroll_by(-1);
+            if(wp==VK_DOWN)profile.scroll_by(1);
+            if(wp==L'P' && !profilePath.empty())profile.save(profilePath);
+            if(wp==L'L' && !profilePath.empty())profile.load(profilePath);
             repaint(hwnd);return 0;
         }
         case WM_DESTROY:
@@ -221,6 +235,8 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR args,int show) {
     if(args && args[0]!=L'\0')return 3; // No PIDs, injected objects, or commands.
     prefsPath=prefs_path();
+    profilePath=profile_path();
+    if(!profilePath.empty())profile.load(profilePath);
     slinkywinky::MenuAppearance stored{};
     if(!prefsPath.empty() && slinkywinky::load_menu_appearance(prefsPath,stored))
         menu.set_appearance(stored);
