@@ -7,7 +7,9 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.security.MessageDigest;
 import java.security.ProtectionDomain;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.objectweb.asm.ClassReader;
@@ -163,6 +165,8 @@ public final class RendererLivePreflight {
      */
     private static String bytecodeShapeTranscript(byte[] bytes) throws Exception {
         final StringBuilder out=new StringBuilder(bytes.length*2);
+        final ArrayList<String> fields=new ArrayList<String>();
+        final ArrayList<String> methods=new ArrayList<String>();
         final ClassReader reader=new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM5) {
             @Override public void visit(int version,int access,String name,
@@ -172,13 +176,16 @@ public final class RendererLivePreflight {
             }
             @Override public org.objectweb.asm.FieldVisitor visitField(
                     int access,String name,String desc,String signature,Object value) {
-                trace(out,"F",String.valueOf(access),name,desc,signature,
+                StringBuilder field=new StringBuilder();
+                trace(field,"F",String.valueOf(access),name,desc,signature,
                       String.valueOf(value));
+                fields.add(field.toString());
                 return null;
             }
             @Override public MethodVisitor visitMethod(int access,String name,
                     String desc,String signature,String[] exceptions) {
-                trace(out,"M",String.valueOf(access),name,desc,signature,
+                final StringBuilder method=new StringBuilder();
+                trace(method,"M",String.valueOf(access),name,desc,signature,
                       Arrays.toString(exceptions));
                 return new MethodVisitor(Opcodes.ASM5) {
                     final IdentityHashMap<Label,Integer> ids=
@@ -191,7 +198,7 @@ public final class RendererLivePreflight {
                         ids.put(label,assigned);
                         return assigned;
                     }
-                    void emit(String... items) {trace(out,items);}
+                    void emit(String... items) {trace(method,items);}
                     @Override public void visitCode() {emit("code");}
                     @Override public void visitInsn(int op) {
                         emit("I",String.valueOf(op));
@@ -261,10 +268,20 @@ public final class RendererLivePreflight {
                     @Override public void visitMaxs(int stack,int locals) {
                         emit("MAX",String.valueOf(stack),String.valueOf(locals));
                     }
-                    @Override public void visitEnd() {emit("END");}
+                    @Override public void visitEnd() {
+                        emit("END");
+                        methods.add(method.toString());
+                    }
                 };
             }
         },ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
+        // HotSpot retransform may report methods in a different order. The
+        // identity and complete instruction transcript of EVERY method and
+        // field must still match the pinned original source.
+        Collections.sort(fields);
+        Collections.sort(methods);
+        for(String field:fields)trace(out,"FIELD",field);
+        for(String method:methods)trace(out,"METHOD",method);
         return out.toString();
     }
 
