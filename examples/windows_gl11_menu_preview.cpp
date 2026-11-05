@@ -13,6 +13,10 @@
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <cstdint>
 #include <filesystem>
+#include <iomanip>
+#include <optional>
+#include <sstream>
+#include <string>
 
 namespace {
 using slinkywinky::MenuTab;
@@ -28,6 +32,7 @@ HWND window=nullptr;
 std::filesystem::path preferences;
 std::filesystem::path profilePreferences;
 bool overlayDemo=false; // Standalone-only demonstration, never attached to Minecraft.
+std::optional<std::size_t> focusedParameter;
 
 std::filesystem::path settings_file() {
     wchar_t buffer[32768]{};
@@ -45,6 +50,23 @@ std::filesystem::path profile_file() {
 void persist() {
     if(!preferences.empty())
         slinkywinky::save_menu_appearance(preferences,menu.appearance());
+}
+void refresh_caption(HWND hwnd) {
+    std::wstring label=overlayDemo?
+        L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)":title;
+    if(focusedParameter && menu.expanded(*focusedParameter)) {
+        const auto parameter=profile.primary(*focusedParameter);
+        if(parameter) {
+            std::wostringstream formatted;
+            formatted<<L" | "<<std::wstring(parameter->name,
+                parameter->name+std::char_traits<char>::length(parameter->name))
+                <<L" "<<std::fixed
+                <<std::setprecision(parameter->integral?0:2)
+                <<parameter->value<<L"  (+/-)";
+            label+=formatted.str();
+        }
+    }
+    SetWindowTextW(hwnd,label.c_str());
 }
 void request_paint(HWND hwnd){InvalidateRect(hwnd,nullptr,FALSE);}
 bool create_context(HWND hwnd) {
@@ -148,10 +170,18 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 if(index>=0 && static_cast<std::size_t>(index)<rows.size()) {
                     if(x>=width-92 && x<=width-19)
                         profile.toggle(rows[index].catalog_index);
-                    else if(x>=width-145 && x<width-92)
-                        menu.toggle_expanded(rows[index].catalog_index);
+                    else if(x>=width-145 && x<width-92) {
+                        const auto id=rows[index].catalog_index;
+                        if(menu.toggle_expanded(id)) {
+                            if(menu.expanded(id) && profile.primary(id))
+                                focusedParameter=id;
+                            else if(focusedParameter && *focusedParameter==id)
+                                focusedParameter.reset();
+                        }
+                    }
                 }
             }
+            refresh_caption(hwnd);
             request_paint(hwnd);return 0;
         }
         case WM_KEYDOWN:{
@@ -160,6 +190,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 profile.select(static_cast<MenuTab>(wp-L'1'));
             if(wp==VK_UP)profile.scroll_by(-1);
             if(wp==VK_DOWN)profile.scroll_by(1);
+            const int step=(wp==VK_OEM_PLUS || wp==VK_ADD)?1:
+                           (wp==VK_OEM_MINUS || wp==VK_SUBTRACT)?-1:0;
+            if(step && focusedParameter)
+                profile.adjust_primary(*focusedParameter,step);
             // The only effect of P/L is saving/loading a local native
             // configuration document. No module action is dispatched to MC.
             if(wp==L'P' && !profilePreferences.empty())
@@ -177,9 +211,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         static_cast<unsigned>(bounds.right),
                         static_cast<unsigned>(bounds.bottom));
                 }
-                SetWindowTextW(hwnd,overlayDemo?
-                    L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)":
-                    title);
+                refresh_caption(hwnd);
             }
             if(wp==L'C'){
                 menu.set_compact(!menu.appearance().compact);persist();
@@ -193,6 +225,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 persist();
                 adjust_client(hwnd);
             }
+            refresh_caption(hwnd);
             request_paint(hwnd);return 0;
         }
         case WM_DESTROY:
