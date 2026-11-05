@@ -82,6 +82,18 @@ def attachable_games(loader, jdk):
     return games
 
 
+def original_render_classes_loaded(log_text):
+    """Only exact Java 8 class-load receipts from original 1.8.9.jar count."""
+    if "LWJGL Version:" not in log_text:
+        return False
+    for name in ("ave", "bfk"):
+        pattern = r"(?m)^\[Loaded " + name + (
+            r" from file:/[^\r\n]+/1\.8\.9\.jar\]\r?$")
+        if re.search(pattern, log_text) is None:
+            return False
+    return True
+
+
 def validate_observation_evidence(log_text, attempts, expected_ticks,
                                   require_world=False, require_ray_entity=False):
     """Validate original-process markers; never infer a world from attachment alone."""
@@ -278,13 +290,7 @@ def main():
         return log.read_text(encoding="utf-8", errors="replace")
 
     def loaded_exact_original_render_classes():
-        # Java 8 -verbose:class prints an exact class name at the start of
-        # its own [Loaded ...] line. This avoids treating LWJGL initialization
-        # (which occurs earlier) as a loaded Minecraft renderer.
-        text = read_log()
-        return ("LWJGL Version:" in text and
-                re.search(r"(?m)^\[Loaded ave from ", text) is not None and
-                re.search(r"(?m)^\[Loaded bfk from ", text) is not None)
+        return original_render_classes_loaded(read_log())
 
 
     def wait_for(process, marker, count, seconds):
