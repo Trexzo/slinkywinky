@@ -161,7 +161,7 @@ public final class RendererLivePreflight {
      * ASM, not raw constant-pool indexes. No native class bytes are written.
      * Does NOT yet authorize any production load or renderer hook.
      */
-    private static String bytecodeShapeSha256(byte[] bytes) throws Exception {
+    private static String bytecodeShapeTranscript(byte[] bytes) throws Exception {
         final StringBuilder out=new StringBuilder(bytes.length*2);
         final ClassReader reader=new ClassReader(bytes);
         reader.accept(new ClassVisitor(Opcodes.ASM5) {
@@ -265,7 +265,29 @@ public final class RendererLivePreflight {
                 };
             }
         },ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);
-        return sha256(out.toString().getBytes(StandardCharsets.UTF_8));
+        return out.toString();
+    }
+
+    private static String bytecodeShapeSha256(byte[] bytes) throws Exception {
+        return sha256(bytecodeShapeTranscript(bytes).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String firstShapeDifference(byte[] source,byte[] captured)
+        throws Exception {
+        final String a=bytecodeShapeTranscript(source);
+        final String b=bytecodeShapeTranscript(captured);
+        int at=0;
+        while(at<a.length() && at<b.length() && a.charAt(at)==b.charAt(at))
+            at++;
+        if(at==a.length() && at==b.length())return "equal";
+        // Short diagnostic-only context identifies whether a discrepancy is
+        // in a method code event or merely JVM rewritten metadata.
+        final int low=Math.max(0,at-16), highA=Math.min(a.length(),at+22);
+        final int highB=Math.min(b.length(),at+22);
+        final String before=a.substring(low,highA).replace("\n","_");
+        final String after=b.substring(low,highB).replace("\n","_");
+        return "at="+at+" src_len="+a.length()+" vm_len="+b.length()+
+               " source="+before+" observed="+after;
     }
 
     private static String mismatchDiagnostics(Class<?> game,Class<?> render,
@@ -287,8 +309,12 @@ public final class RendererLivePreflight {
             summary.append("_bytes_changed=").append(differences);
             summary.append("_asm_equal=").append(
                 asmRoundtripSha256(a).equals(asmRoundtripSha256(b)));
-            summary.append("_code_shape_equal=").append(
-                bytecodeShapeSha256(a).equals(bytecodeShapeSha256(b)));
+            final boolean shapeEqual=
+                bytecodeShapeSha256(a).equals(bytecodeShapeSha256(b));
+            summary.append("_code_shape_equal=").append(shapeEqual);
+            if(!shapeEqual)
+                summary.append("_shape_first_delta={").append(
+                    firstShapeDifference(a,b)).append("}");
         }
         return summary.toString();
     }
