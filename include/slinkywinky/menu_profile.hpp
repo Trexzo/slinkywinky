@@ -19,6 +19,7 @@ class MenuProfileBridge {
 public:
     explicit MenuProfileBridge(MenuState& menu) noexcept;
     bool select(MenuTab tab) noexcept;
+    bool scroll_by(int delta) noexcept;
     bool toggle(std::size_t catalog_index) noexcept;
     bool enabled(std::size_t catalog_index) const noexcept;
     bool adopt(const ClientSettings& settings);
