@@ -344,9 +344,12 @@ def run(argv=None):
     env = os.environ.copy()
     env.pop("SLINKYWINKY_ATTACH_TEST", None)
     env.pop("SLINKYWINKY_EXPERIMENTAL_HOOK", None)
+    env.pop("SLINKYWINKY_RENDER_OVERLAY", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
+    if a.mode=="overlay":
+        env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
