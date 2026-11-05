@@ -226,6 +226,7 @@ class ReceiptChecks(unittest.TestCase):
                     cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
                     harness.LOADER_MODES[option]+"\n","")
             with patch.object(harness,"process_birth_token",return_value=8123456789), \
+                 patch.object(harness,"verify_original_client_jar",return_value=(1,2,3,4)), \
                  patch.object(harness.subprocess,"run",side_effect=fake):
                 result=harness.run([
                     "--loader",str(loader),"--jdk8",str(root/"jdk8"),
@@ -267,6 +268,7 @@ class ReceiptChecks(unittest.TestCase):
                     cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
                     harness.LOADER_MODES[option]+"\n","")
             with patch.object(harness,"process_birth_token",return_value=8123456789), \
+                 patch.object(harness,"verify_original_client_jar",return_value=(1,2,3,4)), \
                  patch.object(harness.subprocess,"run",side_effect=fake):
                 with self.assertRaises(harness.ReceiptError):
                     harness.run([
@@ -307,6 +309,7 @@ class ReceiptChecks(unittest.TestCase):
             births=[101,101,101,101,202]
             with patch.object(harness,"process_birth_token",
                               side_effect=births) as check_birth, \
+                 patch.object(harness,"verify_original_client_jar",return_value=(1,2,3,4)), \
                  patch.object(harness.subprocess,"run",side_effect=fake):
                 with self.assertRaisesRegex(harness.ReceiptError,"replaced/restarted"):
                     harness.run([
@@ -314,6 +317,56 @@ class ReceiptChecks(unittest.TestCase):
                         "--pid","123","--target-stdout-log",str(log),
                         "--mode","context","--execute"])
             self.assertEqual(check_birth.call_count,5)
+            self.assertEqual(attached,["--render-preflight"])
+
+    def test_local_client_jar_rejects_wrong_size_and_digest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            client=Path(folder)/"1.8.9.jar"
+            client.write_bytes(b"forged")
+            with self.assertRaisesRegex(harness.ReceiptError,"original vanilla"):
+                harness.verify_original_client_jar(client)
+            # Even an exact-length but counterfeit JAR must fail both pins.
+            with client.open("wb") as stream:
+                stream.truncate(harness.PINNED_VANILLA_189_BYTES)
+            with self.assertRaisesRegex(harness.ReceiptError,"digest mismatch"):
+                harness.verify_original_client_jar(client)
+
+    @unittest.skipUnless(os.name=="nt", "Simulated live Attach requires Windows")
+    def test_original_jar_swap_between_stages_refuses_callback_attach(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            loader=root/"slinkywinky_loader.exe"
+            java=root/"jdk8"/"bin"/"java.exe"
+            tools=root/"jdk8"/"lib"/"tools.jar"
+            log=root/"target-stdout.log"
+            java.parent.mkdir(parents=True)
+            tools.parent.mkdir(parents=True)
+            for file in (loader,java,tools,log):
+                file.touch()
+            attached=[]
+            def fake(cmd,**kwargs):
+                if cmd[1]=="list":
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"123 net.minecraft.client.main.Main\n","")
+                option=cmd[-1]
+                attached.append(option)
+                with log.open("a",encoding="utf-8") as output:
+                    output.write(P)
+                return harness.subprocess.CompletedProcess(
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\n","")
+            same=(1,2,3,4)
+            changed=(1,2,3,5)
+            # Initial SHA, pre-R73 SHA, post-R73 SHA, then changed pre-R75 SHA.
+            with patch.object(harness,"verify_original_client_jar",
+                              side_effect=[same,same,same,changed]), \
+                 patch.object(harness,"process_birth_token",return_value=101), \
+                 patch.object(harness.subprocess,"run",side_effect=fake):
+                with self.assertRaisesRegex(harness.ReceiptError,"replaced"):
+                    harness.run([
+                        "--loader",str(loader),"--jdk8",str(root/"jdk8"),
+                        "--pid","123","--target-stdout-log",str(log),
+                        "--mode","context","--execute"])
             self.assertEqual(attached,["--render-preflight"])
 
     def test_explicit_birth_token_comparison_is_fail_closed(self):
