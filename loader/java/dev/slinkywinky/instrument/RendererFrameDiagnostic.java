@@ -55,11 +55,11 @@ public final class RendererFrameDiagnostic {
         if(raw==null || raw.length==0 || raw.length>1000000 ||
            !PINNED_BFK_SHA256.equals(hex(hash(raw))))
             throw new IllegalArgumentException("R75 original bfk fingerprint mismatch");
-        return weaveValidatedRuntime(raw);
+        return weaveValidatedRuntime(raw,false);
     }
 
     /** Called ONLY after original-source and loaded-code shape admission. */
-    private static byte[] weaveValidatedRuntime(byte[] raw) {
+    private static byte[] weaveValidatedRuntime(byte[] raw,final boolean atExit) {
         final ClassReader reader=new ClassReader(raw);
         if(!"bfk".equals(reader.getClassName()))
             throw new IllegalArgumentException("R75 unexpected renderer class");
@@ -76,13 +76,22 @@ public final class RendererFrameDiagnostic {
                     throw new IllegalArgumentException("R75 unsupported renderer access");
                 matched.incrementAndGet();
                 return new MethodVisitor(Opcodes.ASM5,downstream) {
-                    @Override public void visitCode() {
-                        super.visitCode();
+                    private void callback() {
                         super.visitVarInsn(Opcodes.FLOAD,1);
                         super.visitVarInsn(Opcodes.LLOAD,2);
                         super.visitMethodInsn(Opcodes.INVOKESTATIC,
                             "dev/slinkywinky/instrument/RendererFrameDiagnostic",
                             "onRender","(FJ)V",false);
+                    }
+                    @Override public void visitCode() {
+                        super.visitCode();
+                        if(!atExit)callback(); // R75-R91 original entry semantics.
+                    }
+                    @Override public void visitInsn(int opcode) {
+                        // R92 only: draw after the scene is rendered, but
+                        // before the game's caller swaps its back buffer.
+                        if(atExit && opcode==Opcodes.RETURN)callback();
+                        super.visitInsn(opcode);
                     }
                 };
             }
@@ -233,7 +242,7 @@ public final class RendererFrameDiagnostic {
                         "R90 original-source/loaded-code admission failed before weave",
                         mismatch);
                 }
-                return weaveValidatedRuntime(raw);
+                return weaveValidatedRuntime(raw,multiFrame);
             }
         };
         activeFence=fence;
