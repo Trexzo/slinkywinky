@@ -27,8 +27,43 @@ O = (harness.RESTORED + "\n" + harness.CALLBACK +
      " owner=synthetic#1\n" + harness.STABLE + "\n" +
      harness.OVERLAY + "\n" + harness.RELEASED + "\n")
 
+M = (harness.RESTORED + "\n" + harness.R92_CALLBACK +
+     " owner=synthetic#1\n" + harness.R92_STABLE + "\n" +
+     harness.R92_OVERLAY + "\n" + harness.RELEASED + "\n")
+
 
 class ReceiptChecks(unittest.TestCase):
+    def test_r92_exact_72_callback_64_frame_receipts_and_negative_controls(self):
+        self.assertEqual(len(harness.validate_receipt("--render-overlay=72",M)),5)
+        harness.validate_loader_receipt(
+            "--render-overlay=72",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-overlay-r92\n")
+        for invalid in (
+            M.replace(harness.R92_OVERLAY,""),
+            M.replace("accepted=72","accepted=8"),
+            M.replace("frames=64","frames=63"),
+            M.replace("current=72","current=71"),
+            M.replace("invalid=0","invalid=1"),
+            M.replace("stable=true","stable=false"),
+            M.replace(harness.R92_OVERLAY,harness.R92_OVERLAY+"_FAKE"),
+            M.replace(harness.R92_STABLE+"\n"+harness.R92_OVERLAY,
+                      harness.R92_OVERLAY+"\n"+harness.R92_STABLE),
+            M.replace(harness.R92_OVERLAY,
+                      harness.R92_OVERLAY+"\n"+harness.R92_OVERLAY),
+            M + M,
+            M + "R92_WGL_CONTEXT_UNVERIFIED\n",
+            M + "R92_MULTIFRAME_OVERLAY_UNVERIFIED\n",
+        ):
+            with self.subTest(invalid=invalid),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-overlay=72",invalid)
+        for option,log in (
+            ("--render-overlay=72",O),
+            ("--render-overlay=8",M),
+            ("--render-context=8",M),
+        ):
+            with self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt(option,log)
+
     def test_r91_overlay_receipts_are_fresh_strict_and_separate(self):
         self.assertEqual(len(harness.validate_receipt("--render-overlay=8",O)),5)
         for malformed in (
