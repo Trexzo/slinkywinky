@@ -153,7 +153,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
-            profile.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1);
+            if(profile.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1))
+                focusedParameter.reset();
+            refresh_caption(hwnd);
             request_paint(hwnd);return 0;
         }
         case WM_LBUTTONDOWN:{
@@ -163,7 +165,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             const int y=static_cast<short>(HIWORD(lp));
             if(y>=78 && y<120 && x>=18 && x<width-18) {
                 const int tab=(x-18)*7/(width-36);
-                if(tab>=0 && tab<6)profile.select(static_cast<MenuTab>(tab));
+                if(tab>=0 && tab<6) {
+                    profile.select(static_cast<MenuTab>(tab));
+                    focusedParameter.reset();
+                }
             } else if(y>=153 && y<545 && menu.tab()!=MenuTab::Profiles){
                 const auto rows=menu.page();
                 const int index=(y-153)/49;
@@ -173,10 +178,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(x>=width-145 && x<width-92) {
                         const auto id=rows[index].catalog_index;
                         if(menu.toggle_expanded(id)) {
+                            focusedParameter.reset();
                             if(menu.expanded(id) && profile.primary(id))
                                 focusedParameter=id;
-                            else if(focusedParameter && *focusedParameter==id)
-                                focusedParameter.reset();
                         }
                     }
                 }
@@ -186,10 +190,12 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_KEYDOWN:{
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
-            if(wp>=L'1' && wp<=L'6')
+            if(wp>=L'1' && wp<=L'6') {
                 profile.select(static_cast<MenuTab>(wp-L'1'));
-            if(wp==VK_UP)profile.scroll_by(-1);
-            if(wp==VK_DOWN)profile.scroll_by(1);
+                focusedParameter.reset();
+            }
+            if(wp==VK_UP && profile.scroll_by(-1))focusedParameter.reset();
+            if(wp==VK_DOWN && profile.scroll_by(1))focusedParameter.reset();
             const int step=(wp==VK_OEM_PLUS || wp==VK_ADD)?1:
                            (wp==VK_OEM_MINUS || wp==VK_SUBTRACT)?-1:0;
             if(step && focusedParameter)
