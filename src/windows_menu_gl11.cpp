@@ -151,6 +151,22 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
            item.title!=official_module_catalog()[item.catalog_index].name)
             return false;
     if(frame.is_placeholder && !frame.visible.empty())return false;
+    if(frame.parameters.size()>frame.visible.size())return false;
+    for(std::size_t i=0;i<frame.parameters.size();++i) {
+        const auto& parameter=frame.parameters[i];
+        if(parameter.caption.empty() || parameter.caption.size()>48 ||
+           !module_has_profile_setting(parameter.catalog_index))return false;
+        for(const unsigned char c:parameter.caption)
+            if(c<32 || c>126)return false; // ASCII first-party bitmap only.
+        bool matched=false;
+        for(const auto& item:frame.visible)
+            if(item.catalog_index==parameter.catalog_index && item.expanded)
+                matched=true;
+        if(!matched)return false;
+        for(std::size_t j=0;j<i;++j)
+            if(frame.parameters[j].catalog_index==parameter.catalog_index)
+                return false;
+    }
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT,viewport);
     if(viewport[0]!=0 || viewport[1]!=0 ||
@@ -255,10 +271,15 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         text(item.title,31.0f,y+9.0f,2.0f,w-208.0f);
         if(!frame.appearance.compact) {
             rgb(0x929295);
-            text(!module_has_profile_setting(item.catalog_index) ?
-                 "NOT IMPLEMENTED" :
-                 (item.expanded?"P SAVE  L LOAD PROFILE":"NATIVE SETTING ONLY"),
-                 31.0f,y+31.0f,1.1f,w-208.0f);
+            std::string_view status=!module_has_profile_setting(item.catalog_index)?
+                "NOT IMPLEMENTED" :
+                (item.expanded?"P SAVE  L LOAD PROFILE":"NATIVE SETTING ONLY");
+            for(const auto& parameter:frame.parameters)
+                if(parameter.catalog_index==item.catalog_index) {
+                    status=parameter.caption;
+                    break;
+                }
+            text(status,31.0f,y+31.0f,1.1f,w-208.0f);
         }
         rgb(0xf0f0f0);
         text(item.expanded?"-":"+",w-117.0f,y+17.0f,1.5f,25.0f);
