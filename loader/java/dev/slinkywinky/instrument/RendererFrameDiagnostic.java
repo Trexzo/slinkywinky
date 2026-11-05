@@ -58,6 +58,14 @@ public final class RendererFrameDiagnostic {
         return weaveValidatedRuntime(raw,false);
     }
 
+    /** R92 offline audit only: require pinned Mojang bfk source bytes. */
+    public static byte[] weavePinnedOriginalAtExit(byte[] raw) {
+        if(raw==null || raw.length==0 || raw.length>1000000 ||
+           !PINNED_BFK_SHA256.equals(hex(hash(raw))))
+            throw new IllegalArgumentException("R92 original bfk fingerprint mismatch");
+        return weaveValidatedRuntime(raw,true);
+    }
+
     /** Called ONLY after original-source and loaded-code shape admission. */
     private static byte[] weaveValidatedRuntime(byte[] raw,final boolean atExit) {
         final ClassReader reader=new ClassReader(raw);
