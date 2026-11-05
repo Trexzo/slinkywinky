@@ -13,6 +13,12 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#ifdef SW_R91_TEST_JNI_OVERLAY
+#include <jni.h>
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+    JNIEnv*,jclass,jlong,jlong,jint,jint);
+#endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
 
 namespace {
@@ -250,6 +256,39 @@ int main() {
         same(beforeOverlay,snapshot());
         std::cout<<"R69_BOUNDED_GL_OVERLAY_UNTOUCHED_OUTSIDE_PIXELS_PASS\\n";
         std::cout<<"R69_TRANSPARENT_GL_PANEL_STATE_RESTORE_PASS\\n";
+#ifdef SW_R91_TEST_JNI_OVERLAY
+        // R91: invoke the EXACT production JNI entrypoint from a disposable
+        // owner-thread WGL fixture. The original game is never started here.
+        glClearColor(0.10f,0.38f,0.69f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        const State beforeNativeOverlay=snapshot();
+        const auto originalOutside=readback(0,315);
+        const jlong admittedContext=static_cast<jlong>(
+            reinterpret_cast<std::uintptr_t>(context.gl));
+        const jlong admittedDc=static_cast<jlong>(
+            reinterpret_cast<std::uintptr_t>(context.dc));
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+            nullptr,nullptr,0,admittedDc,676,630)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+            nullptr,nullptr,admittedContext,admittedDc,677,630)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(beforeNativeOverlay,snapshot());
+        REQUIRE(readback(0,315)==originalOutside);
+        REQUIRE(readback(675,315)==originalOutside);
+        REQUIRE(readback(15,615)!=originalOutside);
+        bool wrongThreadAccepted=false;
+        std::thread wrongNativeThread([&] {
+            wrongThreadAccepted=
+                Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+                    nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE;
+        });
+        wrongNativeThread.join();
+        REQUIRE(!wrongThreadAccepted);
+        same(beforeNativeOverlay,snapshot());
+        std::cout<<"R91_REAL_JNI_WGL_ONE_FRAME_PIXELS_AND_RESTORATION_PASS\\n";
+#endif
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));
         REQUIRE(!draw_menu_gl11(*changed,context.gl,context.dc));
