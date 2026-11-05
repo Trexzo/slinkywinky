@@ -149,6 +149,8 @@ def main():
                         help="Existing official Minecraft installation (read-only)")
     parser.add_argument("--run", action="store_true",
                         help="Explicitly authorize launching one disposable vanilla client")
+    parser.add_argument("--render-overlay-acceptance", action="store_true",
+                        help="Opt-in R91: isolated one-frame native menu and restored GL state")
     parser.add_argument("--render-context-acceptance", action="store_true",
                         help="Opt-in R90: isolated vanilla process with bounded R81 renderer diagnostics; never draw the menu")
     parser.add_argument("--world-observation", action="store_true",
@@ -162,7 +164,9 @@ def main():
         parser.error("Refusing to start Minecraft: pass --run explicitly")
     if os.name != "nt":
         parser.error("Windows x64 only")
-    if args.render_context_acceptance and (args.world_observation or
+    if args.render_context_acceptance and args.render_overlay_acceptance:
+        parser.error("R90 context and R91 overlay modes are mutually exclusive")
+    if (args.render_context_acceptance or args.render_overlay_acceptance) and (args.world_observation or
                                            args.require_ray_entity or
                                            args.continuous_observation):
         parser.error("R90 renderer acceptance must run alone, not with world/tick probes")
@@ -257,12 +261,13 @@ def main():
         "fullscreen:false\nfancyGraphics:false\nrenderDistance:2\n", encoding="ascii"
     )
     log = sandbox / (
-        "r90-render-" + str(time.time_ns()) + ".log"
-        if args.render_context_acceptance else "vanilla-run.log"
+        ("r91-overlay-" if args.render_overlay_acceptance else "r90-render-") +
+        str(time.time_ns()) + ".log"
+        if (args.render_context_acceptance or args.render_overlay_acceptance) else "vanilla-run.log"
     )
     cmd = [
         str(jdk / "bin" / "java.exe"),
-        *(["-verbose:class"] if args.render_context_acceptance else []),
+        *(["-verbose:class"] if (args.render_context_acceptance or args.render_overlay_acceptance) else []),
         "-Xmx768M",
         "-Djava.library.path=" + str(native_dir),
         "-Dlog4j2.formatMsgNoLookups=true",
@@ -276,7 +281,7 @@ def main():
     ]
     environment = os.environ.copy()
     environment.pop("SLINKYWINKY_ATTACH_TEST", None)
-    if args.render_context_acceptance:
+    if args.render_context_acceptance or args.render_overlay_acceptance:
         # Native gameplay hooks are not part of renderer admission.
         environment.pop("SLINKYWINKY_EXPERIMENTAL_HOOK", None)
     else:
@@ -302,7 +307,7 @@ def main():
         return False
 
     print("Launching one isolated vanilla 1.8.9 JVM; no Forge.", flush=True)
-    with log.open("xb" if args.render_context_acceptance else "wb") as output:
+    with log.open("xb" if (args.render_context_acceptance or args.render_overlay_acceptance) else "wb") as output:
         game = subprocess.Popen(
             cmd, cwd=str(sandbox), env=environment, stdout=output,
             stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
@@ -315,7 +320,7 @@ def main():
                      if pid == game.pid]
             if len(exact) != 1:
                 raise RuntimeError("The newly launched vanilla PID was not uniquely enumerated")
-            if args.render_context_acceptance:
+            if args.render_context_acceptance or args.render_overlay_acceptance:
                 # A Java 8 renderer starts later than the LWJGL log line.
                 # Require real JVM class-load receipts for both exact original
                 # obfuscated classes before sending the first Attach.
@@ -331,7 +336,8 @@ def main():
                 harness = Path(__file__).with_name("original_189_live_render_acceptance.py")
                 if not harness.is_file():
                     raise RuntimeError("Missing in-repository original renderer receipt checker")
-                report = sandbox / ("r90-render-receipts-" + str(game.pid) + ".json")
+                report = sandbox / (("r91-overlay-receipts-" if args.render_overlay_acceptance
+                                     else "r90-render-receipts-") + str(game.pid) + ".json")
                 if report.exists():
                     raise RuntimeError("Refusing to overwrite existing R90 diagnostic evidence")
                 command = [
@@ -339,7 +345,8 @@ def main():
                     "--loader", str(launcher), "--jdk8", str(jdk),
                     "--pid", str(game.pid), "--target-stdout-log", str(log),
                     "--original-client-jar", str(client_jar),
-                    "--mode", "context", "--timeout-seconds", "45",
+                    "--mode", ("overlay" if args.render_overlay_acceptance else "context"),
+                    "--timeout-seconds", "45",
                     "--execute", "--report", str(report)
                 ]
                 # The R81 harness independently checks exact class hashes,
@@ -355,15 +362,20 @@ def main():
                         "Supervised original renderer admission rejected: " +
                         (result.stderr + result.stdout)[-5000:])
                 evidence = json.loads(report.read_text(encoding="utf-8"))
-                if (len(evidence.get("stages", [])) != 3 or
+                if (len(evidence.get("stages", [])) !=
+                        (4 if args.render_overlay_acceptance else 3) or
                         evidence.get("in_game_menu_verified") is not False or
                         evidence.get("visual_game_acceptance") is not False):
                     raise RuntimeError("Unexpected renderer evidence scope")
                 if game.poll() is not None:
                     raise RuntimeError("Vanilla JVM exited during renderer verification")
-                print("R90_ORIGINAL_189_RENDER_DIAGNOSTIC_RECEIPTS_PASS",
+                print(("R91_ORIGINAL_189_ONE_FRAME_OVERLAY_RECEIPTS_PASS"
+                       if args.render_overlay_acceptance else
+                       "R90_ORIGINAL_189_RENDER_DIAGNOSTIC_RECEIPTS_PASS"),
                       "pid=" + str(game.pid), "report=" + str(report), flush=True)
-                print("R90_NOT_VISUAL_OR_IN_GAME_CLICKGUI_CERTIFICATION", flush=True)
+                print("R91_NOT_INTERACTIVE_CLICKGUI_OR_VISUAL_WINDOW_CERTIFICATION"
+                      if args.render_overlay_acceptance else
+                      "R90_NOT_VISUAL_OR_IN_GAME_CLICKGUI_CERTIFICATION", flush=True)
                 return
             if args.world_observation:
                 print("Open a LOCAL single-player world in the isolated client.", flush=True)
