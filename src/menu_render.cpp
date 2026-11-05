@@ -1,5 +1,8 @@
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/menu_profile.hpp"
+#include <iomanip>
 #include <limits>
+#include <sstream>
 #include <utility>
 
 namespace slinkywinky {
@@ -31,9 +34,11 @@ bool MenuRenderSession::resize(unsigned width,unsigned height) noexcept {
     height_=height;
     return true;
 }
-std::optional<MenuRenderFrame> MenuRenderSession::next(const MenuState& menu) {
+std::optional<MenuRenderFrame> MenuRenderSession::next(
+    const MenuState& menu,const MenuProfileBridge* profile) {
     std::lock_guard<std::mutex> lock(mutex_);
     if(!active_ || !owner() || !valid_viewport(width_,height_) ||
+       (profile!=nullptr && !profile->owns(menu)) ||
        sequence_==std::numeric_limits<std::uint64_t>::max())
         return std::nullopt;
     // Only the first-party model is copied. No raw pointers into a native
@@ -47,6 +52,22 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(const MenuState& menu) {
     frame.appearance=menu.appearance();
     frame.visible=menu.page();
     if(frame.visible.size()>8)return std::nullopt;
+    if(profile) {
+        for(const auto& item:frame.visible) {
+            if(!item.expanded)continue;
+            const auto parameter=profile->primary(item.catalog_index);
+            if(!parameter)continue;
+            // Captions are made only from the first-party typed configuration.
+            // Rendering later never needs access to mutable profile state.
+            std::ostringstream caption;
+            caption<<parameter->name<<": "<<std::fixed
+                   <<std::setprecision(parameter->integral?0:2)
+                   <<parameter->value;
+            const std::string value=caption.str();
+            if(value.empty() || value.size()>48)return std::nullopt;
+            frame.parameters.push_back({item.catalog_index,value});
+        }
+    }
     frame.is_placeholder=frame.tab==MenuTab::Profiles;
     if(frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload)
         return std::nullopt;
