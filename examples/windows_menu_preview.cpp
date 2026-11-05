@@ -11,6 +11,9 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <iomanip>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -26,6 +29,7 @@ bool alternateAccent=false;
 int windowWidth=baseWidth;
 std::filesystem::path prefsPath;
 std::filesystem::path profilePath;
+std::optional<std::size_t> focusedParameter;
 
 void save_prefs() {
     if(!prefsPath.empty())
@@ -131,12 +135,20 @@ void redraw(HWND hwnd,HDC target) {
             SelectObject(buffer,nameFont);
             draw(buffer,widen(item.title),31,y+5,w-206,23,bright);
             SelectObject(buffer,small);
-            if(!frame->appearance.compact)
-                draw(buffer,!slinkywinky::module_has_profile_setting(item.catalog_index)
-                         ? L"Not implemented - unavailable" :
-                     (item.expanded?L"P: save profile  /  L: load profile":
-                         L"Native profile setting - not active in Minecraft"),
-                     31,y+24,w-206,16,muted);
+            if(!frame->appearance.compact) {
+                std::wstring detail=L"Not implemented - unavailable";
+                if(const auto parameter=profile.primary(item.catalog_index)) {
+                    detail=L"Native profile setting - not active in Minecraft";
+                    if(item.expanded) {
+                        std::ostringstream line;
+                        line<<parameter->name<<": "<<std::fixed
+                            <<std::setprecision(parameter->integral?0:2)
+                            <<parameter->value<<" | +/- adjust | P save";
+                        detail=widen(line.str());
+                    }
+                }
+                draw(buffer,detail,31,y+24,w-206,16,muted);
+            }
             // Dedicated + expansion and inert preview-switch affordances.
             draw(buffer,item.expanded?L"-":L"+",w-122,y+9,32,28,muted,
                  DT_CENTER|DT_SINGLELINE|DT_VCENTER);
@@ -149,7 +161,7 @@ void redraw(HWND hwnd,HDC target) {
     }
     rect(buffer,18,565,w-36,1,RGB(61,61,63));
     SelectObject(buffer,small);
-    draw(buffer,L"1-6 tabs | Scroll | P save profile | L load | C compact | W wide | G accent",
+    draw(buffer,L"1-6 tabs | Scroll | +/- expanded value | P save | L load | C compact | W wide",
          21,575,w-42,18,muted);
     draw(buffer,L"7 native settings supported; other switches unavailable. NO GAME ACTIONS.",
          21,594,w-42,18,RGB(203,137,90));
@@ -193,8 +205,15 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 if(idx>=0 && static_cast<std::size_t>(idx)<rows.size()) {
                     if(x>=clientWidth-92 && x<=clientWidth-19)
                         profile.toggle(rows[idx].catalog_index);
-                    else if(x>=clientWidth-145 && x<clientWidth-92)
-                        menu.toggle_expanded(rows[idx].catalog_index);
+                    else if(x>=clientWidth-145 && x<clientWidth-92) {
+                        const auto id=rows[idx].catalog_index;
+                        if(menu.toggle_expanded(id)) {
+                            if(menu.expanded(id) && profile.primary(id))
+                                focusedParameter=id;
+                            else if(focusedParameter && *focusedParameter==id)
+                                focusedParameter.reset();
+                        }
+                    }
                 }
             }
             repaint(hwnd);return 0;
@@ -220,6 +239,10 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             }
             if(wp==VK_UP)profile.scroll_by(-1);
             if(wp==VK_DOWN)profile.scroll_by(1);
+            const int step=(wp==VK_OEM_PLUS || wp==VK_ADD)?1:
+                           (wp==VK_OEM_MINUS || wp==VK_SUBTRACT)?-1:0;
+            if(step && focusedParameter)
+                profile.adjust_primary(*focusedParameter,step);
             if(wp==L'P' && !profilePath.empty())profile.save(profilePath);
             if(wp==L'L' && !profilePath.empty())profile.load(profilePath);
             repaint(hwnd);return 0;
