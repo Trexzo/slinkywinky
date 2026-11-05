@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """R60 negative controls for isolated vanilla 1.8.9 evidence parsing. Never runs Minecraft."""
 import unittest
-from windows_vanilla189_isolated_manual import validate_observation_evidence
+from windows_vanilla189_isolated_manual import (
+    validate_observation_evidence, original_render_classes_loaded
+)
 
 
 class RuntimeEvidenceTests(unittest.TestCase):
@@ -18,6 +20,24 @@ class RuntimeEvidenceTests(unittest.TestCase):
         if cleanup:
             fields += "GAME_THREAD_HOOK_CLEANUP_PASS\n"
         return fields
+
+    def test_r90_exact_verbose_renderer_readiness(self):
+        vanilla = ("[Loaded ave from file:/C:/User/.minecraft/versions/1.8.9/1.8.9.jar]\\n"
+                   "[Loaded bfk from file:/C:/User/.minecraft/versions/1.8.9/1.8.9.jar]\\n"
+                   "[10:00:00] [Client thread/INFO]: LWJGL Version: 2.9.4\\n")
+        self.assertTrue(original_render_classes_loaded(vanilla))
+        invalid = (
+            vanilla.replace("Loaded bfk", "Loaded bfkx"),
+            vanilla.replace("Loaded ave", "Loaded aver"),
+            vanilla.replace("1.8.9.jar", "1.8.8.jar"),
+            vanilla.replace("LWJGL Version:", "Starting LWJGL"),
+            vanilla.replace("[Loaded ave from", "[INFO] [Loaded ave from"),
+            vanilla.replace("file:/C:", "file:/untrusted-bundle.jar/C:"),
+            vanilla.replace("1.8.9.jar]", "1.8.9.jar.fake]"),
+        )
+        for candidate in invalid:
+            with self.subTest(candidate=candidate):
+                self.assertFalse(original_render_classes_loaded(candidate))
 
     def test_menu_double_attach_compatible_with_r48(self):
         log = self.record(20, 0, 0) + self.record(20, 0, 0)
