@@ -18,6 +18,18 @@ bool* setting(ClientSettings& settings, std::size_t index) noexcept {
         default: return nullptr;
     }
 }
+const bool* setting(const ClientSettings& settings, std::size_t index) noexcept {
+    switch(index) {
+        case 0: return &settings.combat.aim_enabled;
+        case 1: return &settings.combat.auto_block_enabled;
+        case 2: return &settings.combat.auto_clicker_enabled;
+        case 4: return &settings.backtrack_enabled;
+        case 6: return &settings.combat.hit_select_enabled;
+        case 12: return &settings.combat.reach_enabled;
+        case 15: return &settings.velocity.enabled;
+        default: return nullptr;
+    }
+}
 } // namespace
 
 bool module_has_profile_setting(std::size_t index) noexcept {
@@ -32,7 +44,7 @@ bool* MenuProfileBridge::flag(std::size_t index) noexcept {
     return setting(settings_,index);
 }
 const bool* MenuProfileBridge::flag(std::size_t index) const noexcept {
-    return setting(const_cast<ClientSettings&>(settings_),index);
+    return setting(settings_,index);
 }
 void MenuProfileBridge::synchronize_visible() noexcept {
     // All page writes are preview flags. In particular nothing executes an
@@ -46,6 +58,11 @@ void MenuProfileBridge::synchronize_visible() noexcept {
 }
 bool MenuProfileBridge::select(MenuTab tab) noexcept {
     if(!menu_.select(tab))return false;
+    synchronize_visible();
+    return true;
+}
+bool MenuProfileBridge::scroll_by(int delta) noexcept {
+    if(!menu_.scroll_by(delta))return false;
     synchronize_visible();
     return true;
 }
