@@ -23,7 +23,35 @@ W = (harness.RESTORED + "\n" + harness.CALLBACK +
      harness.RELEASED + "\n")
 
 
+O = (harness.RESTORED + "\n" + harness.CALLBACK +
+     " owner=synthetic#1\n" + harness.STABLE + "\n" +
+     harness.OVERLAY + "\n" + harness.RELEASED + "\n")
+
+
 class ReceiptChecks(unittest.TestCase):
+    def test_r91_overlay_receipts_are_fresh_strict_and_separate(self):
+        self.assertEqual(len(harness.validate_receipt("--render-overlay=8",O)),5)
+        for malformed in (
+            O.replace(harness.OVERLAY,""),
+            O.replace(harness.OVERLAY,harness.OVERLAY+"_FAKE"),
+            O.replace(harness.OVERLAY,harness.OVERLAY.replace("frames=1","frames=2")),
+            O.replace(harness.STABLE+"\n"+harness.OVERLAY,
+                      harness.OVERLAY+"\n"+harness.STABLE),
+            O+O,
+            O.replace(harness.OVERLAY,harness.OVERLAY+"\n"+
+                      harness.OVERLAY),
+            O+"R91_RENDER_OVERLAY_UNVERIFIED\n",
+        ):
+            with self.subTest(log=malformed),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-overlay=8",malformed)
+        with self.assertRaises(harness.ReceiptError):
+            harness.validate_receipt("--render-context=8",O)
+        with self.assertRaises(harness.ReceiptError):
+            harness.validate_receipt("--render-overlay=8",W)
+        harness.validate_loader_receipt(
+            "--render-overlay=8",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-overlay-r91\n")
+
     def test_valid_stages(self):
         self.assertEqual(len(harness.validate_receipt("--render-preflight",P)),2)
         self.assertEqual(len(harness.validate_receipt("--render-callback=8",C)),3)
