@@ -1,4 +1,5 @@
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -73,6 +74,33 @@ int main() {
     CHECK(!render.attached());
     CHECK(!render.attach(3,676,620));
     CHECK(render.attach(4,676,620));
+    CHECK(render.detach());
+    // R88: the graphics-owner snapshot contains only expanded, visible
+    // first-party numeric profile text; it never retains live profile data.
+    MenuState editorMenu;
+    MenuProfileBridge editor(editorMenu);
+    CHECK(render.attach(5,676,620));
+    auto noExpansion=render.next(editorMenu,&editor);
+    CHECK(noExpansion && noExpansion->parameters.empty());
+    CHECK(editorMenu.toggle_expanded(0));
+    auto initial=render.next(editorMenu,&editor);
+    CHECK(initial && initial->parameters.size()==1);
+    CHECK(initial->parameters[0].catalog_index==0);
+    CHECK(initial->parameters[0].caption=="Aim range: 4.00");
+    CHECK(editor.adjust_primary(0,1));
+    auto updated=render.next(editorMenu,&editor);
+    CHECK(updated && updated->parameters.size()==1);
+    CHECK(updated->parameters[0].caption=="Aim range: 4.25");
+    CHECK(initial->parameters[0].caption=="Aim range: 4.00");
+    MenuState foreignMenu;
+    MenuProfileBridge foreign(foreignMenu);
+    const auto beforeWrongOwner=render.sequence();
+    CHECK(!render.next(editorMenu,&foreign));
+    CHECK(render.sequence()==beforeWrongOwner);
+    CHECK(editor.scroll_by(9));
+    CHECK(render.next(editorMenu,&editor)->parameters.empty()); // Hidden row.
+    CHECK(editor.select(MenuTab::Move));
+    CHECK(render.next(editorMenu,&editor)->parameters.empty()); // Wrong tab.
     CHECK(render.detach());
     return 0;
 }
