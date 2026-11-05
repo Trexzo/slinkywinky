@@ -311,18 +311,29 @@ public final class InstrumentationProbe {
             if (!hookInstalled.compareAndSet(false,true))
                 throw new IllegalStateException("Minecraft instrumentation already active");
             boolean inspectorRemovalConfirmed=true;
+            boolean preflightSucceeded=false;
             try {
                 RendererLivePreflight.run(instrumentation);
+                preflightSucceeded=true;
             } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
-                // R80: the passive inspector might still be registered; do
-                // not admit another Attach while this cannot be ruled out.
+                // R80: a passive inspector may still be registered. Preserve
+                // the lock, even if no renderer bytecode was changed.
                 inspectorRemovalConfirmed=false;
                 throw new IllegalStateException(
                     "R73 passive renderer inspector removal unconfirmed",uncertain);
             } catch (Exception error) {
                 throw new IllegalStateException("R73 renderer preflight refused",error);
             } finally {
-                if(inspectorRemovalConfirmed)hookInstalled.set(false);
+                if(inspectorRemovalConfirmed) {
+                    hookInstalled.set(false);
+                    // R83: the R73 preflight PASS marker is printed BEFORE
+                    // this finally block. The harness must instead wait for
+                    // the explicit release receipt to sequence the next Attach.
+                    if(preflightSucceeded) {
+                        System.out.println("R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS");
+                        System.out.flush();
+                    }
+                }
             }
             return;
         }
