@@ -1,0 +1,76 @@
+name: Injectable Windows Java 8 agent
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  standalone-native-loader:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install full Java 8 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Static-check manual vanilla acceptance script (never launch game)
+        run: |
+          python -m py_compile tests/windows_vanilla189_isolated_manual.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/windows_vanilla189_isolated_manual.py --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/test_vanilla_observation_evidence.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Configure injectable architecture
+        run: cmake -S . -B build-inject -A x64 -DSLINKYWINKY_BUILD_ATTACH=ON -DSLINKYWINKY_BUILD_JNI=ON
+      - name: Build native loader and JVMTI DLL
+        run: cmake --build build-inject --config Release --parallel
+      - name: Run all native, JVM and actual Attach API tests
+        run: ctest --test-dir build-inject -C Release --output-on-failure
+      - name: Verify standalone package and calculate SHA-256
+        shell: pwsh
+        run: |
+          $d = 'build-inject/Release'
+          $files = @(
+            "slinkywinky_loader.exe",
+            "slinkywinky_agent.dll",
+            "slinkywinky_instrument.jar",
+            "slinkywinky_render_audit.jar",
+            "slinkywinky_jni.dll",
+            "slinkywinky_hud_preview.exe",
+            "slinkywinky_menu_preview.exe",
+            "slinkywinky_gl11_menu_preview.exe",
+            "attach-classes/dev/slinkywinky/attach/AttachMain.class")
+          $hashes = foreach ($f in $files) {
+            $full = Join-Path $d $f
+            if (!(Test-Path -LiteralPath $full)) { throw "Missing artifact $full" }
+            $hash = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $f"
+          }
+          $hashes | Set-Content "$d/SHA256SUMS.txt" -Encoding ascii
+          foreach ($line in (Get-Content "$d/SHA256SUMS.txt")) {
+            if ($line -notmatch "^([a-f0-9]{64})  (.+)$") { throw "Invalid hash manifest entry" }
+            $expected = $Matches[1]
+            $full = Join-Path $d $Matches[2]
+            if (!(Test-Path -LiteralPath $full)) { throw "Missing manifest target $full" }
+            $actual = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($expected -ne $actual) { throw "Hash mismatch for $full" }
+          }
+      - name: Upload loader and agent preview package
+        uses: actions/upload-artifact@v4
+        with:
+          name: slinkywinky-standalone-loader-x64-preview
+          path: |
+            build-inject/Release/slinkywinky_loader.exe
+            build-inject/Release/slinkywinky_agent.dll
+            build-inject/Release/slinkywinky_instrument.jar
+            build-inject/Release/slinkywinky_render_audit.jar
+            build-inject/Release/slinkywinky_jni.dll
+            build-inject/Release/slinkywinky_hud_preview.exe
+            build-inject/Release/slinkywinky_menu_preview.exe
+            build-inject/Release/slinkywinky_gl11_menu_preview.exe
+            build-inject/Release/attach-classes/**
+            build-inject/Release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7

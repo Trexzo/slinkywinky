@@ -1,0 +1,90 @@
+name: R71-R75 original vanilla 1.8.9 render audit
+
+# Independent from release CI. Original Mojang game bytes are downloaded to
+# runner temp storage, validated, inspected read-only and NEVER uploaded.
+on:
+  push:
+    paths:
+      - '.github/workflows/original-189-audit.yml'
+      - 'tests/official_189_render_audit.py'
+      - 'tests/original_189_live_render_acceptance.py'
+      - 'tests/test_original_189_live_acceptance.py'
+      - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
+      - 'loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java'
+      - 'loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java'
+      - 'loader/java/dev/slinkywinky/instrument/RenderFrameGate.java'
+      - 'tests/java/dev/slinkywinky/attach/OriginalRendererFrameDiagnosticAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RenderPreweaveAdmissionSmoke.java'
+      - 'CMakeLists.txt'
+  pull_request:
+    paths:
+      - '.github/workflows/original-189-audit.yml'
+      - 'tests/official_189_render_audit.py'
+      - 'tests/original_189_live_render_acceptance.py'
+      - 'tests/test_original_189_live_acceptance.py'
+      - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RendererLivePreflightExactAudit.java'
+      - 'loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java'
+      - 'loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java'
+      - 'loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java'
+      - 'loader/java/dev/slinkywinky/instrument/RenderFrameGate.java'
+      - 'tests/java/dev/slinkywinky/attach/OriginalRendererFrameDiagnosticAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/RenderPreweaveAdmissionSmoke.java'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  original-client-class-audit:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout first-party sources
+        uses: actions/checkout@v4
+      - name: Install Java 8 full JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Parse original-JAR downloader without writing cache files
+        shell: pwsh
+        run: |
+          python -c "import ast,pathlib;ast.parse(pathlib.Path('tests/official_189_render_audit.py').read_text(encoding='utf-8'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify R81 original-game acceptance receipts offline (NO Attach)
+        shell: pwsh
+        run: |
+          python -B -m unittest discover -s tests -p "test_original_189_live_acceptance.py" -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build exact read-only ASM verifier (no game files)
+        shell: pwsh
+        run: |
+          cmake -S . -B build-original-189 -A x64 -DSLINKYWINKY_BUILD_ATTACH=ON -DSLINKYWINKY_BUILD_JNI=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-original-189 --config Release --parallel
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Download verified Mojang 1.8.9 original and audit memory-only renderer weave
+        shell: pwsh
+        run: |
+          python tests/official_189_render_audit.py `
+            --java8 "$env:JAVA_HOME/bin/java.exe" `
+            --audit-jar "build-original-189/Release/slinkywinky_render_audit.jar" `
+            --instrument-jar "build-original-189/Release/slinkywinky_instrument.jar"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Confirm no original JAR entered the repository
+        if: always()
+        shell: pwsh
+        run: |
+          $new = git status --porcelain
+          if ($new) { throw "Unexpected changes after read-only original JAR audit: $new" }
+          Write-Output "R71_NO_GAME_BINARY_COMMITTED_OR_UPLOADED"

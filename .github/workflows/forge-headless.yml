@@ -1,0 +1,72 @@
+name: Experimental headless Minecraft 1.8.9 startup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  headless-client-startup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Legacy Gradle 2.14.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '2.14.1'
+          cache-disabled: true
+      - name: Install dummy Xorg and software GL
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xserver-xorg-core xserver-xorg-video-dummy xauth x11-xserver-utils mesa-utils libgl1-mesa-dri libgl1
+      - name: Start explicit-mode virtual display
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo Xorg :99 -config "$GITHUB_WORKSPACE/ci/xorg-dummy.conf" -noreset -nolisten tcp -logfile "$GITHUB_WORKSPACE/xorg-99.log" > /dev/null 2>&1 &
+          sleep 5
+          DISPLAY=:99 xrandr --query | tee xrandr.log
+          DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 glxinfo -B | tee glxinfo.log
+          grep -q '1280x720' xrandr.log
+      - name: Launch Forge 1.8.9 in read-only preview
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          timeout --signal=TERM --kill-after=15s 360s env DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 gradle --no-daemon -p experimental/forge189 runClient -x getAssets --stacktrace > forge-client.log 2>&1 || status=$?
+          tail -n 120 forge-client.log || true
+          echo "Forge client exit status: $status"
+          if [ "$status" -eq 124 ] && grep -Fq '[SlinkyWinkyPreview] initialized - read-only' forge-client.log; then
+            echo 'PASS: Forge reached mod initialization and stayed running until controlled timeout'
+            exit 0
+          fi
+          echo 'FAIL: no sustained, confirmed mod startup' >&2
+          exit 1
+      - name: Summarize Minecraft crash reports
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for report in experimental/forge189/run/crash-reports/*.txt; do
+            echo "=== Crash report: $report ==="
+            sed -n '1,100p' "$report"
+          done
+      - name: Preserve runtime diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge189-headless-launch-log
+          path: |
+            forge-client.log
+            xorg-99.log
+            xrandr.log
+            glxinfo.log
+            experimental/forge189/run/crash-reports/
+            experimental/forge189/run/logs/
+            experimental/forge189/run/hs_err_pid*.log
+          if-no-files-found: warn
+          retention-days: 7

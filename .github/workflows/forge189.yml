@@ -1,0 +1,44 @@
+name: Experimental Forge 1.8.9 JAR build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  forge-java8:
+    name: ForgeGradle 2.1 / Minecraft 1.8.9 / JDK 8
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: JDK 8 for legacy ForgeGradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Gradle 2.14.1 (legacy toolchain)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '2.14.1'
+          cache-disabled: true
+      - name: Build experimental Forge 1.8.9 JAR
+        run: gradle --no-daemon -p experimental/forge189 build --stacktrace
+      - name: Check packaged classes
+        shell: bash
+        run: |
+          set -euo pipefail
+          jarpath=$(find experimental/forge189/build/libs -maxdepth 1 -name '*.jar' ! -name '*-sources.jar' -print -quit)
+          test -n "$jarpath"
+          jar tf "$jarpath" | grep -q 'dev/slinkywinky/forge/ForgePreview.class'
+          if jar tf "$jarpath" | grep -Eq 'dev/slinkywinky/(NativeSmoke|HostSmoke)\.class'; then
+            echo 'Smoke-test mains should not be in the Forge mod JAR' >&2; exit 1
+          fi
+          sha256sum "$jarpath" > forge-preview.sha256
+      - name: Upload experimental Forge JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: slinkywinky-forge189-preview-jar
+          path: |
+            experimental/forge189/build/libs/*.jar
+            forge-preview.sha256
+          if-no-files-found: error
+          retention-days: 7
