@@ -7,6 +7,7 @@ JVM log containing Java-agent System.out (NOT just latest.log by assumption)
 must be provided. Only fresh appended bytes count as receipts.
 """
 import argparse
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -154,6 +155,51 @@ def check_target_listing(stdout, pid):
     return rows[0][1]
 
 
+def process_birth_token(pid):
+    """Read a Windows PID's kernel creation FILETIME without modifying it.
+
+    The operator can re-use a PID, but a restarted/recycled JVM must never
+    inherit earlier diagnostic receipts. No shell, WMI or extra process starts.
+    """
+    if os.name != "nt":
+        raise ReceiptError("Windows PID identity checks require Windows")
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.GetProcessTimes.argtypes = (
+        wintypes.HANDLE, ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME))
+    kernel.GetProcessTimes.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+    if not handle:
+        raise ReceiptError("Cannot inspect target PID creation identity")
+    try:
+        created = wintypes.FILETIME()
+        exited = wintypes.FILETIME()
+        kernel_time = wintypes.FILETIME()
+        user_time = wintypes.FILETIME()
+        if not kernel.GetProcessTimes(
+                handle, ctypes.byref(created), ctypes.byref(exited),
+                ctypes.byref(kernel_time), ctypes.byref(user_time)):
+            raise ReceiptError("Cannot read target PID creation time")
+        birth = (created.dwHighDateTime << 32) | created.dwLowDateTime
+        if not birth:
+            raise ReceiptError("Target PID creation identity is invalid")
+        return birth
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def require_same_process(pid, original_birth):
+    current = process_birth_token(pid)
+    if current != original_birth:
+        raise ReceiptError("Target PID was replaced/restarted during acceptance")
+
+
 def validate_loader_receipt(option, pid, stdout):
     expected = (
         "ATTACH_RESULT=SUCCESS pid=" + str(pid) +
@@ -242,6 +288,7 @@ def run(argv=None):
                             capture_output=True, text=True, env=env,
                             timeout=15, check=True)
     check_target_listing(listed.stdout, a.pid)
+    original_birth = process_birth_token(a.pid)
     records = []
     for option, _required in steps:
         # A second check prevents a vanished/replaced PID being attached.
@@ -249,6 +296,7 @@ def run(argv=None):
                                  capture_output=True, text=True, env=env,
                                  timeout=15, check=True)
         check_target_listing(current.stdout, a.pid)
+        require_same_process(a.pid,original_birth)
         original_stat = target_log.stat()
         before = original_stat.st_size
         cmd = [str(loader), "attach", str(a.pid), str(jdk8), option]
@@ -258,8 +306,10 @@ def run(argv=None):
             raise ReceiptError("External Attach failed for "+option+
                                "; STOP, do not try another diagnostic")
         validate_loader_receipt(option,a.pid,result.stdout)
+        require_same_process(a.pid,original_birth)
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
+        require_same_process(a.pid,original_birth)
         records.append({"mode":option,"target_receipts":list(receipts)})
         print("R81_FRESH_TARGET_RECEIPTS_PASS mode="+option,flush=True)
 
@@ -268,6 +318,7 @@ def run(argv=None):
                                    capture_output=True, text=True, env=env,
                                    timeout=15, check=True)
     check_target_listing(final_listing.stdout, a.pid)
+    require_same_process(a.pid,original_birth)
     # This is not a substitute for a visual game-frame/GL state inspection.
     print("R81_ORIGINAL_RENDER_DIAGNOSTIC_RECEIPTS_PASS")
     print("R81_NOT_GAME_MENU_OR_VISUAL_RENDER_ACCEPTANCE")
