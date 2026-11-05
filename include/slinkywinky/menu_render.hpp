@@ -3,10 +3,17 @@
 #include <cstdint>
 #include <optional>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
 namespace slinkywinky {
+class MenuProfileBridge;
+
+struct MenuRenderParameter {
+    std::size_t catalog_index=0;
+    std::string caption; // immutable, first-party ASCII formatted primary setting
+};
 // R63: a first-party, renderer-neutral admission boundary.
 // This never calls OpenGL, Minecraft, JNI, a loader, or gameplay input.
 struct MenuRenderFrame {
@@ -17,6 +24,7 @@ struct MenuRenderFrame {
     MenuTab tab=MenuTab::Combat;
     MenuAppearance appearance{};
     std::vector<MenuItem> visible;
+    std::vector<MenuRenderParameter> parameters; // expanded visible rows only
     bool is_placeholder=false; // Profiles is informational; Unload not admitted.
 };
 
@@ -26,7 +34,8 @@ public:
     // to the lifetime of that context, not a Minecraft game session.
     bool attach(std::uint64_t epoch,unsigned width,unsigned height) noexcept;
     bool resize(unsigned width,unsigned height) noexcept;
-    std::optional<MenuRenderFrame> next(const MenuState& menu);
+    std::optional<MenuRenderFrame> next(const MenuState& menu,
+                                        const MenuProfileBridge* profile=nullptr);
     // Cleanup is intentionally owner-thread only; a failed close leaves this
     // context locked until the host can perform the correct teardown.
     bool detach() noexcept;
