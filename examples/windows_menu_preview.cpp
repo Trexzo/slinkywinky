@@ -76,7 +76,7 @@ void redraw(HWND hwnd,HDC target) {
     RECT client{};GetClientRect(hwnd,&client);
     // No frame is rendered unless the host surface belongs to the current
     // validated owner-thread context with this exact viewport.
-    const auto frame=renderSession.next(menu);
+    const auto frame=renderSession.next(menu,&profile);
     if(!frame || frame->viewport_width!=static_cast<unsigned>(client.right) ||
        frame->viewport_height!=static_cast<unsigned>(client.bottom))
         return;
@@ -137,16 +137,11 @@ void redraw(HWND hwnd,HDC target) {
             SelectObject(buffer,small);
             if(!frame->appearance.compact) {
                 std::wstring detail=L"Not implemented - unavailable";
-                if(const auto parameter=profile.primary(item.catalog_index)) {
+                if(profile.primary(item.catalog_index))
                     detail=L"Native profile setting - not active in Minecraft";
-                    if(item.expanded) {
-                        std::ostringstream line;
-                        line<<parameter->name<<": "<<std::fixed
-                            <<std::setprecision(parameter->integral?0:2)
-                            <<parameter->value<<" | +/- adjust | P save";
-                        detail=widen(line.str());
-                    }
-                }
+                for(const auto& parameter:frame->parameters)
+                    if(parameter.catalog_index==item.catalog_index)
+                        detail=widen(parameter.caption)+" | +/- adjust | P save";
                 draw(buffer,detail,31,y+24,w-206,16,muted);
             }
             // Dedicated + expansion and inert preview-switch affordances.
