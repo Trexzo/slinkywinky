@@ -323,6 +323,11 @@ public final class InstrumentationProbe {
                     "R73 passive renderer inspector removal unconfirmed",uncertain);
             } catch (Exception error) {
                 throw new IllegalStateException("R73 renderer preflight refused",error);
+            } catch (Error unexpectedVmError) {
+                // We cannot prove the passive-inspector lifecycle after a VM
+                // or linkage error. Stay locked rather than permit reattach.
+                inspectorRemovalConfirmed=false;
+                throw unexpectedVmError;
             } finally {
                 if(inspectorRemovalConfirmed) {
                     hookInstalled.set(false);
