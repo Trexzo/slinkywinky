@@ -188,7 +188,8 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_MOUSEWHEEL:{
             const int sign=GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1;
-            profile.scroll_by(sign);repaint(hwnd);return 0;
+            if(profile.scroll_by(sign))focusedParameter.reset();
+            repaint(hwnd);return 0;
         }
         case WM_LBUTTONDOWN:{
             const int x=static_cast<short>(LOWORD(lp));
@@ -197,7 +198,10 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             const int clientWidth=client.right;
             if(y>=navY && y<navY+navH && x>=18 && x<clientWidth-18) {
                 const int idx=(x-18)*7/(clientWidth-36);
-                if(idx>=0 && idx<6)profile.select(static_cast<MenuTab>(idx));
+                if(idx>=0 && idx<6) {
+                    profile.select(static_cast<MenuTab>(idx));
+                    focusedParameter.reset();
+                }
             } else if(y>=rowStart && y<rowStart+8*rowH &&
                      menu.tab()!=MenuTab::Profiles) {
                 const auto rows=menu.page();
@@ -208,10 +212,9 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(x>=clientWidth-145 && x<clientWidth-92) {
                         const auto id=rows[idx].catalog_index;
                         if(menu.toggle_expanded(id)) {
+                            focusedParameter.reset();
                             if(menu.expanded(id) && profile.primary(id))
                                 focusedParameter=id;
-                            else if(focusedParameter && *focusedParameter==id)
-                                focusedParameter.reset();
                         }
                     }
                 }
@@ -220,7 +223,10 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_KEYDOWN:{
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
-            if(wp>=L'1'&&wp<=L'6')profile.select(static_cast<MenuTab>(wp-L'1'));
+            if(wp>=L'1'&&wp<=L'6') {
+                profile.select(static_cast<MenuTab>(wp-L'1'));
+                focusedParameter.reset();
+            }
             if(wp==L'C'){
                 menu.set_compact(!menu.appearance().compact);
                 save_prefs();
@@ -237,8 +243,8 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                              SWP_NOMOVE|SWP_NOZORDER);
                 save_prefs();
             }
-            if(wp==VK_UP)profile.scroll_by(-1);
-            if(wp==VK_DOWN)profile.scroll_by(1);
+            if(wp==VK_UP && profile.scroll_by(-1))focusedParameter.reset();
+            if(wp==VK_DOWN && profile.scroll_by(1))focusedParameter.reset();
             const int step=(wp==VK_OEM_PLUS || wp==VK_ADD)?1:
                            (wp==VK_OEM_MINUS || wp==VK_SUBTRACT)?-1:0;
             if(step && focusedParameter)
