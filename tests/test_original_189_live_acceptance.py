@@ -225,7 +225,8 @@ class ReceiptChecks(unittest.TestCase):
                 return harness.subprocess.CompletedProcess(
                     cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
                     harness.LOADER_MODES[option]+"\n","")
-            with patch.object(harness.subprocess,"run",side_effect=fake):
+            with patch.object(harness,"process_birth_token",return_value=8123456789), \
+                 patch.object(harness.subprocess,"run",side_effect=fake):
                 result=harness.run([
                     "--loader",str(loader),"--jdk8",str(root/"jdk8"),
                     "--pid","123","--target-stdout-log",str(log),
@@ -265,7 +266,8 @@ class ReceiptChecks(unittest.TestCase):
                 return harness.subprocess.CompletedProcess(
                     cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
                     harness.LOADER_MODES[option]+"\n","")
-            with patch.object(harness.subprocess,"run",side_effect=fake):
+            with patch.object(harness,"process_birth_token",return_value=8123456789), \
+                 patch.object(harness.subprocess,"run",side_effect=fake):
                 with self.assertRaises(harness.ReceiptError):
                     harness.run([
                         "--loader",str(loader),"--jdk8",str(root/"jdk8"),
@@ -273,6 +275,52 @@ class ReceiptChecks(unittest.TestCase):
                         "--mode","context","--execute"])
             self.assertEqual(attached,["--render-preflight",
                                        "--render-callback=8"])
+
+    @unittest.skipUnless(os.name=="nt", "R84 PID reuse fixture requires Windows")
+    def test_pid_recycling_between_preflight_and_callback_refused(self):
+        # Both list calls return the SAME PID, yet its kernel birth token
+        # changes. Never Attach to the new JVM after preflight has completed.
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            loader=root/"slinkywinky_loader.exe"
+            java=root/"jdk8"/"bin"/"java.exe"
+            tools=root/"jdk8"/"lib"/"tools.jar"
+            log=root/"target-stdout.log"
+            java.parent.mkdir(parents=True)
+            tools.parent.mkdir(parents=True)
+            for file in (loader,java,tools,log):
+                file.touch()
+            attached=[]
+            def fake(cmd,**kwargs):
+                if cmd[1]=="list":
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"123 net.minecraft.client.main.Main\\n","")
+                option=cmd[-1]
+                attached.append(option)
+                with log.open("a",encoding="utf-8") as output:
+                    output.write(P)
+                return harness.subprocess.CompletedProcess(
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\\n","")
+            # Startup, preflight pre-Attach, post-Attach, post-receipt,
+            # then mismatched creation token before callback Attach.
+            births=[101,101,101,101,202]
+            with patch.object(harness,"process_birth_token",
+                              side_effect=births) as check_birth, \
+                 patch.object(harness.subprocess,"run",side_effect=fake):
+                with self.assertRaisesRegex(harness.ReceiptError,"replaced/restarted"):
+                    harness.run([
+                        "--loader",str(loader),"--jdk8",str(root/"jdk8"),
+                        "--pid","123","--target-stdout-log",str(log),
+                        "--mode","context","--execute"])
+            self.assertEqual(check_birth.call_count,5)
+            self.assertEqual(attached,["--render-preflight"])
+
+    def test_explicit_birth_token_comparison_is_fail_closed(self):
+        with patch.object(harness,"process_birth_token",return_value=222):
+            harness.require_same_process(123,222)
+            with self.assertRaises(harness.ReceiptError):
+                harness.require_same_process(123,111)
 
     def test_plan_never_launches_attach_or_reads_process(self):
         with patch.object(harness.subprocess,"run",
