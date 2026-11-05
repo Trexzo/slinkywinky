@@ -141,7 +141,7 @@ void redraw(HWND hwnd,HDC target) {
                     detail=L"Native profile setting - not active in Minecraft";
                 for(const auto& parameter:frame->parameters)
                     if(parameter.catalog_index==item.catalog_index)
-                        detail=widen(parameter.caption)+" | +/- adjust | P save";
+                        detail=widen(parameter.caption)+L" | +/- adjust | P save";
                 draw(buffer,detail,31,y+24,w-206,16,muted);
             }
             // Dedicated + expansion and inert preview-switch affordances.
