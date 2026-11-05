@@ -320,7 +320,9 @@ public final class RendererFrameDiagnostic {
                 }
                 System.out.println(evidence==null?
                     "R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS":
-                    "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS");
+                    (multiFrame?"R92_FINITE_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
+                     (renderOverlay?"R91_ONE_FRAME_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
+                      "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS")));
                 System.out.flush();
                 InstrumentationProbe.finishRenderDiagnostic(restored);
                 // R81: consumer must not start the next Attach merely from a
