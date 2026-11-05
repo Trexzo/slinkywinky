@@ -60,8 +60,16 @@ public final class RendererLivePreflight {
         throws Exception {
         require(ave!=null && bfk!=null && ave.length>0 && bfk.length>0 &&
                 ave.length<=1000000 && bfk.length<=1000000,"Invalid classfile lengths");
-        require(sha256(ave).equals(aveExpected) &&
-                sha256(bfk).equals(bfkExpected),"Loaded original-class SHA-256 mismatch");
+        final String aveActual=sha256(ave);
+        final String bfkActual=sha256(bfk);
+        if(!aveActual.equals(aveExpected) || !bfkActual.equals(bfkExpected)) {
+            // R90: trace only public bytecode fingerprints and lengths in the
+            // failure path; never persist, print or relax modified class bytes.
+            throw new IllegalStateException(
+                "Loaded original-class SHA-256 mismatch"+
+                " ave="+aveActual+" length="+ave.length+
+                " bfk="+bfkActual+" length="+bfk.length);
+        }
         final ClassReader game,renderer;
         try {
             game=new ClassReader(ave);
