@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <array>
 #include <cstdint>
@@ -183,6 +184,31 @@ int main() {
         REQUIRE(changed && changed->visible.front().preview_enabled);
         REQUIRE(draw_menu_gl11(*changed,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
+        // R88: the native GL renderer consumes typed, immutable profile
+        // snapshots. It rejects untrusted or stale row captions before GL.
+        MenuProfileBridge profile(menu);
+        REQUIRE(menu.toggle_expanded(0));
+        REQUIRE(profile.adjust_primary(0,1));
+        const auto configured=admitted.next(menu,&profile);
+        REQUIRE(configured && configured->parameters.size()==1);
+        REQUIRE(configured->parameters[0].catalog_index==0);
+        REQUIRE(configured->parameters[0].caption=="Aim range: 4.25");
+        REQUIRE(draw_menu_gl11(*configured,context.gl,context.dc));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
+        wrong=*configured;
+        wrong.parameters[0].catalog_index=3; // Unsupported module.
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
+        wrong=*configured;
+        wrong.parameters[0].catalog_index=2; // Not expanded.
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
+        wrong=*configured;
+        wrong.parameters[0].caption="\x01";
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
+        wrong=*configured;
+        wrong.parameters.push_back(wrong.parameters[0]);
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
         same(before,snapshot());
 
         // R69: draw a translucent inset menu *over* an existing frame.
