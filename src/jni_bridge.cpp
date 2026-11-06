@@ -470,9 +470,9 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCurrentWglSnapshot(
  * settings. A fresh owner-bound host is closed on the same callback; no
  * native renderer state is retained between frames.
  */
-extern "C" JNIEXPORT jboolean JNICALL
-Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
-    JNIEnv*,jclass,jlong expectedContext,jlong expectedDc,jint width,jint height) {
+static jboolean drawValidatedMenuOverlay(
+    jlong expectedContext,jlong expectedDc,jint width,jint height,
+    slinkywinky::MenuGL11Mode mode) {
     if(expectedContext==0 || expectedDc==0 ||
        width<320 || width>8192 || height<240 || height>8192)
         return JNI_FALSE;
@@ -500,7 +500,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
     if(!host.open(context,dc,static_cast<unsigned>(width),
                   static_cast<unsigned>(height)))
         return JNI_FALSE;
-    const bool drawn=host.draw(menu,&profile);
+    const bool drawn=host.draw(menu,&profile,mode);
     const bool closed=host.close();
     glGetIntegerv(GL_VIEWPORT,viewportAfter);
     glGetIntegerv(GL_MATRIX_MODE,&modeAfter);
@@ -516,6 +516,19 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
            std::fabs(colorBefore[i]-colorAfter[i])>0.00001f)
             return JNI_FALSE;
     return JNI_TRUE;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
+    JNIEnv*,jclass,jlong context,jlong dc,jint width,jint height) {
+    return drawValidatedMenuOverlay(context,dc,width,height,
+        slinkywinky::MenuGL11Mode::BoundedOverlay);
+}
+// R93 only: the same GL ownership and state guards, a 70%-scale panel.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+    JNIEnv*,jclass,jlong context,jlong dc,jint width,jint height) {
+    return drawValidatedMenuOverlay(context,dc,width,height,
+        slinkywinky::MenuGL11Mode::CompactOverlay);
 }
 
 #endif
