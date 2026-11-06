@@ -208,14 +208,14 @@ RECEIPT_LINES = {
     R99_RETAINED: re.compile(r"^" + re.escape(R99_RETAINED) + r"\r?$", re.MULTILINE),
     R100_CALLBACK: re.compile(
         r"^R100_RENDER_CALLBACK_BOUNDED_PASS accepted=([0-9]{1,4}) "
-        r"owner=[^\\r\\n]{1,256}#[1-9][0-9]*\\r?$",re.MULTILINE),
+        r"owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$",re.MULTILINE),
     R100_STABLE: re.compile(
         r"^R100_WGL_CONTEXT_STABLE_PASS attempts=([0-9]{1,4}) "
         r"current=([0-9]{1,4}) absent=0 invalid=0 changed=0 stable=true "
         r"shown=([0-9]{1,4}) actions=4 refused=0 tab=1 "
-        r"focus=17 preview=1 stop=operator\\r?$",re.MULTILINE),
+        r"focus=17 preview=1 stop=operator\r?$",re.MULTILINE),
     R100_OPERATOR: re.compile(
-        r"^" + re.escape(R100_OPERATOR) + r"\\r?$",re.MULTILINE),
+        r"^" + re.escape(R100_OPERATOR) + r"\r?$",re.MULTILINE),
     R93_CALLBACK: re.compile(
         r"^" + re.escape(R93_CALLBACK) +
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
