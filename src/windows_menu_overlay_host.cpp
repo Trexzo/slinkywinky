@@ -52,6 +52,10 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
     return draw(menu,profile,MenuGL11Mode::BoundedOverlay);
 }
 bool WglMenuOverlayHost::draw(const MenuState& menu,
+                              const MenuProfileBridge* profile,MenuGL11Mode mode) {
+    return draw(menu,profile,mode,nullptr);
+}
+bool WglMenuOverlayHost::draw(const MenuState& menu,
                               const MenuProfileBridge* profile,MenuGL11Mode mode,
                               const MenuNavigation* navigation) {
     if(!current())return false;
