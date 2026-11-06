@@ -18,6 +18,9 @@
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
     JNIEnv*,jclass,jlong,jlong,jint,jint);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+    JNIEnv*,jclass,jlong,jlong,jint,jint);
 #endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
 
@@ -288,6 +291,33 @@ int main() {
         REQUIRE(!wrongThreadAccepted);
         same(beforeNativeOverlay,snapshot());
         std::cout<<"R91_REAL_JNI_WGL_ONE_FRAME_PIXELS_AND_RESTORATION_PASS\\n";
+        // R93: invoke the real compact JNI export on the disposable GL host.
+        glClearColor(0.10f,0.38f,0.69f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        const State compactBefore=snapshot();
+        const auto compactOutside=readback(0,315);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+            nullptr,nullptr,0,admittedDc,676,630)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+            nullptr,nullptr,admittedContext,admittedDc,677,630)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(compactBefore,snapshot());
+        REQUIRE(readback(0,315)==compactOutside);
+        REQUIRE(readback(675,315)==compactOutside);
+        REQUIRE(readback(105,522)!=compactOutside);
+        bool compactForeignAccepted=false;
+        std::thread compactForeign([&] {
+            compactForeignAccepted=
+                Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+                    nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE;
+        });
+        compactForeign.join();
+        REQUIRE(!compactForeignAccepted);
+        same(compactBefore,snapshot());
+        std::cout<<"R93_REAL_COMPACT_JNI_GL11_PIXELS_AND_RESTORE_PASS\\n";
+
 #endif
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));
