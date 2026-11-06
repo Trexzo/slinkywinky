@@ -61,6 +61,9 @@ void all_modes(MenuPanelMode mode) {
     CHECK(gate.press(*fresh,mode,toggle.x,toggle.y,350,true));
     CHECK(!gate.release(*fresh,mode,toggle.x,toggle.y,360,true)); // double click denied
     CHECK(profile.enabled(0)); // no second toggle
+    // The exact 500ms Windows double-click threshold must also reject.
+    CHECK(gate.press(*fresh,mode,toggle.x,toggle.y,700,true));
+    CHECK(!gate.release(*fresh,mode,toggle.x,toggle.y,730,true));
     CHECK(gate.press(*fresh,mode,toggle.x,toggle.y,800,true));
     const auto later=gate.release(*fresh,mode,toggle.x,toggle.y,820,true);
     CHECK(later && later->kind==MenuHitKind::Toggle); // after cooldown
@@ -141,7 +144,8 @@ void all_modes(MenuPanelMode mode) {
     CHECK(gate.press(*changed,mode,body.x,body.y,6000,true));
     std::atomic<bool> refused{false};
     std::thread other([&] {
-        refused=!gate.cancel() && !gate.press(*changed,mode,body.x,body.y,6010,true) &&
+        refused=!gate.cancel() && !gate.set_double_click_window(250) &&
+                !gate.press(*changed,mode,body.x,body.y,6010,true) &&
                 !gate.release(*changed,mode,body.x,body.y,6020,true) &&
                 !gate.move(*changed,mode,body.x,body.y,true);
     });
@@ -149,6 +153,10 @@ void all_modes(MenuPanelMode mode) {
     CHECK(refused && gate.pending());
     CHECK(gate.cancel());
     CHECK(!gate.pending());
+    CHECK(gate.press(*changed,mode,body.x,body.y,6200,true));
+    CHECK(gate.set_double_click_window(900)); // OS setting changed mid-press
+    CHECK(!gate.pending());
+    CHECK(!gate.release(*changed,mode,body.x,body.y,6240,true));
     CHECK(frames.detach());
 }
 }
