@@ -8,6 +8,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
+#include "slinkywinky/windows_insert_edge.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -146,6 +147,33 @@ std::array<GLubyte,4> readback(int x,int y) {
 
 int main() {
     try {
+        // R95 pure focus/key-edge policy: no SendInput, hooks or real keypress.
+        VisibilityInsertEdge edge;
+        REQUIRE(!edge.armed());
+        REQUIRE(!edge.sample(true,true));  // Held during admission.
+        REQUIRE(!edge.sample(true,true));  // No auto-repeat toggle.
+        REQUIRE(!edge.sample(true,false)); // Focused key release arms.
+        REQUIRE(edge.armed());
+        REQUIRE(edge.sample(true,true));   // First rising Insert.
+        REQUIRE(!edge.sample(true,true));  // Held once; never repeats.
+        REQUIRE(!edge.sample(true,false));
+        REQUIRE(edge.sample(true,true));   // Second fresh key press.
+        REQUIRE(!edge.sample(false,true)); // Lost focus with key down.
+        REQUIRE(!edge.armed());
+        REQUIRE(!edge.sample(true,true));  // Return while held: no ghost.
+        REQUIRE(!edge.sample(false,false));
+        REQUIRE(!edge.sample(true,true));  // Lost focus + key held.
+        REQUIRE(!edge.sample(true,false)); // Must release IN game.
+        REQUIRE(edge.sample(true,true));   // Re-press only.
+        REQUIRE(!edge.sample(false,false));
+        REQUIRE(!edge.sample(true,false));
+        REQUIRE(edge.sample(true,true));
+        edge.reset();
+        REQUIRE(!edge.armed());
+        REQUIRE(!edge.sample(true,true)); // New session held Insert.
+        REQUIRE(!edge.sample(true,false));
+        REQUIRE(edge.sample(true,true));
+        std::cout<<"R95_FOREGROUND_INSERT_EDGE_FOCUS_REENTRY_REPEAT_AND_RESET_PASS\\n";
         Context context;
         glViewport(0,0,676,630);
         glEnable(GL_DEPTH_TEST);
