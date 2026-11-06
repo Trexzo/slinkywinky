@@ -45,7 +45,31 @@ U = (harness.RESTORED + "\n"
        "stop=operator\n" + harness.RELEASED + "\n")
 
 
+K = (U.replace("toggles=3","toggles=2")
+     .replace(harness.R94_VISIBILITY,
+              "R95_INPUT_SOURCE_AUDIT keys=2 events=0\\n" + harness.R94_VISIBILITY))
+
+
 class ReceiptChecks(unittest.TestCase):
+    def test_r95_insert_source_receipt_and_sandbox_binding_collision(self):
+        self.assertEqual(len(harness.validate_receipt("--render-visibility=manual",K)),5)
+        for modified in (
+            K.replace("keys=2","keys=1"),
+            K.replace("events=0","events=1"),
+            K.replace("R95_INPUT_SOURCE_AUDIT","R95_INPUT_SOURCE_FAKED"),
+        ):
+            self.assertNotEqual(modified,K)
+        from windows_r95_scoped_insert import check_offline_insert_collision
+        with tempfile.TemporaryDirectory() as root:
+            folder=Path(root)/"game"
+            folder.mkdir()
+            options=folder/"options.txt"
+            options.write_text("key_key.jump:210\\n",encoding="utf-8")
+            with self.assertRaises(RuntimeError):
+                check_offline_insert_collision(Path(root))
+            options.write_text("key_key.jump:57\\n",encoding="utf-8")
+            check_offline_insert_collision(Path(root))
+
     def test_r94_manual_exact_dynamic_counters_and_fake_receipt_refusal(self):
         self.assertEqual(len(harness.validate_receipt("--render-visibility=manual",U)),5)
         harness.validate_loader_receipt(
@@ -612,6 +636,72 @@ class ReceiptChecks(unittest.TestCase):
                               "--render-visibility=manual",
                               "--toggle-visibility","--toggle-visibility",
                               "--toggle-visibility","--stop-visibility"])
+            data=json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["stages"]),7)
+            self.assertEqual(data["stages"][-1]["mode"],"--render-visibility=manual")
+            self.assertFalse(data["visual_game_acceptance"])
+            self.assertFalse(data["in_game_menu_verified"])
+
+    @unittest.skipUnless(os.name=="nt", "R95 synthetic original foreground key requires Windows")
+    def test_r95_seven_stage_original_only_insert_key_and_stop(self):
+        # Fully simulated Attach and JVM stdout: NEVER start Minecraft.
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            loader=root/"slinkywinky_loader.exe"
+            java=root/"jdk8"/"bin"/"java.exe"
+            tools=root/"jdk8"/"lib"/"tools.jar"
+            log=root/"target-stdout.log"
+            client=root/"fixture-original-client.jar"
+            report=root/"r95-evidence.json"
+            java.parent.mkdir(parents=True)
+            tools.parent.mkdir(parents=True)
+            for file in (loader,java,tools,log,client):
+                file.touch()
+            attached=[]
+            def fake(cmd,**kwargs):
+                self.assertNotIn("SLINKYWINKY_ATTACH_TEST",kwargs["env"])
+                self.assertNotIn("SLINKYWINKY_EXPERIMENTAL_HOOK",kwargs["env"])
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_OVERLAY"),"1")
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_VISIBILITY"),"1")
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_MANUAL"),"1")
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_MULTIFRAME"),"1")
+                if cmd[1]=="list":
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"123 net.minecraft.client.main.Main\n","")
+                self.assertEqual(cmd[1],"attach")
+                self.assertEqual(cmd[2],"123")
+                option=cmd[-1]
+                attached.append(option)
+                if option in ("--toggle-visibility","--stop-visibility"):
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+option[2:]+"\n","")
+                stage={"--render-preflight":P,
+                       "--render-callback=8":C,
+                       "--render-context=8":W,
+                       "--render-overlay=8":O,
+                       "--render-overlay=72":M,
+                       "--render-visibility=72":V,
+                       "--render-visibility=manual":K}[option]
+                with log.open("a",encoding="utf-8") as output:
+                    output.write(stage)
+                return harness.subprocess.CompletedProcess(
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\n","")
+            with patch.object(harness,"process_birth_token",return_value=81), \
+                 patch.object(harness,"verify_original_client_jar",return_value=(1,2,3,4)), \
+                 patch.object(harness.subprocess,"run",side_effect=fake), \\\n                 patch.object(harness,"send_isolated_insert",return_value=2) as injected:
+                result=harness.run([
+                    "--loader",str(loader),"--jdk8",str(root/"jdk8"),
+                    "--pid","123","--target-stdout-log",str(log),
+                    "--original-client-jar",str(client),
+                    "--mode","key","--execute","--report",str(report)])
+            self.assertEqual(result,0)
+            injected.assert_called_once_with(123,root)
+            self.assertEqual(attached,
+                             ["--render-preflight","--render-callback=8",
+                              "--render-context=8","--render-overlay=8",
+                              "--render-overlay=72","--render-visibility=72",
+                              "--render-visibility=manual","--stop-visibility"])
             data=json.loads(report.read_text(encoding="utf-8"))
             self.assertEqual(len(data["stages"]),7)
             self.assertEqual(data["stages"][-1]["mode"],"--render-visibility=manual")
