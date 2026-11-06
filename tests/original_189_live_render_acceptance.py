@@ -171,19 +171,19 @@ RECEIPT_LINES = {
         r"^" + re.escape(R93_CALLBACK) +
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     R93_STABLE: re.compile(r"^" + re.escape(R93_STABLE) + r"\r?$", re.MULTILINE),
-    R93_VISIBILITY: re.compile(r"^" + re.escape(R93_VISIBILITY) + r"\\r?$", re.MULTILINE),
+    R93_VISIBILITY: re.compile(r"^" + re.escape(R93_VISIBILITY) + r"\r?$", re.MULTILINE),
     R94_CALLBACK: re.compile(
         r"^R94_RENDER_CALLBACK_BOUNDED_PASS accepted=([0-9]{1,4}) "
-        r"owner=[^\\r\\n]{1,256}#[1-9][0-9]*\\r?$", re.MULTILINE),
+        r"owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     R94_STABLE: re.compile(
         r"^R94_WGL_CONTEXT_STABLE_PASS attempts=([0-9]{1,4}) current=([0-9]{1,4}) "
         r"absent=0 invalid=0 changed=0 stable=true "
         r"shown=([0-9]{1,4}) hidden=([0-9]{1,4}) toggles=([0-9]{1,4}) "
-        r"stop=operator\\r?$", re.MULTILINE),
+        r"stop=operator\r?$", re.MULTILINE),
     R94_VISIBILITY: re.compile(
         r"^R94_MENU_OPERATOR_CONTROLLED_PASS frames=([0-9]{1,4}) "
         r"toggles=([0-9]{1,4}) shown=([0-9]{1,4}) "
-        r"hidden=([0-9]{1,4}) stop=operator\\r?$", re.MULTILINE),
+        r"hidden=([0-9]{1,4}) stop=operator\r?$", re.MULTILINE),
 }
 
 
