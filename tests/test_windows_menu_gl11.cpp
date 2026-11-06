@@ -318,6 +318,29 @@ int main() {
         same(compactBefore,snapshot());
         std::cout<<"R93_REAL_COMPACT_JNI_GL11_PIXELS_AND_RESTORE_PASS\\n";
 
+        // R93: reproduce the finite visibility phase with a full redraw of
+        // the underlying scene on EVERY frame. Hidden phases must never
+        // call JNI, so they retain no overlay pixels across game frames.
+        int shownPixels=0,hiddenPixels=0;
+        for(int attempt=9;attempt<=72;attempt++) {
+            glClearColor(0.10f,0.38f,0.69f,1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            const auto noMenu=readback(105,522);
+            const bool visible=attempt<=28 || attempt>=45;
+            if(visible) {
+                REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
+                    nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+                REQUIRE(readback(105,522)!=noMenu);
+                shownPixels++;
+            } else {
+                REQUIRE(readback(105,522)==noMenu);
+                hiddenPixels++;
+            }
+            same(compactBefore,snapshot());
+        }
+        REQUIRE(shownPixels==48 && hiddenPixels==16);
+        std::cout<<"R93_COMPACT_SHOW_HIDE_SHOW_GL_PIXELS_PASS\\n";
+
 #endif
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));
