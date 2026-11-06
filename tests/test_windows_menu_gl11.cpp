@@ -11,6 +11,7 @@
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
+#include "slinkywinky/windows_game_window_gate.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include <array>
@@ -794,6 +795,47 @@ int main() {
         REQUIRE(!host.draw(menu));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+        // R101: spoofing a title alone must not grant input admission.
+        // The HDC must be the actual current WGL renderer window, owned by
+        // the exact current thread and source-pinned original process.
+        REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
+                GameWindowFocus::Refused);
+        REQUIRE(SetWindowTextW(context.hwnd,L"Minecraft 1.8.9"));
+        ShowWindow(context.hwnd,SW_SHOWNOACTIVATE);
+        REQUIRE(IsWindowVisible(context.hwnd));
+        const auto localWindow=audit_game_render_window(
+            context.gl,context.dc,676,630);
+        REQUIRE(localWindow==GameWindowFocus::ValidBackground ||
+                localWindow==GameWindowFocus::ValidForeground);
+        REQUIRE(audit_game_render_window(context.gl,context.dc,677,630)==
+                GameWindowFocus::Refused);
+        REQUIRE(audit_game_render_window(nullptr,context.dc,676,630)==
+                GameWindowFocus::Refused);
+        REQUIRE(audit_game_render_window(context.gl,nullptr,676,630)==
+                GameWindowFocus::Refused);
+        // Ambiguous extra same-title root in the same PID is never usable.
+        HWND duplicate=CreateWindowW(klass,L"Minecraft 1.8.9",WS_POPUP,
+                                     30,30,320,240,nullptr,nullptr,
+                                     GetModuleHandleW(nullptr),nullptr);
+        REQUIRE(duplicate!=nullptr);
+        ShowWindow(duplicate,SW_SHOWNOACTIVATE);
+        REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
+                GameWindowFocus::Refused);
+        ShowWindow(duplicate,SW_HIDE);
+        DestroyWindow(duplicate);
+        REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)!=
+                GameWindowFocus::Refused);
+        std::thread otherWindow([&] {
+            REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
+                    GameWindowFocus::Refused);
+        });
+        otherWindow.join();
+        ShowWindow(context.hwnd,SW_HIDE);
+        REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
+                GameWindowFocus::Refused);
+        REQUIRE(SetWindowTextW(context.hwnd,L"R67 isolated GL fixture"));
+        same(before,snapshot());
+        std::cout<<"R101_READ_ONLY_WGL_BOUND_GAME_WINDOW_IDENTITY_NEGATIVE_CONTROLS_PASS\\n";
         std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";
         std::cout<<"R70_WGL_CONTEXT_LOSS_FAIL_CLOSED_PASS\n";
         std::cout<<"R67_ISOLATED_WGL_CONTEXT_PASS\n";
