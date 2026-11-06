@@ -147,6 +147,8 @@ void adjust_client(HWND hwnd) {
 LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     switch(message) {
         case WM_CREATE:
+            // Match Windows actual double-click timeout for this preview.
+            mouseGesture.set_double_click_window(GetDoubleClickTime());
             return create_context(hwnd)?0:-1;
         case WM_SIZE: {
             cancel_mouse(hwnd); // Resize invalidates pressed coordinates.
@@ -226,11 +228,19 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_CANCELMODE:
             cancel_mouse(hwnd);
             return 0;
+        case WM_SETTINGCHANGE:
+            cancel_mouse(hwnd);
+            mouseGesture.set_double_click_window(GetDoubleClickTime());
+            return 0;
         case WM_CAPTURECHANGED:
             mouseGesture.cancel(); // Capture was taken by another window.
             return 0;
-        case WM_LBUTTONDOWN:
-        case WM_LBUTTONDBLCLK:{
+        case WM_LBUTTONDBLCLK:
+            // Explicit OS-recognized double-click: the first committed
+            // action is enough. Never start a second gesture on this down.
+            cancel_mouse(hwnd);
+            return 0;
+        case WM_LBUTTONDOWN:{
             // R98 never changes state on DOWN. It only stores a bounded,
             // immutable owner-thread render snapshot for later comparison.
             if(GetCapture() && GetCapture()!=hwnd)return 0;
