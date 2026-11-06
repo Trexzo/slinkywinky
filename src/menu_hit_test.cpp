@@ -37,11 +37,16 @@ std::optional<MenuHit> hit_test_menu(
        (frame.is_placeholder!=(frame.tab==MenuTab::Profiles)))
         return std::nullopt;
     const auto& catalog=official_module_catalog();
+    std::size_t prior_index=0;
+    bool first_row=true;
     for(const auto& row:frame.visible) {
         if(row.catalog_index>=catalog.size() ||
            catalog[row.catalog_index].tab!=frame.tab ||
-           row.title!=catalog[row.catalog_index].name)
+           row.title!=catalog[row.catalog_index].name ||
+           (!first_row && row.catalog_index<=prior_index))
             return std::nullopt;
+        prior_index=row.catalog_index;
+        first_row=false;
     }
     if(frame.is_placeholder && !frame.visible.empty())
         return std::nullopt;
