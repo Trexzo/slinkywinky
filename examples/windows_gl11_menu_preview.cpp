@@ -162,7 +162,26 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
-            if(profile.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1)) {
+            RECT client{};GetClientRect(hwnd,&client);
+            const auto mode=!overlayDemo?
+                slinkywinky::MenuPanelMode::StandalonePreview:
+                (overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay?
+                 slinkywinky::MenuPanelMode::CompactOverlay:
+                 slinkywinky::MenuPanelMode::BoundedOverlay);
+            const auto panel=slinkywinky::menu_panel_geometry(
+                static_cast<unsigned>(client.right),
+                static_cast<unsigned>(client.bottom),
+                menu.appearance().wide,mode);
+            POINT mouse{static_cast<short>(LOWORD(lp)),
+                        static_cast<short>(HIWORD(lp))};
+            if(!panel || !ScreenToClient(hwnd,&mouse) ||
+               mouse.x<static_cast<LONG>(panel->left) ||
+               mouse.y<static_cast<LONG>(panel->top) ||
+               mouse.x>=static_cast<LONG>(panel->left+panel->width) ||
+               mouse.y>=static_cast<LONG>(panel->top+panel->height))
+                return 0; // Wheel outside the painted panel is inert.
+            const auto delta=GET_WHEEL_DELTA_WPARAM(wp);
+            if(delta && profile.scroll_by(delta>0?-1:1)) {
                 const auto page=menu.page();
                 if(!page.empty())navigation.focus_visible_row(page.front().catalog_index);
             }
