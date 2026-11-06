@@ -9,6 +9,7 @@
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
 #include <GL/gl.h>
@@ -572,7 +573,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
  */
 static jboolean drawValidatedMenuOverlay(
     jlong expectedContext,jlong expectedDc,jint width,jint height,
-    slinkywinky::MenuGL11Mode mode) {
+    slinkywinky::MenuGL11Mode mode,
+    slinkywinky::WglRetainedMenuPreview* retained=nullptr) {
     if(expectedContext==0 || expectedDc==0 ||
        width<320 || width>8192 || height<240 || height>8192)
         return JNI_FALSE;
@@ -594,14 +596,24 @@ static jboolean drawValidatedMenuOverlay(
     glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&attribBefore);
     glGetIntegerv(GL_CLIENT_ATTRIB_STACK_DEPTH,&clientBefore);
     glGetFloatv(GL_CURRENT_COLOR,colorBefore);
-    slinkywinky::WglMenuOverlayHost host;
-    slinkywinky::MenuState menu;
-    slinkywinky::MenuProfileBridge profile(menu);
-    if(!host.open(context,dc,static_cast<unsigned>(width),
-                  static_cast<unsigned>(height)))
-        return JNI_FALSE;
-    const bool drawn=host.draw(menu,&profile,mode);
-    const bool closed=host.close();
+    bool drawn=false,closed=true;
+    if(retained) {
+        if(mode!=slinkywinky::MenuGL11Mode::CompactOverlay)
+            return JNI_FALSE;
+        drawn=retained->draw(context,dc,static_cast<unsigned>(width),
+                             static_cast<unsigned>(height));
+        // The retained model is long-lived, but each frame's WGL host is
+        // opened and closed on the original render owner inside draw().
+    } else {
+        slinkywinky::WglMenuOverlayHost host;
+        slinkywinky::MenuState menu;
+        slinkywinky::MenuProfileBridge profile(menu);
+        if(!host.open(context,dc,static_cast<unsigned>(width),
+                      static_cast<unsigned>(height)))
+            return JNI_FALSE;
+        drawn=host.draw(menu,&profile,mode);
+        closed=host.close();
+    }
     glGetIntegerv(GL_VIEWPORT,viewportAfter);
     glGetIntegerv(GL_MATRIX_MODE,&modeAfter);
     glGetIntegerv(GL_ATTRIB_STACK_DEPTH,&attribAfter);
@@ -622,6 +634,81 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
     JNIEnv*,jclass,jlong context,jlong dc,jint width,jint height) {
     return drawValidatedMenuOverlay(context,dc,width,height,
         slinkywinky::MenuGL11Mode::BoundedOverlay);
+}
+// R99 owner-bound opt-in model. These exports are not called by R94/R95.
+namespace {
+std::mutex retained_preview_mutex;
+bool retained_preview_armed=false;
+std::unique_ptr<slinkywinky::WglRetainedMenuPreview> retained_preview;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(retained_preview_armed || retained_preview)return JNI_FALSE;
+    retained_preview_armed=true;
+    return JNI_TRUE;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+    JNIEnv*,jclass,jlong context,jlong dc,jint width,jint height) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !context || !dc ||
+       width<320 || width>8192 || height<240 || height>8192 ||
+       wglGetCurrentContext()!=reinterpret_cast<HGLRC>(
+           static_cast<std::uintptr_t>(context)) ||
+       wglGetCurrentDC()!=reinterpret_cast<HDC>(
+           static_cast<std::uintptr_t>(dc)))
+        return JNI_FALSE;
+    // Lazy construction: JNI admission runs on the Attach worker, not the
+    // original Minecraft WGL render thread. This model MUST be constructed
+    // only on the first admitted original-owner draw callback.
+    try {
+        if(!retained_preview)
+            retained_preview=std::make_unique<slinkywinky::WglRetainedMenuPreview>();
+        return drawValidatedMenuOverlay(context,dc,width,height,
+            slinkywinky::MenuGL11Mode::CompactOverlay,retained_preview.get());
+    } catch(...) {
+        return JNI_FALSE;
+    }
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+    JNIEnv*,jclass,jint action) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       action<0 || action>7 || !retained_preview->owner_thread())
+        return JNI_FALSE;
+    try {
+        return retained_preview->apply(
+            static_cast<slinkywinky::MenuNavAction>(action))?JNI_TRUE:JNI_FALSE;
+    } catch(...) {
+        return JNI_FALSE;
+    }
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed)return JNI_FALSE;
+    if(retained_preview) {
+        if(!retained_preview->owner_thread() ||
+           !retained_preview->close())return JNI_FALSE;
+        retained_preview.reset();
+    }
+    retained_preview_armed=false;
+    return JNI_TRUE;
+}
+// R99 only for fail-closed cleanup after the R81 fence has drained every
+// original render callback; no WGL resources are held between frames.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed)return JNI_FALSE;
+    retained_preview.reset();
+    retained_preview_armed=false;
+    return JNI_TRUE;
 }
 // R93 only: the same GL ownership and state guards, a 70%-scale panel.
 extern "C" JNIEXPORT jboolean JNICALL
