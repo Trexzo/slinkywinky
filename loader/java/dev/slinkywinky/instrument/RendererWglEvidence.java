@@ -421,7 +421,8 @@ public final class RendererWglEvidence {
                " stable="+fullyStable()+
                (windowAudit ?
                 " window=exact-original owner=render-thread foreground="+auditForeground+
-                " background="+auditBackground+" refused="+auditRefused :
+                " background="+auditBackground+" refused="+auditRefused+
+                " width="+width+" height="+height :
                (operatorMenu ?
                 " shown="+overlayFrames+" actions="+acceptedOperatorEvents+
                 " refused="+rejectedOperatorEvents+" tab="+lastOperatorTab+
