@@ -28,7 +28,8 @@ namespace slinkywinky {
 // draws only a centered, clipped panel; does not clear or replace the frame.
 enum class MenuGL11Mode : unsigned char {
     StandalonePreview,
-    BoundedOverlay
+    BoundedOverlay,
+    CompactOverlay
 };
 
 bool draw_menu_gl11(const MenuRenderFrame& frame,
