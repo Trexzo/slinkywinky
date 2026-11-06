@@ -394,7 +394,8 @@ def run(argv=None):
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
     if a.mode in ("overlay","multiframe","visibility"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
-    if a.mode=="multiframe":
+    if a.mode in ("multiframe","visibility"):
+        # R93 must pass the earlier, separately consent-gated R92 stage.
         env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
     if a.mode=="visibility":
         env["SLINKYWINKY_RENDER_VISIBILITY"] = "1"
