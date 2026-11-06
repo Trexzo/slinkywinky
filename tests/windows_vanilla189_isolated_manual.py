@@ -451,6 +451,10 @@ def main():
                         evidence.get("in_game_menu_verified") is not False or
                         evidence.get("visual_game_acceptance") is not False):
                     raise RuntimeError("Unexpected renderer evidence scope")
+                if args.render_window_audit_acceptance:
+                    cross=evidence.get("window_crosscheck")
+                    if not cross or not cross.get("same_original_window_size_and_unique_identity") or cross.get("foreground_or_input_capture_certified") is not False or cross.get("os_input_sent") is not False:
+                        raise RuntimeError("R103 native-to-external window reconciliation missing or unsafe")
                 if game.poll() is not None:
                     raise RuntimeError("Vanilla JVM exited during renderer verification")
                 if args.render_window_audit_acceptance:
