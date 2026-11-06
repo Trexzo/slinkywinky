@@ -71,6 +71,8 @@ std::optional<MenuHit> hit_test_menu(
     if(x<18.0f || x>=w-18.0f)return std::nullopt;
     for(std::size_t i=0;i<frame.visible.size();++i) {
         const float top=153.0f+static_cast<float>(i)*49.0f;
+        // A clipped partial row is deliberately not an actionable target.
+        if(top+44.0f>panel->logical_height())continue;
         if(y<top || y>=top+44.0f)continue; // 5px row gaps inert.
         const std::size_t index=frame.visible[i].catalog_index;
         const bool implemented=
