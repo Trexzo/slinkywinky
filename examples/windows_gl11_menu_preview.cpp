@@ -9,6 +9,7 @@
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_navigation.hpp"
+#include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
@@ -34,6 +35,7 @@ HWND window=nullptr;
 std::filesystem::path preferences;
 std::filesystem::path profilePreferences;
 bool overlayDemo=false; // Standalone-only demonstration, never attached to Minecraft.
+slinkywinky::MenuGL11Mode overlayMode=slinkywinky::MenuGL11Mode::BoundedOverlay;
 
 std::filesystem::path settings_file() {
     wchar_t buffer[32768]{};
@@ -54,7 +56,10 @@ void persist() {
 }
 void refresh_caption(HWND hwnd) {
     std::wstring label=overlayDemo?
-        L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)":title;
+        (overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay?
+         L"SlinkyWinky GL1.1 Menu - Compact Overlay Demo (NO GAME)":
+         L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)"):
+        title;
     const auto focused=navigation.visible_focus();
     if(focused && menu.expanded(*focused)) {
         const auto parameter=profile.primary(*focused);
@@ -143,8 +148,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     glClearColor(0.10f,0.38f,0.69f,1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
                     if(overlayHost.draw(menu,&profile,
-                            slinkywinky::MenuGL11Mode::BoundedOverlay,
-                            &navigation))SwapBuffers(device);
+                            overlayMode,&navigation))SwapBuffers(device);
                 } else {
                     const auto frame=session.next(menu,&profile,&navigation);
                     if(frame && slinkywinky::draw_menu_gl11(
@@ -167,23 +171,33 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_LBUTTONDOWN:{
             RECT client{};GetClientRect(hwnd,&client);
-            const int width=client.right;
+            if(client.right<320 || client.bottom<240 ||
+               client.right>8192 || client.bottom>8192)return 0;
             const int x=static_cast<short>(LOWORD(lp));
             const int y=static_cast<short>(HIWORD(lp));
-            if(y>=78 && y<120 && x>=18 && x<width-18) {
-                const int tab=(x-18)*7/(width-36);
-                if(tab>=0 && tab<6) {
-                    navigation.select_tab(static_cast<MenuTab>(tab));
-                }
-            } else if(y>=153 && y<545 && menu.tab()!=MenuTab::Profiles){
-                const auto rows=menu.page();
-                const int index=(y-153)/49;
-                if(index>=0 && static_cast<std::size_t>(index)<rows.size()) {
-                    if(navigation.focus_visible_row(rows[index].catalog_index)) {
-                        if(x>=width-92 && x<=width-19)
-                            navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
-                        else if(x>=width-145 && x<width-92)
+            // R97: hit testing uses the SAME panel geometry/scaling as the
+            // GL11 renderer. The input originates only in this standalone
+            // Win32 preview; never installed into a Minecraft window.
+            const auto frame=session.next(menu,&profile,&navigation);
+            const auto mode=!overlayDemo?
+                slinkywinky::MenuPanelMode::StandalonePreview:
+                (overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay?
+                 slinkywinky::MenuPanelMode::CompactOverlay:
+                 slinkywinky::MenuPanelMode::BoundedOverlay);
+            if(frame &&
+               frame->viewport_width==static_cast<unsigned>(client.right) &&
+               frame->viewport_height==static_cast<unsigned>(client.bottom)) {
+                const auto hit=slinkywinky::hit_test_menu(*frame,mode,x,y);
+                if(hit) {
+                    using slinkywinky::MenuHitKind;
+                    if(hit->kind==MenuHitKind::Tab)
+                        navigation.select_tab(hit->tab);
+                    else if(navigation.focus_visible_row(hit->catalog_index)) {
+                        if(hit->kind==MenuHitKind::Expand)
                             navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
+                        else if(hit->kind==MenuHitKind::Toggle)
+                            navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
+                        // RowBody only changes visual focus.
                     }
                 }
             }
@@ -218,6 +232,13 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 profile.save(profilePreferences);
             if(wp==L'L' && !profilePreferences.empty())
                 profile.load(profilePreferences);
+            if(wp==L'K'){
+                // Switch bounded/compact only within this inert preview.
+                overlayMode=(overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay)?
+                    slinkywinky::MenuGL11Mode::BoundedOverlay:
+                    slinkywinky::MenuGL11Mode::CompactOverlay;
+                refresh_caption(hwnd);
+            }
             if(wp==L'O'){
                 if(overlayDemo) {
                     overlayHost.close();
