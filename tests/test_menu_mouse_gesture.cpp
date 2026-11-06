@@ -33,6 +33,9 @@ void all_modes(MenuPanelMode mode) {
     const Point outside={static_cast<int>(panel->left)-1,toggle.y};
     MenuMouseGesture gate;
     CHECK(gate.owner_thread() && !gate.pending());
+    CHECK(!gate.set_double_click_window(0));
+    CHECK(!gate.set_double_click_window(5001));
+    CHECK(gate.set_double_click_window(500));
     CHECK(!gate.press(*frame,mode,toggle.x,toggle.y,90,false));
     CHECK(!gate.pending());
     CHECK(!gate.press(*frame,mode,outside.x,outside.y,91,true));
@@ -58,11 +61,11 @@ void all_modes(MenuPanelMode mode) {
     CHECK(gate.press(*fresh,mode,toggle.x,toggle.y,350,true));
     CHECK(!gate.release(*fresh,mode,toggle.x,toggle.y,360,true)); // double click denied
     CHECK(profile.enabled(0)); // no second toggle
-    CHECK(gate.press(*fresh,mode,toggle.x,toggle.y,610,true));
-    const auto later=gate.release(*fresh,mode,toggle.x,toggle.y,620,true);
+    CHECK(gate.press(*fresh,mode,toggle.x,toggle.y,800,true));
+    const auto later=gate.release(*fresh,mode,toggle.x,toggle.y,820,true);
     CHECK(later && later->kind==MenuHitKind::Toggle); // after cooldown
 
-    CHECK(gate.press(*fresh,mode,expand.x,expand.y,750,true));
+    CHECK(gate.press(*fresh,mode,expand.x,expand.y,850,true));
     CHECK(!gate.move(*fresh,mode,body.x,body.y,true));
     CHECK(!gate.move(*fresh,mode,expand.x,expand.y,true)); // can't revive drag
     CHECK(!gate.release(*fresh,mode,expand.x,expand.y,780,true));
