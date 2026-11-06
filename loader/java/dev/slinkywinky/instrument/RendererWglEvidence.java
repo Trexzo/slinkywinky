@@ -3,9 +3,10 @@ package dev.slinkywinky.instrument;
 import java.io.File;
 
 /**
- * R78: finite passive WGL evidence, never a graphics renderer.
- * Native call may ONLY read current WGL handles and GL_VIEWPORT.
- * No pointer values are emitted to logs or exposed as gameplay controls.
+ * R78: passive WGL evidence by default. R91/R92/R93 require distinct,
+ * explicitly opted-in finite overlay sessions on the admitted game thread.
+ * R93 uses a deterministic show/hide/show schedule, never game input.
+ * No WGL pointer values are emitted to logs or exposed as gameplay controls.
  */
 public final class RendererWglEvidence {
     private static native long[] nativeCurrentWglSnapshot();
@@ -82,7 +83,8 @@ public final class RendererWglEvidence {
 
     /**
      * The caller is responsible for confirming the original renderer
-     * callsite before observation. Never draws or mutates WGL/GL state.
+     * callsite before observation. Passive sampling is read-only; optional
+     * bounded drawing uses separately verified state-restoring native JNI.
      */
     public synchronized void sample() {
         if(poisoned || attempts>=maxSamples)return;
