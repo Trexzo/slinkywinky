@@ -26,7 +26,6 @@ struct MenuRenderFrame {
     MenuAppearance appearance{};
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
-    std::optional<std::size_t> focused_catalog_index; // R96 visible-only focus snapshot
     bool is_placeholder=false; // Profiles is informational; Unload not admitted.
 };
 
