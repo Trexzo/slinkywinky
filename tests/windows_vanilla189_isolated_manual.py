@@ -149,6 +149,8 @@ def main():
                         help="Existing official Minecraft installation (read-only)")
     parser.add_argument("--run", action="store_true",
                         help="Explicitly authorize launching one disposable vanilla client")
+    parser.add_argument("--render-key-acceptance", action="store_true",
+                        help="R95 opt-in: exact own-game window SendInput Insert x2 plus native stop, not physical hardware")
     parser.add_argument("--render-manual-acceptance", action="store_true",
                         help="R94 opt-in: supervised original client with three PID-scoped toggles and stop")
     parser.add_argument("--render-visibility-acceptance", action="store_true",
@@ -172,9 +174,9 @@ def main():
         parser.error("Windows x64 only")
     if sum((args.render_context_acceptance,args.render_overlay_acceptance,
             args.render_multiframe_acceptance,args.render_visibility_acceptance,
-            args.render_manual_acceptance))>1:
-        parser.error("R90/R91/R92/R93/R94 render modes are mutually exclusive")
-    if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance) and (args.world_observation or
+            args.render_manual_acceptance,args.render_key_acceptance))>1:
+        parser.error("R90/R91/R92/R93/R94/R95 render modes are mutually exclusive")
+    if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance) and (args.world_observation or
                                            args.require_ray_entity or
                                            args.continuous_observation):
         parser.error("R90 renderer acceptance must run alone, not with world/tick probes")
@@ -269,16 +271,17 @@ def main():
         "fullscreen:false\nfancyGraphics:false\nrenderDistance:2\n", encoding="ascii"
     )
     log = sandbox / (
-        ("r94-manual-" if args.render_manual_acceptance else
+        ("r95-key-" if args.render_key_acceptance else
+         ("r94-manual-" if args.render_manual_acceptance else
          ("r93-visibility-" if args.render_visibility_acceptance else
          ("r92-multiframe-" if args.render_multiframe_acceptance else
-         ("r91-overlay-" if args.render_overlay_acceptance else "r90-render-")))) +
+         ("r91-overlay-" if args.render_overlay_acceptance else "r90-render-"))))) +
         str(time.time_ns()) + ".log"
-        if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance) else "vanilla-run.log"
+        if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance) else "vanilla-run.log"
     )
     cmd = [
         str(jdk / "bin" / "java.exe"),
-        *(["-verbose:class"] if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance) else []),
+        *(["-verbose:class"] if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance) else []),
         "-Xmx768M",
         "-Djava.library.path=" + str(native_dir),
         "-Dlog4j2.formatMsgNoLookups=true",
@@ -318,7 +321,7 @@ def main():
         return False
 
     print("Launching one isolated vanilla 1.8.9 JVM; no Forge.", flush=True)
-    with log.open("xb" if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance) else "wb") as output:
+    with log.open("xb" if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance) else "wb") as output:
         game = subprocess.Popen(
             cmd, cwd=str(sandbox), env=environment, stdout=output,
             stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
@@ -347,11 +350,12 @@ def main():
                 harness = Path(__file__).with_name("original_189_live_render_acceptance.py")
                 if not harness.is_file():
                     raise RuntimeError("Missing in-repository original renderer receipt checker")
-                report = sandbox / (("r94-manual-receipts-" if args.render_manual_acceptance
+                report = sandbox / (("r95-key-receipts-" if args.render_key_acceptance
+                                     else ("r94-manual-receipts-" if args.render_manual_acceptance
                                      else ("r93-visibility-receipts-" if args.render_visibility_acceptance
                                      else ("r92-multiframe-receipts-" if args.render_multiframe_acceptance
                                      else ("r91-overlay-receipts-" if args.render_overlay_acceptance
-                                           else "r90-render-receipts-")))) + str(game.pid) + ".json")
+                                           else "r90-render-receipts-"))))) + str(game.pid) + ".json")
                 if report.exists():
                     raise RuntimeError("Refusing to overwrite existing R90 diagnostic evidence")
                 command = [
@@ -359,10 +363,11 @@ def main():
                     "--loader", str(launcher), "--jdk8", str(jdk),
                     "--pid", str(game.pid), "--target-stdout-log", str(log),
                     "--original-client-jar", str(client_jar),
-                    "--mode", ("manual" if args.render_manual_acceptance else
+                    "--mode", ("key" if args.render_key_acceptance else
+                               ("manual" if args.render_manual_acceptance else
                                ("visibility" if args.render_visibility_acceptance else
                                ("multiframe" if args.render_multiframe_acceptance else
-                               ("overlay" if args.render_overlay_acceptance else "context")))),
+                               ("overlay" if args.render_overlay_acceptance else "context"))))),
                     "--timeout-seconds", "45",
                     "--execute", "--report", str(report)
                 ]
@@ -380,7 +385,7 @@ def main():
                         (result.stderr + result.stdout)[-5000:])
                 evidence = json.loads(report.read_text(encoding="utf-8"))
                 if (len(evidence.get("stages", [])) !=
-                        (7 if args.render_manual_acceptance else
+                        (7 if (args.render_manual_acceptance or args.render_key_acceptance) else
                          (6 if args.render_visibility_acceptance else
                          (5 if args.render_multiframe_acceptance else
                          (4 if args.render_overlay_acceptance else 3)))) or
@@ -389,25 +394,29 @@ def main():
                     raise RuntimeError("Unexpected renderer evidence scope")
                 if game.poll() is not None:
                     raise RuntimeError("Vanilla JVM exited during renderer verification")
-                print(("R94_ORIGINAL_189_OPERATOR_VISIBILITY_RECEIPTS_PASS"
-                       if args.render_manual_acceptance else
+                print(("R95_ORIGINAL_189_SYNTHETIC_INSERT_SOURCE_RECEIPTS_PASS"
+                       if args.render_key_acceptance else
+                       ("R94_ORIGINAL_189_OPERATOR_VISIBILITY_RECEIPTS_PASS"
+                        if args.render_manual_acceptance else
                        ("R93_ORIGINAL_189_VISIBILITY_CYCLE_RECEIPTS_PASS"
                         if args.render_visibility_acceptance else
                        ("R92_ORIGINAL_189_MULTIFRAME_OVERLAY_RECEIPTS_PASS"
                         if args.render_multiframe_acceptance else
                        ("R91_ORIGINAL_189_ONE_FRAME_OVERLAY_RECEIPTS_PASS"
                         if args.render_overlay_acceptance else
-                       "R90_ORIGINAL_189_RENDER_DIAGNOSTIC_RECEIPTS_PASS")))),
+                       "R90_ORIGINAL_189_RENDER_DIAGNOSTIC_RECEIPTS_PASS"))))),
                       "pid=" + str(game.pid), "report=" + str(report), flush=True)
-                print("R94_SCRIPTED_OPERATOR_COMMANDS_NOT_PHYSICAL_HOTKEY_ACCEPTANCE"
-                      if args.render_manual_acceptance else
+                print("R95_SYNTHETIC_OS_INPUT_NOT_PHYSICAL_HARDWARE_KEY_ACCEPTANCE"
+                      if args.render_key_acceptance else
+                      ("R94_SCRIPTED_OPERATOR_COMMANDS_NOT_PHYSICAL_HOTKEY_ACCEPTANCE"
+                       if args.render_manual_acceptance else
                       ("R93_NOT_USER_CONTROLLED_SHOW_HIDE_OR_INTERACTIVE_CLICKGUI"
                        if args.render_visibility_acceptance else
                       ("R92_NOT_INTERACTIVE_CLICKGUI_OR_VISUAL_WINDOW_CERTIFICATION"
                        if args.render_multiframe_acceptance else
                       ("R91_NOT_INTERACTIVE_CLICKGUI_OR_VISUAL_WINDOW_CERTIFICATION"
                        if args.render_overlay_acceptance else
-                      "R90_NOT_VISUAL_OR_IN_GAME_CLICKGUI_CERTIFICATION"))), flush=True)
+                      "R90_NOT_VISUAL_OR_IN_GAME_CLICKGUI_CERTIFICATION")))), flush=True)
                 return
             if args.world_observation:
                 print("Open a LOCAL single-player world in the isolated client.", flush=True)
