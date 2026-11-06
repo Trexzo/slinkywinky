@@ -825,11 +825,13 @@ int main() {
         DestroyWindow(duplicate);
         REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)!=
                 GameWindowFocus::Refused);
+        bool otherWindowRefused=false;
         std::thread otherWindow([&] {
-            REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
-                    GameWindowFocus::Refused);
+            otherWindowRefused=audit_game_render_window(
+                context.gl,context.dc,676,630)==GameWindowFocus::Refused;
         });
         otherWindow.join();
+        REQUIRE(otherWindowRefused);
         ShowWindow(context.hwnd,SW_HIDE);
         REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
                 GameWindowFocus::Refused);
