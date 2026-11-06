@@ -48,6 +48,10 @@ bool WglMenuOverlayHost::resize(unsigned w,unsigned h) noexcept {
     return true;
 }
 bool WglMenuOverlayHost::draw(const MenuState& menu,
+                              const MenuProfileBridge* profile) {
+    return draw(menu,profile,MenuGL11Mode::BoundedOverlay);
+}
+bool WglMenuOverlayHost::draw(const MenuState& menu,
                               const MenuProfileBridge* profile,MenuGL11Mode mode) {
     if(!current())return false;
     // R70: refuse desynchronized host viewports BEFORE taking a numbered
