@@ -1,4 +1,5 @@
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/menu_profile.hpp"
 #include <algorithm>
 
 namespace slinkywinky {
