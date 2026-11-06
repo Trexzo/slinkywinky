@@ -21,9 +21,15 @@ public final class RenderFrameGate {
 
     /** R92 permits a single explicit 8-preflight + 64-draw epoch. */
     public RenderFrameGate(int limit,boolean multiOverlay) {
-        if(multiOverlay ? limit!=72 : (limit<1 || limit>8))
+        this(limit,multiOverlay,false);
+    }
+
+    /** R94: opt-in, finite manual menu epoch; hard upper cap 2048 callbacks. */
+    public RenderFrameGate(int limit,boolean multiOverlay,boolean manual) {
+        if(manual ? (multiOverlay || limit!=2048) :
+           (multiOverlay ? limit!=72 : (limit<1 || limit>8)))
             throw new IllegalArgumentException(
-                "Only R75 1..8 or explicit R92 72-frame diagnostic allowed");
+                "Only R75 1..8, R92 72, or R94 2048 explicitly admitted frames");
         this.limit=limit;
     }
 
