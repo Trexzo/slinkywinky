@@ -7,6 +7,7 @@
 #endif
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
+#include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
@@ -476,7 +477,7 @@ namespace {
 std::mutex visibility_mutex;
 HANDLE visibility_toggle=nullptr;
 HANDLE visibility_stop=nullptr;
-bool visibility_key_down=true; // Require a release after admission.
+slinkywinky::VisibilityInsertEdge visibility_insert_edge;
 bool visibility_owner_ready=false;
 }
 extern "C" JNIEXPORT jboolean JNICALL
@@ -508,7 +509,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
     }
     visibility_toggle=toggle;
     visibility_stop=stop;
-    visibility_key_down=true;
+    visibility_insert_edge.reset();
     visibility_owner_ready=true;
     return JNI_TRUE;
 }
@@ -540,8 +541,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
     // Never turn a key that was held while focus was elsewhere into a
     // synthetic press when the game becomes foreground.
     const bool pressed=(GetAsyncKeyState(VK_INSERT)&0x8000)!=0;
-    const bool key_toggle=owner_foreground && pressed && !visibility_key_down;
-    visibility_key_down=pressed || !owner_foreground;
+    const bool key_toggle=visibility_insert_edge.sample(owner_foreground,pressed);
     return (event_toggle || key_toggle)?1:0;
 }
 extern "C" JNIEXPORT jboolean JNICALL
@@ -555,7 +555,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
     visibility_toggle=nullptr;
     visibility_stop=nullptr;
     visibility_owner_ready=false;
-    visibility_key_down=true;
+    visibility_insert_edge.reset();
     return (one && two)?JNI_TRUE:JNI_FALSE;
 }
 
