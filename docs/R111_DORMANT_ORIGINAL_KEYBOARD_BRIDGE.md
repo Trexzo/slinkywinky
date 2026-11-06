@@ -1,0 +1,7 @@
+# R111 — Dormant original Minecraft 1.8.9 keyboard bridge
+
+The production-compiled `OriginalKeyboardBridgeWeaver` performs one in-memory ASM replacement on **exact** vanilla Minecraft 1.8.9 `ave.class` (SHA-256 `430a17aa1911bcd0251aa4dcecb013b6c5b251bb5d0122c7305de0e36dc33e82`), changing `INVOKESTATIC Keyboard.next()Z` in `ave.s()V` to `INVOKESTATIC KeyboardQueueOwner.next()Z`. It refuses incorrect source hashes and other class layouts, including different event-key getters, nonunique queues or altered keybinding/GUI callsites.
+
+The R111 original-client workflow builds this method into the Java 8 agent and executes an **offline-only** audit on the SHA-validated original Mojang JAR. It compares all method-instruction traces before and after transformation and permits **only** the one same-signature callsite replacement. It tests rejection of modified, already transformed or invalid input. Transformed game bytes stay in memory and are never saved, launched or committed.
+
+**No live hook is installed**. No production agent mode invokes this method, no original-game class is redefined, no physical keyboard is captured, and the R110 queue owner remains dormant. **Pre-queue vanilla `avb` keybinding dispatch persists**, so this is not a valid no-gameplay-pass-through claim. Real acceptance still requires complete control of original keyboard and mouse delivery, verified WGL foreground ownership, release handling and independently validated original-class restoration. Keep draft PR #1 unmerged and combat disabled.

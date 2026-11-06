@@ -172,6 +172,23 @@ def main():
             raise RuntimeError("R109 original keyboard loop dry run failed: " +
                                key_weave.stdout[-1600:] + key_weave.stderr[-1600:])
         print(key_weave.stdout.rstrip(), flush=True)
+        # R111: production-compiled Java8 bridge is still dormant; verify
+        # one original Keyboard.next() substitution against Mojang bytes.
+        bridge = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.OriginalKeyboardBridgeWeaveAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40)
+        if (bridge.returncode != 0 or
+                "R111_ORIGINAL_189_PRODUCTION_BRIDGE_ONE_CALLSITE_OFFLINE_PASS"
+                not in bridge.stdout or
+                "R111_ALL_OTHER_METHOD_AND_INSTRUCTION_TRACES_UNCHANGED_PASS"
+                not in bridge.stdout or
+                "R111_PREQUEUE_KEYBINDINGS_REMAIN_ACTIVE_NOT_MODAL_CERTIFICATION"
+                not in bridge.stdout):
+            raise RuntimeError("R111 pinned original keyboard bridge failed: " +
+                               bridge.stdout[-1600:] + bridge.stderr[-1600:])
+        print(bridge.stdout.rstrip(), flush=True)
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.
         weave = subprocess.run(
