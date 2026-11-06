@@ -374,7 +374,7 @@ def main():
                 evidence["original_jar_sha256"]=PINNED_CLIENT_SHA256
                 evidence["exact_original_render_classes_loaded"]=True
                 evidence["target_process_reused"]=False
-                report.write_text(json.dumps(evidence,sort_keys=True,indent=2)+"\\n",
+                report.write_text(json.dumps(evidence,sort_keys=True,indent=2)+"\n",
                                   encoding="utf-8")
                 print("R102_ORIGINAL_WINDOW_IDENTITY_PASS pid="+str(game.pid)+
                       " foreground="+str(evidence["foreground_samples"])+
