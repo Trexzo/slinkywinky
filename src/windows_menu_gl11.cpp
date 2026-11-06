@@ -152,6 +152,13 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
            item.title!=official_module_catalog()[item.catalog_index].name)
             return false;
     if(frame.is_placeholder && !frame.visible.empty())return false;
+    if(frame.focused_catalog_index) {
+        bool inVisiblePage=false;
+        for(const auto& row:frame.visible)
+            if(row.catalog_index==*frame.focused_catalog_index)
+                inVisiblePage=true;
+        if(!inVisiblePage)return false; // No stale or forged focus index.
+    }
     if(frame.parameters.size()>frame.visible.size())return false;
     for(std::size_t i=0;i<frame.parameters.size();++i) {
         const auto& parameter=frame.parameters[i];
@@ -239,6 +246,14 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         rgba(i%2==0?0x1c1c1d:0x252526,
              overlay?static_cast<GLubyte>(235):static_cast<GLubyte>(255));
         quad(18,y,w-36,44);
+        if(frame.focused_catalog_index &&
+           item.catalog_index==*frame.focused_catalog_index) {
+            // R96: first-party row focus is a *render-only* accent, never
+            // a gameplay toggle. Inherits compact viewport clip/GL restore.
+            rgb(frame.appearance.accent_rgb);
+            quad(18,y+1,w-36,2);
+            quad(18,y+3,2,39);
+        }
         if(item.preview_enabled) {
             rgb(frame.appearance.accent_rgb);
             quad(18,y,3,44);
