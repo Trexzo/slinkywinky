@@ -494,6 +494,8 @@ int main() {
             *focusedFrame,MenuPanelMode::CompactOverlay,expandX,toggleY);
         REQUIRE(compactExpand && compactExpand->kind==MenuHitKind::Expand &&
                 compactExpand->catalog_index==0);
+        glClearColor(0.10f,0.38f,0.69f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
         const auto withoutMenu=readback(toggleX,629-toggleY);
         REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
                                MenuGL11Mode::CompactOverlay,
