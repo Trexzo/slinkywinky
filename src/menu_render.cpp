@@ -60,13 +60,6 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.tab=menu.tab();
     frame.appearance=menu.appearance();
     frame.visible=menu.page();
-    if(navigation)
-        frame.focused_catalog_index=navigation->visible_focus();
-    if(frame.focused_catalog_index &&
-       std::none_of(frame.visible.begin(),frame.visible.end(),
-           [&frame](const MenuItem& row){
-               return row.catalog_index==*frame.focused_catalog_index;
-           }))return std::nullopt;
     if(frame.visible.size()>8)return std::nullopt;
     if(profile) {
         for(const auto& item:frame.visible) {
