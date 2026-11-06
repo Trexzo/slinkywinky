@@ -1,6 +1,7 @@
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_navigation.hpp"
+#include <algorithm>
 #include <iomanip>
 #include <limits>
 #include <sstream>
