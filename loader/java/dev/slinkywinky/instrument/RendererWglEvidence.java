@@ -17,6 +17,13 @@ public final class RendererWglEvidence {
     private static native boolean nativeOpenManualVisibility();
     private static native int nativePollManualVisibility(long context,long dc);
     private static native boolean nativeCloseManualVisibility();
+    // R99: separate finite source-pinned retained first-party preview.
+    private static native boolean nativeArmRetainedPreview();
+    private static native boolean nativeDrawRetainedPreview(
+        long context,long dc,int width,int height);
+    private static native boolean nativeRetainedPreviewAction(int action);
+    private static native int[] nativeRetainedPreviewSnapshot();
+    private static native boolean nativeDiscardRetainedPreview();
 
     private Thread owner;
     private int attempts;
@@ -34,6 +41,7 @@ public final class RendererWglEvidence {
     private final boolean multiFrame;
     private final boolean scriptedVisibility;
     private final boolean manualVisibility;
+    private final boolean retainedPreview;
     private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
@@ -45,14 +53,16 @@ public final class RendererWglEvidence {
     private boolean menuVisible;
     private boolean operatorStop;
     private boolean manualClosed;
+    private boolean retainedVerified;
 
     private RendererWglEvidence(boolean requested,boolean multi,boolean scripted,
-                                boolean manual) {
+                                boolean manual,boolean retained) {
         overlayRequested=requested;
         multiFrame=multi;
         scriptedVisibility=scripted;
         manualVisibility=manual;
-        maxSamples=manual?2048:((multi || scripted)?72:8);
+        retainedPreview=retained;
+        maxSamples=manual?2048:((multi || scripted || retained)?72:8);
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -85,6 +95,14 @@ public final class RendererWglEvidence {
     public static RendererWglEvidence open(String dllPath,boolean overlay,
                                             boolean multi,boolean scripted,
                                             boolean manual) throws Exception {
+        return open(dllPath,overlay,multi,scripted,manual,false);
+    }
+
+    public static RendererWglEvidence open(String dllPath,boolean overlay,
+                                            boolean multi,boolean scripted,
+                                            boolean manual,boolean retained) throws Exception {
+        if(retained && (!overlay || multi || scripted || manual))
+            throw new IllegalArgumentException("R99 finite retained preview is exclusive");
         if(manual && (multi || scripted || !overlay))
             throw new IllegalArgumentException("R94 manual visibility requires exclusive overlay mode");
         if(scripted && (multi || !overlay))
@@ -100,7 +118,9 @@ public final class RendererWglEvidence {
         System.load(dll.getAbsolutePath());
         if(manual && !nativeOpenManualVisibility())
             throw new IllegalStateException("R94 owner-PID control gate admission failed");
-        return new RendererWglEvidence(overlay,multi,scripted,manual);
+        if(retained && !nativeArmRetainedPreview())
+            throw new IllegalStateException("R99 owner-render retained admission failed");
+        return new RendererWglEvidence(overlay,multi,scripted,manual,retained);
     }
 
     /**
@@ -180,6 +200,32 @@ public final class RendererWglEvidence {
                 }
                 return;
             }
+            // R99 is a separate finite retained menu preview, with four
+            // internally scripted *local profile-only* navigation actions.
+            // NO OS keys, mouse or original Minecraft gameplay handlers.
+            if(retainedPreview && attempts>8 && preflightStable()) {
+                if(!nativeDrawRetainedPreview(context,dc,width,height)) {
+                    poisoned=true;overlayFailed=true;invalid++;return;
+                }
+                overlayDrawn=true;
+                overlayFrames++;
+                final int nextAction=overlayFrames==1?2:
+                    (overlayFrames==2?4:(overlayFrames==3?5:
+                     (overlayFrames==4?0:-1)));
+                if(nextAction>=0 && !nativeRetainedPreviewAction(nextAction)) {
+                    poisoned=true;overlayFailed=true;invalid++;return;
+                }
+                final int[] state=nativeRetainedPreviewSnapshot();
+                if(state==null || state.length!=6 || state[0]!=overlayFrames ||
+                   state[3]!=Math.min(overlayFrames,4) || state[4]!=0 ||
+                   state[1]!=(overlayFrames>=4?1:0) ||
+                   state[2]!=(overlayFrames>=4?17:(overlayFrames>=1?1:0)) ||
+                   state[5]!=(overlayFrames>=3?1:0)) {
+                    poisoned=true;overlayFailed=true;invalid++;return;
+                }
+                if(overlayFrames>=5)retainedVerified=true;
+                return;
+            }
             // The visual R91 experiment is a distinct explicit mode. Exactly
             // ONE draw may occur, after all eight source/callsite/owner/WGL
             // snapshots have passed the established passive R78 gate.
@@ -222,12 +268,24 @@ public final class RendererWglEvidence {
     public synchronized boolean multiFrame(){return multiFrame;}
     public synchronized boolean scriptedVisibility(){return scriptedVisibility;}
     public synchronized boolean manualVisibility(){return manualVisibility;}
+    public synchronized boolean retainedPreview(){return retainedPreview;}
+    public synchronized boolean retainedVerified(){
+        return retainedPreview && retainedVerified && overlayFrames==64 &&
+               !poisoned && !overlayFailed;
+    }
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}
     public synchronized int toggles(){return toggles;}
     public synchronized int keyToggles(){return keyToggles;}
     public synchronized int eventToggles(){return eventToggles;}
     public synchronized boolean closeManual() {
+        if(retainedPreview) {
+            if(manualClosed)return false;
+            manualClosed=true;
+            // Called only after the callback fence drains all WGL owners;
+            // per-frame native WGL hosts are already closed on render.
+            return nativeDiscardRetainedPreview();
+        }
         if(!manualVisibility)return true;
         if(manualClosed)return false;
         manualClosed=true;
@@ -237,12 +295,13 @@ public final class RendererWglEvidence {
     public synchronized int hiddenFrames(){return hiddenFrames;}
     public synchronized boolean overlayDrawn(){
         return overlayDrawn && !overlayFailed &&
-               (manualVisibility ?
+               (retainedPreview ? retainedVerified() :
+                (manualVisibility ?
                     (operatorStop && toggles>=2 && toggles==keyToggles+eventToggles &&
                      overlayFrames>0 && hiddenFrames>0 &&
                      overlayFrames+hiddenFrames==attempts-8) :
                     (overlayFrames==(scriptedVisibility?48:(multiFrame?64:1)) &&
-                     (!scriptedVisibility || hiddenFrames==16)));
+                     (!scriptedVisibility || hiddenFrames==16))));
     }
     public synchronized int attempts(){return attempts;}
     public synchronized int present(){return current;}
@@ -261,11 +320,14 @@ public final class RendererWglEvidence {
         return "attempts="+attempts+" current="+current+" absent="+absent+
                " invalid="+invalid+" changed="+changed+
                " stable="+fullyStable()+
+               (retainedPreview ?
+                " frames="+overlayFrames+" retained="+retainedVerified() +
+                " actions=4 tab=1 focus=17" :
                (manualVisibility ?
                 " shown="+overlayFrames+" hidden="+hiddenFrames+
                 " toggles="+toggles+" stop="+(operatorStop?"operator":"limit"):
                 (scriptedVisibility?
                  " shown="+overlayFrames+" hidden="+hiddenFrames:
-                 (multiFrame?" frames="+overlayFrames:"")));
+                 (multiFrame?" frames="+overlayFrames:""))));
     }
 }
