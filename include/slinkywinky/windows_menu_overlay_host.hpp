@@ -19,6 +19,7 @@ namespace slinkywinky {
  * A session must be explicitly closed by the original owner before a
  * changed HGLRC/HDC can be accepted; stale tokens never reopen it.
  */
+class MenuNavigation;
 class WglMenuOverlayHost {
 public:
     bool open(HGLRC context,HDC dc,unsigned width,unsigned height) noexcept;
@@ -26,7 +27,8 @@ public:
     bool draw(const MenuState& menu,
               const MenuProfileBridge* profile=nullptr); // preserved R70/R76 ABI
     bool draw(const MenuState& menu,const MenuProfileBridge* profile,
-              MenuGL11Mode mode); // R93 explicit compact mode
+              MenuGL11Mode mode,
+              const MenuNavigation* navigation=nullptr); // R96 optional focus
     bool close() noexcept;            // allowed after current context loss
     bool active() const noexcept {return session_.attached();}
     std::uint64_t last_sequence() const noexcept {return session_.sequence();}
