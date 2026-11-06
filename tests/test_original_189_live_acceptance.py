@@ -51,6 +51,20 @@ K = (U.replace("toggles=3","toggles=2")
 
 
 class ReceiptChecks(unittest.TestCase):
+    @unittest.skipUnless(os.name=="nt", "R95 actual Win32 focus gate requires Windows")
+    def test_r95_sendinput_refuses_process_without_original_game_window(self):
+        from windows_r95_scoped_insert import send_isolated_insert
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            game=root/"game"
+            game.mkdir()
+            (game/"options.txt").write_text("fullscreen:false\\n",encoding="ascii")
+            # The Python test process is NOT an original Minecraft 1.8.9
+            # window. No SendInput is permitted under any circumstances.
+            with self.assertRaisesRegex(RuntimeError,
+                                        "window not uniquely identified"):
+                send_isolated_insert(os.getpid(),root)
+
     def test_r95_insert_source_receipt_and_sandbox_binding_collision(self):
         self.assertEqual(len(harness.validate_receipt("--render-visibility=manual",K)),5)
         for modified in (
