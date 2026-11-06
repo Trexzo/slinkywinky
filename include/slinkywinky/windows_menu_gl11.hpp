@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "slinkywinky/menu_render.hpp"
+#include <optional>
 
 namespace slinkywinky {
 
@@ -36,6 +37,11 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     HGLRC expected_context,
                     HDC expected_dc,
                     MenuGL11Mode mode=MenuGL11Mode::StandalonePreview) noexcept;
+// R96 separate value-only focus argument, leaving original frame ABI intact.
+bool draw_menu_gl11(const MenuRenderFrame& frame,
+                    HGLRC expected_context,HDC expected_dc,
+                    MenuGL11Mode mode,
+                    std::optional<std::size_t> focused_catalog_index) noexcept;
 
 } // namespace slinkywinky
 #endif
