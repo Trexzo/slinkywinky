@@ -2,6 +2,8 @@
 #define NOMINMAX
 #include <windows.h>
 #include "slinkywinky/windows_stop_gate.hpp"
+// R94: compiled PID-scoped event names must exactly match the target JNI DLL;
+// never substitute a Java Attach for these owner-process control events.
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
