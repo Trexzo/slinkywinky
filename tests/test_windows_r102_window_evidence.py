@@ -30,7 +30,7 @@ class R102WindowIdentityTests(unittest.TestCase):
             [original(), original(pid=555, title=EXPECTED_TITLE)],
             1234, 987654321)
         self.assertEqual(accepted["window_count"], 1)
-        self.assertFalse(accepted["render_hdc_certified"])
+        self.assertFalse(accepted["window_render_hdc_certified"])
         self.assertFalse(accepted["input_capture_certified"])
 
     def test_refuse_absent_ambiguous_minimized_or_false_identity(self):
