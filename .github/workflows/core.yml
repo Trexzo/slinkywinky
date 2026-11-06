@@ -19,6 +19,8 @@ jobs:
         run: cmake --build build --config ${{ matrix.build }} --parallel
       - name: Test
         run: ctest --test-dir build -C ${{ matrix.build }} --output-on-failure
+      - name: R102 read-only original-window identity negative controls
+        run: python -m unittest discover -s tests -p test_windows_r102_window_evidence.py -v
       - name: Demo smoke test
         shell: bash
         run: |
