@@ -149,6 +149,8 @@ def main():
                         help="Existing official Minecraft installation (read-only)")
     parser.add_argument("--run", action="store_true",
                         help="Explicitly authorize launching one disposable vanilla client")
+    parser.add_argument("--window-identity-acceptance", action="store_true",
+                        help="R102 no-input: verify unique owned original game window and foreground/background identity")
     parser.add_argument("--render-operator-menu-acceptance", action="store_true",
                         help="R100 isolated real 1.8.9 externally acknowledged menu navigation and stop")
     parser.add_argument("--render-retained-acceptance", action="store_true",
@@ -180,8 +182,9 @@ def main():
             args.render_multiframe_acceptance,args.render_visibility_acceptance,
             args.render_manual_acceptance,args.render_key_acceptance,
             args.render_retained_acceptance,
-            args.render_operator_menu_acceptance))>1:
-        parser.error("R90/R91/R92/R93/R94/R95/R99/R100 render modes are mutually exclusive")
+            args.render_operator_menu_acceptance,
+            args.window_identity_acceptance))>1:
+        parser.error("R90/R91/R92/R93/R94/R95/R99/R100/R102 acceptance modes are mutually exclusive")
     if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance) and (args.world_observation or
                                            args.require_ray_entity or
                                            args.continuous_observation):
@@ -287,9 +290,11 @@ def main():
         str(time.time_ns()) + ".log"
         if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance) else "vanilla-run.log"
     )
+    if args.window_identity_acceptance:
+        log=sandbox / ("r102-window-"+str(time.time_ns())+".log")
     cmd = [
         str(jdk / "bin" / "java.exe"),
-        *(["-verbose:class"] if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance) else []),
+        *(["-verbose:class"] if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance or args.window_identity_acceptance) else []),
         "-Xmx768M",
         "-Djava.library.path=" + str(native_dir),
         "-Dlog4j2.formatMsgNoLookups=true",
@@ -342,6 +347,41 @@ def main():
                      if pid == game.pid]
             if len(exact) != 1:
                 raise RuntimeError("The newly launched vanilla PID was not uniquely enumerated")
+            if args.window_identity_acceptance:
+                # No Attach or JNI call: independent passive Win32 window
+                # inspection of the already source-pinned original JAR.
+                from original_189_live_render_acceptance import process_birth_token
+                from windows_r102_window_identity_evidence import (
+                    observe_owned_game, WindowAuditError)
+                birth=process_birth_token(game.pid)
+                deadline=time.monotonic()+25
+                evidence=None
+                while time.monotonic()<deadline and game.poll() is None:
+                    try:
+                        if not loaded_exact_original_render_classes():
+                            raise WindowAuditError("Original source-loaded classes not yet present")
+                        evidence=observe_owned_game(game.pid,birth)
+                        if process_birth_token(game.pid)!=birth:
+                            raise RuntimeError("Original game process changed during inspection")
+                        break
+                    except WindowAuditError:
+                        time.sleep(0.25)
+                if evidence is None:
+                    raise RuntimeError("R102 exact original game window not admitted in 25 seconds")
+                report=sandbox / ("r102-window-evidence-"+str(game.pid)+".json")
+                if report.exists():
+                    raise RuntimeError("Refusing to overwrite existing original-game R102 evidence")
+                evidence["original_jar_sha256"]=PINNED_CLIENT_SHA256
+                evidence["exact_original_render_classes_loaded"]=True
+                evidence["target_process_reused"]=False
+                report.write_text(json.dumps(evidence,sort_keys=True,indent=2)+"\\n",
+                                  encoding="utf-8")
+                print("R102_ORIGINAL_WINDOW_IDENTITY_PASS pid="+str(game.pid)+
+                      " foreground="+str(evidence["foreground_samples"])+
+                      " background="+str(evidence["background_samples"])+
+                      " report="+str(report),flush=True)
+                print("R102_WINDOW_IDENTITY_NOT_WGL_OR_INPUT_CAPTURE_CERTIFICATION",flush=True)
+                return
             if args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance:
                 # A Java 8 renderer starts later than the LWJGL log line.
                 # Require real JVM class-load receipts for both exact original
