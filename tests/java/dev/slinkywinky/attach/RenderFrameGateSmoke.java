@@ -2,6 +2,7 @@ package dev.slinkywinky.attach;
 
 import dev.slinkywinky.instrument.RenderFrameGate;
 import dev.slinkywinky.instrument.RendererFrameDiagnostic;
+import dev.slinkywinky.instrument.RendererWglEvidence;
 import java.util.concurrent.TimeUnit;
 
 /** R75 pure Java 8 negative controls; no Minecraft, Attach, JNI or graphics. */
@@ -53,6 +54,27 @@ public final class RenderFrameGateSmoke {
         check(multiWrong.invalid() && multiWrong.accepted()==0,
               "R92 wrong original callsite admitted");
         System.out.println("R92_ONLY_EXPLICIT_72_FRAME_OWNER_GATE_PASS");
+        int visible=0,hidden=0;
+        for(int sampleIndex=1;sampleIndex<=72;sampleIndex++) {
+            final boolean draw=RendererWglEvidence.scriptedVisibleAt(sampleIndex);
+            final boolean invisible=RendererWglEvidence.scriptedHiddenAt(sampleIndex);
+            check(!(draw && invisible),"R93 visible/hidden overlap");
+            if(sampleIndex<=8) {
+                check(!draw && !invisible,"R93 preflight must never draw");
+            } else {
+                check(draw || invisible,"R93 missing admitted visibility frame");
+                if(draw)visible++; else hidden++;
+            }
+            if(sampleIndex<=28 && sampleIndex>=9 ||
+               sampleIndex>=45 && sampleIndex<=72)
+                check(draw,"R93 unexpected hidden phase");
+        }
+        check(visible==48 && hidden==16 &&
+              !RendererWglEvidence.scriptedVisibleAt(0) &&
+              !RendererWglEvidence.scriptedVisibleAt(73) &&
+              !RendererWglEvidence.scriptedHiddenAt(73),
+              "R93 show/hide/show exact cardinality failed");
+        System.out.println("R93_SCRIPTED_SHOW_20_HIDE_16_SHOW_28_PASS");
         RenderFrameGate capped=new RenderFrameGate(8);
         sample(capped,15);
         check(capped.accepted()==8 && !capped.invalid() &&
