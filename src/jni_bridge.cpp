@@ -8,6 +8,7 @@
 #include "slinkywinky/windows_hud_ipc.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
+#include "slinkywinky/windows_visibility_hotkey.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
@@ -480,7 +481,8 @@ namespace {
 std::mutex visibility_mutex;
 HANDLE visibility_toggle=nullptr;
 HANDLE visibility_stop=nullptr;
-slinkywinky::VisibilityInsertEdge visibility_insert_edge;
+std::unique_ptr<slinkywinky::ScopedVisibilityHotkey> visibility_hotkey;
+std::uint64_t visibility_hotkey_epoch=0;
 bool visibility_owner_ready=false;
 }
 extern "C" JNIEXPORT jboolean JNICALL
@@ -512,7 +514,10 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
     }
     visibility_toggle=toggle;
     visibility_stop=stop;
-    visibility_insert_edge.reset();
+    visibility_hotkey.reset();
+    // Each new manual session owns a distinct focus lease. The policy is
+    // constructed later on the verified WGL render thread, not the Attach thread.
+    if(++visibility_hotkey_epoch==0)++visibility_hotkey_epoch;
     visibility_owner_ready=true;
     return JNI_TRUE;
 }
@@ -531,21 +536,40 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
     const DWORD toggle_state=WaitForSingleObject(visibility_toggle,0);
     if(toggle_state==WAIT_FAILED)return -1;
     const bool event_toggle=toggle_state==WAIT_OBJECT_0;
-    const HWND hwnd=WindowFromDC(wglGetCurrentDC());
-    DWORD window_pid=0;
-    const HWND foreground=GetForegroundWindow();
-    bool owner_foreground=false;
-    if(hwnd && foreground) {
-        const HWND root=GetAncestor(hwnd,GA_ROOT);
-        if(root && foreground==root && IsWindowVisible(root) &&
-           !IsIconic(root) && GetWindowThreadProcessId(root,&window_pid)!=0 &&
-           window_pid==GetCurrentProcessId())
-            owner_foreground=true;
+    // R106: the old PID-only foreground shortcut was weaker than the
+    // source-pinned R101/R103 original WGL/HWND, title and viewport audit.
+    // We do not read desktop-global key state unless THAT audit says the
+    // active render owner itself is the unique foreground game window.
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewport);
+    const auto focus=(viewport[0]==0 && viewport[1]==0 &&
+                      viewport[2]>0 && viewport[3]>0)
+        ? slinkywinky::audit_game_render_window(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(expectedContext)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(expectedDc)),
+            static_cast<unsigned>(viewport[2]),
+            static_cast<unsigned>(viewport[3]))
+        : slinkywinky::GameWindowFocus::Refused;
+    bool pressed=false;
+    bool buttons_released=false;
+    if(focus==slinkywinky::GameWindowFocus::ValidForeground) {
+        pressed=(GetAsyncKeyState(VK_INSERT)&0x8000)!=0;
+        buttons_released=
+            (GetAsyncKeyState(VK_LBUTTON)&0x8000)==0 &&
+            (GetAsyncKeyState(VK_RBUTTON)&0x8000)==0 &&
+            (GetAsyncKeyState(VK_MBUTTON)&0x8000)==0 &&
+            (GetAsyncKeyState(VK_XBUTTON1)&0x8000)==0 &&
+            (GetAsyncKeyState(VK_XBUTTON2)&0x8000)==0;
     }
-    // Never turn a key that was held while focus was elsewhere into a
-    // synthetic press when the game becomes foreground.
-    const bool pressed=(GetAsyncKeyState(VK_INSERT)&0x8000)!=0;
-    const bool key_toggle=visibility_insert_edge.sample(owner_foreground,pressed);
+    // This owner-only classifier admits only after released inputs and three
+    // consecutive valid foreground render samples. Any later identity
+    // ambiguity or focus loss latches until a new manual session/epoch.
+    if(!visibility_hotkey)
+        visibility_hotkey=std::make_unique<slinkywinky::ScopedVisibilityHotkey>(
+            visibility_hotkey_epoch);
+    const bool key_toggle=visibility_hotkey->sample(
+        focus,pressed,buttons_released);
+    // This remains a visibility-only signal, NOT a modal input consumer.
     // Distinguish real foreground Insert edges from external PID events.
     // R94 still accepts 1 and 3 as visibility toggles; R95 audits origin.
     return key_toggle?3:(event_toggle?1:0);
@@ -561,7 +585,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
     visibility_toggle=nullptr;
     visibility_stop=nullptr;
     visibility_owner_ready=false;
-    visibility_insert_edge.reset();
+    visibility_hotkey.reset();
     return (one && two)?JNI_TRUE:JNI_FALSE;
 }
 

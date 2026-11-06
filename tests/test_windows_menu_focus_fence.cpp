@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include "slinkywinky/windows_menu_focus_fence.hpp"
+#include "slinkywinky/windows_visibility_hotkey.hpp"
 #include <windows.h>
 #include <stdexcept>
 #include <thread>
@@ -74,5 +75,46 @@ int main() {
     REQUIRE(gate.observe(GameWindowFocus::ValidForeground)==FocusFenceState::Dormant);
     REQUIRE(gate.observe(GameWindowFocus::ValidBackground)==FocusFenceState::Background);
     REQUIRE(!gate.can_consume_game_input());
+    // R106: a visible menu edge is not admitted just because a caller
+    // knows our PID or because one foreground observation succeeded.
+    ScopedVisibilityHotkey hotkey(106);
+    REQUIRE(!hotkey.can_consume_game_input());
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidBackground,false,true));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,false,false));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(!hotkey.candidate());
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(hotkey.candidate());
+    REQUIRE(hotkey.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(hotkey.sample(GameWindowFocus::ValidForeground,true,true));
+    bool foreignHotkeyAllowed=false;
+    std::thread wrongHotkeyThread([&]() {
+        foreignHotkeyAllowed=hotkey.sample(
+            GameWindowFocus::ValidForeground,true,true) || hotkey.candidate();
+    });
+    wrongHotkeyThread.join();
+    REQUIRE(!foreignHotkeyAllowed && hotkey.candidate());
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidBackground,false,true));
+    REQUIRE(!hotkey.candidate());
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(!hotkey.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!hotkey.candidate());
+    // A new local admission epoch can proceed, but only after all input is up.
+    ScopedVisibilityHotkey rearmed(107);
+    REQUIRE(!rearmed.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!rearmed.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(!rearmed.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(!rearmed.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(rearmed.candidate());
+    REQUIRE(rearmed.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!rearmed.sample(GameWindowFocus::Refused,false,true));
+    REQUIRE(!rearmed.sample(GameWindowFocus::ValidForeground,false,true));
+    REQUIRE(!rearmed.sample(GameWindowFocus::ValidForeground,true,true));
+    REQUIRE(!rearmed.can_consume_game_input());
+    std::cout<<"R106_STRICT_WGL_FOCUS_THREE_SAMPLES_INSERT_RELEASE_AND_NO_PASSTHROUGH_CLAIM_PASS\n";
     std::cout<<"R104_FOREGROUND_STABILITY_LOSS_LATCH_RELEASE_REARM_NO_GAME_INPUT_PASS\n";
 }
