@@ -64,10 +64,10 @@ class ReceiptChecks(unittest.TestCase):
             folder=Path(root)/"game"
             folder.mkdir()
             options=folder/"options.txt"
-            options.write_text("key_key.jump:210\\n",encoding="utf-8")
+            options.write_text("key_key.jump:210\n",encoding="utf-8")
             with self.assertRaises(RuntimeError):
                 check_offline_insert_collision(Path(root))
-            options.write_text("key_key.jump:57\\n",encoding="utf-8")
+            options.write_text("key_key.jump:57\n",encoding="utf-8")
             check_offline_insert_collision(Path(root))
 
     def test_r94_manual_exact_dynamic_counters_and_fake_receipt_refusal(self):
