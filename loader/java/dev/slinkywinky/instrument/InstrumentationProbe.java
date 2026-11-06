@@ -276,6 +276,19 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R94: admitted only by exact original source and operator consent.
+        final String manualPrefix="minecraft-render-manual-r94|";
+        if(options!=null && options.startsWith(manualPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(manualPrefix.length()),true,false,false,true);
+            } catch(Exception error) {
+                throw new IllegalStateException("R94 manual menu activation refused",error);
+            }
+            return;
+        }
         // R93: isolated, bounded show / hide / show. Never intercepts input.
         final String visibilityPrefix="minecraft-render-visibility-r93|";
         if(options!=null && options.startsWith(visibilityPrefix)) {
