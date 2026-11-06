@@ -239,6 +239,21 @@ public final class RendererFrameDiagnostic {
                              final boolean manualVisibility,
                              final boolean retainedPreview,
                              final boolean operatorMenu) throws Exception {
+        start(instrumentation,contextDllPath,renderOverlay,multiFrame,
+              scriptedVisibility,manualVisibility,retainedPreview,operatorMenu,false);
+    }
+    public static void start(final Instrumentation instrumentation,
+                             final String contextDllPath,
+                             final boolean renderOverlay,
+                             final boolean multiFrame,
+                             final boolean scriptedVisibility,
+                             final boolean manualVisibility,
+                             final boolean retainedPreview,
+                             final boolean operatorMenu,
+                             final boolean windowAudit) throws Exception {
+        if(windowAudit && (renderOverlay || multiFrame || scriptedVisibility ||
+                           manualVisibility || retainedPreview || operatorMenu))
+            throw new IllegalArgumentException("R101 window audit is exclusive read-only admission");
         if(operatorMenu && (!renderOverlay || multiFrame ||
                             scriptedVisibility || manualVisibility || retainedPreview))
             throw new IllegalArgumentException("R100 finite operator menu is exclusive");
@@ -271,7 +286,7 @@ public final class RendererFrameDiagnostic {
             // Load AFTER original Mojang SHA and classloader admission, BEFORE
             // registering a bytecode-changing transformer. Never draw.
             evidence=contextDllPath==null?null:
-                RendererWglEvidence.open(contextDllPath,renderOverlay,multiFrame,scriptedVisibility,manualVisibility,retainedPreview,operatorMenu);
+                RendererWglEvidence.open(contextDllPath,renderOverlay,multiFrame,scriptedVisibility,manualVisibility,retainedPreview,operatorMenu,windowAudit);
         } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
             // The read-only class inspector may still be installed. Do not
             // allow another attach while its removal is unproven.
@@ -371,7 +386,9 @@ public final class RendererFrameDiagnostic {
                                  ((manualVisibility && evidence!=null && evidence.manualStopped()) ||
                                   (operatorMenu && evidence!=null && evidence.operatorStopped()))) &&
                    !session.invalid() && !fence.failed() && restored && manualClosed)
-                    System.out.println((operatorMenu?
+                    System.out.println((windowAudit?
+                        "R101_RENDER_CALLBACK_BOUNDED_PASS accepted=8 owner=":
+                        (operatorMenu?
                         "R100_RENDER_CALLBACK_BOUNDED_PASS accepted="+session.accepted()+" owner=":
                         (retainedPreview?
                         "R99_RENDER_CALLBACK_BOUNDED_PASS accepted=72 owner=":
@@ -380,7 +397,7 @@ public final class RendererFrameDiagnostic {
                          (scriptedVisibility?
                           "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72 owner=":
                           (multiFrame?"R92_RENDER_CALLBACK_BOUNDED_PASS accepted=72 owner=":
-                           "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8 owner=")))))+
+                           "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8 owner="))))))+
                         session.ownerThread());
                 else
                     System.err.println("R75_RENDER_CALLBACK_UNVERIFIED frames="+
@@ -392,21 +409,30 @@ public final class RendererFrameDiagnostic {
                                          (session.accepted()==maxFrames ||
                                           (manualVisibility && evidence.manualStopped()) ||
                                           (operatorMenu && evidence.operatorStopped())) &&
-                                         restored && manualClosed && evidence.fullyStable();
+                                         restored && manualClosed && evidence.fullyStable() &&
+                                         (!windowAudit || evidence.windowIdentityVerified());
                     System.out.println((stable?
-                        (operatorMenu?"R100_WGL_CONTEXT_STABLE_PASS ":
+                        (windowAudit?"R101_WGL_CONTEXT_STABLE_PASS ":
+                         (operatorMenu?"R100_WGL_CONTEXT_STABLE_PASS ":
                          (retainedPreview?"R99_WGL_CONTEXT_STABLE_PASS ":
                          (manualVisibility?"R94_WGL_CONTEXT_STABLE_PASS ":
                           (scriptedVisibility?"R93_WGL_CONTEXT_STABLE_PASS ":
                            (multiFrame?"R92_WGL_CONTEXT_STABLE_PASS ":
-                                       "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "))))):
-                        (operatorMenu?"R100_WGL_CONTEXT_UNVERIFIED ":
+                                       "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS ")))))):
+                        (windowAudit?"R101_WGL_CONTEXT_UNVERIFIED ":
+                         (operatorMenu?"R100_WGL_CONTEXT_UNVERIFIED ":
                          (retainedPreview?"R99_WGL_CONTEXT_UNVERIFIED ":
                          (manualVisibility?"R94_WGL_CONTEXT_UNVERIFIED ":
                           (scriptedVisibility?"R93_WGL_CONTEXT_UNVERIFIED ":
                            (multiFrame?"R92_WGL_CONTEXT_UNVERIFIED ":
-                                       "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED "))))))+
+                                       "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")))))))+
                         evidence.result());
+                    if(windowAudit) {
+                        if(stable)
+                            System.out.println("R101_ORIGINAL_GAME_WINDOW_IDENTIFIED_PASS");
+                        else
+                            System.err.println("R101_GAME_WINDOW_IDENTITY_UNVERIFIED");
+                    }
                     if(manualVisibility && stable && evidence.overlayDrawn()) {
                         // Distinct audit (not a standalone success marker):
                         // original SHA, WGL, restoration and release remain
@@ -444,13 +470,14 @@ public final class RendererFrameDiagnostic {
                 }
                 System.out.println(evidence==null?
                     "R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS":
-                    (operatorMenu?"R100_EXTERNAL_EVENT_PREVIEW_NO_GAME_INPUT_ACTIONS":
+                    (windowAudit?"R101_READ_ONLY_GAME_WINDOW_NO_INPUT_OR_GAMEPLAY_ACTIONS":
+                     (operatorMenu?"R100_EXTERNAL_EVENT_PREVIEW_NO_GAME_INPUT_ACTIONS":
                      (retainedPreview?"R99_RETAINED_LOCAL_PREVIEW_NO_GAME_INPUT_ACTIONS":
                      (manualVisibility?"R94_FOREGROUND_INSERT_OR_EVENT_NO_GAMEPLAY_ACTIONS":
                       (scriptedVisibility?"R93_SCRIPTED_SHOW_HIDE_NO_GAMEPLAY_OR_INPUT_ACTIONS":
                        (multiFrame?"R92_FINITE_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
                         (renderOverlay?"R91_ONE_FRAME_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
-                         "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS")))))));
+                         "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS"))))))));
                 System.out.flush();
                 InstrumentationProbe.finishRenderDiagnostic(restored && manualClosed);
                 // R81: consumer must not start the next Attach merely from a
@@ -476,14 +503,16 @@ public final class RendererFrameDiagnostic {
                 "R75 cleanup worker unavailable; original renderer restored="+restored,
                 workerFailure);
         }
-        System.out.println(operatorMenu?
+        System.out.println(windowAudit?
+            "R101_RENDER_CALLBACK_ARMED_LIMIT=8":
+            (operatorMenu?
             "R100_RENDER_CALLBACK_ARMED_LIMIT=2048":
             (retainedPreview?
             "R99_RENDER_CALLBACK_ARMED_LIMIT=72":
             (manualVisibility?"R94_RENDER_CALLBACK_ARMED_LIMIT=2048":
              (scriptedVisibility?"R93_RENDER_CALLBACK_ARMED_LIMIT=72":
               (multiFrame?"R92_RENDER_CALLBACK_ARMED_LIMIT=72":
-                          "R75_RENDER_CALLBACK_ARMED_LIMIT=8")))));
+                          "R75_RENDER_CALLBACK_ARMED_LIMIT=8"))))));
         System.out.flush();
     }
 
