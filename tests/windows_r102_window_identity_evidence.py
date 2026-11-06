@@ -43,6 +43,7 @@ def classify_snapshot(items, expected_pid, expected_birth):
         not MIN_HEIGHT <= height <= MAX_HEIGHT or
         item.get("enabled") is not True or
         item.get("root") is not True or
+        type(item.get("foreground")) is not bool or
         not isinstance(item.get("thread_id"), int) or
         item["thread_id"] <= 0):
         raise WindowAuditError("Original game window has invalid geometry/ownership")
