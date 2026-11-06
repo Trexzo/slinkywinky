@@ -236,7 +236,8 @@ RECEIPT_LINES = {
         r"^R101_WGL_CONTEXT_STABLE_PASS attempts=8 current=8 "
         r"absent=0 invalid=0 changed=0 stable=true "
         r"window=exact-original owner=render-thread "
-        r"foreground=([0-8]) background=([0-8]) refused=0\r?$",re.MULTILINE),
+        r"foreground=([0-8]) background=([0-8]) refused=0 "
+        r"width=([0-9]{3,4}) height=([0-9]{3,4})\r?$",re.MULTILINE),
     R103_WINDOW: re.compile(r"^" + re.escape(R103_WINDOW) + r"\r?$",re.MULTILINE),
     R93_CALLBACK: re.compile(
         r"^" + re.escape(R93_CALLBACK) +
@@ -285,8 +286,11 @@ def validate_receipt(option, appended):
                 raise ReceiptError("Malformed or conflicting pass-looking target receipt")
     if option=="--render-window-audit=8":
         window_counts=RECEIPT_LINES[R103_STABLE].search(appended)
-        if not window_counts or sum(map(int,window_counts.groups()))!=8:
-            raise ReceiptError("R103 original renderer foreground/background samples inconsistent")
+        if not window_counts:
+            raise ReceiptError("R103 original renderer/window samples missing")
+        fg,bg,w,h=map(int,window_counts.groups())
+        if fg+bg!=8 or not (320<=w<=8192 and 240<=h<=8192):
+            raise ReceiptError("R103 original renderer foreground/background/size inconsistent")
     if option=="--render-visibility=manual":
         m0=RECEIPT_LINES[R94_CALLBACK].search(appended)
         m1=RECEIPT_LINES[R94_STABLE].search(appended)
