@@ -542,7 +542,9 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
     // synthetic press when the game becomes foreground.
     const bool pressed=(GetAsyncKeyState(VK_INSERT)&0x8000)!=0;
     const bool key_toggle=visibility_insert_edge.sample(owner_foreground,pressed);
-    return (event_toggle || key_toggle)?1:0;
+    // Distinguish real foreground Insert edges from external PID events.
+    // R94 still accepts 1 and 3 as visibility toggles; R95 audits origin.
+    return key_toggle?3:(event_toggle?1:0);
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
