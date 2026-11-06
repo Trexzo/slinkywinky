@@ -37,6 +37,10 @@ bool MenuRenderSession::resize(unsigned width,unsigned height) noexcept {
     return true;
 }
 std::optional<MenuRenderFrame> MenuRenderSession::next(
+    const MenuState& menu,const MenuProfileBridge* profile) {
+    return next(menu,profile,nullptr);
+}
+std::optional<MenuRenderFrame> MenuRenderSession::next(
     const MenuState& menu,const MenuProfileBridge* profile,
     const MenuNavigation* navigation) {
     std::lock_guard<std::mutex> lock(mutex_);
