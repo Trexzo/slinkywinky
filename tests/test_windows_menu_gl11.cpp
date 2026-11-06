@@ -56,6 +56,9 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
     JNIEnv*,jclass,jlong,jlong);
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(JNIEnv*,jclass);
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeAuditRenderWindow(
+    JNIEnv*,jclass,jlong,jlong,jint,jint);
 #endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
 
@@ -805,6 +808,13 @@ int main() {
         REQUIRE(IsWindowVisible(context.hwnd));
         const auto localWindow=audit_game_render_window(
             context.gl,context.dc,676,630);
+#ifdef SW_R91_TEST_JNI_OVERLAY
+        const auto auditJni=Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeAuditRenderWindow(
+            nullptr,nullptr,
+            static_cast<jlong>(reinterpret_cast<std::uintptr_t>(context.gl)),
+            static_cast<jlong>(reinterpret_cast<std::uintptr_t>(context.dc)),676,630);
+        REQUIRE(auditJni==static_cast<jint>(localWindow));
+#endif
         REQUIRE(localWindow==GameWindowFocus::ValidBackground ||
                 localWindow==GameWindowFocus::ValidForeground);
         REQUIRE(audit_game_render_window(context.gl,context.dc,677,630)==
