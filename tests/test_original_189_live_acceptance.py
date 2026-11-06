@@ -47,7 +47,7 @@ U = (harness.RESTORED + "\n"
 
 K = (U.replace("toggles=3","toggles=2")
      .replace(harness.R94_VISIBILITY,
-              "R95_INPUT_SOURCE_AUDIT keys=2 events=0\\n" + harness.R94_VISIBILITY))
+              "R95_INPUT_SOURCE_AUDIT keys=2 events=0\n" + harness.R94_VISIBILITY))
 
 
 class ReceiptChecks(unittest.TestCase):
@@ -689,7 +689,8 @@ class ReceiptChecks(unittest.TestCase):
                     harness.LOADER_MODES[option]+"\n","")
             with patch.object(harness,"process_birth_token",return_value=81), \
                  patch.object(harness,"verify_original_client_jar",return_value=(1,2,3,4)), \
-                 patch.object(harness.subprocess,"run",side_effect=fake), \\\n                 patch.object(harness,"send_isolated_insert",return_value=2) as injected:
+                 patch.object(harness.subprocess,"run",side_effect=fake), \
+                 patch.object(harness,"send_isolated_insert",return_value=2) as injected:
                 result=harness.run([
                     "--loader",str(loader),"--jdk8",str(root/"jdk8"),
                     "--pid","123","--target-stdout-log",str(log),
