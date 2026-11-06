@@ -36,6 +36,33 @@ public final class RenderFrameGateSmoke {
             catch(IllegalArgumentException expected){denied=true;}
             check(denied,"Invalid frame cap admitted");
         }
+        // R94 user-controlled session: the ordinary 8-frame and R92 72
+        // gates cannot be silently expanded to the manual 2048-frame cap.
+        for(int cap:new int[]{8,72,2047,2049,65535}) {
+            boolean rejected=false;
+            try{new RenderFrameGate(cap,false,true);}
+            catch(IllegalArgumentException expected){rejected=true;}
+            check(rejected,"R94 incorrect cap accepted");
+        }
+        RenderFrameGate manual=new RenderFrameGate(2048,false,true);
+        sample(manual,23);
+        check(manual.accepted()==23 && !manual.invalid(),
+              "R94 prior-to-stop frames incorrect");
+        manual.stop();
+        sample(manual,100);
+        check(manual.accepted()==23 && !manual.invalid() &&
+              manual.await(1,TimeUnit.MILLISECONDS),
+              "R94 operator-stop did not drain finite gate");
+        RenderFrameGate manualTimeout=new RenderFrameGate(2048,false,true);
+        sample(manualTimeout,2100);
+        check(manualTimeout.accepted()==2048 && !manualTimeout.invalid() &&
+              manualTimeout.await(1,TimeUnit.MILLISECONDS),
+              "R94 finite callback cap unbounded");
+        RenderFrameGate wrongManual=new RenderFrameGate(2048,false,true);
+        wrongManual.sample(Thread.currentThread(),0.25f,1L,BAD);
+        check(wrongManual.invalid() && wrongManual.accepted()==0,
+              "R94 invalid game stack passed");
+        System.out.println("R94_MANUAL_2048_CAP_OPERATOR_STOP_AND_OWNER_GATE_PASS");
         // R92: only an explicitly marked 72-frame epoch may exceed R75's
         // default eight callbacks. No Minecraft JVM or JNI is involved.
         for(int cap:new int[]{8,64,73,999}) {
