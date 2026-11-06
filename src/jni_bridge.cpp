@@ -463,6 +463,93 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCurrentWglSnapshot(
     return result;
 }
 /**
+ * R94: operator-controlled finite visibility session.
+ * A real owner-PID process creates the two named events, and only its
+ * admitted native render callback polls them. No injected input, hooks,
+ * message interception, thread creation, or context switching.
+ *
+ * Return values from poll: -1 invalid, 0 unchanged, 1 toggle, 2 stop.
+ * VK_INSERT is sampled ONLY while the WGL-owned game window is foreground.
+ */
+namespace {
+std::mutex visibility_mutex;
+HANDLE visibility_toggle=nullptr;
+HANDLE visibility_stop=nullptr;
+bool visibility_key_down=true; // Require a release after admission.
+bool visibility_owner_ready=false;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(visibility_mutex);
+    if(visibility_owner_ready || visibility_toggle || visibility_stop)return JNI_FALSE;
+    const auto pid=static_cast<std::uint32_t>(GetCurrentProcessId());
+    const auto toggle_name=slinkywinky::visibility_toggle_event_name(pid);
+    const auto stop_name=slinkywinky::visibility_stop_event_name(pid);
+    HANDLE toggle=CreateEventW(nullptr,FALSE,FALSE,toggle_name.c_str());
+    const bool fresh_toggle=toggle && GetLastError()!=ERROR_ALREADY_EXISTS;
+    if(!fresh_toggle){if(toggle)CloseHandle(toggle);return JNI_FALSE;}
+    HANDLE stop=CreateEventW(nullptr,TRUE,FALSE,stop_name.c_str());
+    const bool fresh_stop=stop && GetLastError()!=ERROR_ALREADY_EXISTS;
+    if(!fresh_stop) {
+        if(stop)CloseHandle(stop);
+        CloseHandle(toggle);
+        return JNI_FALSE;
+    }
+    visibility_toggle=toggle;
+    visibility_stop=stop;
+    visibility_key_down=true;
+    visibility_owner_ready=true;
+    return JNI_TRUE;
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+    JNIEnv*,jclass,jlong expectedContext,jlong expectedDc) {
+    std::lock_guard<std::mutex> lock(visibility_mutex);
+    if(!visibility_owner_ready || !visibility_toggle || !visibility_stop ||
+       !expectedContext || !expectedDc ||
+       wglGetCurrentContext()!=reinterpret_cast<HGLRC>(
+           static_cast<std::uintptr_t>(expectedContext)) ||
+       wglGetCurrentDC()!=reinterpret_cast<HDC>(
+           static_cast<std::uintptr_t>(expectedDc)))
+        return -1;
+    if(WaitForSingleObject(visibility_stop,0)==WAIT_OBJECT_0)return 2;
+    const DWORD toggle_state=WaitForSingleObject(visibility_toggle,0);
+    if(toggle_state==WAIT_FAILED)return -1;
+    const bool event_toggle=toggle_state==WAIT_OBJECT_0;
+    const HWND hwnd=WindowFromDC(wglGetCurrentDC());
+    DWORD window_pid=0;
+    const HWND foreground=GetForegroundWindow();
+    bool owner_foreground=false;
+    if(hwnd && foreground) {
+        const HWND root=GetAncestor(hwnd,GA_ROOT);
+        if(root && GetWindowThreadProcessId(root,&window_pid)!=0 &&
+           window_pid==GetCurrentProcessId() && foreground==root)
+            owner_foreground=true;
+    }
+    // Never turn a key that was held while focus was elsewhere into a
+    // synthetic press when the game becomes foreground.
+    const bool pressed=(GetAsyncKeyState(VK_INSERT)&0x8000)!=0;
+    const bool key_toggle=owner_foreground && pressed && !visibility_key_down;
+    visibility_key_down=pressed || !owner_foreground;
+    return (event_toggle || key_toggle)?1:0;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(visibility_mutex);
+    if(!visibility_owner_ready || !visibility_toggle || !visibility_stop)
+        return JNI_FALSE;
+    const bool one=CloseHandle(visibility_toggle)!=0;
+    const bool two=CloseHandle(visibility_stop)!=0;
+    visibility_toggle=nullptr;
+    visibility_stop=nullptr;
+    visibility_owner_ready=false;
+    visibility_key_down=true;
+    return (one && two)?JNI_TRUE:JNI_FALSE;
+}
+
+/**
  * R91/R92/R93 explicitly opt in to bounded GL1.1 overlay drawing on
  * the source-admitted original renderer thread after stable WGL samples.
  *
