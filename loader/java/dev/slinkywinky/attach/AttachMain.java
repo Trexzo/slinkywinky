@@ -36,12 +36,18 @@ public final class AttachMain {
             final boolean renderContext = args.length == 4 && "--render-context=8".equals(args[3]);
             final boolean renderOverlay = args.length == 4 && "--render-overlay=8".equals(args[3]);
             final boolean renderMultiframe = args.length == 4 && "--render-overlay=72".equals(args[3]);
+            final boolean renderVisibility = args.length == 4 && "--render-visibility=72".equals(args[3]);
             final String requestedOption = args.length == 4 ? args[3] : "";
             final boolean extendedHook = "--hook-probe=120".equals(requestedOption) ||
                                          "--hook-probe=600".equals(requestedOption);
             final boolean continuousHook = "--hook-probe=continuous".equals(requestedOption);
             final boolean hookProbe = "--hook-probe".equals(requestedOption) ||
                                       extendedHook || continuousHook;
+            if (renderVisibility && (!"1".equals(System.getenv("SLINKYWINKY_RENDER_VISIBILITY")) ||
+                                     !"1".equals(System.getenv("SLINKYWINKY_RENDER_OVERLAY")) ||
+                                     !"1".equals(System.getenv("SLINKYWINKY_RENDER_CONTEXT")) ||
+                                     !"1".equals(System.getenv("SLINKYWINKY_RENDER_CALLBACK"))))
+                throw new IllegalArgumentException("R93 needs explicit scripted visibility consent");
             if (renderMultiframe && (!"1".equals(System.getenv("SLINKYWINKY_RENDER_MULTIFRAME")) ||
                                      !"1".equals(System.getenv("SLINKYWINKY_RENDER_OVERLAY")) ||
                                      !"1".equals(System.getenv("SLINKYWINKY_RENDER_CONTEXT")) ||
@@ -65,7 +71,7 @@ public final class AttachMain {
             if (continuousHook && !"1".equals(System.getenv("SLINKYWINKY_CONTINUOUS_OBSERVATION")))
                 throw new IllegalArgumentException("Continuous hook requires SLINKYWINKY_CONTINUOUS_OBSERVATION=1");
             if (args.length == 4 && !tickProbe && !instrumentProbe &&
-                !renderPreflight && !renderCallback && !renderContext && !renderOverlay && !renderMultiframe && !hookProbe) throw new IllegalArgumentException("Unknown option");
+                !renderPreflight && !renderCallback && !renderContext && !renderOverlay && !renderMultiframe && !renderVisibility && !hookProbe) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
                 throw new IllegalArgumentException("Numeric PID required");
@@ -82,7 +88,7 @@ public final class AttachMain {
                 throw new IllegalArgumentException("Refusing non-Minecraft target: " + target.displayName());
             VirtualMachine vm = VirtualMachine.attach(target);
             try {
-                if (instrumentProbe || hookProbe || renderPreflight || renderCallback || renderContext || renderOverlay || renderMultiframe) {
+                if (instrumentProbe || hookProbe || renderPreflight || renderCallback || renderContext || renderOverlay || renderMultiframe || renderVisibility) {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
@@ -95,7 +101,9 @@ public final class AttachMain {
                                      (renderCallback ? "minecraft-render-callback-r75" :
                                      (renderPreflight ? "minecraft-render-preflight" :
                                      (test ? "probe" : "minecraft")))));
-                    if ((renderContext || renderOverlay || renderMultiframe) && !new File(dll.getParentFile(),"slinkywinky_jni.dll").isFile())
+                    if (renderVisibility) options = "minecraft-render-visibility-r93|" +
+                        new File(dll.getParentFile(),"slinkywinky_jni.dll").getCanonicalPath();
+                    if ((renderContext || renderOverlay || renderMultiframe || renderVisibility) && !new File(dll.getParentFile(),"slinkywinky_jni.dll").isFile())
                         throw new IllegalArgumentException("R78 requires standalone JNI library");
                     if (hookProbe) {
                         File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
@@ -113,7 +121,9 @@ public final class AttachMain {
             } finally {
                 vm.detach();
             }
-            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + (renderMultiframe ? " mode=render-overlay-r92" : (renderOverlay ? " mode=render-overlay-r91" : (renderContext ? " mode=render-context-r78" : (renderCallback ? " mode=render-callback-r75" : (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft"))))))))));
+            String receipt = renderVisibility ? " mode=render-visibility-r93" :
+                (renderMultiframe ? " mode=render-overlay-r92" : (renderOverlay ? " mode=render-overlay-r91" : (renderContext ? " mode=render-context-r78" : (renderCallback ? " mode=render-callback-r75" : (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))))))));
+            System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + receipt);
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
             System.exit(2);
