@@ -31,6 +31,9 @@ R99_STABLE = ("R99_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true "
               "frames=64 retained=true actions=4 tab=1 focus=17")
 R99_RETAINED = "R99_RETAINED_MENU_DRAW_PASS frames=64 actions=4 tab=1 focus=17"
+R100_CALLBACK = "R100_RENDER_CALLBACK_BOUNDED_PASS"
+R100_STABLE = "R100_WGL_CONTEXT_STABLE_PASS"
+R100_OPERATOR = "R100_OPERATOR_MENU_CONTROLLED_PASS actions=4 tab=1 focus=17 preview=1 stop=operator"
 R93_CALLBACK = "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
 R93_STABLE = ("R93_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true shown=48 hidden=16")
@@ -63,6 +66,8 @@ NEGATIVE = (
     "R94_OPERATOR_VISIBILITY_UNVERIFIED",
     "R99_WGL_CONTEXT_UNVERIFIED",
     "R99_RETAINED_MENU_UNVERIFIED",
+    "R100_WGL_CONTEXT_UNVERIFIED",
+    "R100_OPERATOR_MENU_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -77,6 +82,7 @@ LOADER_MODES = {
     "--render-visibility=72": "render-visibility-r93",
     "--render-visibility=manual": "render-manual-r94",
     "--render-retained=72": "render-retained-r99",
+    "--render-menu=operator": "render-menu-r100",
 }
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
@@ -122,6 +128,13 @@ STAGES = {
                ("--render-visibility=manual",
                 (RESTORED, R94_CALLBACK, R94_STABLE, R94_VISIBILITY, RELEASED))),
 }
+
+# R100 includes all six R99 original class/render/GL admissions before
+# the new independent externally-commanded operator stage.
+STAGES["operator"] = STAGES["retained"] + (
+    ("--render-menu=operator",
+     (RESTORED,R100_CALLBACK,R100_STABLE,R100_OPERATOR,RELEASED)),
+)
 
 # R95 uses the same seven original-JVM admissions as R94, but the final
 # toggle inputs must be OS-injected Insert on the exact sandbox window.
@@ -193,6 +206,16 @@ RECEIPT_LINES = {
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     R99_STABLE: re.compile(r"^" + re.escape(R99_STABLE) + r"\r?$", re.MULTILINE),
     R99_RETAINED: re.compile(r"^" + re.escape(R99_RETAINED) + r"\r?$", re.MULTILINE),
+    R100_CALLBACK: re.compile(
+        r"^R100_RENDER_CALLBACK_BOUNDED_PASS accepted=([0-9]{1,4}) "
+        r"owner=[^\\r\\n]{1,256}#[1-9][0-9]*\\r?$",re.MULTILINE),
+    R100_STABLE: re.compile(
+        r"^R100_WGL_CONTEXT_STABLE_PASS attempts=([0-9]{1,4}) "
+        r"current=([0-9]{1,4}) absent=0 invalid=0 changed=0 stable=true "
+        r"shown=([0-9]{1,4}) actions=4 refused=0 tab=1 "
+        r"focus=17 preview=1 stop=operator\\r?$",re.MULTILINE),
+    R100_OPERATOR: re.compile(
+        r"^" + re.escape(R100_OPERATOR) + r"\\r?$",re.MULTILINE),
     R93_CALLBACK: re.compile(
         r"^" + re.escape(R93_CALLBACK) +
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
@@ -215,7 +238,7 @@ RECEIPT_LINES = {
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["retained"] + STAGES["manual"])[option]
+    expected = dict(STAGES["operator"] + STAGES["manual"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
@@ -252,8 +275,20 @@ def validate_receipt(option, appended):
                 tuple(map(int,m1.groups()))==
                 (frames,frames,shown,hidden,toggles)):
             raise ReceiptError("R94 counter relationship or stop evidence invalid")
+    if option=="--render-menu=operator":
+        cmd=RECEIPT_LINES[R100_CALLBACK].search(appended)
+        status=RECEIPT_LINES[R100_STABLE].search(appended)
+        if not cmd or not status:
+            raise ReceiptError("Missing R100 actual original render-thread counters")
+        frames=int(cmd.group(1))
+        attempts,current,shown=tuple(map(int,status.groups()))
+        if not (9<=frames<=2048 and frames==attempts==current and
+                shown==frames-8):
+            raise ReceiptError("R100 operator callback/frame provenance mismatch")
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    elif option == "--render-menu=operator":
+        ordered = (RESTORED,R100_CALLBACK,R100_STABLE,R100_OPERATOR,RELEASED)
     elif option == "--render-retained=72":
         ordered = (RESTORED, R99_CALLBACK, R99_STABLE, R99_RETAINED, RELEASED)
     elif option == "--render-visibility=manual":
@@ -463,20 +498,23 @@ def run(argv=None):
     env.pop("SLINKYWINKY_RENDER_VISIBILITY", None)
     env.pop("SLINKYWINKY_RENDER_MANUAL", None)
     env.pop("SLINKYWINKY_RENDER_RETAINED", None)
+    env.pop("SLINKYWINKY_RENDER_OPERATOR", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
-    if a.mode in ("overlay","multiframe","visibility","manual","key","retained"):
+    if a.mode in ("overlay","multiframe","visibility","manual","key","retained","operator"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
-    if a.mode in ("multiframe","visibility","manual","key","retained"):
+    if a.mode in ("multiframe","visibility","manual","key","retained","operator"):
         # R93 must pass the earlier, separately consent-gated R92 stage.
         env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
     if a.mode in ("visibility","manual","key"):
         env["SLINKYWINKY_RENDER_VISIBILITY"] = "1"
     if a.mode in ("manual","key"):
         env["SLINKYWINKY_RENDER_MANUAL"] = "1"
-    if a.mode=="retained":
+    if a.mode in ("retained","operator"):
         env["SLINKYWINKY_RENDER_RETAINED"] = "1"
+    if a.mode=="operator":
+        env["SLINKYWINKY_RENDER_OPERATOR"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
@@ -509,6 +547,35 @@ def run(argv=None):
                                "; STOP, do not try another diagnostic")
         validate_loader_receipt(option,a.pid,result.stdout)
         require_same_process(a.pid,original_birth)
+        if option == "--render-menu=operator":
+            # Five distinct commands originate in this supervised owner-PID
+            # helper process, NEVER from the target JVM's scripted R99 path.
+            # Every response is acknowledged by the source-admitted original
+            # WGL render owner; no SendInput or Minecraft key/mouse hooks.
+            controls=("--menu-next-row","--menu-expand",
+                      "--menu-toggle-preview","--menu-next-tab",
+                      "--menu-stop")
+            for control in controls:
+                require_same_process(a.pid,original_birth)
+                command=[str(loader),"attach",str(a.pid),str(jdk8),control]
+                reply=subprocess.run(command,capture_output=True,text=True,
+                                     timeout=8,env=env)
+                expected="ATTACH_RESULT=SUCCESS pid="+str(a.pid)+" mode="+control[2:]
+                if reply.returncode or reply.stdout.strip()!=expected:
+                    # Best-effort cooperative stop, only for the same
+                    # kernel-birth original JVM; don't claim restoration
+                    # unless the target subsequently emits its full proof.
+                    try:
+                        require_same_process(a.pid,original_birth)
+                        subprocess.run(
+                            [str(loader),"attach",str(a.pid),str(jdk8),
+                             "--menu-stop"],
+                            capture_output=True,text=True,env=env,timeout=4)
+                    except Exception:
+                        pass
+                    raise ReceiptError("R100 operator command "+control+
+                                       " not acknowledged by original render owner")
+                print("R100_ORIGINAL_MENU_OPERATOR_ACK_PASS command="+control,flush=True)
         if option == "--render-visibility=manual":
             # All controls are explicit PID-scoped events, not Java Attach.
             # The supervised offline game owns this process and can safely
