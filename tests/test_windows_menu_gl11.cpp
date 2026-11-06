@@ -33,6 +33,20 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
     JNIEnv*,jclass,jlong,jlong);
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(JNIEnv*,jclass);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(JNIEnv*,jclass);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+    JNIEnv*,jclass,jlong,jlong,jint,jint);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+    JNIEnv*,jclass,jint);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
+    JNIEnv*,jclass);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview(
+    JNIEnv*,jclass);
 #endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
 
@@ -378,6 +392,63 @@ int main() {
             same(compactBefore,snapshot());
         }
         REQUIRE(shownPixels==48 && hiddenPixels==16);
+        // R99: CALL THE REAL EXPORTED JNI FUNCTIONS, not a mock menu.
+        // Admission is inert until explicitly armed; a model is constructed
+        // lazily on this WGL owner and survives successive native calls.
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
+            nullptr,nullptr)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,2)==JNI_FALSE); // cannot navigate before first draw
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,0,admittedDc,676,630)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,677,630)==JNI_FALSE);
+        const State retainedBefore=snapshot();
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+        same(retainedBefore,snapshot());
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,2)==JNI_TRUE); // NextRow = 2
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,4)==JNI_TRUE); // ExpandFocused = 4
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,5)==JNI_TRUE); // ToggleFocusedPreview = 5
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,-1)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,8)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+        same(retainedBefore,snapshot());
+        bool foreignRetainedAction=false,foreignRetainedDraw=false;
+        std::thread foreignRetained([&] {
+            foreignRetainedAction=
+                Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+                    nullptr,nullptr,2)==JNI_TRUE;
+            foreignRetainedDraw=
+                Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+                    nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE;
+        });
+        foreignRetained.join();
+        REQUIRE(!foreignRetainedAction && !foreignRetainedDraw);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
+            nullptr,nullptr)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview(
+            nullptr,nullptr)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_FALSE);
+        same(retainedBefore,snapshot());
+        std::cout<<"R99_REAL_JNI_RETAINED_MENU_ARM_DRAW_NAVIGATE_END_AND_DISCARD_PASS\\n";
         std::cout<<"R93_COMPACT_SHOW_HIDE_SHOW_GL_PIXELS_PASS\\n";
 
         // R94 production stop/toggle event registration and JNI polling.
