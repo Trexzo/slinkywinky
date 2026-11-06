@@ -295,7 +295,7 @@ def main():
     ]
     environment = os.environ.copy()
     environment.pop("SLINKYWINKY_ATTACH_TEST", None)
-    if args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance:
+    if args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance:
         # Native gameplay hooks are not part of renderer admission.
         environment.pop("SLINKYWINKY_EXPERIMENTAL_HOOK", None)
     else:
@@ -334,7 +334,7 @@ def main():
                      if pid == game.pid]
             if len(exact) != 1:
                 raise RuntimeError("The newly launched vanilla PID was not uniquely enumerated")
-            if args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance:
+            if args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance:
                 # A Java 8 renderer starts later than the LWJGL log line.
                 # Require real JVM class-load receipts for both exact original
                 # obfuscated classes before sending the first Attach.
