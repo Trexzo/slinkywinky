@@ -9,6 +9,7 @@
 
 namespace slinkywinky {
 class MenuProfileBridge;
+class MenuNavigation;
 
 struct MenuRenderParameter {
     std::size_t catalog_index=0;
@@ -25,6 +26,7 @@ struct MenuRenderFrame {
     MenuAppearance appearance{};
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
+    std::optional<std::size_t> focused_catalog_index; // R96 visible-only focus snapshot
     bool is_placeholder=false; // Profiles is informational; Unload not admitted.
 };
 
@@ -35,7 +37,8 @@ public:
     bool attach(std::uint64_t epoch,unsigned width,unsigned height) noexcept;
     bool resize(unsigned width,unsigned height) noexcept;
     std::optional<MenuRenderFrame> next(const MenuState& menu,
-                                        const MenuProfileBridge* profile=nullptr);
+                                        const MenuProfileBridge* profile=nullptr,
+                                        const MenuNavigation* navigation=nullptr);
     // Cleanup is intentionally owner-thread only; a failed close leaves this
     // context locked until the host can perform the correct teardown.
     bool detach() noexcept;
