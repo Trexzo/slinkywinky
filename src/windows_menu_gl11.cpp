@@ -188,8 +188,12 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
        viewport[2]!=static_cast<GLint>(frame.viewport_width) ||
        viewport[3]!=static_cast<GLint>(frame.viewport_height))
         return false;
+    const auto geometryMode=mode==MenuGL11Mode::StandalonePreview?
+        MenuPanelMode::StandalonePreview:
+        (mode==MenuGL11Mode::BoundedOverlay?
+         MenuPanelMode::BoundedOverlay:MenuPanelMode::CompactOverlay);
     const auto panel=menu_panel_geometry(frame.viewport_width,frame.viewport_height,
-        frame.appearance.wide,static_cast<MenuPanelMode>(mode));
+        frame.appearance.wide,geometryMode);
     if(!panel)return false;
     ScopedFixedFunctionState state;
     if(!state.ready())return false;
