@@ -10,6 +10,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
@@ -25,6 +26,7 @@ using slinkywinky::MenuTab;
 slinkywinky::MenuState menu;
 slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuNavigation navigation(menu,profile);
+slinkywinky::MenuMouseGesture mouseGesture;
 slinkywinky::MenuRenderSession session;
 slinkywinky::WglMenuOverlayHost overlayHost;
 constexpr wchar_t title[]=L"SlinkyWinky GL1.1 Menu Preview - Offline";
@@ -76,6 +78,34 @@ void refresh_caption(HWND hwnd) {
     SetWindowTextW(hwnd,label.c_str());
 }
 void request_paint(HWND hwnd){InvalidateRect(hwnd,nullptr,FALSE);}
+slinkywinky::MenuPanelMode panel_mode() noexcept {
+    return !overlayDemo?slinkywinky::MenuPanelMode::StandalonePreview:
+           (overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay?
+            slinkywinky::MenuPanelMode::CompactOverlay:
+            slinkywinky::MenuPanelMode::BoundedOverlay);
+}
+bool preview_focused(HWND hwnd) {
+    return hwnd && GetForegroundWindow()==hwnd &&
+           IsWindowVisible(hwnd) && !IsIconic(hwnd);
+}
+std::optional<slinkywinky::MenuRenderFrame> mouse_frame(HWND hwnd) {
+    if(!preview_focused(hwnd) || !graphics || !device ||
+       wglGetCurrentContext()!=graphics)return std::nullopt;
+    RECT client{};if(!GetClientRect(hwnd,&client) ||
+       client.right<320 || client.bottom<240 ||
+       client.right>8192 || client.bottom>8192)return std::nullopt;
+    auto frame=session.next(menu,&profile,&navigation);
+    if(!frame || frame->viewport_width!=static_cast<unsigned>(client.right) ||
+       frame->viewport_height!=static_cast<unsigned>(client.bottom))
+        return std::nullopt;
+    return frame;
+}
+void cancel_mouse(HWND hwnd) {
+    mouseGesture.cancel();
+    // Capture is solely owned by this separate preview window. A new
+    // Minecraft client/window is never discovered or touched.
+    if(GetCapture()==hwnd)ReleaseCapture();
+}
 bool create_context(HWND hwnd) {
     device=GetDC(hwnd);
     if(!device)return false;
@@ -97,6 +127,7 @@ bool create_context(HWND hwnd) {
     return session.attach(1,w,h);
 }
 void close_context(HWND hwnd) {
+    cancel_mouse(hwnd);
     // Window proc always runs on the same UI thread that owns the WGL context.
     overlayHost.close();
     session.detach();
@@ -118,6 +149,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_CREATE:
             return create_context(hwnd)?0:-1;
         case WM_SIZE: {
+            cancel_mouse(hwnd); // Resize invalidates pressed coordinates.
             if(!graphics || !device)return 0;
             const unsigned width=LOWORD(lp),height=HIWORD(lp);
             if(width<320u || height<240u || width>8192u || height>8192u)
@@ -162,12 +194,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
+            cancel_mouse(hwnd); // Scrolling invalidates pressed row.
             RECT client{};GetClientRect(hwnd,&client);
-            const auto mode=!overlayDemo?
-                slinkywinky::MenuPanelMode::StandalonePreview:
-                (overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay?
-                 slinkywinky::MenuPanelMode::CompactOverlay:
-                 slinkywinky::MenuPanelMode::BoundedOverlay);
+            const auto mode=panel_mode();
             const auto panel=slinkywinky::menu_panel_geometry(
                 static_cast<unsigned>(client.right),
                 static_cast<unsigned>(client.bottom),
@@ -188,42 +217,74 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             refresh_caption(hwnd);
             request_paint(hwnd);return 0;
         }
-        case WM_LBUTTONDOWN:{
-            RECT client{};GetClientRect(hwnd,&client);
-            if(client.right<320 || client.bottom<240 ||
-               client.right>8192 || client.bottom>8192)return 0;
+        case WM_KILLFOCUS:
+            cancel_mouse(hwnd);
+            return 0;
+        case WM_ACTIVATEAPP:
+            if(!wp)cancel_mouse(hwnd);
+            return 0;
+        case WM_CANCELMODE:
+            cancel_mouse(hwnd);
+            return 0;
+        case WM_CAPTURECHANGED:
+            mouseGesture.cancel(); // Capture was taken by another window.
+            return 0;
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:{
+            // R98 never changes state on DOWN. It only stores a bounded,
+            // immutable owner-thread render snapshot for later comparison.
+            if(GetCapture() && GetCapture()!=hwnd)return 0;
+            const auto frame=mouse_frame(hwnd);
+            if(!frame) {cancel_mouse(hwnd);return 0;}
             const int x=static_cast<short>(LOWORD(lp));
             const int y=static_cast<short>(HIWORD(lp));
-            // R97: hit testing uses the SAME panel geometry/scaling as the
-            // GL11 renderer. The input originates only in this standalone
-            // Win32 preview; never installed into a Minecraft window.
-            const auto frame=session.next(menu,&profile,&navigation);
-            const auto mode=!overlayDemo?
-                slinkywinky::MenuPanelMode::StandalonePreview:
-                (overlayMode==slinkywinky::MenuGL11Mode::CompactOverlay?
-                 slinkywinky::MenuPanelMode::CompactOverlay:
-                 slinkywinky::MenuPanelMode::BoundedOverlay);
-            if(frame &&
-               frame->viewport_width==static_cast<unsigned>(client.right) &&
-               frame->viewport_height==static_cast<unsigned>(client.bottom)) {
-                const auto hit=slinkywinky::hit_test_menu(*frame,mode,x,y);
-                if(hit) {
-                    using slinkywinky::MenuHitKind;
-                    if(hit->kind==MenuHitKind::Tab)
-                        navigation.select_tab(hit->tab);
-                    else if(navigation.focus_visible_row(hit->catalog_index)) {
-                        if(hit->kind==MenuHitKind::Expand)
-                            navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
-                        else if(hit->kind==MenuHitKind::Toggle)
-                            navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
-                        // RowBody only changes visual focus.
-                    }
+            if(mouseGesture.press(*frame,panel_mode(),x,y,
+                                  GetTickCount64(),preview_focused(hwnd))) {
+                SetCapture(hwnd);
+                if(GetCapture()!=hwnd)mouseGesture.cancel();
+            }
+            return 0;
+        }
+        case WM_MOUSEMOVE:{
+            if(!mouseGesture.pending())return 0;
+            const auto frame=mouse_frame(hwnd);
+            if(!frame || GetCapture()!=hwnd ||
+               !mouseGesture.move(*frame,panel_mode(),
+                                  static_cast<short>(LOWORD(lp)),
+                                  static_cast<short>(HIWORD(lp)),
+                                  preview_focused(hwnd))) {
+                cancel_mouse(hwnd); // Leaving the target is terminal.
+            }
+            return 0;
+        }
+        case WM_LBUTTONUP:{
+            const auto frame=mouse_frame(hwnd);
+            std::optional<slinkywinky::MenuHit> hit;
+            if(frame && GetCapture()==hwnd)
+                hit=mouseGesture.release(
+                    *frame,panel_mode(),
+                    static_cast<short>(LOWORD(lp)),
+                    static_cast<short>(HIWORD(lp)),
+                    GetTickCount64(),preview_focused(hwnd));
+            cancel_mouse(hwnd);
+            if(hit) {
+                using slinkywinky::MenuHitKind;
+                if(hit->kind==MenuHitKind::Tab)
+                    navigation.select_tab(hit->tab);
+                else if(navigation.focus_visible_row(hit->catalog_index)) {
+                    if(hit->kind==MenuHitKind::Expand)
+                        navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
+                    else if(hit->kind==MenuHitKind::Toggle)
+                        navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
+                    // Body clicks only set inert visual focus.
                 }
             }
             refresh_caption(hwnd);
-            request_paint(hwnd);return 0;
+            request_paint(hwnd);
+            return 0;
         }
         case WM_KEYDOWN:{
+            cancel_mouse(hwnd); // Keyboard can change tab/page/appearance.
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
             // Preview-only first-party keyboard navigation. This WndProc is
             // a separate Windows demo and is NEVER installed into Minecraft.
@@ -307,7 +368,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR arguments,int show) {
         menu.set_appearance(stored);
     WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);
     wc.lpfnWndProc=window_proc;
-    wc.style=CS_OWNDC;
+    wc.style=CS_OWNDC|CS_DBLCLKS; // R98 explicit double-click path.
     wc.hInstance=instance;
     wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     wc.lpszClassName=className;
