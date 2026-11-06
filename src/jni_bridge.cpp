@@ -534,8 +534,9 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
     bool owner_foreground=false;
     if(hwnd && foreground) {
         const HWND root=GetAncestor(hwnd,GA_ROOT);
-        if(root && GetWindowThreadProcessId(root,&window_pid)!=0 &&
-           window_pid==GetCurrentProcessId() && foreground==root)
+        if(root && foreground==root && IsWindowVisible(root) &&
+           !IsIconic(root) && GetWindowThreadProcessId(root,&window_pid)!=0 &&
+           window_pid==GetCurrentProcessId())
             owner_foreground=true;
     }
     // Never turn a key that was held while focus was elsewhere into a
