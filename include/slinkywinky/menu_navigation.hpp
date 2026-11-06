@@ -23,6 +23,9 @@ public:
     bool owns(const MenuState& menu,const MenuProfileBridge& profile) const noexcept;
     bool owner_thread() const noexcept;
     bool apply(MenuNavAction action);
+    // Standalone preview mouse/tab controls also need to synchronize focus.
+    bool select_tab(MenuTab tab);
+    bool focus_visible_row(std::size_t catalog_index);
     // Focus is reported only for an actual visible row. Never leak an old
     // row selection into a different tab or scrolled page.
     std::optional<std::size_t> visible_focus() const;
