@@ -7,6 +7,7 @@
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/menu_navigation.hpp"
@@ -506,6 +507,64 @@ int main() {
         same(focusBefore,snapshot());
         std::cout<<"R97_COMPACT_PIXEL_TO_CLIENT_HIT_ALIGNMENT_PASS\\n";
         std::cout<<"R96_FOCUSED_ROW_GL11_PIXELS_OWNER_AND_RESTORE_PASS\\n";
+
+        // R99: a genuine, per-frame current-WGL renderer whose inert menu
+        // navigation survives across draws instead of resetting each frame.
+        // No Minecraft JVM, hooks, OS keys or combat module execution.
+        WglRetainedMenuPreview retained;
+        REQUIRE(!retained.active() && retained.owner_thread());
+        REQUIRE(!retained.apply(MenuNavAction::NextRow));
+        REQUIRE(!retained.draw(nullptr,context.dc,676,630));
+        REQUIRE(!retained.draw(context.gl,nullptr,676,630));
+        REQUIRE(!retained.draw(context.gl,context.dc,999,630));
+        glClearColor(0.10f,0.38f,0.69f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        const State r99Before=snapshot();
+        REQUIRE(retained.draw(context.gl,context.dc,676,630));
+        REQUIRE(retained.active() && retained.drawn_frames()==1);
+        REQUIRE(retained.focused_row() && *retained.focused_row()==0);
+        same(r99Before,snapshot());
+        REQUIRE(retained.apply(MenuNavAction::NextRow));
+        REQUIRE(retained.focused_row() && *retained.focused_row()==1);
+        REQUIRE(retained.apply(MenuNavAction::ExpandFocused));
+        REQUIRE(retained.apply(MenuNavAction::ToggleFocusedPreview));
+        REQUIRE(retained.preview_enabled(1));
+        REQUIRE(retained.apply(MenuNavAction::IncreaseSetting));
+        REQUIRE(!retained.preview_enabled(3));
+        REQUIRE(retained.draw(context.gl,context.dc,676,630));
+        REQUIRE(retained.drawn_frames()==2 && retained.preview_enabled(1));
+        REQUIRE(retained.focused_row() && *retained.focused_row()==1);
+        REQUIRE(retained.accepted_actions()==4);
+        same(r99Before,snapshot());
+        REQUIRE(retained.apply(MenuNavAction::NextRow));
+        REQUIRE(retained.apply(MenuNavAction::NextRow)); // unsupported #3
+        REQUIRE(retained.focused_row() && *retained.focused_row()==3);
+        REQUIRE(!retained.apply(MenuNavAction::ToggleFocusedPreview));
+        REQUIRE(!retained.apply(MenuNavAction::ExpandFocused));
+        REQUIRE(!retained.preview_enabled(3));
+        REQUIRE(retained.refused_actions()==2);
+        REQUIRE(retained.apply(MenuNavAction::NextTab));
+        REQUIRE(retained.tab()==MenuTab::Move);
+        REQUIRE(retained.draw(context.gl,context.dc,676,630));
+        REQUIRE(retained.focused_row() && *retained.focused_row()==17);
+        REQUIRE(retained.drawn_frames()==3);
+        bool r99ForeignDraw=false,r99ForeignAction=false,r99ForeignClose=false;
+        std::thread r99Foreign([&] {
+            r99ForeignDraw=retained.draw(context.gl,context.dc,676,630);
+            r99ForeignAction=retained.apply(MenuNavAction::NextTab);
+            r99ForeignClose=retained.close();
+        });
+        r99Foreign.join();
+        REQUIRE(!r99ForeignDraw && !r99ForeignAction && !r99ForeignClose);
+        REQUIRE(retained.drawn_frames()==3);
+        REQUIRE(!retained.draw(context.gl,context.dc,650,610));
+        REQUIRE(retained.drawn_frames()==3);
+        REQUIRE(retained.close());
+        REQUIRE(!retained.active());
+        REQUIRE(!retained.apply(MenuNavAction::NextRow));
+        REQUIRE(!retained.close());
+        same(r99Before,snapshot());
+        std::cout<<"R99_RETAINED_WGL_MENU_STATE_THREE_FRAMES_AND_OWNER_RESTORE_PASS\\n";
 
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));
