@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 import time
+from windows_r95_scoped_insert import send_isolated_insert
 
 PREFLIGHT = "R73_LOADED_ORIGINAL_VANILLA_189_RENDERER_PREFLIGHT_PASS"
 PREFLIGHT_RELEASED = "R83_ORIGINAL_PREFLIGHT_ADMISSION_RELEASED_PASS"
@@ -105,6 +106,10 @@ STAGES = {
                ("--render-visibility=manual",
                 (RESTORED, R94_CALLBACK, R94_STABLE, R94_VISIBILITY, RELEASED))),
 }
+
+# R95 uses the same seven original-JVM admissions as R94, but the final
+# toggle inputs must be OS-injected Insert on the exact sandbox window.
+STAGES["key"] = STAGES["manual"]
 
 
 class ReceiptError(RuntimeError):
@@ -437,14 +442,14 @@ def run(argv=None):
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
-    if a.mode in ("overlay","multiframe","visibility","manual"):
+    if a.mode in ("overlay","multiframe","visibility","manual","key"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
-    if a.mode in ("multiframe","visibility","manual"):
+    if a.mode in ("multiframe","visibility","manual","key"):
         # R93 must pass the earlier, separately consent-gated R92 stage.
         env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
-    if a.mode in ("visibility","manual"):
+    if a.mode in ("visibility","manual","key"):
         env["SLINKYWINKY_RENDER_VISIBILITY"] = "1"
-    if a.mode=="manual":
+    if a.mode in ("manual","key"):
         env["SLINKYWINKY_RENDER_MANUAL"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
@@ -482,12 +487,18 @@ def run(argv=None):
             # All controls are explicit PID-scoped events, not Java Attach.
             # The supervised offline game owns this process and can safely
             # simulate an operator toggling a menu twice, then stopping it.
-            for control,delay in (
-                ("--toggle-visibility",0.30),
-                ("--toggle-visibility",0.40),
-                ("--toggle-visibility",0.30),
-                ("--stop-visibility",0.40),
-            ):
+            if a.mode=="key":
+                # The keyboard helper refuses a foreign/minimized window and
+                # records ONLY synthetic OS SendInput: never physical hardware.
+                if send_isolated_insert(a.pid,target_log.parent)!=2:
+                    raise ReceiptError("R95 exactly two scoped Insert taps required")
+                controls=(("--stop-visibility",0.35),)
+            else:
+                controls=(("--toggle-visibility",0.30),
+                          ("--toggle-visibility",0.40),
+                          ("--toggle-visibility",0.30),
+                          ("--stop-visibility",0.40))
+            for control,delay in controls:
                 time.sleep(delay)
                 require_same_process(a.pid,original_birth)
                 command=[str(loader),"attach",str(a.pid),str(jdk8),control]
@@ -506,6 +517,22 @@ def run(argv=None):
                                        category+"; STOP and preserve fail-closed restore")
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
+        if a.mode=="key" and option=="--render-visibility=manual":
+            # This is an extra source-specific audit, not a replacement for
+            # exact original-JVM class restoration, WGL and gate release.
+            appended=read_appended(target_log,before,original_stat)
+            match=re.findall(
+                r"(?m)^R95_INPUT_SOURCE_AUDIT keys=([0-9]{1,4}) "
+                r"events=([0-9]{1,4})\\r?$",appended)
+            if match!=[("2","0")] or appended.count("R95_INPUT_SOURCE_AUDIT")!=1:
+                raise ReceiptError("R95 native Insert vs PID event provenance unverified")
+            final=re.search(
+                r"(?m)^R94_MENU_OPERATOR_CONTROLLED_PASS frames=([0-9]{1,4}) "
+                r"toggles=([0-9]{1,4}) shown=([0-9]{1,4}) "
+                r"hidden=([0-9]{1,4}) stop=operator\\r?$",appended)
+            if final is None or int(final.group(2))!=2:
+                raise ReceiptError("R95 Insert must be the ONLY visibility toggle source")
+            print("R95_ORIGINAL_FOREGROUND_SYNTHETIC_INSERT_TWICE_PASS",flush=True)
         require_same_process(a.pid,original_birth)
         require_same_original_jar(client_path,original_client_identity)
         records.append({"mode":option,"target_receipts":list(receipts)})
