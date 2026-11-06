@@ -42,6 +42,7 @@ int wmain(int argc, wchar_t** argv) {
     const bool render_overlay = option == L"--render-overlay=8";
     const bool render_multiframe = option == L"--render-overlay=72";
     const bool render_retained = option == L"--render-retained=72";
+    const bool render_operator = option == L"--render-menu=operator";
     const bool render_visibility = option == L"--render-visibility=72";
     const bool manual_visibility = option == L"--render-visibility=manual";
     const bool toggle_visibility = option == L"--toggle-visibility";
@@ -58,10 +59,10 @@ int wmain(int argc, wchar_t** argv) {
     const bool operator_command=operator_slot>=0;
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
         (argc == 5 && option != L"--tick-probe" &&
-         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context && !render_overlay && !render_multiframe && !render_retained && !render_visibility && !manual_visibility &&
+         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context && !render_overlay && !render_multiframe && !render_retained && !render_operator && !render_visibility && !manual_visibility &&
          !toggle_visibility && !stop_visibility && !operator_command)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-overlay=8|--render-overlay=72|--render-retained=72|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility|--menu-next-tab|--menu-previous-tab|--menu-next-row|--menu-previous-row|--menu-expand|--menu-toggle-preview|--menu-increase|--menu-decrease|--menu-stop]\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-overlay=8|--render-overlay=72|--render-retained=72|--render-menu=operator|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility|--menu-next-tab|--menu-previous-tab|--menu-next-row|--menu-previous-row|--menu-expand|--menu-toggle-preview|--menu-increase|--menu-decrease|--menu-stop]\n";
         return 2;
     }
     // R100 producer is serialized by a process-birth-scoped named mutex.
@@ -165,9 +166,9 @@ int wmain(int argc, wchar_t** argv) {
     const auto instrument = folder / L"slinkywinky_instrument.jar";
     const auto classes = folder / L"attach-classes";
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
-        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight || render_callback || render_context || render_overlay || render_multiframe || render_retained || render_visibility || manual_visibility) &&
+        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight || render_callback || render_context || render_overlay || render_multiframe || render_retained || render_operator || render_visibility || manual_visibility) &&
          !regular_file_exists(instrument)) ||
-        (argc == 5 && (hook_option || render_context || render_overlay || render_multiframe || render_retained || render_visibility) &&
+        (argc == 5 && (hook_option || render_context || render_overlay || render_multiframe || render_retained || render_operator || render_visibility) &&
          !regular_file_exists(folder / L"slinkywinky_jni.dll")) ||
         !regular_file_exists(classes / L"dev" / L"slinkywinky" / L"attach" / L"AttachMain.class")) {
         std::wcerr << L"Missing JDK8 tools.jar, executable, native agent or attach helper.\n";
