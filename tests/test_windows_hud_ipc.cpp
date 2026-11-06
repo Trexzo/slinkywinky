@@ -11,10 +11,22 @@ int reader_child(DWORD pid,bool javaOrigin) {
     HudIpcReader reader;
     if(!reader.connect(pid))return 2;
     auto status=reader.read();
-    if(!status || status->sequence!=1 || status->status.valid_ticks!=1)return 3;
-    return javaOrigin ?
-        (status->status.flags==0 && status->status.target_distance==0?0:4) :
-        (status->status.target_distance==3.25?0:5);
+    if(!status)return 3;
+    if(javaOrigin) {
+        // Java8 smoke publisher may have refreshed its safe observation
+        // while this process was being scheduled. Accept only the exact
+        // bounded first-party sequence/time relationship, never stale data.
+        const auto seq=status->sequence;
+        if(seq<1 || seq>161 || status->status.valid_ticks!=seq ||
+           status->status.generation!=1 ||
+           status->status.time_ms!=1000u+50u*(seq-1u))
+            return 3;
+        return status->status.flags==0 &&
+               status->status.target_distance==0 ? 0 : 4;
+    }
+    // Original standalone fixture remains pinned to one exact observation.
+    if(status->sequence!=1 || status->status.valid_ticks!=1)return 3;
+    return status->status.target_distance==3.25 ? 0 : 5;
 }
 int wmain(int argc,wchar_t** argv) {
     if(argc==3 && (std::wstring(argv[1])==L"--reader" ||
