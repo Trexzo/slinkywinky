@@ -11,6 +11,8 @@ public final class RendererWglEvidence {
     private static native long[] nativeCurrentWglSnapshot();
     private static native boolean nativeDrawReadOnlyOverlay(
         long context,long dc,int width,int height);
+    private static native boolean nativeDrawCompactOverlay(
+        long context,long dc,int width,int height);
 
     private Thread owner;
     private int attempts;
@@ -26,28 +28,46 @@ public final class RendererWglEvidence {
     private boolean poisoned;
     private final boolean overlayRequested;
     private final boolean multiFrame;
+    private final boolean scriptedVisibility;
     private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
     private int overlayFrames;
+    private int hiddenFrames;
 
-    private RendererWglEvidence(boolean requested,boolean multi) {
+    private RendererWglEvidence(boolean requested,boolean multi,boolean scripted) {
         overlayRequested=requested;
         multiFrame=multi;
-        maxSamples=multi?72:8;
+        scriptedVisibility=scripted;
+        maxSamples=(multi || scripted)?72:8;
+    }
+
+    /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
+    public static boolean scriptedVisibleAt(int sample) {
+        return sample>=9 && sample<=72 && (sample<=28 || sample>=45);
+    }
+    public static boolean scriptedHiddenAt(int sample) {
+        return sample>=29 && sample<=44;
     }
 
     /** Must be called only after R73 has admitted exact loaded original classes. */
     public static RendererWglEvidence open(String dllPath) throws Exception {
-        return open(dllPath,false,false);
+        return open(dllPath,false,false,false);
     }
 
     public static RendererWglEvidence open(String dllPath,boolean overlay) throws Exception {
-        return open(dllPath,overlay,false);
+        return open(dllPath,overlay,false,false);
     }
 
     public static RendererWglEvidence open(String dllPath,boolean overlay,
                                             boolean multi) throws Exception {
+        return open(dllPath,overlay,multi,false);
+    }
+
+    public static RendererWglEvidence open(String dllPath,boolean overlay,
+                                            boolean multi,boolean scripted) throws Exception {
+        if(scripted && (multi || !overlay))
+            throw new IllegalArgumentException("R93 scripted show/hide requires exclusive overlay mode");
         if(multi && !overlay)
             throw new IllegalArgumentException("R92 requires overlay admission");
         if(dllPath==null || !dllPath.endsWith("slinkywinky_jni.dll"))
@@ -57,7 +77,7 @@ public final class RendererWglEvidence {
            !"slinkywinky_jni.dll".equalsIgnoreCase(dll.getName()))
             throw new IllegalArgumentException("R78 JNI DLL missing");
         System.load(dll.getAbsolutePath());
-        return new RendererWglEvidence(overlay,multi);
+        return new RendererWglEvidence(overlay,multi,scripted);
     }
 
     /**
@@ -107,20 +127,31 @@ public final class RendererWglEvidence {
             // snapshots have passed the established passive R78 gate.
             if(overlayRequested &&
                ((multiFrame && attempts>8 && preflightStable()) ||
-                (!multiFrame && attempts==8 && preflightStable()))) {
-                boolean drawn=false;
-                try {
-                    drawn=nativeDrawReadOnlyOverlay(context,dc,width,height);
-                } catch(Throwable drawing) {
-                    drawn=false;
-                }
-                if(!drawn) {
-                    overlayFailed=true;
-                    poisoned=true;
-                    invalid++;
+                (scriptedVisibility && attempts>8 && preflightStable()) ||
+                (!multiFrame && !scriptedVisibility &&
+                 attempts==8 && preflightStable()))) {
+                if(scriptedVisibility && scriptedHiddenAt(attempts)) {
+                    // HIDDEN means no native draw call, no GUI input hook,
+                    // no state writes or owner changes. The original game
+                    // renders its own frame without any Slinky overlay.
+                    hiddenFrames++;
                 } else {
-                    overlayDrawn=true;
-                    overlayFrames++;
+                    boolean drawn=false;
+                    try {
+                        drawn=scriptedVisibility?
+                            nativeDrawCompactOverlay(context,dc,width,height):
+                            nativeDrawReadOnlyOverlay(context,dc,width,height);
+                    } catch(Throwable drawing) {
+                        drawn=false;
+                    }
+                    if(!drawn) {
+                        overlayFailed=true;
+                        poisoned=true;
+                        invalid++;
+                    } else {
+                        overlayDrawn=true;
+                        overlayFrames++;
+                    }
                 }
             }
         } catch(Throwable error) {
@@ -131,10 +162,13 @@ public final class RendererWglEvidence {
 
     public synchronized boolean overlayRequested(){return overlayRequested;}
     public synchronized boolean multiFrame(){return multiFrame;}
+    public synchronized boolean scriptedVisibility(){return scriptedVisibility;}
     public synchronized int overlayFrames(){return overlayFrames;}
+    public synchronized int hiddenFrames(){return hiddenFrames;}
     public synchronized boolean overlayDrawn(){
         return overlayDrawn && !overlayFailed &&
-               overlayFrames==(multiFrame?64:1);
+               overlayFrames==(scriptedVisibility?48:(multiFrame?64:1)) &&
+               (!scriptedVisibility || hiddenFrames==16);
     }
     public synchronized int attempts(){return attempts;}
     public synchronized int present(){return current;}
@@ -152,6 +186,8 @@ public final class RendererWglEvidence {
         return "attempts="+attempts+" current="+current+" absent="+absent+
                " invalid="+invalid+" changed="+changed+
                " stable="+fullyStable()+
-               (multiFrame?" frames="+overlayFrames:"");
+               (scriptedVisibility?
+                " shown="+overlayFrames+" hidden="+hiddenFrames:
+                (multiFrame?" frames="+overlayFrames:""));
     }
 }
