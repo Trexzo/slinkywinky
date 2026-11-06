@@ -10,6 +10,7 @@
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
+#include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include <array>
@@ -47,6 +48,13 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview(
     JNIEnv*,jclass);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(JNIEnv*,jclass);
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+    JNIEnv*,jclass,jlong,jlong);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(JNIEnv*,jclass);
 #endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
 
@@ -448,6 +456,73 @@ int main() {
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
             nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_FALSE);
         same(retainedBefore,snapshot());
+        // R100 production JNI operator events are not game key/mouse
+        // events. Their action is applied ONLY on the current WGL owner.
+        const auto selfPid=static_cast<std::uint32_t>(GetCurrentProcessId());
+        std::uint64_t selfBirth=0;
+        REQUIRE(menu_operator_process_birth(selfPid,&selfBirth) && selfBirth!=0);
+        REQUIRE(menu_operator_event_name(selfPid,selfBirth,12).empty());
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+            nullptr,nullptr,admittedContext,admittedDc)==-1);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(
+            nullptr,nullptr)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
+            nullptr,nullptr)==JNI_FALSE); // Cannot mix R99 and R100 modes.
+        std::array<HANDLE,11> operatorTestEvents{};
+        for(int i=0;i<11;i++) {
+            const auto name=menu_operator_event_name(selfPid,selfBirth,i);
+            REQUIRE(!name.empty());
+            operatorTestEvents[static_cast<std::size_t>(i)]=OpenEventW(
+                EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,name.c_str());
+            REQUIRE(operatorTestEvents[static_cast<std::size_t>(i)]!=nullptr);
+        }
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+            nullptr,nullptr,admittedContext,admittedDc)==-1); // no model yet
+        const State beforeOperator=snapshot();
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+        same(beforeOperator,snapshot());
+        auto commandNative=[&](int slot,int expected,bool accepted) {
+            REQUIRE(ResetEvent(operatorTestEvents[9]));
+            REQUIRE(ResetEvent(operatorTestEvents[10]));
+            REQUIRE(SetEvent(operatorTestEvents[static_cast<std::size_t>(slot)]));
+            REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+                nullptr,nullptr,admittedContext,admittedDc)==expected);
+            REQUIRE(WaitForSingleObject(operatorTestEvents[accepted?9:10],0)==WAIT_OBJECT_0);
+            REQUIRE(WaitForSingleObject(operatorTestEvents[accepted?10:9],0)==WAIT_TIMEOUT);
+            REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+                nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_TRUE);
+            same(beforeOperator,snapshot());
+        };
+        bool foreignOperatorPoll=false;
+        std::thread foreignOperator([&] {
+            foreignOperatorPoll=
+                Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+                    nullptr,nullptr,admittedContext,admittedDc)!=-1;
+        });
+        foreignOperator.join();
+        REQUIRE(!foreignOperatorPoll);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
+            nullptr,nullptr,2)==JNI_FALSE); // scripts forbidden in operator mode
+        commandNative(2,3,true); // NextRow (index 1)
+        commandNative(4,5,true); // Expand index 1
+        commandNative(5,6,true); // Local preview toggle only
+        commandNative(0,1,true); // NextTab (Move, focus index 17)
+        commandNative(5,15,false); // Unsupported row denied + refused ACK
+        commandNative(8,9,true); // Cooperative operator stop
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
+            nullptr,nullptr)==JNI_FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
+            nullptr,nullptr,admittedContext,admittedDc,676,630)==JNI_FALSE);
+        for(HANDLE event:operatorTestEvents)CloseHandle(event);
+        const auto closedName=menu_operator_event_name(selfPid,selfBirth,2);
+        REQUIRE(!OpenEventW(EVENT_MODIFY_STATE,FALSE,closedName.c_str()));
+        same(beforeOperator,snapshot());
+        std::cout<<"R100_REAL_JNI_PID_BIRTH_MENU_COMMAND_ACK_REFUSAL_AND_STOP_PASS\\n";
         std::cout<<"R99_REAL_JNI_RETAINED_MENU_ARM_DRAW_NAVIGATE_END_AND_DISCARD_PASS\\n";
         std::cout<<"R93_COMPACT_SHOW_HIDE_SHOW_GL_PIXELS_PASS\\n";
 
