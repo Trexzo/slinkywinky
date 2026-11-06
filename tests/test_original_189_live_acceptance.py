@@ -32,6 +32,11 @@ M = (harness.RESTORED + "\n" + harness.R92_CALLBACK +
      harness.R92_OVERLAY + "\n" + harness.RELEASED + "\n")
 
 
+R99 = (harness.RESTORED + "\n" + harness.R99_CALLBACK +
+       " owner=synthetic#1\n" + harness.R99_STABLE + "\n" +
+       harness.R99_RETAINED + "\n" + harness.RELEASED + "\n")
+
+
 V = (harness.RESTORED + "\n" + harness.R93_CALLBACK +
      " owner=synthetic#1\n" + harness.R93_STABLE + "\n" +
      harness.R93_VISIBILITY + "\n" + harness.RELEASED + "\n")
@@ -141,6 +146,41 @@ class ReceiptChecks(unittest.TestCase):
             ("--render-visibility=72",O),
             ("--render-overlay=72",V),
             ("--render-overlay=8",V),
+        ):
+            with self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt(mode,log)
+
+    def test_r99_pinned_retained_64_frame_local_navigation_receipts(self):
+        self.assertEqual(len(harness.validate_receipt("--render-retained=72",R99)),5)
+        harness.validate_loader_receipt(
+            "--render-retained=72",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-retained-r99\n")
+        self.assertEqual(len(harness.STAGES["retained"]),6)
+        for invalid in (
+            R99.replace(harness.R99_RETAINED,""),
+            R99.replace("accepted=72","accepted=8"),
+            R99.replace("frames=64","frames=63"),
+            R99.replace("actions=4","actions=3"),
+            R99.replace("tab=1","tab=0"),
+            R99.replace("focus=17","focus=1"),
+            R99.replace("retained=true","retained=false"),
+            R99.replace("current=72","current=71"),
+            R99.replace("invalid=0","invalid=1"),
+            R99.replace(harness.R99_RETAINED,harness.R99_RETAINED+"_FAKE"),
+            R99.replace(harness.R99_STABLE+"\n"+harness.R99_RETAINED,
+                        harness.R99_RETAINED+"\n"+harness.R99_STABLE),
+            R99.replace(harness.R99_RETAINED,
+                        harness.R99_RETAINED+"\n"+harness.R99_RETAINED),
+            R99+R99,
+            R99+"R99_RETAINED_MENU_UNVERIFIED\n",
+            R99+"R99_WGL_CONTEXT_UNVERIFIED\n",
+        ):
+            with self.subTest(invalid=invalid),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-retained=72",invalid)
+        for mode,log in (
+            ("--render-retained=72",M),
+            ("--render-overlay=72",R99),
+            ("--render-visibility=manual",R99),
         ):
             with self.assertRaises(harness.ReceiptError):
                 harness.validate_receipt(mode,log)
