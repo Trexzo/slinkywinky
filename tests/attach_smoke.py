@@ -78,6 +78,20 @@ try:
         raise AssertionError("R109 offline keyboard ASM negative controls failed: " +
                              keyboard_weave.stdout + keyboard_weave.stderr)
     print("PASS: R109 memory-only original input callsite rewrite controls")
+    # R110: functional Java 8 LWJGL2 event-owner gate exercised against a
+    # disposable mock keyboard, with no Minecraft or original-game input hook.
+    queue_owner = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.KeyboardQueueOwnerSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (queue_owner.returncode != 0 or
+        "R110_MOCK_LWJGL_VANILLA_PASSTHROUGH_AND_MODAL_QUEUE_QUARANTINE_PASS"
+        not in queue_owner.stdout or
+        "R110_KEY_DOWN_UP_REPEATS_CLOSE_DRAIN_AND_RESTORE_GUARDS_PASS"
+        not in queue_owner.stdout):
+        raise AssertionError("R110 Java 8 input-owner isolated regression failed: " +
+                             queue_owner.stdout + queue_owner.stderr)
+    print("PASS: R110 independent Java 8 modal queue owner, no live game hook")
     # R72: generated bfk class only; source and transformed bytes stay in
     # the disposable JVM heap. The real Mojang JAR is tested separately in CI.
     offline_weave = subprocess.run(
