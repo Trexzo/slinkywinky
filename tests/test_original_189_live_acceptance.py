@@ -41,7 +41,7 @@ R103 = (harness.RESTORED + "\n" + harness.R103_CALLBACK +
         " owner=synthetic#1\n" + harness.R103_STABLE +
         " attempts=8 current=8 absent=0 invalid=0 changed=0 stable=true"
         " window=exact-original owner=render-thread foreground=0"
-        " background=8 refused=0\n" + harness.R103_WINDOW + "\n" +
+        " background=8 refused=0 width=854 height=480\n" + harness.R103_WINDOW + "\n" +
         harness.RELEASED + "\n")
 
 
@@ -174,6 +174,9 @@ class ReceiptChecks(unittest.TestCase):
         for invalid in (
             R103.replace("foreground=0","foreground=1"),
             R103.replace("background=8","background=7"),
+            R103.replace("width=854","width=9000"),
+            R103.replace("height=480","height=100"),
+            R103.replace("height=480","height=480_FAKE"),
             R103.replace("current=8","current=7"),
             R103.replace("invalid=0","invalid=1"),
             R103.replace("stable=true","stable=false"),
