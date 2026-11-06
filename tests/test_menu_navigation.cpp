@@ -15,8 +15,14 @@ int main() {
     CHECK(input.owns(menu,profile));
     CHECK(input.visible_focus() && *input.visible_focus()==0);
     CHECK(!input.apply(MenuNavAction::PreviousRow)); // No wrap.
+    CHECK(!input.select_tab(MenuTab::Unload));
+    CHECK(!input.select_tab(MenuTab::Count));
+    CHECK(!input.focus_visible_row(64));
     CHECK(input.apply(MenuNavAction::NextRow));
     CHECK(*input.visible_focus()==1);
+    CHECK(input.focus_visible_row(0));
+    CHECK(*input.visible_focus()==0);
+    CHECK(input.focus_visible_row(1));
     const auto initial=profile.primary(1);
     CHECK(initial.has_value());
     CHECK(!input.apply(MenuNavAction::IncreaseSetting)); // Not expanded.
