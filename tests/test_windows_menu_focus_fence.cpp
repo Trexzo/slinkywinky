@@ -35,6 +35,10 @@ int main() {
                           FocusFenceState::Refused;
         crossThreadDenied=crossThreadDenied && !gate.foreground_candidate() &&
                          !gate.can_consume_game_input();
+        crossThreadDenied=crossThreadDenied &&
+                         gate.state()==FocusFenceState::Refused &&
+                         gate.epoch()==0 && gate.foreground_samples()==0 &&
+                         gate.background_samples()==0 && gate.denied_samples()==0;
         crossThreadDenied=crossThreadDenied && !gate.begin(2,true);
     });
     other.join();

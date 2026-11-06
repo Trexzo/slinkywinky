@@ -73,10 +73,20 @@ public:
     FocusFenceState state() const noexcept {
         return same_owner()?state_:FocusFenceState::Refused;
     }
-    unsigned foreground_samples() const noexcept {return foreground_samples_;}
-    unsigned background_samples() const noexcept {return background_samples_;}
-    unsigned denied_samples() const noexcept {return denied_samples_;}
-    std::uint64_t epoch() const noexcept {return last_epoch_;}
+    // Diagnostics belong to the constructing thread, too: cross-thread
+    // reads of these mutable counters would otherwise be undefined behavior.
+    unsigned foreground_samples() const noexcept {
+        return same_owner()?foreground_samples_:0;
+    }
+    unsigned background_samples() const noexcept {
+        return same_owner()?background_samples_:0;
+    }
+    unsigned denied_samples() const noexcept {
+        return same_owner()?denied_samples_:0;
+    }
+    std::uint64_t epoch() const noexcept {
+        return same_owner()?last_epoch_:0;
+    }
 
 private:
     bool same_owner() const noexcept {
