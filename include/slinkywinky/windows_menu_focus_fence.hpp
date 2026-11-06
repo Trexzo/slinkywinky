@@ -32,7 +32,8 @@ public:
     // Must only be called after the independent exact original WGL/HDC/
     // root HWND + viewport audit. The caller does not gain event ownership.
     FocusFenceState observe(GameWindowFocus result) noexcept {
-        if(!same_owner() || last_epoch_==0) {
+        if(!same_owner())return FocusFenceState::Refused;
+        if(last_epoch_==0) {
             state_=FocusFenceState::Refused;
             return state_;
         }
