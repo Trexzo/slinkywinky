@@ -281,7 +281,7 @@ public final class RendererWglEvidence {
             // The visual R91 experiment is a distinct explicit mode. Exactly
             // ONE draw may occur, after all eight source/callsite/owner/WGL
             // snapshots have passed the established passive R78 gate.
-            if(overlayRequested && !retainedPreview &&
+            if(overlayRequested && !retainedPreview && !operatorMenu &&
                ((multiFrame && attempts>8 && preflightStable()) ||
                 (scriptedVisibility && attempts>8 && preflightStable()) ||
                 (!multiFrame && !scriptedVisibility &&
