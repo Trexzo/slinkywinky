@@ -10,6 +10,7 @@ import java.io.File;
  */
 public final class RendererWglEvidence {
     private static native long[] nativeCurrentWglSnapshot();
+    private static native int nativeAuditRenderWindow(long context,long dc,int width,int height);
     private static native boolean nativeDrawReadOnlyOverlay(
         long context,long dc,int width,int height);
     private static native boolean nativeDrawCompactOverlay(
@@ -46,6 +47,10 @@ public final class RendererWglEvidence {
     private final boolean manualVisibility;
     private final boolean retainedPreview;
     private final boolean operatorMenu;
+    private final boolean windowAudit;
+    private int auditForeground;
+    private int auditBackground;
+    private int auditRefused;
     private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
@@ -65,13 +70,15 @@ public final class RendererWglEvidence {
     private int lastOperatorPreview=-1;
 
     private RendererWglEvidence(boolean requested,boolean multi,boolean scripted,
-                                boolean manual,boolean retained,boolean operator) {
+                                boolean manual,boolean retained,boolean operator,
+                                boolean audit) {
         overlayRequested=requested;
         multiFrame=multi;
         scriptedVisibility=scripted;
         manualVisibility=manual;
         retainedPreview=retained;
         operatorMenu=operator;
+        windowAudit=audit;
         maxSamples=(manual || operator)?2048:
                    ((multi || scripted || retained)?72:8);
     }
@@ -118,6 +125,14 @@ public final class RendererWglEvidence {
                                             boolean multi,boolean scripted,
                                             boolean manual,boolean retained,
                                             boolean operator) throws Exception {
+        return open(dllPath,overlay,multi,scripted,manual,retained,operator,false);
+    }
+    public static RendererWglEvidence open(String dllPath,boolean overlay,
+                                            boolean multi,boolean scripted,
+                                            boolean manual,boolean retained,
+                                            boolean operator,boolean audit) throws Exception {
+        if(audit && (overlay || multi || scripted || manual || retained || operator))
+            throw new IllegalArgumentException("R101 source-only window audit is exclusive and read-only");
         if(operator && (!overlay || multi || scripted || manual || retained))
             throw new IllegalArgumentException("R100 operator menu requires separate original-only consent");
         if(retained && (!overlay || multi || scripted || manual))
@@ -141,7 +156,7 @@ public final class RendererWglEvidence {
             throw new IllegalStateException("R99 owner-render retained admission failed");
         if(operator && !nativeOpenOperatorMenu())
             throw new IllegalStateException("R100 PID/birth operator-menu admission failed");
-        return new RendererWglEvidence(overlay,multi,scripted,manual,retained,operator);
+        return new RendererWglEvidence(overlay,multi,scripted,manual,retained,operator,audit);
     }
 
     /**
@@ -187,6 +202,15 @@ public final class RendererWglEvidence {
                 // Same opaque handles and same exact viewport.
             }
             current++;
+            if(windowAudit) {
+                // The window is identified from THIS original renderer's
+                // WGL HDC; no global hook, focus change or gameplay input.
+                final int identity=nativeAuditRenderWindow(context,dc,width,height);
+                if(identity==1)auditForeground++;
+                else if(identity==0)auditBackground++;
+                else {auditRefused++;poisoned=true;invalid++;}
+                return;
+            }
             if(manualVisibility) {
                 if(attempts>8 && preflightStable()) {
                     final int action=nativePollManualVisibility(context,dc);
@@ -322,6 +346,12 @@ public final class RendererWglEvidence {
     public synchronized boolean manualVisibility(){return manualVisibility;}
     public synchronized boolean retainedPreview(){return retainedPreview;}
     public synchronized boolean operatorMenu(){return operatorMenu;}
+    public synchronized boolean windowAudit(){return windowAudit;}
+    public synchronized boolean windowIdentityVerified(){
+        return windowAudit && attempts==8 && current==8 &&
+               auditForeground+auditBackground==8 && auditRefused==0 &&
+               !poisoned && fullyStable();
+    }
     public synchronized boolean operatorStopped(){return operatorMenu && operatorStop;}
     public synchronized boolean operatorFailed(){return operatorMenu &&
         (poisoned || overlayFailed);}
@@ -389,6 +419,9 @@ public final class RendererWglEvidence {
         return "attempts="+attempts+" current="+current+" absent="+absent+
                " invalid="+invalid+" changed="+changed+
                " stable="+fullyStable()+
+               (windowAudit ?
+                " window=exact-original owner=render-thread foreground="+auditForeground+
+                " background="+auditBackground+" refused="+auditRefused :
                (operatorMenu ?
                 " shown="+overlayFrames+" actions="+acceptedOperatorEvents+
                 " refused="+rejectedOperatorEvents+" tab="+lastOperatorTab+
@@ -402,6 +435,6 @@ public final class RendererWglEvidence {
                 " toggles="+toggles+" stop="+(operatorStop?"operator":"limit"):
                 (scriptedVisibility?
                  " shown="+overlayFrames+" hidden="+hiddenFrames:
-                 (multiFrame?" frames="+overlayFrames:"")))));
+                 (multiFrame?" frames="+overlayFrames:""))))));
     }
 }
