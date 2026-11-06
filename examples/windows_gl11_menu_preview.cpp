@@ -8,6 +8,7 @@
 #include <GL/gl.h>
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
@@ -22,6 +23,7 @@ namespace {
 using slinkywinky::MenuTab;
 slinkywinky::MenuState menu;
 slinkywinky::MenuProfileBridge profile(menu);
+slinkywinky::MenuNavigation navigation(menu,profile);
 slinkywinky::MenuRenderSession session;
 slinkywinky::WglMenuOverlayHost overlayHost;
 constexpr wchar_t title[]=L"SlinkyWinky GL1.1 Menu Preview - Offline";
@@ -32,7 +34,6 @@ HWND window=nullptr;
 std::filesystem::path preferences;
 std::filesystem::path profilePreferences;
 bool overlayDemo=false; // Standalone-only demonstration, never attached to Minecraft.
-std::optional<std::size_t> focusedParameter;
 
 std::filesystem::path settings_file() {
     wchar_t buffer[32768]{};
@@ -54,8 +55,9 @@ void persist() {
 void refresh_caption(HWND hwnd) {
     std::wstring label=overlayDemo?
         L"SlinkyWinky GL1.1 Menu - Bounded Overlay Demo (NO GAME)":title;
-    if(focusedParameter && menu.expanded(*focusedParameter)) {
-        const auto parameter=profile.primary(*focusedParameter);
+    const auto focused=navigation.visible_focus();
+    if(focused && menu.expanded(*focused)) {
+        const auto parameter=profile.primary(*focused);
         if(parameter) {
             std::wostringstream formatted;
             formatted<<L" | "<<std::wstring(parameter->name,
@@ -140,12 +142,15 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 if(overlayDemo) {
                     glClearColor(0.10f,0.38f,0.69f,1.0f);
                     glClear(GL_COLOR_BUFFER_BIT);
-                    if(overlayHost.draw(menu,&profile))SwapBuffers(device);
+                    if(overlayHost.draw(menu,&profile,
+                            slinkywinky::MenuGL11Mode::BoundedOverlay,
+                            &navigation))SwapBuffers(device);
                 } else {
-                    const auto frame=session.next(menu,&profile);
+                    const auto frame=session.next(menu,&profile,&navigation);
                     if(frame && slinkywinky::draw_menu_gl11(
                         *frame,graphics,device,
-                        slinkywinky::MenuGL11Mode::StandalonePreview))
+                        slinkywinky::MenuGL11Mode::StandalonePreview,
+                        navigation.visible_focus()))
                         SwapBuffers(device);
                 }
             }
@@ -153,8 +158,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
-            if(profile.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1))
-                focusedParameter.reset();
+            if(profile.scroll_by(GET_WHEEL_DELTA_WPARAM(wp)>0?-1:1)) {
+                const auto page=menu.page();
+                if(!page.empty())navigation.focus_visible_row(page.front().catalog_index);
+            }
             refresh_caption(hwnd);
             request_paint(hwnd);return 0;
         }
@@ -166,22 +173,17 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(y>=78 && y<120 && x>=18 && x<width-18) {
                 const int tab=(x-18)*7/(width-36);
                 if(tab>=0 && tab<6) {
-                    profile.select(static_cast<MenuTab>(tab));
-                    focusedParameter.reset();
+                    navigation.select_tab(static_cast<MenuTab>(tab));
                 }
             } else if(y>=153 && y<545 && menu.tab()!=MenuTab::Profiles){
                 const auto rows=menu.page();
                 const int index=(y-153)/49;
                 if(index>=0 && static_cast<std::size_t>(index)<rows.size()) {
-                    if(x>=width-92 && x<=width-19)
-                        profile.toggle(rows[index].catalog_index);
-                    else if(x>=width-145 && x<width-92) {
-                        const auto id=rows[index].catalog_index;
-                        if(menu.toggle_expanded(id)) {
-                            focusedParameter.reset();
-                            if(menu.expanded(id) && profile.primary(id))
-                                focusedParameter=id;
-                        }
+                    if(navigation.focus_visible_row(rows[index].catalog_index)) {
+                        if(x>=width-92 && x<=width-19)
+                            navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
+                        else if(x>=width-145 && x<width-92)
+                            navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
                     }
                 }
             }
@@ -190,16 +192,26 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_KEYDOWN:{
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
-            if(wp>=L'1' && wp<=L'6') {
-                profile.select(static_cast<MenuTab>(wp-L'1'));
-                focusedParameter.reset();
-            }
-            if(wp==VK_UP && profile.scroll_by(-1))focusedParameter.reset();
-            if(wp==VK_DOWN && profile.scroll_by(1))focusedParameter.reset();
-            const int step=(wp==VK_OEM_PLUS || wp==VK_ADD)?1:
-                           (wp==VK_OEM_MINUS || wp==VK_SUBTRACT)?-1:0;
-            if(step && focusedParameter)
-                profile.adjust_primary(*focusedParameter,step);
+            // Preview-only first-party keyboard navigation. This WndProc is
+            // a separate Windows demo and is NEVER installed into Minecraft.
+            if(wp>=L'1' && wp<=L'6')
+                navigation.select_tab(static_cast<MenuTab>(wp-L'1'));
+            if(wp==VK_LEFT)
+                navigation.apply(slinkywinky::MenuNavAction::PreviousTab);
+            if(wp==VK_RIGHT || wp==VK_TAB)
+                navigation.apply(slinkywinky::MenuNavAction::NextTab);
+            if(wp==VK_UP)
+                navigation.apply(slinkywinky::MenuNavAction::PreviousRow);
+            if(wp==VK_DOWN)
+                navigation.apply(slinkywinky::MenuNavAction::NextRow);
+            if(wp==VK_RETURN)
+                navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
+            if(wp==VK_SPACE)
+                navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
+            if(wp==VK_OEM_PLUS || wp==VK_ADD)
+                navigation.apply(slinkywinky::MenuNavAction::IncreaseSetting);
+            if(wp==VK_OEM_MINUS || wp==VK_SUBTRACT)
+                navigation.apply(slinkywinky::MenuNavAction::DecreaseSetting);
             // The only effect of P/L is saving/loading a local native
             // configuration document. No module action is dispatched to MC.
             if(wp==L'P' && !profilePreferences.empty())
