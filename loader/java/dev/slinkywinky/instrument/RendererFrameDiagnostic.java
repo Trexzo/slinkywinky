@@ -390,7 +390,8 @@ public final class RendererFrameDiagnostic {
                     final boolean stable=completed && !session.invalid() &&
                                          !fence.failed() &&
                                          (session.accepted()==maxFrames ||
-                                          (manualVisibility && evidence.manualStopped())) &&
+                                          (manualVisibility && evidence.manualStopped()) ||
+                                          (operatorMenu && evidence.operatorStopped())) &&
                                          restored && manualClosed && evidence.fullyStable();
                     System.out.println((stable?
                         (operatorMenu?"R100_WGL_CONTEXT_STABLE_PASS ":
