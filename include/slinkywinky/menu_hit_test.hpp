@@ -1,0 +1,51 @@
+#pragma once
+#include "slinkywinky/menu_render.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+
+namespace slinkywinky {
+
+// R97: render-neutral mirror of the three opt-in GL11 panel modes.
+// Not an OS input handler. The native game JNI does NOT call this interface.
+enum class MenuPanelMode : std::uint8_t {
+    StandalonePreview, BoundedOverlay, CompactOverlay
+};
+
+struct MenuPanelGeometry {
+    unsigned left=0, top=0, width=0, height=0;
+    float scale=1.0f;
+    float logical_width() const noexcept {
+        return static_cast<float>(width)/scale;
+    }
+    float logical_height() const noexcept {
+        return static_cast<float>(height)/scale;
+    }
+};
+
+// Exactly the drawing panel used by the first-party GL1.1 renderer.
+// Refuse invalid dimensions and unknown modes before any arithmetic/GL calls.
+std::optional<MenuPanelGeometry> menu_panel_geometry(
+    unsigned viewport_width,unsigned viewport_height,bool wide,
+    MenuPanelMode mode) noexcept;
+
+enum class MenuHitKind : std::uint8_t {
+    Tab, RowBody, Expand, Toggle
+};
+
+// Catalog index is meaningful only for non-Tab hits. No raw input pointers,
+// Windows hooks, game keybindings or client actions are retained.
+struct MenuHit {
+    MenuHitKind kind=MenuHitKind::RowBody;
+    MenuTab tab=MenuTab::Combat;
+    std::size_t catalog_index=0;
+};
+
+// Client coordinates are top-left physical pixels, precisely like
+// WM_LBUTTONDOWN. Only a valid, fully contained visible draw target is
+// hittable. Unsupported rows may be focused, but never enabled by the hit.
+std::optional<MenuHit> hit_test_menu(
+    const MenuRenderFrame& frame,MenuPanelMode mode,
+    int client_x,int client_y) noexcept;
+
+} // namespace slinkywinky
