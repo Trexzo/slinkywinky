@@ -490,8 +490,26 @@ def run(argv=None):
             if a.mode=="key":
                 # The keyboard helper refuses a foreign/minimized window and
                 # records ONLY synthetic OS SendInput: never physical hardware.
-                if send_isolated_insert(a.pid,target_log.parent)!=2:
-                    raise ReceiptError("R95 exactly two scoped Insert taps required")
+                try:
+                    sent=send_isolated_insert(a.pid,target_log.parent)
+                    if sent!=2:
+                        raise RuntimeError("R95 synthetic key count incomplete")
+                except Exception:
+                    # Best effort STOP of only the exact same original JVM.
+                    # Never claim restored-source acceptance merely because
+                    # the stop event was posted; the owning launcher still
+                    # terminates only its sandbox child on refusal.
+                    try:
+                        require_same_process(a.pid,original_birth)
+                        subprocess.run(
+                            [str(loader),"attach",str(a.pid),str(jdk8),
+                             "--stop-visibility"],
+                            capture_output=True,text=True,env=env,timeout=8)
+                    except Exception:
+                        pass
+                    raise ReceiptError(
+                        "R95 owner-foreground SendInput admission refused; "
+                        "requested cooperative stop; no key PASS") from None
                 controls=(("--stop-visibility",0.35),)
             else:
                 controls=(("--toggle-visibility",0.30),
