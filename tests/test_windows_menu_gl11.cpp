@@ -822,11 +822,15 @@ int main() {
         // WGL owner/window evidence, without synthesizing a single key.
         MenuFocusFence focusFence;
         REQUIRE(focusFence.begin(101,true));
-        for(int sample=0;sample<3;sample++)
-            REQUIRE(focusFence.observe(audit_game_render_window(
-                context.gl,context.dc,676,630))!=FocusFenceState::Refused);
-        REQUIRE(focusFence.foreground_candidate()==
-                (localWindow==GameWindowFocus::ValidForeground));
+        bool allForeground=true;
+        for(int sample=0;sample<3;sample++) {
+            const auto observation=audit_game_render_window(
+                context.gl,context.dc,676,630);
+            REQUIRE(observation!=GameWindowFocus::Refused);
+            allForeground&=observation==GameWindowFocus::ValidForeground;
+            REQUIRE(focusFence.observe(observation)!=FocusFenceState::Refused);
+        }
+        REQUIRE(focusFence.foreground_candidate()==allForeground);
         REQUIRE(!focusFence.can_consume_game_input());
         REQUIRE(audit_game_render_window(context.gl,context.dc,677,630)==
                 GameWindowFocus::Refused);
