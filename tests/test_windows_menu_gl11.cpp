@@ -10,6 +10,7 @@
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/menu_navigation.hpp"
+#include "slinkywinky/menu_hit_test.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -471,6 +472,37 @@ int main() {
         REQUIRE(focusHost.close());
         same(focusBefore,snapshot());
         REQUIRE(focusSession.detach());
+        // R97: use the exact GL11 compact transform for client-space input.
+        // These pixels come from the real native renderer and are sampled
+        // without any keyboard/mouse message sent to Minecraft or Windows.
+        const auto compactPanel=menu_panel_geometry(
+            676,630,false,MenuPanelMode::CompactOverlay);
+        REQUIRE(compactPanel && compactPanel->left==98 &&
+                compactPanel->top==105 && compactPanel->scale==0.70f);
+        const float logicalW=compactPanel->logical_width();
+        const int toggleX=static_cast<int>(compactPanel->left)+
+            static_cast<int>(std::lround(compactPanel->scale*(logicalW-54.0f)));
+        const int toggleY=static_cast<int>(compactPanel->top)+
+            static_cast<int>(std::lround(compactPanel->scale*(153.0f+23.0f)));
+        const auto compactHit=hit_test_menu(
+            *focusedFrame,MenuPanelMode::CompactOverlay,toggleX,toggleY);
+        REQUIRE(compactHit && compactHit->kind==MenuHitKind::Toggle &&
+                compactHit->catalog_index==0);
+        const int expandX=static_cast<int>(compactPanel->left)+
+            static_cast<int>(std::lround(compactPanel->scale*(logicalW-114.0f)));
+        const auto compactExpand=hit_test_menu(
+            *focusedFrame,MenuPanelMode::CompactOverlay,expandX,toggleY);
+        REQUIRE(compactExpand && compactExpand->kind==MenuHitKind::Expand &&
+                compactExpand->catalog_index==0);
+        const auto withoutMenu=readback(toggleX,629-toggleY);
+        REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
+                               MenuGL11Mode::CompactOverlay,
+                               std::optional<std::size_t>{0}));
+        REQUIRE(readback(toggleX,629-toggleY)!=withoutMenu);
+        REQUIRE(!hit_test_menu(*focusedFrame,MenuPanelMode::CompactOverlay,
+                               static_cast<int>(compactPanel->left)-1,toggleY));
+        same(focusBefore,snapshot());
+        std::cout<<"R97_COMPACT_PIXEL_TO_CLIENT_HIT_ALIGNMENT_PASS\\n";
         std::cout<<"R96_FOCUSED_ROW_GL11_PIXELS_OWNER_AND_RESTORE_PASS\\n";
 
         // No current WGL context: invocation MUST be refused before any GL call.
