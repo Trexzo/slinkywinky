@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <memory>
 #include <thread>
+#include <cstdio>
 
 namespace {
 void error(JNIEnv* env,const char* cls,const char* message) {
@@ -488,12 +489,20 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
     const auto stop_name=slinkywinky::visibility_stop_event_name(pid);
     HANDLE toggle=CreateEventW(nullptr,FALSE,FALSE,toggle_name.c_str());
     const bool fresh_toggle=toggle && GetLastError()!=ERROR_ALREADY_EXISTS;
-    if(!fresh_toggle){if(toggle)CloseHandle(toggle);return JNI_FALSE;}
+    if(!fresh_toggle){
+        const DWORD err=GetLastError();
+        if(toggle)CloseHandle(toggle);
+        std::fprintf(stderr,"R94_NATIVE_GATE_TOGGLE_OPEN_REFUSED win32=%lu\\n",
+                     static_cast<unsigned long>(err));
+        return JNI_FALSE;
+    }
     HANDLE stop=CreateEventW(nullptr,TRUE,FALSE,stop_name.c_str());
     const bool fresh_stop=stop && GetLastError()!=ERROR_ALREADY_EXISTS;
     if(!fresh_stop) {
         if(stop)CloseHandle(stop);
         CloseHandle(toggle);
+        std::fprintf(stderr,"R94_NATIVE_GATE_STOP_OPEN_REFUSED win32=%lu\\n",
+                     static_cast<unsigned long>(GetLastError()));
         return JNI_FALSE;
     }
     visibility_toggle=toggle;
