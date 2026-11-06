@@ -276,6 +276,19 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R93: isolated, bounded show / hide / show. Never intercepts input.
+        final String visibilityPrefix="minecraft-render-visibility-r93|";
+        if(options!=null && options.startsWith(visibilityPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(visibilityPrefix.length()),true,false,true);
+            } catch(Exception error) {
+                throw new IllegalStateException("R93 scripted visibility refused",error);
+            }
+            return;
+        }
         // R92: finite 8-preflight + 64-overlay original render callbacks.
         // Explicitly separated from read-only R90 and one-frame R91.
         final String multiPrefix="minecraft-render-overlay-r92|";
