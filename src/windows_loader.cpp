@@ -2,6 +2,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "slinkywinky/windows_stop_gate.hpp"
+#include "slinkywinky/windows_menu_operator_events.hpp"
 // R94: compiled PID-scoped event names must exactly match the target JNI DLL;
 // never substitute a Java Attach for these owner-process control events.
 #include <cstdint>
@@ -45,12 +46,68 @@ int wmain(int argc, wchar_t** argv) {
     const bool manual_visibility = option == L"--render-visibility=manual";
     const bool toggle_visibility = option == L"--toggle-visibility";
     const bool stop_visibility = option == L"--stop-visibility";
+    // R100: no Attach, keystroke synthesis or Minecraft window messages.
+    const std::wstring operator_options[9]={
+        L"--menu-next-tab",L"--menu-previous-tab",L"--menu-next-row",
+        L"--menu-previous-row",L"--menu-expand",L"--menu-toggle-preview",
+        L"--menu-increase",L"--menu-decrease",L"--menu-stop"
+    };
+    int operator_slot=-1;
+    for(int i=0;i<9;i++)
+        if(option==operator_options[i])operator_slot=i;
+    const bool operator_command=operator_slot>=0;
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
         (argc == 5 && option != L"--tick-probe" &&
          option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context && !render_overlay && !render_multiframe && !render_retained && !render_visibility && !manual_visibility &&
-         !toggle_visibility && !stop_visibility)) {
+         !toggle_visibility && !stop_visibility && !operator_command)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-overlay=8|--render-overlay=72|--render-retained=72|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility]\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-overlay=8|--render-overlay=72|--render-retained=72|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility|--menu-next-tab|--menu-previous-tab|--menu-next-row|--menu-previous-row|--menu-expand|--menu-toggle-preview|--menu-increase|--menu-decrease|--menu-stop]\n";
+        return 2;
+    }
+    // R100 producer is serialized by a process-birth-scoped named mutex.
+    // It only reports SUCCESS after the original WGL owner has acknowledged
+    // this exact action; an ambiguous timeout or rejected action fails closed.
+    if(operator_command) {
+        std::uint64_t pidWide=0,birth=0;
+        try {pidWide=std::stoull(std::wstring(argv[2]));}
+        catch(...) {return 2;}
+        if(!pidWide || pidWide>0xffffffffULL)return 2;
+        const auto pid=static_cast<std::uint32_t>(pidWide);
+        if(!slinkywinky::menu_operator_process_birth(pid,&birth))return 2;
+        const auto mutexName=slinkywinky::menu_operator_event_name(pid,birth,11);
+        HANDLE producer=CreateMutexW(nullptr,FALSE,mutexName.c_str());
+        if(!producer)return 2;
+        const DWORD owns=WaitForSingleObject(producer,0);
+        if(owns!=WAIT_OBJECT_0) {
+            CloseHandle(producer);
+            std::wcerr<<L"ATTACH_RESULT=FAIL R100 command producer busy/uncertain\n";
+            return 2;
+        }
+        const auto commandName=slinkywinky::menu_operator_event_name(pid,birth,operator_slot);
+        const auto successName=slinkywinky::menu_operator_event_name(pid,birth,9);
+        const auto refusedName=slinkywinky::menu_operator_event_name(pid,birth,10);
+        HANDLE command=OpenEventW(EVENT_MODIFY_STATE,FALSE,commandName.c_str());
+        HANDLE success=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,successName.c_str());
+        HANDLE rejected=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,refusedName.c_str());
+        DWORD reply=WAIT_FAILED;
+        if(command && success && rejected &&
+           ResetEvent(success) && ResetEvent(rejected) && SetEvent(command)) {
+            const HANDLE acknowledgments[2]={success,rejected};
+            reply=WaitForMultipleObjects(2,acknowledgments,FALSE,2500);
+        }
+        if(command)CloseHandle(command);
+        if(success)CloseHandle(success);
+        if(rejected)CloseHandle(rejected);
+        ReleaseMutex(producer);
+        CloseHandle(producer);
+        if(reply==WAIT_OBJECT_0) {
+            std::wcout<<L"ATTACH_RESULT=SUCCESS pid="<<pid<<L" mode="<<
+                         operator_options[operator_slot].substr(2)<<L"\n";
+            return 0;
+        }
+        std::wcerr<<(reply==WAIT_OBJECT_0+1?
+            L"ATTACH_RESULT=FAIL R100 menu action refused\n":
+            L"ATTACH_RESULT=FAIL R100 no acknowledged active operator session\n");
         return 2;
     }
     // R94 named controls do NOT use the Java Attach API (safepoint). They
