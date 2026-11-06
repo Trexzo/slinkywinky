@@ -24,6 +24,9 @@ public final class RendererWglEvidence {
     private static native boolean nativeRetainedPreviewAction(int action);
     private static native int[] nativeRetainedPreviewSnapshot();
     private static native boolean nativeDiscardRetainedPreview();
+    private static native boolean nativeOpenOperatorMenu();
+    private static native int nativePollOperatorMenu(long context,long dc);
+    private static native boolean nativeCloseOperatorMenu();
 
     private Thread owner;
     private int attempts;
@@ -42,6 +45,7 @@ public final class RendererWglEvidence {
     private final boolean scriptedVisibility;
     private final boolean manualVisibility;
     private final boolean retainedPreview;
+    private final boolean operatorMenu;
     private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
@@ -54,15 +58,22 @@ public final class RendererWglEvidence {
     private boolean operatorStop;
     private boolean manualClosed;
     private boolean retainedVerified;
+    private int acceptedOperatorEvents;
+    private int rejectedOperatorEvents;
+    private int lastOperatorTab=-1;
+    private int lastOperatorFocus=-1;
+    private int lastOperatorPreview=-1;
 
     private RendererWglEvidence(boolean requested,boolean multi,boolean scripted,
-                                boolean manual,boolean retained) {
+                                boolean manual,boolean retained,boolean operator) {
         overlayRequested=requested;
         multiFrame=multi;
         scriptedVisibility=scripted;
         manualVisibility=manual;
         retainedPreview=retained;
-        maxSamples=manual?2048:((multi || scripted || retained)?72:8);
+        operatorMenu=operator;
+        maxSamples=(manual || operator)?2048:
+                   ((multi || scripted || retained)?72:8);
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -101,6 +112,14 @@ public final class RendererWglEvidence {
     public static RendererWglEvidence open(String dllPath,boolean overlay,
                                             boolean multi,boolean scripted,
                                             boolean manual,boolean retained) throws Exception {
+        return open(dllPath,overlay,multi,scripted,manual,retained,false);
+    }
+    public static RendererWglEvidence open(String dllPath,boolean overlay,
+                                            boolean multi,boolean scripted,
+                                            boolean manual,boolean retained,
+                                            boolean operator) throws Exception {
+        if(operator && (!overlay || multi || scripted || manual || retained))
+            throw new IllegalArgumentException("R100 operator menu requires separate original-only consent");
         if(retained && (!overlay || multi || scripted || manual))
             throw new IllegalArgumentException("R99 finite retained preview is exclusive");
         if(manual && (multi || scripted || !overlay))
@@ -120,7 +139,9 @@ public final class RendererWglEvidence {
             throw new IllegalStateException("R94 owner-PID control gate admission failed");
         if(retained && !nativeArmRetainedPreview())
             throw new IllegalStateException("R99 owner-render retained admission failed");
-        return new RendererWglEvidence(overlay,multi,scripted,manual,retained);
+        if(operator && !nativeOpenOperatorMenu())
+            throw new IllegalStateException("R100 PID/birth operator-menu admission failed");
+        return new RendererWglEvidence(overlay,multi,scripted,manual,retained,operator);
     }
 
     /**
@@ -200,6 +221,37 @@ public final class RendererWglEvidence {
                 }
                 return;
             }
+            // R100: actions originate ONLY from acknowledged external
+            // PID/birth-scoped named events. The receiver polls on the
+            // already verified source-pinned original WGL render owner.
+            // No Minecraft keys, clicks, packets or gameplay module dispatch.
+            if(operatorMenu && attempts>8 && preflightStable()) {
+                if(!nativeDrawRetainedPreview(context,dc,width,height)) {
+                    poisoned=true;overlayFailed=true;invalid++;return;
+                }
+                overlayDrawn=true;
+                overlayFrames++;
+                final int action=nativePollOperatorMenu(context,dc);
+                if(action<0 || action>17 || action==18) {
+                    poisoned=true;invalid++;return;
+                }
+                if(action==9)operatorStop=true;
+                else if(action>=1 && action<=8)acceptedOperatorEvents++;
+                else if(action>=10 && action<=17)rejectedOperatorEvents++;
+                final int[] state=nativeRetainedPreviewSnapshot();
+                if(state==null || state.length!=6 || state[0]!=overlayFrames ||
+                   state[3]!=acceptedOperatorEvents ||
+                   state[4]!=rejectedOperatorEvents ||
+                   state[1]<0 || state[1]>5 || state[2]<-1 || state[2]>=65 ||
+                   (state[5]!=0 && state[5]!=1) ||
+                   acceptedOperatorEvents>15 || rejectedOperatorEvents>15) {
+                    poisoned=true;invalid++;return;
+                }
+                lastOperatorTab=state[1];
+                lastOperatorFocus=state[2];
+                lastOperatorPreview=state[5];
+                return;
+            }
             // R99 is a separate finite retained menu preview, with four
             // internally scripted *local profile-only* navigation actions.
             // NO OS keys, mouse or original Minecraft gameplay handlers.
@@ -269,6 +321,16 @@ public final class RendererWglEvidence {
     public synchronized boolean scriptedVisibility(){return scriptedVisibility;}
     public synchronized boolean manualVisibility(){return manualVisibility;}
     public synchronized boolean retainedPreview(){return retainedPreview;}
+    public synchronized boolean operatorMenu(){return operatorMenu;}
+    public synchronized boolean operatorStopped(){return operatorMenu && operatorStop;}
+    public synchronized boolean operatorFailed(){return operatorMenu &&
+        (poisoned || overlayFailed);}
+    public synchronized boolean operatorVerified(){
+        return operatorMenu && operatorStop && !poisoned && !overlayFailed &&
+               overlayFrames>=5 && acceptedOperatorEvents==4 &&
+               rejectedOperatorEvents==0 && lastOperatorTab==1 &&
+               lastOperatorFocus==17 && lastOperatorPreview==1;
+    }
     public synchronized boolean retainedVerified(){
         return retainedPreview && retainedVerified && overlayFrames==64 &&
                !poisoned && !overlayFailed;
@@ -279,6 +341,11 @@ public final class RendererWglEvidence {
     public synchronized int keyToggles(){return keyToggles;}
     public synchronized int eventToggles(){return eventToggles;}
     public synchronized boolean closeManual() {
+        if(operatorMenu) {
+            if(manualClosed)return false;
+            manualClosed=true;
+            return nativeCloseOperatorMenu();
+        }
         if(retainedPreview) {
             if(manualClosed)return false;
             manualClosed=true;
@@ -295,13 +362,14 @@ public final class RendererWglEvidence {
     public synchronized int hiddenFrames(){return hiddenFrames;}
     public synchronized boolean overlayDrawn(){
         return overlayDrawn && !overlayFailed &&
-               (retainedPreview ? retainedVerified() :
+               (operatorMenu ? operatorVerified() :
+                (retainedPreview ? retainedVerified() :
                 (manualVisibility ?
                     (operatorStop && toggles>=2 && toggles==keyToggles+eventToggles &&
                      overlayFrames>0 && hiddenFrames>0 &&
                      overlayFrames+hiddenFrames==attempts-8) :
                     (overlayFrames==(scriptedVisibility?48:(multiFrame?64:1)) &&
-                     (!scriptedVisibility || hiddenFrames==16))));
+                     (!scriptedVisibility || hiddenFrames==16)))));
     }
     public synchronized int attempts(){return attempts;}
     public synchronized int present(){return current;}
@@ -313,13 +381,19 @@ public final class RendererWglEvidence {
                invalid==0 && changed==0 && pinned && !poisoned;
     }
     public synchronized boolean fullyStable() {
-        return (manualVisibility ? (operatorStop || attempts==maxSamples) :
+        return ((manualVisibility || operatorMenu) ?
+                (operatorStop || attempts==maxSamples) :
                 attempts==maxSamples) && preflightStable();
     }
     public synchronized String result() {
         return "attempts="+attempts+" current="+current+" absent="+absent+
                " invalid="+invalid+" changed="+changed+
                " stable="+fullyStable()+
+               (operatorMenu ?
+                " shown="+overlayFrames+" actions="+acceptedOperatorEvents+
+                " refused="+rejectedOperatorEvents+" tab="+lastOperatorTab+
+                " focus="+lastOperatorFocus+" preview="+lastOperatorPreview+
+                " stop="+(operatorStop?"operator":"limit") :
                (retainedPreview ?
                 " frames="+overlayFrames+" retained="+retainedVerified() +
                 " actions=4 tab=1 focus=17" :
@@ -328,6 +402,6 @@ public final class RendererWglEvidence {
                 " toggles="+toggles+" stop="+(operatorStop?"operator":"limit"):
                 (scriptedVisibility?
                  " shown="+overlayFrames+" hidden="+hiddenFrames:
-                 (multiFrame?" frames="+overlayFrames:""))));
+                 (multiFrame?" frames="+overlayFrames:"")))));
     }
 }
