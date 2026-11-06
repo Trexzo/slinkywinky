@@ -37,6 +37,14 @@ R99 = (harness.RESTORED + "\n" + harness.R99_CALLBACK +
        harness.R99_RETAINED + "\n" + harness.RELEASED + "\n")
 
 
+R103 = (harness.RESTORED + "\n" + harness.R103_CALLBACK +
+        " owner=synthetic#1\n" + harness.R103_STABLE +
+        " attempts=8 current=8 absent=0 invalid=0 changed=0 stable=true"
+        " window=exact-original owner=render-thread foreground=0"
+        " background=8 refused=0\n" + harness.R103_WINDOW + "\n" +
+        harness.RELEASED + "\n")
+
+
 R100 = (harness.RESTORED + "\n"
         + harness.R100_CALLBACK + " accepted=42 owner=synthetic#1\n"
         + harness.R100_STABLE + " attempts=42 current=42 absent=0 "
@@ -157,6 +165,43 @@ class ReceiptChecks(unittest.TestCase):
         ):
             with self.assertRaises(harness.ReceiptError):
                 harness.validate_receipt(mode,log)
+
+    def test_r103_exact_original_render_window_audit_receipts(self):
+        self.assertEqual(len(harness.validate_receipt("--render-window-audit=8",R103)),5)
+        self.assertEqual(len(harness.STAGES["window"]),4)
+        harness.validate_loader_receipt("--render-window-audit=8",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-window-audit-r103\n")
+        for invalid in (
+            R103.replace("foreground=0","foreground=1"),
+            R103.replace("background=8","background=7"),
+            R103.replace("current=8","current=7"),
+            R103.replace("invalid=0","invalid=1"),
+            R103.replace("stable=true","stable=false"),
+            R103.replace("refused=0","refused=1"),
+            R103.replace("owner=render-thread","owner=unsafe"),
+            R103.replace("accepted=8","accepted=9"),
+            R103.replace("owner=synthetic#1","owner=synthetic#0"),
+            R103.replace(harness.R103_WINDOW,""),
+            R103.replace(harness.R103_WINDOW,
+                         harness.R103_WINDOW+"_FAKE"),
+            R103.replace(harness.R103_STABLE+" attempts=8",
+                         harness.R103_STABLE+" attempts=80"),
+            R103.replace(harness.R103_WINDOW,
+                         harness.R103_WINDOW+"\n"+harness.R103_WINDOW),
+            R103.replace(harness.R103_STABLE,
+                         "R101_WGL_CONTEXT_UNVERIFIED"),
+            R103+harness.R103_WINDOW+"\n",
+            R103+R103,
+        ):
+            with self.subTest(invalid=invalid),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-window-audit=8",invalid)
+        for mode,record in (
+            ("--render-window-audit=8",R100),
+            ("--render-context=8",R103),
+            ("--render-menu=operator",R103),
+        ):
+            with self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt(mode,record)
 
     def test_r100_true_external_operator_receipt_and_negative_controls(self):
         self.assertEqual(len(harness.validate_receipt("--render-menu=operator",R100)),5)
