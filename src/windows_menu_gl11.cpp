@@ -229,7 +229,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     // R93: scale both geometry and the bitmap text in physical pixels;
     // scissor stays in original viewport coordinates and is state-restored.
     const float scale=panel->scale;
-    if(compact)glScalef(scale,scale,1.0f);
+    if(scale!=1.0f)glScalef(scale,scale,1.0f);
     const float w=static_cast<float>(paneWidth)/scale;
     const float h=static_cast<float>(paneHeight)/scale;
     rgba(0x161617,overlay?static_cast<GLubyte>(225):static_cast<GLubyte>(255));
