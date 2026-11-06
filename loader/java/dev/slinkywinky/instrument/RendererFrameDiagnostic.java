@@ -15,9 +15,10 @@ import org.objectweb.asm.Opcodes;
 
 /**
  * R75: opt-in, finite Java-only callback diagnostic on exact ORIGINAL bfk.
- * R78 optionally observes current WGL/viewport through read-only JNI after
- * strict R79 render-thread admission. Neither path draws UI or changes GL.
- * A daemon retransform restores original bytecode (or locks future admission).
+ * R78 observes WGL/viewport without rendering. R91, R92 and R93 are
+ * separate finite native GL experiments with explicit admission. R93
+ * exercises an input-free show/hide/show schedule only. A daemon retransform
+ * restores source-pinned original bytecode (or locks future admission).
  */
 public final class RendererFrameDiagnostic {
     private static final String PINNED_BFK_SHA256 =
