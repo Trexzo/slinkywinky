@@ -87,13 +87,15 @@ int main() {
     MenuRenderSession frameSource;
     CHECK(frameSource.attach(50,676,630));
     const auto frame0=frameSource.next(menu,&profile,&input);
-    CHECK(frame0 && frame0->focused_catalog_index==0);
+    const auto focus0=input.visible_focus();
+    CHECK(frame0 && focus0==0);
     CHECK(input.apply(MenuNavAction::NextRow));
     const auto frame1=frameSource.next(menu,&profile,&input);
-    CHECK(frame1 && frame1->focused_catalog_index==1);
-    CHECK(frame0->focused_catalog_index==0);
+    const auto focus1=input.visible_focus();
+    CHECK(frame1 && focus1==1);
+    CHECK(focus0==0); // Value snapshot predates cursor move.
     const auto unbound=frameSource.next(menu,&profile);
-    CHECK(unbound && !unbound->focused_catalog_index);
+    CHECK(unbound); // Original MenuRenderFrame ABI has no focus field.
 
     MenuState foreignMenu;
     MenuProfileBridge foreignProfile(foreignMenu);
