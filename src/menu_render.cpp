@@ -1,5 +1,6 @@
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_navigation.hpp"
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -35,10 +36,13 @@ bool MenuRenderSession::resize(unsigned width,unsigned height) noexcept {
     return true;
 }
 std::optional<MenuRenderFrame> MenuRenderSession::next(
-    const MenuState& menu,const MenuProfileBridge* profile) {
+    const MenuState& menu,const MenuProfileBridge* profile,
+    const MenuNavigation* navigation) {
     std::lock_guard<std::mutex> lock(mutex_);
     if(!active_ || !owner() || !valid_viewport(width_,height_) ||
        (profile!=nullptr && !profile->owns(menu)) ||
+       (navigation!=nullptr &&
+        (profile==nullptr || !navigation->owns(menu,*profile))) ||
        sequence_==std::numeric_limits<std::uint64_t>::max())
         return std::nullopt;
     // Only the first-party model is copied. No raw pointers into a native
@@ -51,6 +55,13 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.tab=menu.tab();
     frame.appearance=menu.appearance();
     frame.visible=menu.page();
+    if(navigation)
+        frame.focused_catalog_index=navigation->visible_focus();
+    if(frame.focused_catalog_index &&
+       std::none_of(frame.visible.begin(),frame.visible.end(),
+           [&frame](const MenuItem& row){
+               return row.catalog_index==*frame.focused_catalog_index;
+           }))return std::nullopt;
     if(frame.visible.size()>8)return std::nullopt;
     if(profile) {
         for(const auto& item:frame.visible) {
