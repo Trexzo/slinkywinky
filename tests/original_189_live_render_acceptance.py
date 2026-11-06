@@ -34,6 +34,9 @@ R99_RETAINED = "R99_RETAINED_MENU_DRAW_PASS frames=64 actions=4 tab=1 focus=17"
 R100_CALLBACK = "R100_RENDER_CALLBACK_BOUNDED_PASS"
 R100_STABLE = "R100_WGL_CONTEXT_STABLE_PASS"
 R100_OPERATOR = "R100_OPERATOR_MENU_CONTROLLED_PASS actions=4 tab=1 focus=17 preview=1 stop=operator"
+R103_CALLBACK = "R101_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
+R103_STABLE = "R101_WGL_CONTEXT_STABLE_PASS"
+R103_WINDOW = "R101_ORIGINAL_GAME_WINDOW_IDENTIFIED_PASS"
 R93_CALLBACK = "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
 R93_STABLE = ("R93_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true shown=48 hidden=16")
@@ -68,6 +71,8 @@ NEGATIVE = (
     "R99_RETAINED_MENU_UNVERIFIED",
     "R100_WGL_CONTEXT_UNVERIFIED",
     "R100_OPERATOR_MENU_UNVERIFIED",
+    "R101_WGL_CONTEXT_UNVERIFIED",
+    "R101_GAME_WINDOW_IDENTITY_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -77,6 +82,7 @@ LOADER_MODES = {
     "--render-preflight": "render-preflight",
     "--render-callback=8": "render-callback-r75",
     "--render-context=8": "render-context-r78",
+    "--render-window-audit=8": "render-window-audit-r103",
     "--render-overlay=8": "render-overlay-r91",
     "--render-overlay=72": "render-overlay-r92",
     "--render-visibility=72": "render-visibility-r93",
@@ -128,6 +134,13 @@ STAGES = {
                ("--render-visibility=manual",
                 (RESTORED, R94_CALLBACK, R94_STABLE, R94_VISIBILITY, RELEASED))),
 }
+
+# R103 independently links the source-pinned native WGL HWND audit to
+# the external exact-PID/birth/unique-window R102 observation.
+STAGES["window"] = STAGES["context"] + (
+    ("--render-window-audit=8",
+     (RESTORED,R103_CALLBACK,R103_STABLE,R103_WINDOW,RELEASED)),
+)
 
 # R100 includes all six R99 original class/render/GL admissions before
 # the new independent externally-commanded operator stage.
@@ -216,6 +229,15 @@ RECEIPT_LINES = {
         r"focus=17 preview=1 stop=operator\r?$",re.MULTILINE),
     R100_OPERATOR: re.compile(
         r"^" + re.escape(R100_OPERATOR) + r"\r?$",re.MULTILINE),
+    R103_CALLBACK: re.compile(
+        r"^" + re.escape(R103_CALLBACK) +
+        r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$",re.MULTILINE),
+    R103_STABLE: re.compile(
+        r"^R101_WGL_CONTEXT_STABLE_PASS attempts=8 current=8 "
+        r"absent=0 invalid=0 changed=0 stable=true "
+        r"window=exact-original owner=render-thread "
+        r"foreground=([0-8]) background=([0-8]) refused=0\r?$",re.MULTILINE),
+    R103_WINDOW: re.compile(r"^" + re.escape(R103_WINDOW) + r"\r?$",re.MULTILINE),
     R93_CALLBACK: re.compile(
         r"^" + re.escape(R93_CALLBACK) +
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
@@ -238,7 +260,7 @@ RECEIPT_LINES = {
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["operator"] + STAGES["manual"])[option]
+    expected = dict(STAGES["operator"] + STAGES["manual"] + STAGES["window"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
@@ -261,6 +283,10 @@ def validate_receipt(option, appended):
                 pattern.fullmatch(line) for pattern in RECEIPT_LINES.values()
             ):
                 raise ReceiptError("Malformed or conflicting pass-looking target receipt")
+    if option=="--render-window-audit=8":
+        window_counts=RECEIPT_LINES[R103_STABLE].search(appended)
+        if not window_counts or sum(map(int,window_counts.groups()))!=8:
+            raise ReceiptError("R103 original renderer foreground/background samples inconsistent")
     if option=="--render-visibility=manual":
         m0=RECEIPT_LINES[R94_CALLBACK].search(appended)
         m1=RECEIPT_LINES[R94_STABLE].search(appended)
@@ -287,6 +313,8 @@ def validate_receipt(option, appended):
             raise ReceiptError("R100 operator callback/frame provenance mismatch")
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    elif option == "--render-window-audit=8":
+        ordered = (RESTORED,R103_CALLBACK,R103_STABLE,R103_WINDOW,RELEASED)
     elif option == "--render-menu=operator":
         ordered = (RESTORED,R100_CALLBACK,R100_STABLE,R100_OPERATOR,RELEASED)
     elif option == "--render-retained=72":
@@ -499,6 +527,7 @@ def run(argv=None):
     env.pop("SLINKYWINKY_RENDER_MANUAL", None)
     env.pop("SLINKYWINKY_RENDER_RETAINED", None)
     env.pop("SLINKYWINKY_RENDER_OPERATOR", None)
+    env.pop("SLINKYWINKY_RENDER_WINDOW", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
@@ -515,6 +544,8 @@ def run(argv=None):
         env["SLINKYWINKY_RENDER_RETAINED"] = "1"
     if a.mode=="operator":
         env["SLINKYWINKY_RENDER_OPERATOR"] = "1"
+    if a.mode=="window":
+        env["SLINKYWINKY_RENDER_WINDOW"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
