@@ -177,26 +177,36 @@ public final class RendererFrameDiagnostic {
 
     /** Existing agent admission guard must already have been acquired. */
     public static void start(final Instrumentation instrumentation) throws Exception {
-        start(instrumentation,null,false,false);
+        start(instrumentation,null,false,false,false);
     }
 
     /** Non-null DLL path enables only R78 read-only current-WGL sampling. */
     public static void start(final Instrumentation instrumentation,
                              final String contextDllPath) throws Exception {
-        start(instrumentation,contextDllPath,false,false);
+        start(instrumentation,contextDllPath,false,false,false);
     }
 
     /** R91 is a distinct explicit, finite, first-party GL11 visual probe. */
     public static void start(final Instrumentation instrumentation,
                              final String contextDllPath,
                              final boolean renderOverlay) throws Exception {
-        start(instrumentation,contextDllPath,renderOverlay,false);
+        start(instrumentation,contextDllPath,renderOverlay,false,false);
     }
 
     public static void start(final Instrumentation instrumentation,
                              final String contextDllPath,
                              final boolean renderOverlay,
                              final boolean multiFrame) throws Exception {
+        start(instrumentation,contextDllPath,renderOverlay,multiFrame,false);
+    }
+
+    public static void start(final Instrumentation instrumentation,
+                             final String contextDllPath,
+                             final boolean renderOverlay,
+                             final boolean multiFrame,
+                             final boolean scriptedVisibility) throws Exception {
+        if(scriptedVisibility && (multiFrame || !renderOverlay))
+            throw new IllegalArgumentException("R93 show/hide is a separate finite overlay mode");
         if(multiFrame && !renderOverlay)
             throw new IllegalArgumentException("R92 multi-frame requires overlay");
         if(renderOverlay && contextDllPath==null)
@@ -219,7 +229,7 @@ public final class RendererFrameDiagnostic {
             // Load AFTER original Mojang SHA and classloader admission, BEFORE
             // registering a bytecode-changing transformer. Never draw.
             evidence=contextDllPath==null?null:
-                RendererWglEvidence.open(contextDllPath,renderOverlay,multiFrame);
+                RendererWglEvidence.open(contextDllPath,renderOverlay,multiFrame,scriptedVisibility);
         } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
             // The read-only class inspector may still be installed. Do not
             // allow another attach while its removal is unproven.
@@ -231,8 +241,8 @@ public final class RendererFrameDiagnostic {
         }
         // An unexpected VM LinkageError is not known to be recoverable:
         // leave admission locked instead of guessing about transformer state.
-        final int maxFrames=multiFrame?72:8;
-        final RenderFrameGate session=new RenderFrameGate(maxFrames,multiFrame);
+        final int maxFrames=(multiFrame || scriptedVisibility)?72:8;
+        final RenderFrameGate session=new RenderFrameGate(maxFrames,multiFrame || scriptedVisibility);
         final RenderCallbackFence fence=new RenderCallbackFence(session,
             evidence==null ? null : new Runnable() {
                 @Override public void run() {evidence.sample();}
@@ -250,7 +260,7 @@ public final class RendererFrameDiagnostic {
                         "R90 original-source/loaded-code admission failed before weave",
                         mismatch);
                 }
-                return weaveValidatedRuntime(raw,multiFrame);
+                return weaveValidatedRuntime(raw,multiFrame || scriptedVisibility);
             }
         };
         activeFence=fence;
@@ -305,9 +315,10 @@ public final class RendererFrameDiagnostic {
                     System.err.println("R75_RESTORE_UNCERTAIN_NO_REATTACH");
                 if(completed && session.accepted()==maxFrames && !session.invalid() &&
                    !fence.failed() && restored)
-                    System.out.println((multiFrame?
-                        "R92_RENDER_CALLBACK_BOUNDED_PASS accepted=72 owner=":
-                        "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8 owner=")+
+                    System.out.println((scriptedVisibility?
+                        "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72 owner=":
+                        (multiFrame?"R92_RENDER_CALLBACK_BOUNDED_PASS accepted=72 owner=":
+                         "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8 owner=")) +
                         session.ownerThread());
                 else
                     System.err.println("R75_RENDER_CALLBACK_UNVERIFIED frames="+
@@ -319,27 +330,32 @@ public final class RendererFrameDiagnostic {
                                          session.accepted()==maxFrames &&
                                          restored && evidence.fullyStable();
                     System.out.println((stable?
-                        (multiFrame?"R92_WGL_CONTEXT_STABLE_PASS ":
-                                    "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "):
-                        (multiFrame?"R92_WGL_CONTEXT_UNVERIFIED ":
-                                    "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED "))+
+                        (scriptedVisibility?"R93_WGL_CONTEXT_STABLE_PASS ":
+                         (multiFrame?"R92_WGL_CONTEXT_STABLE_PASS ":
+                                     "R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS ")):
+                        (scriptedVisibility?"R93_WGL_CONTEXT_UNVERIFIED ":
+                         (multiFrame?"R92_WGL_CONTEXT_UNVERIFIED ":
+                                     "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")))+
                         evidence.result());
                     if(evidence.overlayRequested()) {
                         if(stable && evidence.overlayDrawn())
-                            System.out.println(multiFrame?
-                                "R92_MULTIFRAME_OVERLAY_DRAW_PASS frames=64":
-                                "R91_ORIGINAL_RENDER_OVERLAY_DRAW_PASS frames=1");
+                            System.out.println(scriptedVisibility?
+                                "R93_MENU_SHOW_HIDE_SHOW_PASS shown=48 hidden=16":
+                                (multiFrame?"R92_MULTIFRAME_OVERLAY_DRAW_PASS frames=64":
+                                            "R91_ORIGINAL_RENDER_OVERLAY_DRAW_PASS frames=1"));
                         else
-                            System.err.println(multiFrame?
-                                "R92_MULTIFRAME_OVERLAY_UNVERIFIED":
-                                "R91_RENDER_OVERLAY_UNVERIFIED");
+                            System.err.println(scriptedVisibility?
+                                "R93_MENU_VISIBILITY_UNVERIFIED":
+                                (multiFrame?"R92_MULTIFRAME_OVERLAY_UNVERIFIED":
+                                            "R91_RENDER_OVERLAY_UNVERIFIED"));
                     }
                 }
                 System.out.println(evidence==null?
                     "R75_RENDER_CALLBACK_NO_GRAPHICS_OR_GAMEPLAY_ACTIONS":
-                    (multiFrame?"R92_FINITE_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
-                     (renderOverlay?"R91_ONE_FRAME_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
-                      "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS")));
+                    (scriptedVisibility?"R93_SCRIPTED_SHOW_HIDE_NO_GAMEPLAY_OR_INPUT_ACTIONS":
+                     (multiFrame?"R92_FINITE_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
+                      (renderOverlay?"R91_ONE_FRAME_GL_OVERLAY_NO_GAMEPLAY_OR_INPUT_ACTIONS":
+                       "R78_READ_ONLY_WGL_NO_RENDER_OR_GAMEPLAY_ACTIONS"))));
                 System.out.flush();
                 InstrumentationProbe.finishRenderDiagnostic(restored);
                 // R81: consumer must not start the next Attach merely from a
@@ -364,9 +380,10 @@ public final class RendererFrameDiagnostic {
                 "R75 cleanup worker unavailable; original renderer restored="+restored,
                 workerFailure);
         }
-        System.out.println(multiFrame?
-            "R92_RENDER_CALLBACK_ARMED_LIMIT=72":
-            "R75_RENDER_CALLBACK_ARMED_LIMIT=8");
+        System.out.println(scriptedVisibility?
+            "R93_RENDER_CALLBACK_ARMED_LIMIT=72":
+            (multiFrame?"R92_RENDER_CALLBACK_ARMED_LIMIT=72":
+                        "R75_RENDER_CALLBACK_ARMED_LIMIT=8"));
         System.out.flush();
     }
 
