@@ -478,6 +478,26 @@ def run(argv=None):
                                "; STOP, do not try another diagnostic")
         validate_loader_receipt(option,a.pid,result.stdout)
         require_same_process(a.pid,original_birth)
+        if option == "--render-visibility=manual":
+            # All controls are explicit PID-scoped events, not Java Attach.
+            # The supervised offline game owns this process and can safely
+            # simulate an operator toggling a menu twice, then stopping it.
+            for control,delay in (
+                ("--toggle-visibility",0.30),
+                ("--toggle-visibility",0.40),
+                ("--toggle-visibility",0.30),
+                ("--stop-visibility",0.40),
+            ):
+                time.sleep(delay)
+                require_same_process(a.pid,original_birth)
+                command=[str(loader),"attach",str(a.pid),str(jdk8),control]
+                reply=subprocess.run(command,capture_output=True,text=True,
+                                     timeout=8,env=env)
+                expected=("ATTACH_RESULT=SUCCESS pid="+str(a.pid)+
+                          " mode="+control[2:])
+                if reply.returncode or reply.stdout.strip()!=expected:
+                    raise ReceiptError("R94 PID-scoped operator "+control+
+                                       " failed; STOP and preserve fail-closed restore")
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
         require_same_process(a.pid,original_birth)
