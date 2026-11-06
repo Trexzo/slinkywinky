@@ -496,8 +496,14 @@ def run(argv=None):
                 expected=("ATTACH_RESULT=SUCCESS pid="+str(a.pid)+
                           " mode="+control[2:])
                 if reply.returncode or reply.stdout.strip()!=expected:
+                    # Never echo arbitrary process output. Categorize only
+                    # the target-gate lookup failure we explicitly recognize.
+                    category=(" gate_unavailable" if
+                              "no active R94 visibility gate" in reply.stderr
+                              else (" mismatched_receipt" if reply.returncode==0
+                                    else " control_refused"))
                     raise ReceiptError("R94 PID-scoped operator "+control+
-                                       " failed; STOP and preserve fail-closed restore")
+                                       category+"; STOP and preserve fail-closed restore")
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
         require_same_process(a.pid,original_birth)
