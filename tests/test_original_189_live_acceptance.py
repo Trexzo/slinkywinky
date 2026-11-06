@@ -711,7 +711,14 @@ class ReceiptChecks(unittest.TestCase):
                     "--original-client-jar",str(client),
                     "--mode","key","--execute","--report",str(report)])
             self.assertEqual(result,0)
-            injected.assert_called_once_with(123,root)
+            injected.assert_called_once()
+            called_args,called_kwargs=injected.call_args
+            self.assertEqual(called_kwargs,{})
+            self.assertEqual(called_args[0],123)
+            # Windows CI may resolve the same temp directory through its
+            # 8.3 short alias or its long canonical name. Compare directory
+            # identity, never a path spelling.
+            self.assertTrue(called_args[1].samefile(root))
             self.assertEqual(attached,
                              ["--render-preflight","--render-callback=8",
                               "--render-context=8","--render-overlay=8",
