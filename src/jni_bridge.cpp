@@ -686,6 +686,27 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
         return JNI_FALSE;
     }
 }
+// Render-thread-only bounded UI evidence; no native pointers exposed.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewSnapshot(
+    JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!env || !retained_preview_armed || !retained_preview ||
+       !retained_preview->active() || !retained_preview->owner_thread())
+        return nullptr;
+    const auto focus=retained_preview->focused_row();
+    const jint data[6]={
+        static_cast<jint>(retained_preview->drawn_frames()),
+        static_cast<jint>(retained_preview->tab()),
+        static_cast<jint>(focus?*focus:-1),
+        static_cast<jint>(retained_preview->accepted_actions()),
+        static_cast<jint>(retained_preview->refused_actions()),
+        retained_preview->preview_enabled(1)?1:0
+    };
+    jintArray result=env->NewIntArray(6);
+    if(result)env->SetIntArrayRegion(result,0,6,data);
+    return result;
+}
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
     JNIEnv*,jclass) {
