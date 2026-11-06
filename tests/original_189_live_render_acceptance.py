@@ -557,6 +557,7 @@ def run(argv=None):
     check_target_listing(listed.stdout, a.pid)
     original_birth = process_birth_token(a.pid)
     records = []
+    window_crosscheck = None
     for option, _required in steps:
         # A second check prevents a vanished/replaced PID being attached.
         current = subprocess.run([str(loader), "list", str(jdk8)],
@@ -567,6 +568,15 @@ def run(argv=None):
         require_same_original_jar(client_path,original_client_identity)
         original_stat = target_log.stat()
         before = original_stat.st_size
+        external_before = None
+        if option == "--render-window-audit=8":
+            from windows_r102_window_identity_evidence import (
+                observe_owned_game,WindowAuditError)
+            try:
+                external_before=observe_owned_game(a.pid,original_birth)
+            except WindowAuditError as problem:
+                raise ReceiptError("R103 external pre-render original HWND refused: "+str(problem))
+            require_same_process(a.pid,original_birth)
         cmd = [str(loader), "attach", str(a.pid), str(jdk8), option]
         result = subprocess.run(cmd,capture_output=True,text=True,
                                 env=env,timeout=25)
@@ -663,6 +673,42 @@ def run(argv=None):
                                        category+"; STOP and preserve fail-closed restore")
         receipts = wait_new_receipt(
             target_log,before,original_stat,option,a.timeout_seconds)
+        if option == "--render-window-audit=8":
+            # R102 external HWND evidence brackets the source-verified R101
+            # original GL render-thread HDC audit on the SAME birth-pinned JVM.
+            try:
+                external_after=observe_owned_game(a.pid,original_birth)
+            except WindowAuditError as problem:
+                raise ReceiptError("R103 external post-render original HWND refused: "+str(problem))
+            require_same_process(a.pid,original_birth)
+            appended=read_appended(target_log,before,original_stat)
+            native=RECEIPT_LINES[R103_STABLE].search(appended)
+            if native is None or external_before is None:
+                raise ReceiptError("R103 native renderer/window evidence absent")
+            fg,bg,width,height=tuple(map(int,native.groups()))
+            before_geometry=external_before["window"]
+            after_geometry=external_after["window"]
+            if (before_geometry["pid"]!=a.pid or after_geometry["pid"]!=a.pid or
+                (before_geometry["width"],before_geometry["height"])!=(width,height) or
+                (after_geometry["width"],after_geometry["height"])!=(width,height) or
+                before_geometry["identity"]!=after_geometry["identity"] or
+                (fg+bg)!=8 or external_before["refused_samples"] or
+                external_after["refused_samples"]):
+                raise ReceiptError("R103 source-pinned native WGL viewport and external unique HWND disagree")
+            window_crosscheck={
+                "original_pid_birth_verified":True,
+                "external_pre":external_before,
+                "native_render_window":{
+                    "samples":8,"foreground":fg,"background":bg,
+                    "viewport_width":width,"viewport_height":height,
+                    "original_gl_hdc_window_identity_pass":True,
+                },
+                "external_post":external_after,
+                "same_original_window_size_and_unique_identity":True,
+                "foreground_or_input_capture_certified":False,
+                "os_input_sent":False,
+            }
+            print("R103_ORIGINAL_RENDER_HDC_EXTERNAL_WINDOW_RECONCILED_PASS",flush=True)
         if a.mode=="key" and option=="--render-visibility=manual":
             # This is an extra source-specific audit, not a replacement for
             # exact original-JVM class restoration, WGL and gate release.
@@ -698,6 +744,10 @@ def run(argv=None):
         report = {"scope":"R81 original vanilla render receipts only",
                   "visual_game_acceptance":False,
                   "in_game_menu_verified":False,"stages":records}
+        if a.mode=="window":
+            if window_crosscheck is None:
+                raise ReceiptError("R103 missing independent native/external window reconciliation")
+            report["window_crosscheck"]=window_crosscheck
         destination = a.report.resolve()
         # Exclusive creation prevents a race between the earlier existence
         # check and a new report supplied by another local process.
