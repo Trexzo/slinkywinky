@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(slinkywinky VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/menu.cpp src/menu_profile.cpp src/menu_prefs.cpp src/menu_render.cpp src/menu_navigation.cpp src/menu_hit_test.cpp src/menu_mouse_gesture.cpp src/menu_bitmap_font.cpp)
+add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/menu.cpp src/menu_profile.cpp src/menu_prefs.cpp src/menu_render.cpp src/menu_navigation.cpp src/menu_keyboard_router.cpp src/menu_hit_test.cpp src/menu_mouse_gesture.cpp src/menu_bitmap_font.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(slinkywinky_core PUBLIC Threads::Threads)
 target_include_directories(slinkywinky_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -36,6 +36,11 @@ if(BUILD_TESTING)
   add_executable(slinkywinky_menu_navigation_tests tests/test_menu_navigation.cpp)
   target_link_libraries(slinkywinky_menu_navigation_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_navigation_ownership COMMAND slinkywinky_menu_navigation_tests)
+  # R108: standalone synthetic event dispatcher; NOT a game input hook.
+  add_executable(slinkywinky_menu_keyboard_router_tests tests/test_menu_keyboard_router.cpp)
+  target_link_libraries(slinkywinky_menu_keyboard_router_tests PRIVATE slinkywinky_core)
+  add_test(NAME native_menu_keyboard_router_no_game_passthrough_fixture
+    COMMAND slinkywinky_menu_keyboard_router_tests)
   add_executable(slinkywinky_menu_hit_tests tests/test_menu_hit_test.cpp)
   target_link_libraries(slinkywinky_menu_hit_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_hit_testing COMMAND slinkywinky_menu_hit_tests)
