@@ -37,6 +37,14 @@ R99 = (harness.RESTORED + "\n" + harness.R99_CALLBACK +
        harness.R99_RETAINED + "\n" + harness.RELEASED + "\n")
 
 
+R100 = (harness.RESTORED + "\n"
+        + harness.R100_CALLBACK + " accepted=42 owner=synthetic#1\n"
+        + harness.R100_STABLE + " attempts=42 current=42 absent=0 "
+          "invalid=0 changed=0 stable=true shown=34 actions=4 refused=0 "
+          "tab=1 focus=17 preview=1 stop=operator\n"
+        + harness.R100_OPERATOR + "\n" + harness.RELEASED + "\n")
+
+
 V = (harness.RESTORED + "\n" + harness.R93_CALLBACK +
      " owner=synthetic#1\n" + harness.R93_STABLE + "\n" +
      harness.R93_VISIBILITY + "\n" + harness.RELEASED + "\n")
@@ -149,6 +157,47 @@ class ReceiptChecks(unittest.TestCase):
         ):
             with self.assertRaises(harness.ReceiptError):
                 harness.validate_receipt(mode,log)
+
+    def test_r100_true_external_operator_receipt_and_negative_controls(self):
+        self.assertEqual(len(harness.validate_receipt("--render-menu=operator",R100)),5)
+        self.assertEqual(len(harness.STAGES["operator"]),7)
+        harness.validate_loader_receipt(
+            "--render-menu=operator",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-menu-r100\n")
+        for invalid in (
+            R100.replace("accepted=42","accepted=43"),
+            R100.replace("attempts=42","attempts=43"),
+            R100.replace("current=42","current=43"),
+            R100.replace("shown=34","shown=35"),
+            R100.replace("actions=4","actions=3"),
+            R100.replace("refused=0","refused=1"),
+            R100.replace("tab=1","tab=0"),
+            R100.replace("focus=17","focus=18"),
+            R100.replace("preview=1","preview=0"),
+            R100.replace("stop=operator","stop=limit"),
+            R100.replace(harness.R100_OPERATOR,
+                         harness.R100_OPERATOR+"_FAKE"),
+            R100.replace(harness.R100_STABLE+" attempts=42",
+                         harness.R100_STABLE+" attempts=2048"),
+            R100.replace(harness.R100_OPERATOR,
+                         harness.R100_OPERATOR+"\n"+harness.R100_OPERATOR),
+            R100.replace(harness.R100_STABLE+" attempts=42",
+                         "R100_WGL_CONTEXT_UNVERIFIED attempts=42"),
+            R100+R100,
+            R100+"R100_OPERATOR_MENU_UNVERIFIED\n",
+        ):
+            with self.subTest(invalid=invalid),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-menu=operator",invalid)
+        for mode,log in (
+            ("--render-menu=operator",M),
+            ("--render-retained=72",R100),
+            ("--render-visibility=manual",R100),
+        ):
+            with self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt(mode,log)
+        # These are *external* operator actions, not JVM-internal R99 scripts.
+        self.assertEqual([a for a,_ in harness.STAGES["operator"]][-1],
+                         "--render-menu=operator")
 
     def test_r99_pinned_retained_64_frame_local_navigation_receipts(self):
         self.assertEqual(len(harness.validate_receipt("--render-retained=72",R99)),5)
