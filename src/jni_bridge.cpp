@@ -11,6 +11,7 @@
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
+#include "slinkywinky/windows_game_window_gate.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
 #include <GL/gl.h>
@@ -629,6 +630,20 @@ static jboolean drawValidatedMenuOverlay(
            std::fabs(colorBefore[i]-colorAfter[i])>0.00001f)
             return JNI_FALSE;
     return JNI_TRUE;
+}
+// R101: read-only original game-window identity evidence. Status:
+// -1 = denied identity/owner/context; 0 = exact identity but background;
+//  1 = exact identity, currently foreground. Never sets focus or input.
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeAuditRenderWindow(
+    JNIEnv*,jclass,jlong expectedContext,jlong expectedDc,jint width,jint height) {
+    if(!expectedContext || !expectedDc || width<=0 || height<=0)
+        return -1;
+    const auto result=slinkywinky::audit_game_render_window(
+        reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(expectedContext)),
+        reinterpret_cast<HDC>(static_cast<std::uintptr_t>(expectedDc)),
+        static_cast<unsigned>(width),static_cast<unsigned>(height));
+    return static_cast<jint>(result);
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
