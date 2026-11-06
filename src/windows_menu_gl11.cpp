@@ -133,6 +133,12 @@ private:
 bool draw_menu_gl11(const MenuRenderFrame& frame,
                     HGLRC expected_context,HDC expected_dc,
                     MenuGL11Mode mode) noexcept {
+    return draw_menu_gl11(frame,expected_context,expected_dc,mode,std::nullopt);
+}
+bool draw_menu_gl11(const MenuRenderFrame& frame,
+                    HGLRC expected_context,HDC expected_dc,
+                    MenuGL11Mode mode,
+                    std::optional<std::size_t> focused_catalog_index) noexcept {
     // Never use a context inferred only from a PID. Require exact equality.
     if((mode!=MenuGL11Mode::StandalonePreview &&
         mode!=MenuGL11Mode::BoundedOverlay &&
@@ -152,10 +158,10 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
            item.title!=official_module_catalog()[item.catalog_index].name)
             return false;
     if(frame.is_placeholder && !frame.visible.empty())return false;
-    if(frame.focused_catalog_index) {
+    if(focused_catalog_index) {
         bool inVisiblePage=false;
         for(const auto& row:frame.visible)
-            if(row.catalog_index==*frame.focused_catalog_index)
+            if(row.catalog_index==*focused_catalog_index)
                 inVisiblePage=true;
         if(!inVisiblePage)return false; // No stale or forged focus index.
     }
@@ -246,8 +252,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         rgba(i%2==0?0x1c1c1d:0x252526,
              overlay?static_cast<GLubyte>(235):static_cast<GLubyte>(255));
         quad(18,y,w-36,44);
-        if(frame.focused_catalog_index &&
-           item.catalog_index==*frame.focused_catalog_index) {
+        if(focused_catalog_index &&
+           item.catalog_index==*focused_catalog_index) {
             // R96: first-party row focus is a *render-only* accent, never
             // a gameplay toggle. Inherits compact viewport clip/GL restore.
             rgb(frame.appearance.accent_rgb);
