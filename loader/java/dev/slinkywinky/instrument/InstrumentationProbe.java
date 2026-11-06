@@ -276,6 +276,21 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R99: 72-frame source-pinned GL11 retained model, with four
+        // first-party scripted navigation actions. No game input/control.
+        final String retainedPrefix="minecraft-render-retained-r99|";
+        if(options!=null && options.startsWith(retainedPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(retainedPrefix.length()),
+                    true,false,false,false,true);
+            } catch(Exception error) {
+                throw new IllegalStateException("R99 retained original menu refused",error);
+            }
+            return;
+        }
         // R94: admitted only by exact original source and operator consent.
         final String manualPrefix="minecraft-render-manual-r94|";
         if(options!=null && options.startsWith(manualPrefix)) {
