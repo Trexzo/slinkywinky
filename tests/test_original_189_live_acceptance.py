@@ -475,7 +475,7 @@ class ReceiptChecks(unittest.TestCase):
                 self.assertNotIn("SLINKYWINKY_EXPERIMENTAL_HOOK",kwargs["env"])
                 self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_OVERLAY"),"1")
                 self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_VISIBILITY"),"1")
-                self.assertNotIn("SLINKYWINKY_RENDER_MULTIFRAME",kwargs["env"])
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_MULTIFRAME"),"1")
                 if cmd[1]=="list":
                     return harness.subprocess.CompletedProcess(
                         cmd,0,"123 net.minecraft.client.main.Main\n","")
