@@ -4,7 +4,7 @@
 namespace slinkywinky {
 namespace {
 constexpr std::uint64_t max_press_ms=1500;
-constexpr std::uint64_t repeat_reject_ms=375;
+constexpr std::uint64_t max_configured_double_click_ms=5000;
 }
 
 MenuMouseGesture::MenuMouseGesture() noexcept :
@@ -15,6 +15,14 @@ bool MenuMouseGesture::owner_thread() const noexcept {
 }
 bool MenuMouseGesture::pending() const noexcept {
     return owner_thread() && active_.has_value();
+}
+bool MenuMouseGesture::set_double_click_window(
+    std::uint64_t milliseconds) noexcept {
+    if(!owner_thread() || milliseconds==0 ||
+       milliseconds>max_configured_double_click_ms)return false;
+    active_.reset(); // A changed timing policy cannot validate a held click.
+    double_click_ms_=milliseconds;
+    return true;
 }
 bool MenuMouseGesture::cancel() noexcept {
     if(!owner_thread())return false;
@@ -106,7 +114,7 @@ std::optional<MenuHit> MenuMouseGesture::release(
     // Allow a different target (e.g. a different row) without delay.
     if(last_committed_ && same_hit(*released,*last_committed_) &&
        monotonic_ms>=last_committed_ms_ &&
-       monotonic_ms-last_committed_ms_<repeat_reject_ms)
+       monotonic_ms-last_committed_ms_<=double_click_ms_)
         return std::nullopt;
     last_committed_=*released;
     last_committed_ms_=monotonic_ms;
