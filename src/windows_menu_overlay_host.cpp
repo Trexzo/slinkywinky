@@ -3,6 +3,7 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include "slinkywinky/menu_navigation.hpp"
 #include <GL/gl.h>
 #include <limits>
 
@@ -69,7 +70,11 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
         return false;
     const auto frame=session_.next(menu,profile,navigation);
     if(!frame)return false;
-    return draw_menu_gl11(*frame,context_,dc_,mode);
+    // R96 focus is captured as an immutable scalar at this owner-thread
+    // draw boundary; it never changes MenuRenderFrame's published layout.
+    const auto focus=navigation?navigation->visible_focus():
+                              std::optional<std::size_t>{};
+    return draw_menu_gl11(*frame,context_,dc_,mode,focus);
 }
 bool WglMenuOverlayHost::close() noexcept {
     // No WGL or OpenGL calls here: allows shutdown if the context was
