@@ -40,7 +40,7 @@ inline GameWindowFocus audit_game_render_window(
     // authentication alone and relies on the upstream pinned Mojang SHA.
     wchar_t title[128]{};
     if(GetWindowTextW(root,title,128)<=0 ||
-       std::wstring(title)!=L"Minecraft 1.8.9")
+       lstrcmpW(title,L"Minecraft 1.8.9")!=0)
         return GameWindowFocus::Refused;
     RECT client{};
     if(!GetClientRect(root,&client) ||
@@ -67,7 +67,7 @@ inline GameWindowFocus audit_game_render_window(
            IsIconic(hwnd))return TRUE;
         wchar_t other[128]{};
         if(GetWindowTextW(hwnd,other,128)>0 &&
-           std::wstring(other)==L"Minecraft 1.8.9")
+           lstrcmpW(other,L"Minecraft 1.8.9")==0)
             ++state->count;
         return state->count>1?FALSE:TRUE;
     },reinterpret_cast<LPARAM>(&scope));
