@@ -499,10 +499,11 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
     HANDLE stop=CreateEventW(nullptr,TRUE,FALSE,stop_name.c_str());
     const bool fresh_stop=stop && GetLastError()!=ERROR_ALREADY_EXISTS;
     if(!fresh_stop) {
+        const DWORD stop_error=GetLastError();
         if(stop)CloseHandle(stop);
         CloseHandle(toggle);
         std::fprintf(stderr,"R94_NATIVE_GATE_STOP_OPEN_REFUSED win32=%lu\\n",
-                     static_cast<unsigned long>(GetLastError()));
+                     static_cast<unsigned long>(stop_error));
         return JNI_FALSE;
     }
     visibility_toggle=toggle;
