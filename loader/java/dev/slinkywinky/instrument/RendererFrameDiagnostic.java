@@ -364,6 +364,14 @@ public final class RendererFrameDiagnostic {
                          (multiFrame?"R92_WGL_CONTEXT_UNVERIFIED ":
                                      "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED "))))+
                         evidence.result());
+                    if(manualVisibility && stable && evidence.overlayDrawn()) {
+                        // Distinct audit (not a standalone success marker):
+                        // original SHA, WGL, restoration and release remain
+                        // mandatory. Never log raw keys or WGL handles.
+                        System.out.println("R95_INPUT_SOURCE_AUDIT keys="+
+                                           evidence.keyToggles()+" events="+
+                                           evidence.eventToggles());
+                    }
                     if(evidence.overlayRequested()) {
                         if(stable && evidence.overlayDrawn())
                             System.out.println(manualVisibility?
