@@ -32,7 +32,43 @@ M = (harness.RESTORED + "\n" + harness.R92_CALLBACK +
      harness.R92_OVERLAY + "\n" + harness.RELEASED + "\n")
 
 
+V = (harness.RESTORED + "\n" + harness.R93_CALLBACK +
+     " owner=synthetic#1\n" + harness.R93_STABLE + "\n" +
+     harness.R93_VISIBILITY + "\n" + harness.RELEASED + "\n")
+
+
 class ReceiptChecks(unittest.TestCase):
+    def test_r93_show_hide_show_receipts_are_ordered_and_fail_closed(self):
+        self.assertEqual(len(harness.validate_receipt("--render-visibility=72",V)),5)
+        harness.validate_loader_receipt(
+            "--render-visibility=72",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-visibility-r93\n")
+        for forged in (
+            V.replace(harness.R93_VISIBILITY,""),
+            V.replace("shown=48","shown=49"),
+            V.replace("hidden=16","hidden=15"),
+            V.replace("current=72","current=71"),
+            V.replace("accepted=72","accepted=73"),
+            V.replace(harness.R93_VISIBILITY,harness.R93_VISIBILITY+"_FAKE"),
+            V.replace(harness.R93_STABLE+"\n"+harness.R93_VISIBILITY,
+                      harness.R93_VISIBILITY+"\n"+harness.R93_STABLE),
+            V.replace(harness.R93_VISIBILITY,
+                      harness.R93_VISIBILITY+"\n"+harness.R93_VISIBILITY),
+            V+V,
+            V+"R93_WGL_CONTEXT_UNVERIFIED\n",
+            V+"R93_MENU_VISIBILITY_UNVERIFIED\n",
+        ):
+            with self.subTest(forged=forged),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-visibility=72",forged)
+        for mode,log in (
+            ("--render-visibility=72",M),
+            ("--render-visibility=72",O),
+            ("--render-overlay=72",V),
+            ("--render-overlay=8",V),
+        ):
+            with self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt(mode,log)
+
     def test_r92_exact_72_callback_64_frame_receipts_and_negative_controls(self):
         self.assertEqual(len(harness.validate_receipt("--render-overlay=72",M)),5)
         harness.validate_loader_receipt(
@@ -415,6 +451,65 @@ class ReceiptChecks(unittest.TestCase):
             data=json.loads(report.read_text(encoding="utf-8"))
             self.assertEqual(len(data["stages"]),5)
             self.assertEqual(data["stages"][-1]["mode"],"--render-overlay=72")
+            self.assertFalse(data["visual_game_acceptance"])
+            self.assertFalse(data["in_game_menu_verified"])
+
+    @unittest.skipUnless(os.name=="nt", "R93 synthetic visibility requires Windows")
+    def test_r93_six_stage_visibility_attach_and_release(self):
+        # Fully simulated Attach and JVM stdout: NEVER start Minecraft.
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            loader=root/"slinkywinky_loader.exe"
+            java=root/"jdk8"/"bin"/"java.exe"
+            tools=root/"jdk8"/"lib"/"tools.jar"
+            log=root/"target-stdout.log"
+            client=root/"fixture-original-client.jar"
+            report=root/"r93-evidence.json"
+            java.parent.mkdir(parents=True)
+            tools.parent.mkdir(parents=True)
+            for file in (loader,java,tools,log,client):
+                file.touch()
+            attached=[]
+            def fake(cmd,**kwargs):
+                self.assertNotIn("SLINKYWINKY_ATTACH_TEST",kwargs["env"])
+                self.assertNotIn("SLINKYWINKY_EXPERIMENTAL_HOOK",kwargs["env"])
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_OVERLAY"),"1")
+                self.assertEqual(kwargs["env"].get("SLINKYWINKY_RENDER_VISIBILITY"),"1")
+                self.assertNotIn("SLINKYWINKY_RENDER_MULTIFRAME",kwargs["env"])
+                if cmd[1]=="list":
+                    return harness.subprocess.CompletedProcess(
+                        cmd,0,"123 net.minecraft.client.main.Main\n","")
+                self.assertEqual(cmd[1],"attach")
+                self.assertEqual(cmd[2],"123")
+                option=cmd[-1]
+                attached.append(option)
+                stage={"--render-preflight":P,
+                       "--render-callback=8":C,
+                       "--render-context=8":W,
+                       "--render-overlay=8":O,
+                       "--render-overlay=72":M,
+                       "--render-visibility=72":V}[option]
+                with log.open("a",encoding="utf-8") as output:
+                    output.write(stage)
+                return harness.subprocess.CompletedProcess(
+                    cmd,0,"ATTACH_RESULT=SUCCESS pid=123 mode="+
+                    harness.LOADER_MODES[option]+"\n","")
+            with patch.object(harness,"process_birth_token",return_value=81), \
+                 patch.object(harness,"verify_original_client_jar",return_value=(1,2,3,4)), \
+                 patch.object(harness.subprocess,"run",side_effect=fake):
+                result=harness.run([
+                    "--loader",str(loader),"--jdk8",str(root/"jdk8"),
+                    "--pid","123","--target-stdout-log",str(log),
+                    "--original-client-jar",str(client),
+                    "--mode","visibility","--execute","--report",str(report)])
+            self.assertEqual(result,0)
+            self.assertEqual(attached,
+                             ["--render-preflight","--render-callback=8",
+                              "--render-context=8","--render-overlay=8",
+                              "--render-overlay=72","--render-visibility=72"])
+            data=json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(len(data["stages"]),6)
+            self.assertEqual(data["stages"][-1]["mode"],"--render-visibility=72")
             self.assertFalse(data["visual_game_acceptance"])
             self.assertFalse(data["in_game_menu_verified"])
 
