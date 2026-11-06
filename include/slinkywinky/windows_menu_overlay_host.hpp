@@ -24,8 +24,9 @@ public:
     bool open(HGLRC context,HDC dc,unsigned width,unsigned height) noexcept;
     bool resize(unsigned width,unsigned height) noexcept;
     bool draw(const MenuState& menu,
-              const MenuProfileBridge* profile=nullptr,
-              MenuGL11Mode mode=MenuGL11Mode::BoundedOverlay); // admitted owner only
+              const MenuProfileBridge* profile=nullptr); // preserved R70/R76 ABI
+    bool draw(const MenuState& menu,const MenuProfileBridge* profile,
+              MenuGL11Mode mode); // R93 explicit compact mode
     bool close() noexcept;            // allowed after current context loss
     bool active() const noexcept {return session_.attached();}
     std::uint64_t last_sequence() const noexcept {return session_.sequence();}
