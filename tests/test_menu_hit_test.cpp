@@ -77,6 +77,10 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
     forged=*frame;forged.sequence=0;
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    forged=*frame;forged.visible[1]=forged.visible[0];
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    forged=*frame;std::swap(forged.visible[0],forged.visible[1]);
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
     CHECK(session.detach());
 }
 }
