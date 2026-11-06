@@ -10,6 +10,7 @@
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
+#include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
 #include <GL/gl.h>
@@ -640,12 +641,22 @@ namespace {
 std::mutex retained_preview_mutex;
 bool retained_preview_armed=false;
 std::unique_ptr<slinkywinky::WglRetainedMenuPreview> retained_preview;
+std::array<HANDLE,11> operator_events{}; // 0..8 commands, 9..10 acknowledgments
+bool operator_armed=false;
+unsigned operator_commands_processed=0;
+void close_operator_events() noexcept {
+    for(HANDLE& event:operator_events) {
+        if(event)CloseHandle(event);
+        event=nullptr;
+    }
+    operator_commands_processed=0;
+}
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
     JNIEnv*,jclass) {
     std::lock_guard<std::mutex> lock(retained_preview_mutex);
-    if(retained_preview_armed || retained_preview)return JNI_FALSE;
+    if(retained_preview_armed || retained_preview || operator_armed)return JNI_FALSE;
     retained_preview_armed=true;
     return JNI_TRUE;
 }
@@ -676,7 +687,7 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
     JNIEnv*,jclass,jint action) {
     std::lock_guard<std::mutex> lock(retained_preview_mutex);
-    if(!retained_preview_armed || !retained_preview ||
+    if(!retained_preview_armed || !retained_preview || operator_armed ||
        action<0 || action>7 || !retained_preview->owner_thread())
         return JNI_FALSE;
     try {
@@ -685,6 +696,88 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
     } catch(...) {
         return JNI_FALSE;
     }
+}
+// R100: each action comes from a separate producer using PID + kernel-birth
+// named Windows events. Only the source-admitted game render owner polls and
+// mutates the local first-party menu. This never sends Minecraft input.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(retained_preview_armed || retained_preview || operator_armed)
+        return JNI_FALSE;
+    std::uint64_t birth=0;
+    const auto pid=static_cast<std::uint32_t>(GetCurrentProcessId());
+    if(!slinkywinky::menu_operator_process_birth(pid,&birth))return JNI_FALSE;
+    try {
+        for(int slot=0;slot<11;slot++) {
+            const auto name=slinkywinky::menu_operator_event_name(pid,birth,slot);
+            if(name.empty()) {close_operator_events();return JNI_FALSE;}
+            HANDLE event=CreateEventW(nullptr,slot>=9,FALSE,name.c_str());
+            const DWORD status=GetLastError();
+            if(!event || status==ERROR_ALREADY_EXISTS) {
+                if(event)CloseHandle(event);
+                close_operator_events();
+                return JNI_FALSE;
+            }
+            operator_events[static_cast<std::size_t>(slot)]=event;
+        }
+    } catch(...) {
+        close_operator_events();
+        return JNI_FALSE;
+    }
+    operator_armed=true;
+    retained_preview_armed=true;
+    return JNI_TRUE;
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+    JNIEnv*,jclass,jlong expectedContext,jlong expectedDc) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!operator_armed || !retained_preview_armed || !retained_preview ||
+       !retained_preview->active() || !retained_preview->owner_thread() ||
+       !expectedContext || !expectedDc ||
+       wglGetCurrentContext()!=reinterpret_cast<HGLRC>(
+           static_cast<std::uintptr_t>(expectedContext)) ||
+       wglGetCurrentDC()!=reinterpret_cast<HDC>(
+           static_cast<std::uintptr_t>(expectedDc)))
+        return -1;
+    if(operator_commands_processed>=16)return -1;
+    const DWORD stop=WaitForSingleObject(operator_events[8],0);
+    if(stop==WAIT_FAILED)return -1;
+    if(stop==WAIT_OBJECT_0) {
+        operator_commands_processed++;
+        return SetEvent(operator_events[9])?9:-1;
+    }
+    for(int slot=0;slot<8;slot++) {
+        const DWORD status=WaitForSingleObject(operator_events[slot],0);
+        if(status==WAIT_FAILED)return -1;
+        if(status!=WAIT_OBJECT_0)continue;
+        operator_commands_processed++;
+        bool accepted=false;
+        try {
+            accepted=retained_preview->apply(
+                static_cast<slinkywinky::MenuNavAction>(slot));
+        } catch(...) {
+            accepted=false;
+        }
+        if(!SetEvent(operator_events[accepted?9:10]))return -1;
+        return accepted?slot+1:slot+10;
+    }
+    return 0;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
+    JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!operator_armed || !retained_preview_armed)return JNI_FALSE;
+    // R81 must already have drained all source-pinned WGL callbacks. The
+    // persistent model retains no GL host between frames.
+    close_operator_events();
+    retained_preview.reset();
+    retained_preview_armed=false;
+    operator_armed=false;
+    return JNI_TRUE;
 }
 // Render-thread-only bounded UI evidence; no native pointers exposed.
 extern "C" JNIEXPORT jintArray JNICALL
@@ -711,7 +804,7 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
     JNIEnv*,jclass) {
     std::lock_guard<std::mutex> lock(retained_preview_mutex);
-    if(!retained_preview_armed)return JNI_FALSE;
+    if(!retained_preview_armed || operator_armed)return JNI_FALSE;
     if(retained_preview) {
         if(!retained_preview->owner_thread() ||
            !retained_preview->close())return JNI_FALSE;
@@ -726,7 +819,7 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview(
     JNIEnv*,jclass) {
     std::lock_guard<std::mutex> lock(retained_preview_mutex);
-    if(!retained_preview_armed)return JNI_FALSE;
+    if(!retained_preview_armed || operator_armed)return JNI_FALSE;
     retained_preview.reset();
     retained_preview_armed=false;
     return JNI_TRUE;
