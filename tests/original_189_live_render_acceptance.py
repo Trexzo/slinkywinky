@@ -523,13 +523,13 @@ def run(argv=None):
             appended=read_appended(target_log,before,original_stat)
             match=re.findall(
                 r"(?m)^R95_INPUT_SOURCE_AUDIT keys=([0-9]{1,4}) "
-                r"events=([0-9]{1,4})\\r?$",appended)
+                r"events=([0-9]{1,4})\r?$",appended)
             if match!=[("2","0")] or appended.count("R95_INPUT_SOURCE_AUDIT")!=1:
                 raise ReceiptError("R95 native Insert vs PID event provenance unverified")
             final=re.search(
                 r"(?m)^R94_MENU_OPERATOR_CONTROLLED_PASS frames=([0-9]{1,4}) "
                 r"toggles=([0-9]{1,4}) shown=([0-9]{1,4}) "
-                r"hidden=([0-9]{1,4}) stop=operator\\r?$",appended)
+                r"hidden=([0-9]{1,4}) stop=operator\r?$",appended)
             if final is None or int(final.group(2))!=2:
                 raise ReceiptError("R95 Insert must be the ONLY visibility toggle source")
             print("R95_ORIGINAL_FOREGROUND_SYNTHETIC_INSERT_TWICE_PASS",flush=True)
