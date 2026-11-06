@@ -47,6 +47,26 @@ bool MenuNavigation::focused_visible(std::size_t* index) const {
     *index=*current;
     return true;
 }
+bool MenuNavigation::select_tab(MenuTab tab) {
+    if(!owner_thread() || !profile_.owns(menu_) ||
+       tab==MenuTab::Count || tab==MenuTab::Unload)return false;
+    if(!profile_.select(tab))return false;
+    const auto visible=menu_.page();
+    focused_=visible.empty()?std::nullopt:
+             std::optional<std::size_t>(visible.front().catalog_index);
+    return true;
+}
+bool MenuNavigation::focus_visible_row(std::size_t catalog_index) {
+    if(!owner_thread() || !profile_.owns(menu_))return false;
+    const auto rows=menu_.page();
+    const auto found=std::find_if(rows.begin(),rows.end(),
+        [catalog_index](const MenuItem& row){
+            return row.catalog_index==catalog_index;
+        });
+    if(found==rows.end())return false;
+    focused_=catalog_index;
+    return true;
+}
 bool MenuNavigation::switch_tab(int direction) {
     if(direction!=1 && direction!=-1)return false;
     // Only the six informational/preview tabs are keyboard navigable.
@@ -54,11 +74,7 @@ bool MenuNavigation::switch_tab(int direction) {
     const int before=static_cast<int>(menu_.tab());
     if(before<0 || before>5)return false;
     const int after=(before+direction+6)%6;
-    if(!profile_.select(static_cast<MenuTab>(after)))return false;
-    const auto visible=menu_.page();
-    focused_=visible.empty()?std::nullopt:
-             std::optional<std::size_t>(visible.front().catalog_index);
-    return true;
+    return select_tab(static_cast<MenuTab>(after));
 }
 bool MenuNavigation::move_row(int direction) {
     if(direction!=1 && direction!=-1)return false;
