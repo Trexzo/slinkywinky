@@ -18,6 +18,9 @@ public:
     bool owner_thread() const noexcept;
     bool pending() const noexcept;
     bool cancel() noexcept;
+    // Mirror the owner preview window's OS double-click timing, without
+    // reading or changing any OS setting from this cross-platform class.
+    bool set_double_click_window(std::uint64_t milliseconds) noexcept;
 
     bool press(const MenuRenderFrame& frame,MenuPanelMode mode,
                int x,int y,std::uint64_t monotonic_ms,
@@ -43,6 +46,7 @@ private:
     std::optional<Press> active_;
     std::optional<MenuHit> last_committed_;
     std::uint64_t last_committed_ms_=0;
+    std::uint64_t double_click_ms_=500;
 };
 
 } // namespace slinkywinky
