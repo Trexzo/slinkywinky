@@ -7,6 +7,7 @@
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include "slinkywinky/windows_stop_gate.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -21,6 +22,13 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawCompactOverlay(
     JNIEnv*,jclass,jlong,jlong,jint,jint);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(JNIEnv*,jclass);
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+    JNIEnv*,jclass,jlong,jlong);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(JNIEnv*,jclass);
 #endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
 
@@ -340,6 +348,47 @@ int main() {
         }
         REQUIRE(shownPixels==48 && hiddenPixels==16);
         std::cout<<"R93_COMPACT_SHOW_HIDE_SHOW_GL_PIXELS_PASS\\n";
+
+        // R94 production stop/toggle event registration and JNI polling.
+        // Event opens do not attach Java or touch any Minecraft JVM.
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenManualVisibility(
+            nullptr,nullptr)==JNI_FALSE);
+        const auto pid=static_cast<std::uint32_t>(GetCurrentProcessId());
+        const auto toggleName=slinkywinky::visibility_toggle_event_name(pid);
+        const auto stopName=slinkywinky::visibility_stop_event_name(pid);
+        HANDLE toggleEvent=OpenEventW(EVENT_MODIFY_STATE,FALSE,toggleName.c_str());
+        HANDLE stopEvent=OpenEventW(EVENT_MODIFY_STATE,FALSE,stopName.c_str());
+        REQUIRE(toggleEvent && stopEvent);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+            nullptr,nullptr,0,admittedDc)==-1);
+        REQUIRE(SetEvent(toggleEvent)!=FALSE);
+        bool foreignGateAccepted=false;
+        std::thread foreignGate([&] {
+            foreignGateAccepted=
+                Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+                    nullptr,nullptr,admittedContext,admittedDc)!=-1;
+        });
+        foreignGate.join();
+        REQUIRE(!foreignGateAccepted);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+            nullptr,nullptr,admittedContext,admittedDc)==1);
+        REQUIRE(SetEvent(stopEvent)!=FALSE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+            nullptr,nullptr,admittedContext,admittedDc)==2);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
+            nullptr,nullptr)==JNI_TRUE);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollManualVisibility(
+            nullptr,nullptr,admittedContext,admittedDc)==-1);
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
+            nullptr,nullptr)==JNI_FALSE);
+        CloseHandle(toggleEvent);
+        CloseHandle(stopEvent);
+        REQUIRE(!OpenEventW(EVENT_MODIFY_STATE,FALSE,toggleName.c_str()));
+        REQUIRE(!OpenEventW(EVENT_MODIFY_STATE,FALSE,stopName.c_str()));
+        same(compactBefore,snapshot());
+        std::cout<<"R94_NATIVE_PID_CONTROL_TOGGLE_STOP_AND_FOREIGN_THREAD_REFUSAL_PASS\\n";
 
 #endif
         // No current WGL context: invocation MUST be refused before any GL call.
