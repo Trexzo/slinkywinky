@@ -25,6 +25,10 @@ R92_CALLBACK = "R92_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
 R92_STABLE = ("R92_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true frames=64")
 R92_OVERLAY = "R92_MULTIFRAME_OVERLAY_DRAW_PASS frames=64"
+R93_CALLBACK = "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
+R93_STABLE = ("R93_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
+              "absent=0 invalid=0 changed=0 stable=true shown=48 hidden=16")
+R93_VISIBILITY = "R93_MENU_SHOW_HIDE_SHOW_PASS shown=48 hidden=16"
 CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
 RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
 STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
@@ -44,6 +48,8 @@ NEGATIVE = (
     "R91_RENDER_OVERLAY_UNVERIFIED",
     "R92_WGL_CONTEXT_UNVERIFIED",
     "R92_MULTIFRAME_OVERLAY_UNVERIFIED",
+    "R93_WGL_CONTEXT_UNVERIFIED",
+    "R93_MENU_VISIBILITY_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -55,6 +61,7 @@ LOADER_MODES = {
     "--render-context=8": "render-context-r78",
     "--render-overlay=8": "render-overlay-r91",
     "--render-overlay=72": "render-overlay-r92",
+    "--render-visibility=72": "render-visibility-r93",
 }
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
@@ -73,6 +80,14 @@ STAGES = {
                    ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)),
                    ("--render-overlay=72",
                     (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED))),
+    "visibility": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
+                   ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
+                   ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
+                   ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)),
+                   ("--render-overlay=72",
+                    (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)),
+                   ("--render-visibility=72",
+                    (RESTORED, R93_CALLBACK, R93_STABLE, R93_VISIBILITY, RELEASED))),
 }
 
 
@@ -136,12 +151,17 @@ RECEIPT_LINES = {
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     R92_STABLE: re.compile(r"^" + re.escape(R92_STABLE) + r"\r?$", re.MULTILINE),
     R92_OVERLAY: re.compile(r"^" + re.escape(R92_OVERLAY) + r"\r?$", re.MULTILINE),
+    R93_CALLBACK: re.compile(
+        r"^" + re.escape(R93_CALLBACK) +
+        r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
+    R93_STABLE: re.compile(r"^" + re.escape(R93_STABLE) + r"\r?$", re.MULTILINE),
+    R93_VISIBILITY: re.compile(r"^" + re.escape(R93_VISIBILITY) + r"\r?$", re.MULTILINE),
 }
 
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["multiframe"])[option]
+    expected = dict(STAGES["visibility"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
@@ -166,6 +186,8 @@ def validate_receipt(option, appended):
                 raise ReceiptError("Malformed or conflicting pass-looking target receipt")
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    elif option == "--render-visibility=72":
+        ordered = (RESTORED, R93_CALLBACK, R93_STABLE, R93_VISIBILITY, RELEASED)
     elif option == "--render-overlay=72":
         ordered = (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)
     else:
@@ -366,13 +388,16 @@ def run(argv=None):
     env.pop("SLINKYWINKY_EXPERIMENTAL_HOOK", None)
     env.pop("SLINKYWINKY_RENDER_OVERLAY", None)
     env.pop("SLINKYWINKY_RENDER_MULTIFRAME", None)
+    env.pop("SLINKYWINKY_RENDER_VISIBILITY", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
-    if a.mode in ("overlay","multiframe"):
+    if a.mode in ("overlay","multiframe","visibility"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
     if a.mode=="multiframe":
         env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
+    if a.mode=="visibility":
+        env["SLINKYWINKY_RENDER_VISIBILITY"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
