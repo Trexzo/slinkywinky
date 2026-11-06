@@ -65,6 +65,19 @@ try:
         raise AssertionError("R107 keyboard path negative controls failed: " +
                              keyboard_audit.stdout + keyboard_audit.stderr)
     print("PASS: R107 original keyboard path source-shape negative controls")
+    # R109: a second offline ASM-only guard proves that a keyboard queue
+    # callsite may be substituted in memory with NO other opcode changes.
+    # Nothing here is installed in the actual game or instrumentation JAR.
+    keyboard_weave = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.OriginalKeyboardLoopWeaveSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (keyboard_weave.returncode != 0 or
+        "R109_SYNTHETIC_KEYBOARD_LOOP_WEAVE_ONE_CHANGE_AND_NEGATIVE_CONTROLS_PASS"
+        not in keyboard_weave.stdout):
+        raise AssertionError("R109 offline keyboard ASM negative controls failed: " +
+                             keyboard_weave.stdout + keyboard_weave.stderr)
+    print("PASS: R109 memory-only original input callsite rewrite controls")
     # R72: generated bfk class only; source and transformed bytes stay in
     # the disposable JVM heap. The real Mojang JAR is tested separately in CI.
     offline_weave = subprocess.run(

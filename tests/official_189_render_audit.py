@@ -154,6 +154,24 @@ def main():
             raise RuntimeError("Original Minecraft keyboard event audit failed: " +
                                keyboard.stdout[-1600:] + keyboard.stderr[-1600:])
         print(keyboard.stdout.rstrip(), flush=True)
+        # R109: verify exactly one source-pinned Keyboard.next() callsite
+        # can be replaced in memory, keeping all other instructions unchanged.
+        # The marker is intentionally unresolved and is NEVER executed.
+        key_weave = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.OriginalKeyboardLoopWeaveAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40)
+        if (key_weave.returncode != 0 or
+                key_weave.stdout.count(
+                    "R109_ORIGINAL_189_KEYBOARD_NEXT_EXACT_ONE_CALLSITE_MEMORY_ONLY_PASS") != 1 or
+                "R109_ALL_OTHER_METHOD_AND_INSTRUCTION_TRACES_UNCHANGED_PASS"
+                not in key_weave.stdout or
+                "R109_NO_GAME_PROCESS_NO_CLASS_REDEFINITION_NO_INPUT_CAPTURE"
+                not in key_weave.stdout):
+            raise RuntimeError("R109 original keyboard loop dry run failed: " +
+                               key_weave.stdout[-1600:] + key_weave.stderr[-1600:])
+        print(key_weave.stdout.rstrip(), flush=True)
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.
         weave = subprocess.run(
