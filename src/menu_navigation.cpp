@@ -15,7 +15,7 @@ std::vector<std::size_t> indices_for(MenuTab tab) {
 }
 
 MenuNavigation::MenuNavigation(MenuState& menu,
-                               MenuProfileBridge& profile) noexcept
+                               MenuProfileBridge& profile)
     : menu_(menu),profile_(profile),thread_(std::this_thread::get_id()) {
     if(profile_.owns(menu_)) {
         const auto visible=menu_.page();
