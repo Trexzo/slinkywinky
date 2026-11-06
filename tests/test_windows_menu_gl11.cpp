@@ -358,6 +358,7 @@ int main() {
         const auto pid=static_cast<std::uint32_t>(GetCurrentProcessId());
         const auto toggleName=slinkywinky::visibility_toggle_event_name(pid);
         const auto stopName=slinkywinky::visibility_stop_event_name(pid);
+        REQUIRE(toggleName.rfind(L"Local\\",0)==0 && stopName.rfind(L"Local\\",0)==0);
         HANDLE toggleEvent=OpenEventW(EVENT_MODIFY_STATE,FALSE,toggleName.c_str());
         HANDLE stopEvent=OpenEventW(EVENT_MODIFY_STATE,FALSE,stopName.c_str());
         REQUIRE(toggleEvent && stopEvent);
