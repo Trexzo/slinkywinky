@@ -139,6 +139,21 @@ def main():
             raise RuntimeError("Original 1.8.9 renderer fingerprint changed")
         print(result.stdout.rstrip(), flush=True)
         print("R71_OFFLINE_ORIGINAL_JAR_RENDER_PREFLIGHT_PASS", flush=True)
+        # R107: source-pin the NORMAL Minecraft keyboard dispatch owner.
+        # This is an offline audit only, NOT a modal/no-pass-through test.
+        keyboard = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.KeyboardInputCallsiteAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40)
+        if (keyboard.returncode != 0 or
+                keyboard.stdout.count("R107_ORIGINAL_189_KEYBOARD_EVENT_PATH_AUDITED ") != 1 or
+                "owner=ave.s()V next=1 eventKey=2 eventState=3 eventChar=1" not in keyboard.stdout or
+                "R107_NORMAL_GAMEPLAY_DISPATCH_PRESENT_NOT_MODAL_INPUT_CERTIFICATION"
+                not in keyboard.stdout):
+            raise RuntimeError("Original Minecraft keyboard event audit failed: " +
+                               keyboard.stdout[-1600:] + keyboard.stderr[-1600:])
+        print(keyboard.stdout.rstrip(), flush=True)
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.
         weave = subprocess.run(
