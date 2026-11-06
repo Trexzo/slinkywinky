@@ -39,12 +39,39 @@ int wmain(int argc, wchar_t** argv) {
     const bool render_overlay = option == L"--render-overlay=8";
     const bool render_multiframe = option == L"--render-overlay=72";
     const bool render_visibility = option == L"--render-visibility=72";
+    const bool manual_visibility = option == L"--render-visibility=manual";
+    const bool toggle_visibility = option == L"--toggle-visibility";
+    const bool stop_visibility = option == L"--stop-visibility";
     if ((!list && !attach) || (attach && !numeric(argv[2])) ||
         (argc == 5 && option != L"--tick-probe" &&
-         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context && !render_overlay && !render_multiframe && !render_visibility)) {
+         option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context && !render_overlay && !render_multiframe && !render_visibility && !manual_visibility &&
+         !toggle_visibility && !stop_visibility)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-overlay=8|--render-overlay=72|--render-visibility=72]\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-overlay=8|--render-overlay=72|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility]\n";
         return 2;
+    }
+    // R94 named controls do NOT use the Java Attach API (safepoint). They
+    // work only while the owner-PID JNI renderer has created the events.
+    if(toggle_visibility || stop_visibility) {
+        std::uint64_t target=0;
+        try {target=std::stoull(std::wstring(argv[2]));}
+        catch(...) {return 2;}
+        if(!target || target>0xffffffffULL)return 2;
+        const auto eventName=toggle_visibility ?
+            slinkywinky::visibility_toggle_event_name(static_cast<std::uint32_t>(target)):
+            slinkywinky::visibility_stop_event_name(static_cast<std::uint32_t>(target));
+        HANDLE event=OpenEventW(EVENT_MODIFY_STATE,FALSE,eventName.c_str());
+        if(!event) {
+            std::wcerr << L"ATTACH_RESULT=FAIL no active R94 visibility gate for PID\n";
+            return 2;
+        }
+        const BOOL sent=SetEvent(event);
+        CloseHandle(event);
+        if(!sent)return 2;
+        std::wcout << L"ATTACH_RESULT=SUCCESS pid=" << target <<
+                      (toggle_visibility?L" mode=toggle-visibility\n":
+                                         L" mode=stop-visibility\n");
+        return 0;
     }
     // Never enter the Java Attach API for an active continuous session. It may
     // require a JVM safepoint while our tick instrumentation is executing.
@@ -78,7 +105,7 @@ int wmain(int argc, wchar_t** argv) {
     const auto instrument = folder / L"slinkywinky_instrument.jar";
     const auto classes = folder / L"attach-classes";
     if (!regular_file_exists(java) || !regular_file_exists(tools) || !regular_file_exists(agent) ||
-        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight || render_callback || render_context || render_overlay || render_multiframe || render_visibility) &&
+        (argc == 5 && (option == L"--instrument-probe" || hook_option || stop_option || render_preflight || render_callback || render_context || render_overlay || render_multiframe || render_visibility || manual_visibility) &&
          !regular_file_exists(instrument)) ||
         (argc == 5 && (hook_option || render_context || render_overlay || render_multiframe || render_visibility) &&
          !regular_file_exists(folder / L"slinkywinky_jni.dll")) ||
