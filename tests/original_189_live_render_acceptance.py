@@ -29,6 +29,9 @@ R93_CALLBACK = "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
 R93_STABLE = ("R93_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true shown=48 hidden=16")
 R93_VISIBILITY = "R93_MENU_SHOW_HIDE_SHOW_PASS shown=48 hidden=16"
+R94_CALLBACK = "R94_RENDER_CALLBACK_BOUNDED_PASS"
+R94_STABLE = "R94_WGL_CONTEXT_STABLE_PASS"
+R94_VISIBILITY = "R94_MENU_OPERATOR_CONTROLLED_PASS"
 CALLBACK = "R75_RENDER_CALLBACK_BOUNDED_PASS accepted=8"
 RELEASED = "R81_ORIGINAL_RENDER_ADMISSION_RELEASED_PASS"
 STABLE = ("R78_READ_ONLY_WGL_CONTEXT_STABLE_PASS "
@@ -50,6 +53,8 @@ NEGATIVE = (
     "R92_MULTIFRAME_OVERLAY_UNVERIFIED",
     "R93_WGL_CONTEXT_UNVERIFIED",
     "R93_MENU_VISIBILITY_UNVERIFIED",
+    "R94_WGL_CONTEXT_UNVERIFIED",
+    "R94_OPERATOR_VISIBILITY_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -62,6 +67,7 @@ LOADER_MODES = {
     "--render-overlay=8": "render-overlay-r91",
     "--render-overlay=72": "render-overlay-r92",
     "--render-visibility=72": "render-visibility-r93",
+    "--render-visibility=manual": "render-manual-r94",
 }
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
@@ -88,6 +94,16 @@ STAGES = {
                     (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)),
                    ("--render-visibility=72",
                     (RESTORED, R93_CALLBACK, R93_STABLE, R93_VISIBILITY, RELEASED))),
+    "manual": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
+               ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
+               ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
+               ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)),
+               ("--render-overlay=72",
+                (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)),
+               ("--render-visibility=72",
+                (RESTORED, R93_CALLBACK, R93_STABLE, R93_VISIBILITY, RELEASED)),
+               ("--render-visibility=manual",
+                (RESTORED, R94_CALLBACK, R94_STABLE, R94_VISIBILITY, RELEASED))),
 }
 
 
@@ -155,13 +171,25 @@ RECEIPT_LINES = {
         r"^" + re.escape(R93_CALLBACK) +
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     R93_STABLE: re.compile(r"^" + re.escape(R93_STABLE) + r"\r?$", re.MULTILINE),
-    R93_VISIBILITY: re.compile(r"^" + re.escape(R93_VISIBILITY) + r"\r?$", re.MULTILINE),
+    R93_VISIBILITY: re.compile(r"^" + re.escape(R93_VISIBILITY) + r"\\r?$", re.MULTILINE),
+    R94_CALLBACK: re.compile(
+        r"^R94_RENDER_CALLBACK_BOUNDED_PASS accepted=([0-9]{1,4}) "
+        r"owner=[^\\r\\n]{1,256}#[1-9][0-9]*\\r?$", re.MULTILINE),
+    R94_STABLE: re.compile(
+        r"^R94_WGL_CONTEXT_STABLE_PASS attempts=([0-9]{1,4}) current=([0-9]{1,4}) "
+        r"absent=0 invalid=0 changed=0 stable=true "
+        r"shown=([0-9]{1,4}) hidden=([0-9]{1,4}) toggles=([0-9]{1,4}) "
+        r"stop=operator\\r?$", re.MULTILINE),
+    R94_VISIBILITY: re.compile(
+        r"^R94_MENU_OPERATOR_CONTROLLED_PASS frames=([0-9]{1,4}) "
+        r"toggles=([0-9]{1,4}) shown=([0-9]{1,4}) "
+        r"hidden=([0-9]{1,4}) stop=operator\\r?$", re.MULTILINE),
 }
 
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["visibility"])[option]
+    expected = dict(STAGES["manual"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
@@ -184,8 +212,24 @@ def validate_receipt(option, appended):
                 pattern.fullmatch(line) for pattern in RECEIPT_LINES.values()
             ):
                 raise ReceiptError("Malformed or conflicting pass-looking target receipt")
+    if option=="--render-visibility=manual":
+        m0=RECEIPT_LINES[R94_CALLBACK].search(appended)
+        m1=RECEIPT_LINES[R94_STABLE].search(appended)
+        m2=RECEIPT_LINES[R94_VISIBILITY].search(appended)
+        counts=tuple(map(int,m2.groups())) if m2 else ()
+        if not (m0 and m1 and m2 and len(counts)==4):
+            raise ReceiptError("Missing R94 numeric target receipts")
+        frames,toggles,shown,hidden=counts
+        if not (9 <= frames <= 2048 and 2 <= toggles <= frames-8 and
+                shown>0 and hidden>0 and shown+hidden==frames-8 and
+                int(m0.group(1))==frames and
+                tuple(map(int,m1.groups()))==
+                (frames,frames,shown,hidden,toggles)):
+            raise ReceiptError("R94 counter relationship or stop evidence invalid")
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    elif option == "--render-visibility=manual":
+        ordered = (RESTORED, R94_CALLBACK, R94_STABLE, R94_VISIBILITY, RELEASED)
     elif option == "--render-visibility=72":
         ordered = (RESTORED, R93_CALLBACK, R93_STABLE, R93_VISIBILITY, RELEASED)
     elif option == "--render-overlay=72":
@@ -389,16 +433,19 @@ def run(argv=None):
     env.pop("SLINKYWINKY_RENDER_OVERLAY", None)
     env.pop("SLINKYWINKY_RENDER_MULTIFRAME", None)
     env.pop("SLINKYWINKY_RENDER_VISIBILITY", None)
+    env.pop("SLINKYWINKY_RENDER_MANUAL", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
-    if a.mode in ("overlay","multiframe","visibility"):
+    if a.mode in ("overlay","multiframe","visibility","manual"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
-    if a.mode in ("multiframe","visibility"):
+    if a.mode in ("multiframe","visibility","manual"):
         # R93 must pass the earlier, separately consent-gated R92 stage.
         env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
-    if a.mode=="visibility":
+    if a.mode in ("visibility","manual"):
         env["SLINKYWINKY_RENDER_VISIBILITY"] = "1"
+    if a.mode=="manual":
+        env["SLINKYWINKY_RENDER_MANUAL"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
