@@ -52,7 +52,8 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
     return draw(menu,profile,MenuGL11Mode::BoundedOverlay);
 }
 bool WglMenuOverlayHost::draw(const MenuState& menu,
-                              const MenuProfileBridge* profile,MenuGL11Mode mode) {
+                              const MenuProfileBridge* profile,MenuGL11Mode mode,
+                              const MenuNavigation* navigation) {
     if(!current())return false;
     // R70: refuse desynchronized host viewports BEFORE taking a numbered
     // frame snapshot. Context/size mismatches must not consume sequences.
@@ -62,7 +63,7 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
        viewport[2]!=static_cast<GLint>(width_) ||
        viewport[3]!=static_cast<GLint>(height_))
         return false;
-    const auto frame=session_.next(menu,profile);
+    const auto frame=session_.next(menu,profile,navigation);
     if(!frame)return false;
     return draw_menu_gl11(*frame,context_,dc_,mode);
 }
