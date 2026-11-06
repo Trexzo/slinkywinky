@@ -92,6 +92,16 @@ if(WIN32)
   target_compile_features(slinkywinky_menu_gl11 PUBLIC cxx_std_17)
   target_link_libraries(slinkywinky_menu_gl11 PUBLIC slinkywinky_core opengl32)
   if(BUILD_TESTING)
+    # R104: no Minecraft JVM/OS input. Isolated foreground/epoch/refusal
+    # contract cannot authorize gameplay event capture.
+    add_executable(slinkywinky_menu_focus_fence_tests
+      tests/test_windows_menu_focus_fence.cpp)
+    target_include_directories(slinkywinky_menu_focus_fence_tests PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_features(slinkywinky_menu_focus_fence_tests PRIVATE cxx_std_17)
+    target_link_libraries(slinkywinky_menu_focus_fence_tests PRIVATE user32 opengl32)
+    add_test(NAME native_menu_focus_loss_rearm_no_input
+      COMMAND slinkywinky_menu_focus_fence_tests)
     add_executable(slinkywinky_gl11_state_tests tests/test_windows_menu_gl11.cpp)
     target_link_libraries(slinkywinky_gl11_state_tests PRIVATE
       slinkywinky_menu_gl11 opengl32 user32 gdi32)
