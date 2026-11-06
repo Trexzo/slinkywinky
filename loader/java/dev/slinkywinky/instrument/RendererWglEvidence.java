@@ -40,6 +40,8 @@ public final class RendererWglEvidence {
     private int overlayFrames;
     private int hiddenFrames;
     private int toggles;
+    private int keyToggles;
+    private int eventToggles;
     private boolean menuVisible;
     private boolean operatorStop;
     private boolean manualClosed;
@@ -147,7 +149,7 @@ public final class RendererWglEvidence {
             if(manualVisibility) {
                 if(attempts>8 && preflightStable()) {
                     final int action=nativePollManualVisibility(context,dc);
-                    if(action<0 || action>2) {
+                    if(action<0 || action>3) {
                         poisoned=true;
                         invalid++;
                         return;
@@ -159,9 +161,11 @@ public final class RendererWglEvidence {
                         hiddenFrames++;
                         return;
                     }
-                    if(action==1) {
+                    if(action==1 || action==3) {
                         menuVisible=!menuVisible;
                         toggles++;
+                        if(action==3)keyToggles++;
+                        else eventToggles++;
                     }
                     if(menuVisible) {
                         if(!nativeDrawCompactOverlay(context,dc,width,height)) {
@@ -221,6 +225,8 @@ public final class RendererWglEvidence {
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}
     public synchronized int toggles(){return toggles;}
+    public synchronized int keyToggles(){return keyToggles;}
+    public synchronized int eventToggles(){return eventToggles;}
     public synchronized boolean closeManual() {
         if(!manualVisibility)return true;
         if(manualClosed)return false;
@@ -232,7 +238,8 @@ public final class RendererWglEvidence {
     public synchronized boolean overlayDrawn(){
         return overlayDrawn && !overlayFailed &&
                (manualVisibility ?
-                    (operatorStop && toggles>=2 && overlayFrames>0 && hiddenFrames>0 &&
+                    (operatorStop && toggles>=2 && toggles==keyToggles+eventToggles &&
+                     overlayFrames>0 && hiddenFrames>0 &&
                      overlayFrames+hiddenFrames==attempts-8) :
                     (overlayFrames==(scriptedVisibility?48:(multiFrame?64:1)) &&
                      (!scriptedVisibility || hiddenFrames==16)));
