@@ -135,7 +135,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     MenuGL11Mode mode) noexcept {
     // Never use a context inferred only from a PID. Require exact equality.
     if((mode!=MenuGL11Mode::StandalonePreview &&
-        mode!=MenuGL11Mode::BoundedOverlay) || !expected_context || !expected_dc ||
+        mode!=MenuGL11Mode::BoundedOverlay &&
+        mode!=MenuGL11Mode::CompactOverlay) || !expected_context || !expected_dc ||
        wglGetCurrentContext()!=expected_context ||
        wglGetCurrentDC()!=expected_dc ||
        frame.epoch==0 || frame.sequence==0 ||
@@ -181,14 +182,15 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     glDisable(GL_CULL_FACE);
     glDisable(GL_FOG);
     glDisable(GL_ALPHA_TEST);
-    const bool overlay=mode==MenuGL11Mode::BoundedOverlay;
+    const bool overlay=mode!=MenuGL11Mode::StandalonePreview;
+    const bool compact=mode==MenuGL11Mode::CompactOverlay;
     // Leave at least a 12 px border in overlay mode. The standalone preview
     // intentionally retains the earlier full-canvas behavior.
     const unsigned paneWidth=overlay?
-        std::min<unsigned>(frame.appearance.wide?844u:676u,
+        std::min<unsigned>(compact?480u:(frame.appearance.wide?844u:676u),
                            frame.viewport_width-24u):frame.viewport_width;
     const unsigned paneHeight=overlay?
-        std::min<unsigned>(630u,frame.viewport_height-24u):
+        std::min<unsigned>(compact?420u:630u,frame.viewport_height-24u):
         frame.viewport_height;
     const unsigned paneLeft=(frame.viewport_width-paneWidth)/2u;
     const unsigned paneTop=(frame.viewport_height-paneHeight)/2u;
@@ -213,8 +215,12 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     glLoadIdentity();
     glTranslatef(static_cast<GLfloat>(paneLeft),
                  static_cast<GLfloat>(paneTop),0.0f);
-    const float w=static_cast<float>(paneWidth);
-    const float h=static_cast<float>(paneHeight);
+    // R93: scale both geometry and the bitmap text in physical pixels;
+    // scissor stays in original viewport coordinates and is state-restored.
+    const float scale=compact?0.70f:1.0f;
+    if(compact)glScalef(scale,scale,1.0f);
+    const float w=static_cast<float>(paneWidth)/scale;
+    const float h=static_cast<float>(paneHeight)/scale;
     rgba(0x161617,overlay?static_cast<GLubyte>(225):static_cast<GLubyte>(255));
     quad(0,0,w,h);
     rgb(frame.appearance.accent_rgb);
