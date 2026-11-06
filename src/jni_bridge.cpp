@@ -463,8 +463,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCurrentWglSnapshot(
     return result;
 }
 /**
- * R91 explicitly opted-in, ONE finite GL1.1 overlay frame on the admitted
- * original renderer thread after eight stable R78 context snapshots.
+ * R91/R92/R93 explicitly opt in to bounded GL1.1 overlay drawing on
+ * the source-admitted original renderer thread after stable WGL samples.
  *
  * No WGL context switching, framebuffer clear, input, networking or game
  * settings. A fresh owner-bound host is closed on the same callback; no
