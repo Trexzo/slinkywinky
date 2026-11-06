@@ -19,7 +19,7 @@ enum class MenuNavAction : unsigned char {
 // construction thread. Its only mutations are in inert local configuration.
 class MenuNavigation final {
 public:
-    MenuNavigation(MenuState& menu, MenuProfileBridge& profile) noexcept;
+    MenuNavigation(MenuState& menu, MenuProfileBridge& profile);
     bool owns(const MenuState& menu,const MenuProfileBridge& profile) const noexcept;
     bool owner_thread() const noexcept;
     bool apply(MenuNavAction action);
