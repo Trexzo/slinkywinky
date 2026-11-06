@@ -12,6 +12,7 @@
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/windows_game_window_gate.hpp"
+#include "slinkywinky/windows_menu_focus_fence.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include <array>
@@ -817,6 +818,16 @@ int main() {
 #endif
         REQUIRE(localWindow==GameWindowFocus::ValidBackground ||
                 localWindow==GameWindowFocus::ValidForeground);
+        // R104 connects its read-only focus lifetime contract to the actual
+        // WGL owner/window evidence, without synthesizing a single key.
+        MenuFocusFence focusFence;
+        REQUIRE(focusFence.begin(101,true));
+        for(int sample=0;sample<3;sample++)
+            REQUIRE(focusFence.observe(audit_game_render_window(
+                context.gl,context.dc,676,630))!=FocusFenceState::Refused);
+        REQUIRE(focusFence.foreground_candidate()==
+                (localWindow==GameWindowFocus::ValidForeground));
+        REQUIRE(!focusFence.can_consume_game_input());
         REQUIRE(audit_game_render_window(context.gl,context.dc,677,630)==
                 GameWindowFocus::Refused);
         REQUIRE(audit_game_render_window(nullptr,context.dc,676,630)==
@@ -831,10 +842,20 @@ int main() {
         ShowWindow(duplicate,SW_SHOWNOACTIVATE);
         REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
                 GameWindowFocus::Refused);
+        REQUIRE(focusFence.observe(audit_game_render_window(
+            context.gl,context.dc,676,630))==FocusFenceState::Refused);
+        REQUIRE(!focusFence.foreground_candidate());
+        REQUIRE(!focusFence.can_consume_game_input());
         ShowWindow(duplicate,SW_HIDE);
         DestroyWindow(duplicate);
         REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)!=
                 GameWindowFocus::Refused);
+        REQUIRE(focusFence.observe(audit_game_render_window(
+            context.gl,context.dc,676,630))==FocusFenceState::Refused);
+        REQUIRE(!focusFence.begin(101,true)); // can't re-use an epoch
+        REQUIRE(!focusFence.begin(102,false)); // no verified key/button release
+        REQUIRE(focusFence.begin(102,true));
+        REQUIRE(!focusFence.foreground_candidate());
         bool otherWindowRefused=false;
         std::thread otherWindow([&] {
             otherWindowRefused=audit_game_render_window(
@@ -847,6 +868,7 @@ int main() {
                 GameWindowFocus::Refused);
         REQUIRE(SetWindowTextW(context.hwnd,L"R67 isolated GL fixture"));
         same(before,snapshot());
+        std::cout<<"R104_REAL_WGL_WINDOW_FOCUS_FENCE_NEVER_CAPTURES_GAME_INPUT_PASS\\n";
         std::cout<<"R101_READ_ONLY_WGL_BOUND_GAME_WINDOW_IDENTITY_NEGATIVE_CONTROLS_PASS\\n";
         std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";
         std::cout<<"R70_WGL_CONTEXT_LOSS_FAIL_CLOSED_PASS\n";
