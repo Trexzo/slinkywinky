@@ -37,8 +37,10 @@ public:
     bool attach(std::uint64_t epoch,unsigned width,unsigned height) noexcept;
     bool resize(unsigned width,unsigned height) noexcept;
     std::optional<MenuRenderFrame> next(const MenuState& menu,
-                                        const MenuProfileBridge* profile=nullptr,
-                                        const MenuNavigation* navigation=nullptr);
+                                        const MenuProfileBridge* profile=nullptr);
+    std::optional<MenuRenderFrame> next(const MenuState& menu,
+                                        const MenuProfileBridge* profile,
+                                        const MenuNavigation* navigation);
     // Cleanup is intentionally owner-thread only; a failed close leaves this
     // context locked until the host can perform the correct teardown.
     bool detach() noexcept;
