@@ -26,6 +26,11 @@ R92_CALLBACK = "R92_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
 R92_STABLE = ("R92_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true frames=64")
 R92_OVERLAY = "R92_MULTIFRAME_OVERLAY_DRAW_PASS frames=64"
+R99_CALLBACK = "R99_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
+R99_STABLE = ("R99_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
+              "absent=0 invalid=0 changed=0 stable=true "
+              "frames=64 retained=true actions=4 tab=1 focus=17")
+R99_RETAINED = "R99_RETAINED_MENU_DRAW_PASS frames=64 actions=4 tab=1 focus=17"
 R93_CALLBACK = "R93_RENDER_CALLBACK_BOUNDED_PASS accepted=72"
 R93_STABLE = ("R93_WGL_CONTEXT_STABLE_PASS attempts=72 current=72 "
               "absent=0 invalid=0 changed=0 stable=true shown=48 hidden=16")
@@ -56,6 +61,8 @@ NEGATIVE = (
     "R93_MENU_VISIBILITY_UNVERIFIED",
     "R94_WGL_CONTEXT_UNVERIFIED",
     "R94_OPERATOR_VISIBILITY_UNVERIFIED",
+    "R99_WGL_CONTEXT_UNVERIFIED",
+    "R99_RETAINED_MENU_UNVERIFIED",
     "Exception in thread",
     "NoClassDefFoundError",
 )
@@ -69,6 +76,7 @@ LOADER_MODES = {
     "--render-overlay=72": "render-overlay-r92",
     "--render-visibility=72": "render-visibility-r93",
     "--render-visibility=manual": "render-manual-r94",
+    "--render-retained=72": "render-retained-r99",
 }
 STAGES = {
     "preflight": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),),
@@ -95,6 +103,14 @@ STAGES = {
                     (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)),
                    ("--render-visibility=72",
                     (RESTORED, R93_CALLBACK, R93_STABLE, R93_VISIBILITY, RELEASED))),
+    "retained": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
+                 ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
+                 ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
+                 ("--render-overlay=8", (RESTORED, CALLBACK, STABLE, OVERLAY, RELEASED)),
+                 ("--render-overlay=72",
+                  (RESTORED, R92_CALLBACK, R92_STABLE, R92_OVERLAY, RELEASED)),
+                 ("--render-retained=72",
+                  (RESTORED, R99_CALLBACK, R99_STABLE, R99_RETAINED, RELEASED))),
     "manual": (("--render-preflight", (PREFLIGHT, PREFLIGHT_RELEASED)),
                ("--render-callback=8", (RESTORED, CALLBACK, RELEASED)),
                ("--render-context=8", (RESTORED, CALLBACK, STABLE, RELEASED)),
@@ -172,6 +188,11 @@ RECEIPT_LINES = {
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
     R92_STABLE: re.compile(r"^" + re.escape(R92_STABLE) + r"\r?$", re.MULTILINE),
     R92_OVERLAY: re.compile(r"^" + re.escape(R92_OVERLAY) + r"\r?$", re.MULTILINE),
+    R99_CALLBACK: re.compile(
+        r"^" + re.escape(R99_CALLBACK) +
+        r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
+    R99_STABLE: re.compile(r"^" + re.escape(R99_STABLE) + r"\r?$", re.MULTILINE),
+    R99_RETAINED: re.compile(r"^" + re.escape(R99_RETAINED) + r"\r?$", re.MULTILINE),
     R93_CALLBACK: re.compile(
         r"^" + re.escape(R93_CALLBACK) +
         r" owner=[^\r\n]{1,256}#[1-9][0-9]*\r?$", re.MULTILINE),
@@ -194,7 +215,7 @@ RECEIPT_LINES = {
 
 def validate_receipt(option, appended):
     """Require one full, fresh target-side line for each expected receipt."""
-    expected = dict(STAGES["manual"])[option]
+    expected = dict(STAGES["retained"] + STAGES["manual"])[option]
     for bad in NEGATIVE:
         if bad in appended:
             raise ReceiptError("Negative target marker present: " + bad)
@@ -233,6 +254,8 @@ def validate_receipt(option, appended):
             raise ReceiptError("R94 counter relationship or stop evidence invalid")
     if option == "--render-preflight":
         ordered = (PREFLIGHT, PREFLIGHT_RELEASED)
+    elif option == "--render-retained=72":
+        ordered = (RESTORED, R99_CALLBACK, R99_STABLE, R99_RETAINED, RELEASED)
     elif option == "--render-visibility=manual":
         ordered = (RESTORED, R94_CALLBACK, R94_STABLE, R94_VISIBILITY, RELEASED)
     elif option == "--render-visibility=72":
@@ -439,18 +462,21 @@ def run(argv=None):
     env.pop("SLINKYWINKY_RENDER_MULTIFRAME", None)
     env.pop("SLINKYWINKY_RENDER_VISIBILITY", None)
     env.pop("SLINKYWINKY_RENDER_MANUAL", None)
+    env.pop("SLINKYWINKY_RENDER_RETAINED", None)
     env["SLINKYWINKY_RENDER_PREFLIGHT"] = "1"
     env["SLINKYWINKY_RENDER_CALLBACK"] = "1"
     env["SLINKYWINKY_RENDER_CONTEXT"] = "1"
-    if a.mode in ("overlay","multiframe","visibility","manual","key"):
+    if a.mode in ("overlay","multiframe","visibility","manual","key","retained"):
         env["SLINKYWINKY_RENDER_OVERLAY"] = "1"
-    if a.mode in ("multiframe","visibility","manual","key"):
+    if a.mode in ("multiframe","visibility","manual","key","retained"):
         # R93 must pass the earlier, separately consent-gated R92 stage.
         env["SLINKYWINKY_RENDER_MULTIFRAME"] = "1"
     if a.mode in ("visibility","manual","key"):
         env["SLINKYWINKY_RENDER_VISIBILITY"] = "1"
     if a.mode in ("manual","key"):
         env["SLINKYWINKY_RENDER_MANUAL"] = "1"
+    if a.mode=="retained":
+        env["SLINKYWINKY_RENDER_RETAINED"] = "1"
 
     listed = subprocess.run([str(loader), "list", str(jdk8)],
                             capture_output=True, text=True, env=env,
