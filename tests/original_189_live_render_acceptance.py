@@ -419,7 +419,14 @@ def run(argv=None):
         result = subprocess.run(cmd,capture_output=True,text=True,
                                 env=env,timeout=25)
         if result.returncode != 0:
-            raise ReceiptError("External Attach failed for "+option+
+            # R93: print only the Java8 helper's declared error category.
+            # Never echo arbitrary target stdout/stderr or filesystem paths.
+            failed = next((line for line in result.stderr.splitlines()
+                           if line.startswith("ATTACH_RESULT=FAIL ")), "")
+            category = re.match(
+                r"^ATTACH_RESULT=FAIL ([A-Za-z][A-Za-z0-9_$]{0,60})", failed)
+            detail = (" helper="+category.group(1)) if category else ""
+            raise ReceiptError("External Attach failed for "+option+detail+
                                "; STOP, do not try another diagnostic")
         validate_loader_receipt(option,a.pid,result.stdout)
         require_same_process(a.pid,original_birth)
