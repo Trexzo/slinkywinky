@@ -9,6 +9,7 @@
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
+#include "slinkywinky/menu_navigation.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -420,6 +421,58 @@ int main() {
         std::cout<<"R94_NATIVE_PID_CONTROL_TOGGLE_STOP_AND_FOREIGN_THREAD_REFUSAL_PASS\\n";
 
 #endif
+        // R96: completely isolated native-first keyboard navigation model.
+        // No Windows keyboard hooks, JVM, Minecraft interaction or game input.
+        MenuState focusMenu;
+        MenuProfileBridge focusProfile(focusMenu);
+        MenuNavigation focusNavigation(focusMenu,focusProfile);
+        MenuRenderSession focusSession;
+        REQUIRE(focusSession.attach(210,676,630));
+        auto focusedFrame=focusSession.next(focusMenu,&focusProfile,&focusNavigation);
+        REQUIRE(focusedFrame);
+        glClearColor(0.1f,0.38f,0.69f,1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        const State focusBefore=snapshot();
+        REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
+                               MenuGL11Mode::StandalonePreview));
+        const auto unselected=readback(40,475);
+        same(focusBefore,snapshot());
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
+                               MenuGL11Mode::StandalonePreview,
+                               focusNavigation.visible_focus()));
+        const auto firstSelected=readback(40,475);
+        REQUIRE(firstSelected!=unselected);
+        REQUIRE(firstSelected[0]>unselected[0] &&
+                firstSelected[1]>unselected[1]);
+        same(focusBefore,snapshot());
+        REQUIRE(focusNavigation.apply(MenuNavAction::NextRow));
+        auto nextFocusedFrame=focusSession.next(focusMenu,&focusProfile,
+                                                &focusNavigation);
+        REQUIRE(nextFocusedFrame && focusNavigation.visible_focus()==1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(draw_menu_gl11(*nextFocusedFrame,context.gl,context.dc,
+                               MenuGL11Mode::StandalonePreview,
+                               focusNavigation.visible_focus()));
+        REQUIRE(readback(40,475)==unselected);
+        const auto secondSelected=readback(40,426);
+        REQUIRE(secondSelected[0]>unselected[0] &&
+                secondSelected[1]>unselected[1]);
+        same(focusBefore,snapshot());
+        const auto badFocus=std::optional<std::size_t>{64};
+        REQUIRE(!draw_menu_gl11(*nextFocusedFrame,context.gl,context.dc,
+                                MenuGL11Mode::StandalonePreview,badFocus));
+        same(focusBefore,snapshot());
+        WglMenuOverlayHost focusHost;
+        REQUIRE(focusHost.open(context.gl,context.dc,676,630));
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(focusHost.draw(focusMenu,&focusProfile,
+                               MenuGL11Mode::StandalonePreview,&focusNavigation));
+        REQUIRE(focusHost.close());
+        same(focusBefore,snapshot());
+        REQUIRE(focusSession.detach());
+        std::cout<<"R96_FOCUSED_ROW_GL11_PIXELS_OWNER_AND_RESTORE_PASS\\n";
+
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));
         REQUIRE(!draw_menu_gl11(*changed,context.gl,context.dc));
