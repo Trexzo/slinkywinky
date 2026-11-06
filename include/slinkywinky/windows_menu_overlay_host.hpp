@@ -27,8 +27,9 @@ public:
     bool draw(const MenuState& menu,
               const MenuProfileBridge* profile=nullptr); // preserved R70/R76 ABI
     bool draw(const MenuState& menu,const MenuProfileBridge* profile,
-              MenuGL11Mode mode,
-              const MenuNavigation* navigation=nullptr); // R96 optional focus
+              MenuGL11Mode mode); // R93 ABI retained
+    bool draw(const MenuState& menu,const MenuProfileBridge* profile,
+              MenuGL11Mode mode,const MenuNavigation* navigation); // R96 focus
     bool close() noexcept;            // allowed after current context loss
     bool active() const noexcept {return session_.attached();}
     std::uint64_t last_sequence() const noexcept {return session_.sequence();}
