@@ -276,6 +276,22 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R100: manual external PID/birth-scoped operator menu commands,
+        // acknowledged on the source-pinned original WGL render owner.
+        // No game keyboard/mouse hooks or gameplay changes are admitted.
+        final String operatorPrefix="minecraft-render-menu-r100|";
+        if(options!=null && options.startsWith(operatorPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(operatorPrefix.length()),
+                    true,false,false,false,false,true);
+            } catch(Exception error) {
+                throw new IllegalStateException("R100 operator original menu refused",error);
+            }
+            return;
+        }
         // R99: 72-frame source-pinned GL11 retained model, with four
         // first-party scripted navigation actions. No game input/control.
         final String retainedPrefix="minecraft-render-retained-r99|";
