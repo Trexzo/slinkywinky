@@ -4,6 +4,7 @@
 #endif
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include <GL/gl.h>
 #include <algorithm>
@@ -187,6 +188,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
        viewport[2]!=static_cast<GLint>(frame.viewport_width) ||
        viewport[3]!=static_cast<GLint>(frame.viewport_height))
         return false;
+    const auto panel=menu_panel_geometry(frame.viewport_width,frame.viewport_height,
+        frame.appearance.wide,static_cast<MenuPanelMode>(mode));
+    if(!panel)return false;
     ScopedFixedFunctionState state;
     if(!state.ready())return false;
     glDisable(GL_DEPTH_TEST);
@@ -196,17 +200,11 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     glDisable(GL_FOG);
     glDisable(GL_ALPHA_TEST);
     const bool overlay=mode!=MenuGL11Mode::StandalonePreview;
-    const bool compact=mode==MenuGL11Mode::CompactOverlay;
-    // Leave at least a 12 px border in overlay mode. The standalone preview
-    // intentionally retains the earlier full-canvas behavior.
-    const unsigned paneWidth=overlay?
-        std::min<unsigned>(compact?480u:(frame.appearance.wide?844u:676u),
-                           frame.viewport_width-24u):frame.viewport_width;
-    const unsigned paneHeight=overlay?
-        std::min<unsigned>(compact?420u:630u,frame.viewport_height-24u):
-        frame.viewport_height;
-    const unsigned paneLeft=(frame.viewport_width-paneWidth)/2u;
-    const unsigned paneTop=(frame.viewport_height-paneHeight)/2u;
+    // R97: draw and hit-test consume ONE validated physical panel geometry.
+    const unsigned paneWidth=panel->width;
+    const unsigned paneHeight=panel->height;
+    const unsigned paneLeft=panel->left;
+    const unsigned paneTop=panel->top;
     if(overlay) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
@@ -230,7 +228,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                  static_cast<GLfloat>(paneTop),0.0f);
     // R93: scale both geometry and the bitmap text in physical pixels;
     // scissor stays in original viewport coordinates and is state-restored.
-    const float scale=compact?0.70f:1.0f;
+    const float scale=panel->scale;
     if(compact)glScalef(scale,scale,1.0f);
     const float w=static_cast<float>(paneWidth)/scale;
     const float h=static_cast<float>(paneHeight)/scale;
