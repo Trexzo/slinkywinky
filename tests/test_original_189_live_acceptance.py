@@ -37,7 +37,45 @@ V = (harness.RESTORED + "\n" + harness.R93_CALLBACK +
      harness.R93_VISIBILITY + "\n" + harness.RELEASED + "\n")
 
 
+U = (harness.RESTORED + "\n"
+     + harness.R94_CALLBACK + " accepted=42 owner=synthetic#1\n"
+     + harness.R94_STABLE + " attempts=42 current=42 absent=0 invalid=0 "
+       "changed=0 stable=true shown=12 hidden=22 toggles=3 stop=operator\n"
+     + harness.R94_VISIBILITY + " frames=42 toggles=3 shown=12 hidden=22 "
+       "stop=operator\n" + harness.RELEASED + "\n")
+
+
 class ReceiptChecks(unittest.TestCase):
+    def test_r94_manual_exact_dynamic_counters_and_fake_receipt_refusal(self):
+        self.assertEqual(len(harness.validate_receipt("--render-visibility=manual",U)),5)
+        harness.validate_loader_receipt(
+            "--render-visibility=manual",123,
+            "ATTACH_RESULT=SUCCESS pid=123 mode=render-manual-r94\n")
+        for incorrect in (
+            U.replace(" accepted=42 "," accepted=43 "),
+            U.replace(" attempts=42 "," attempts=43 "),
+            U.replace(" current=42 "," current=43 "),
+            U.replace(" shown=12 "," shown=13 "),
+            U.replace(" hidden=22 "," hidden=23 "),
+            U.replace(" toggles=3 "," toggles=1 "),
+            U.replace(" stop=operator"," stop=limit"),
+            U.replace(harness.R94_VISIBILITY, "R94_OPERATOR_VISIBILITY_UNVERIFIED"),
+            U.replace(harness.R94_VISIBILITY,harness.R94_VISIBILITY+"_FAKE"),
+            U.replace(harness.R94_STABLE+" attempts=42",
+                      harness.R94_STABLE+" attempts=2048"),
+            U+U,
+            U+"R94_WGL_CONTEXT_UNVERIFIED\n",
+        ):
+            with self.subTest(bad=incorrect),self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt("--render-visibility=manual",incorrect)
+        for mode,log in (
+            ("--render-visibility=manual",V),
+            ("--render-visibility=72",U),
+            ("--render-overlay=72",U),
+        ):
+            with self.assertRaises(harness.ReceiptError):
+                harness.validate_receipt(mode,log)
+
     def test_r93_show_hide_show_receipts_are_ordered_and_fail_closed(self):
         self.assertEqual(len(harness.validate_receipt("--render-visibility=72",V)),5)
         harness.validate_loader_receipt(
