@@ -276,6 +276,22 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R103: explicit original-only, read-only render-HDC-to-HWND audit.
+        // No drawing, input forwarding, focus manipulation or gameplay.
+        final String windowAuditPrefix="minecraft-render-window-audit-r101|";
+        if(options!=null && options.startsWith(windowAuditPrefix)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Minecraft instrumentation already active");
+            try {
+                RendererFrameDiagnostic.start(instrumentation,
+                    options.substring(windowAuditPrefix.length()),
+                    false,false,false,false,false,false,true);
+            } catch(Exception error) {
+                throw new IllegalStateException(
+                    "R103 source-pinned original renderer window audit refused",error);
+            }
+            return;
+        }
         // R100: manual external PID/birth-scoped operator menu commands,
         // acknowledged on the source-pinned original WGL render owner.
         // No game keyboard/mouse hooks or gameplay changes are admitted.
