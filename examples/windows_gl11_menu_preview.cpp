@@ -16,6 +16,7 @@
 #include "slinkywinky/menu_color_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_profile_interaction_geometry.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
@@ -313,6 +314,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             menu.cancel_profile_bind_capture();
             menu.cancel_bind_capture();
             menu.set_bind_hover_row(std::nullopt);
+            menu.set_profile_icon_hover(std::nullopt);
             cancel_mouse(hwnd);
             menu.close_preview_dropdown();
             menu.close_unload_confirmation_preview();
@@ -326,6 +328,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 menu.cancel_profile_bind_capture();
                 menu.cancel_bind_capture();
                 menu.set_bind_hover_row(std::nullopt);
+                menu.set_profile_icon_hover(std::nullopt);
                 cancel_mouse(hwnd);
                 menu.close_preview_dropdown();
                 menu.close_unload_confirmation_preview();
@@ -456,6 +459,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_MOUSEMOVE:{
             if(!mouseGesture.pending()) {
                 std::optional<std::size_t> row;
+                std::optional<slinkywinky::MenuProfileIconHover> iconHover;
                 const auto frame=mouse_frame(hwnd);
                 if(frame && preview_focused(hwnd)) {
                     const auto panel=slinkywinky::menu_panel_geometry(
@@ -468,6 +472,25 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         const float y=(static_cast<float>(
                             static_cast<short>(HIWORD(lp)))-
                             static_cast<float>(panel->top))/panel->scale;
+                        if(frame->tab==MenuTab::Profiles &&
+                           !frame->profile_action_preview &&
+                           !frame->unload_confirmation_preview) {
+                            for(std::size_t i=0;i<frame->profile_cards.size()
+                                && !iconHover;++i) {
+                                for(unsigned action=0;action<4u;++action) {
+                                    const auto rect=
+                                        slinkywinky::menu_profile_icon_visual_rect(
+                                            *frame,panel->logical_width(),
+                                            panel->logical_height(),i,action);
+                                    if(rect && slinkywinky::menu_profile_contains(
+                                        *rect,x,y)) {
+                                        iconHover=slinkywinky::MenuProfileIconHover{
+                                            i,action};
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                         for(std::size_t i=0;i<frame->visible.size();++i) {
                             const auto rect=slinkywinky::menu_module_card_rect(
                                 *frame,panel->logical_width(),i);
@@ -485,7 +508,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         }
                     }
                 }
-                if(menu.set_bind_hover_row(row))request_paint(hwnd);
+                bool repaint=menu.set_bind_hover_row(row);
+                if(menu.set_profile_icon_hover(iconHover))repaint=true;
+                if(repaint)request_paint(hwnd);
                 TRACKMOUSEEVENT tracking{};
                 tracking.cbSize=sizeof(tracking);
                 tracking.dwFlags=TME_LEAVE;
@@ -503,10 +528,12 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             }
             return 0;
         }
-        case WM_MOUSELEAVE:
-            if(menu.set_bind_hover_row(std::nullopt))
-                request_paint(hwnd);
+        case WM_MOUSELEAVE: {
+            bool repaint=menu.set_bind_hover_row(std::nullopt);
+            if(menu.set_profile_icon_hover(std::nullopt))repaint=true;
+            if(repaint)request_paint(hwnd);
             return 0;
+        }
         case WM_LBUTTONUP:{
             const auto frame=mouse_frame(hwnd);
             std::optional<slinkywinky::MenuHit> hit;
