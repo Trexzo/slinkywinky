@@ -371,6 +371,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
                     else if(hit->kind==MenuHitKind::Toggle)
                         navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
+                    else if(hit->kind==MenuHitKind::RecoveredBooleanPreview)
+                        menu.toggle_recovered_boolean_preview(
+                            hit->catalog_index,hit->control_index);
                     else if(hit->kind==MenuHitKind::PiercingControl &&
                             hit->catalog_index==11) {
                         if(hit->control_index==0u)
