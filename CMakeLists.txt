@@ -70,6 +70,12 @@ if(BUILD_TESTING)
   target_link_libraries(slinkywinky_menu_unload_modal_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_unload_confirmation_preview_safety
            COMMAND slinkywinky_menu_unload_modal_tests)
+  add_executable(slinkywinky_recovered_boolean_preview_tests
+    tests/test_recovered_boolean_preview.cpp)
+  target_link_libraries(slinkywinky_recovered_boolean_preview_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_recovered_boolean_preview_safety
+    COMMAND slinkywinky_recovered_boolean_preview_tests)
   add_executable(slinkywinky_menu_profile_tests tests/test_menu_profile.cpp)
   target_link_libraries(slinkywinky_menu_profile_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_profile_binding COMMAND slinkywinky_menu_profile_tests)
