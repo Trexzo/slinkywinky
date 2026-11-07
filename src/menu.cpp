@@ -15,18 +15,25 @@ bool is_module_tab(MenuTab tab) noexcept {
     return tab <= MenuTab::Utility;
 }
 // Bounded, read-only parsing of the recovered fixture choice labels.
-unsigned recovered_choice_count(std::string_view options) noexcept {
-    if(options.empty())return 0u;
-    unsigned count=1;
+unsigned recovered_option_count(
+        std::string_view options,unsigned maximum) noexcept {
+    if(options.empty() || maximum<1u || maximum>16u)return 0u;
+    unsigned count=1u;
     bool after_separator=true;
     for(const char c:options) {
         if(c=='|') {
-            if(after_separator || count>=12u)return 0u;
+            if(after_separator || count>=maximum)return 0u;
             ++count;
             after_separator=true;
         } else after_separator=false;
     }
     return after_separator?0u:count;
+}
+unsigned recovered_choice_count(std::string_view options) noexcept {
+    return recovered_option_count(options,12u);
+}
+unsigned recovered_multi_count(std::string_view options) noexcept {
+    return recovered_option_count(options,16u);
 }
 } // namespace
 
@@ -253,6 +260,65 @@ bool MenuState::open_recovered_choice_preview(
     }
     return false;
 }
+bool MenuState::open_recovered_multi_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept {
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(dropdown_preview_ || unload_confirmation_preview_ ||
+       catalog_index>=catalog.size() || widget_index>=all.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       all[widget_index].kind!=RecoveredWidgetKind::MultiSelect ||
+       std::string_view(all[widget_index].module)!=
+           catalog[catalog_index].name ||
+       recovered_multi_count(all[widget_index].options)==0u)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+       [catalog_index](const MenuItem& item){
+           return item.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> pageWidgets{};
+    if(!recovered_widget_visible_page(
+       catalog[catalog_index].name,settings_offsets_[catalog_index],
+       static_cast<int>(aim_preview_mode_),
+       static_cast<int>(target_preview_mode_),pageWidgets))
+        return false;
+    for(std::size_t i=0;i<pageWidgets.size();++i) {
+        if(pageWidgets[i]!=&all[widget_index])continue;
+        dropdown_preview_=MenuDropdownPreview{
+            MenuDropdownKind::RecoveredMulti,catalog_index,
+            settings_offsets_[catalog_index]+i,
+            settings_offsets_[catalog_index],widget_index,0u
+        };
+        return true;
+    }
+    return false;
+}
+bool MenuState::scroll_preview_popup(int direction) noexcept {
+    if((direction!=1 && direction!=-1) || !dropdown_preview_ ||
+       unload_confirmation_preview_)return false;
+    auto& popup=*dropdown_preview_;
+    if(popup.kind!=MenuDropdownKind::RecoveredChoice &&
+       popup.kind!=MenuDropdownKind::RecoveredMulti)return false;
+    const auto& all=recovered_widget_catalog();
+    if(popup.widget_index>=all.size())return false;
+    const auto& widget=all[popup.widget_index];
+    const auto count=popup.kind==MenuDropdownKind::RecoveredMulti?
+        recovered_multi_count(widget.options):
+        recovered_choice_count(widget.options);
+    constexpr unsigned pageSize=6u;
+    if(count<=pageSize || popup.option_offset>count-pageSize)
+        return false;
+    if(direction<0) {
+        if(popup.option_offset==0u)return false;
+        --popup.option_offset;
+    } else {
+        if(popup.option_offset>=count-pageSize)return false;
+        ++popup.option_offset;
+    }
+    return true;
+}
 std::optional<bool> MenuState::recovered_boolean_override(
         std::size_t widget_index) const noexcept {
     if(widget_index>=recovered_boolean_overrides_.size())return std::nullopt;
@@ -438,8 +504,10 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
     if(!dropdown_preview_)return false;
     const auto popup=*dropdown_preview_;
     if(popup.kind!=MenuDropdownKind::RecoveredChoice &&
+       popup.kind!=MenuDropdownKind::RecoveredMulti &&
        selected_!=MenuTab::Combat)return false;
-    if(popup.kind==MenuDropdownKind::RecoveredChoice &&
+    if((popup.kind==MenuDropdownKind::RecoveredChoice ||
+        popup.kind==MenuDropdownKind::RecoveredMulti) &&
        (popup.catalog_index>=catalog.size() ||
         catalog[popup.catalog_index].tab!=selected_))return false;
     if(popup.catalog_index>=catalog.size() ||
@@ -459,7 +527,20 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
        popup.control_index-popup.page_offset>=widgets.size())
         return false;
     const auto* widget=widgets[popup.control_index-popup.page_offset];
-    if(!widget || widget->kind!=RecoveredWidgetKind::Dropdown)
+    if(!widget)return false;
+    if(popup.kind==MenuDropdownKind::RecoveredMulti) {
+        if(widget->kind!=RecoveredWidgetKind::MultiSelect)
+            return false;
+    } else if(widget->kind!=RecoveredWidgetKind::Dropdown)
+        return false;
+    const unsigned total=popup.kind==MenuDropdownKind::RecoveredMulti?
+        recovered_multi_count(widget->options):
+        (popup.kind==MenuDropdownKind::RecoveredChoice?
+         recovered_choice_count(widget->options):
+         (popup.kind==MenuDropdownKind::AimMode?4u:2u));
+    if(!total || option>=total ||
+       option<popup.option_offset ||
+       option>=popup.option_offset+std::min(6u,total))
         return false;
     switch(popup.kind) {
         case MenuDropdownKind::AimMode:
@@ -494,6 +575,20 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
                 return false;
             recovered_choice_overrides_[popup.widget_index]=option;
             break;
+        }
+        case MenuDropdownKind::RecoveredMulti: {
+            const auto& all=recovered_widget_catalog();
+            if(popup.widget_index>=all.size() ||
+               widget!=&all[popup.widget_index] ||
+               option>=recovered_multi_count(widget->options))
+                return false;
+            const std::uint32_t current=
+                recovered_multi_overrides_[popup.widget_index].value_or(0u);
+            recovered_multi_overrides_[popup.widget_index]=
+                current^(1u<<option);
+            // This recovered multiselect stays open for another option.
+            // Do not close, rebase, or change any other module's flags.
+            return true;
         }
         default:return false;
     }
