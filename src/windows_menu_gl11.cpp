@@ -208,13 +208,14 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                 const float lo=std::min(a,b),hi=std::max(a,b);
                 round_rect(controlX+controlW*lo,controlY+9.0f,
                            std::max(0.01f,controlW*(hi-lo)),4.0f,2.0f);
-                round_rect(controlX+controlW*b-5.0f,
-                           controlY+5.0f,10.0f,12.0f,5.0f);
+                // Source NanoVG knob is r6: 12px diameter.
+                round_rect(controlX+controlW*b-6.0f,
+                           controlY+5.0f,12.0f,12.0f,6.0f);
             } else
                 round_rect(controlX,controlY+9.0f,
                            std::max(0.01f,controlW*a),4.0f,2.0f);
-            round_rect(controlX+controlW*a-5.0f,
-                       controlY+5.0f,10.0f,12.0f,5.0f);
+            round_rect(controlX+controlW*a-6.0f,
+                       controlY+5.0f,12.0f,12.0f,6.0f);
             break;
         }
         case RecoveredWidgetKind::Dropdown:
@@ -727,6 +728,11 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                        frame.recovered_slider_overrides[slot])
                         display.example_value=
                             *frame.recovered_slider_overrides[slot];
+                    if(slot<all.size() && frame.numeric_drag_preview &&
+                       frame.numeric_drag_preview->catalog_index==
+                           item.catalog_index &&
+                       frame.numeric_drag_preview->widget_index==slot)
+                        display.example_value=frame.numeric_drag_preview->lower;
                 }
                 if(display.kind==RecoveredWidgetKind::Range) {
                     const auto& all=recovered_widget_catalog();
@@ -737,6 +743,13 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         const auto& range=*frame.recovered_range_overrides[slot];
                         display.example_value=range.lower;
                         display.example_other=range.upper;
+                    }
+                    if(slot<all.size() && frame.numeric_drag_preview &&
+                       frame.numeric_drag_preview->catalog_index==
+                           item.catalog_index &&
+                       frame.numeric_drag_preview->widget_index==slot) {
+                        display.example_value=frame.numeric_drag_preview->lower;
+                        display.example_other=frame.numeric_drag_preview->upper;
                     }
                 }
                 std::string_view selectedChoice;
@@ -919,7 +932,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     // R147: display candidate-source numeric tooltip above the active
     // visible knob (range uses endpoint midpoint). The reference's global
     // tooltip is pointer-events:none and drawn above cards. No game state.
-    if(frame.numeric_hover && !frame.dropdown_preview) {
+    if((frame.numeric_hover || frame.numeric_drag_preview) &&
+       !frame.dropdown_preview) {
         const auto tip=menu_numeric_tooltip_geometry(frame,w,h);
         if(tip) {
             rgb(0x404040u);
