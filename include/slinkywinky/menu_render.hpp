@@ -48,6 +48,8 @@ struct MenuRenderFrame {
     // R130: changes only inert typed UI preview values.
     std::array<std::optional<unsigned>,385> recovered_choice_overrides{};
     // R131: local typed-choice selections are never gameplay settings.
+    std::array<std::optional<std::uint32_t>,385> recovered_multi_overrides{};
+    // R134: each bit represents one selected option, never game state.
     std::array<std::optional<float>,385> recovered_slider_overrides{};
     // R132: inert source-indexed numeric slider display values.
     std::array<std::optional<RecoveredRangePreview>,385>
