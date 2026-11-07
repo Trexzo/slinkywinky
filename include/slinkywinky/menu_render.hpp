@@ -59,6 +59,9 @@ struct MenuRenderFrame {
     PiercingPreview piercing_preview{}; // local GUI sandbox, no game
     std::optional<MenuDropdownPreview> dropdown_preview{}; // R127 snapshot
     bool unload_confirmation_preview=false; // R128 modal, no runtime unload
+    std::array<MenuBindPreview,67> bind_previews{};
+    std::optional<std::size_t> bind_capture_index{};
+    // R140: display-only module binds/HOLD flags, not game bindings.
     std::array<std::optional<bool>,385> recovered_boolean_overrides{};
     // R130: changes only inert typed UI preview values.
     std::array<std::optional<unsigned>,385> recovered_choice_overrides{};
