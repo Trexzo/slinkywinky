@@ -1,0 +1,88 @@
+#include "slinkywinky/recovered_settings.hpp"
+#include "slinkywinky/menu.hpp"
+#include <array>
+#include <cmath>
+#include <cstring>
+#include <set>
+#include <stdexcept>
+#include <string_view>
+
+#define CHECK(x) do {if(!(x))throw std::runtime_error("R116 recovered settings: " #x);}while(false)
+int main() {
+    using namespace slinkywinky;
+    const auto& items=recovered_widget_catalog();
+    const auto& catalog=official_module_catalog();
+    CHECK(items.size()==378);
+    CHECK(catalog.size()==67);
+    std::array<std::size_t,8> counts{};
+    std::set<std::string_view> names;
+    for(const auto& module:catalog)names.insert(module.name);
+    std::size_t total=0;
+    for(const auto& widget:items) {
+        CHECK(widget.module && names.count(widget.module)==1);
+        CHECK(widget.group && std::strlen(widget.group)>0);
+        CHECK(widget.label && widget.options && widget.auxiliary);
+        CHECK(std::strlen(widget.group)<=70);
+        CHECK(std::strlen(widget.label)<=90);
+        CHECK(std::strlen(widget.options)<=250);
+        CHECK(std::strlen(widget.auxiliary)<=250);
+        CHECK(std::isfinite(widget.min_value) &&
+              std::isfinite(widget.max_value) &&
+              std::isfinite(widget.example_value) &&
+              std::isfinite(widget.example_other));
+        auto kind=static_cast<unsigned>(widget.kind);
+        CHECK(kind<counts.size());
+        ++counts[kind];
+        if(widget.kind==RecoveredWidgetKind::Slider ||
+           widget.kind==RecoveredWidgetKind::Range) {
+            CHECK(widget.min_value<widget.max_value);
+            CHECK(widget.example_value>=widget.min_value &&
+                  widget.example_value<=widget.max_value);
+        }
+        if(widget.kind==RecoveredWidgetKind::Dropdown ||
+           widget.kind==RecoveredWidgetKind::MultiSelect)
+            CHECK(std::strlen(widget.options)>0);
+        ++total;
+    }
+    CHECK(total==378);
+    CHECK(counts[0]==202 && counts[1]==111 &&
+          counts[2]==32 && counts[3]==4 &&
+          counts[4]==13 && counts[5]==8 &&
+          counts[6]==6 && counts[7]==2);
+    std::size_t modulesWithSettings=0;
+    std::size_t counted=0;
+    for(const auto& m:catalog) {
+        const auto count=recovered_widget_count(m.name);
+        std::array<const RecoveredWidget*,5> preview{};
+        const auto seen=recovered_widget_preview(m.name,preview);
+        CHECK(seen==count);
+        if(count>0)++modulesWithSettings;
+        counted+=count;
+        for(std::size_t i=0;i<preview.size();++i) {
+            if(i<count) {
+                CHECK(preview[i]!=nullptr);
+                CHECK(std::string_view(preview[i]->module)==m.name);
+            } else CHECK(preview[i]==nullptr);
+        }
+    }
+    CHECK(modulesWithSettings>=55);
+    CHECK(counted==378);
+    CHECK(recovered_widget_count("Does Not Exist")==0);
+    std::array<const RecoveredWidget*,5> empty{};
+    CHECK(recovered_widget_preview(nullptr,empty)==0);
+    CHECK(empty[0]==nullptr);
+    CHECK(recovered_widget_preview("Aim Assist",empty)>=5);
+    CHECK(empty[0]->kind==RecoveredWidgetKind::Dropdown);
+    CHECK(std::string_view(empty[0]->label)=="Mode");
+    CHECK(empty[1]->kind==RecoveredWidgetKind::Slider);
+    CHECK(std::string_view(empty[1]->label)=="Horizontal speed");
+    CHECK(recovered_widget_preview("Friends",empty)>=4);
+    CHECK(empty[0]->kind==RecoveredWidgetKind::Boolean);
+    CHECK(empty[1]->kind==RecoveredWidgetKind::Text);
+    CHECK(empty[2]->kind==RecoveredWidgetKind::Button);
+    CHECK(recovered_widget_preview("Piercing",empty)>=1);
+    CHECK(empty[0]->kind==RecoveredWidgetKind::MultiSelect);
+    CHECK(recovered_widget_preview("Backtrack",empty)>=5);
+    CHECK(recovered_widget_preview("Pointers",empty)>=5);
+    return 0;
+}

@@ -9,9 +9,12 @@
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_system_font.hpp"
 #include <GL/gl.h>
 #include <algorithm>
+#include <array>
+#include <cstdio>
 #include <cmath>
 #include <cstdint>
 #include <string_view>
@@ -133,6 +136,106 @@ void profile_action_glyph(unsigned kind,float x,float y) noexcept {
         rgb(0x161617);
         quad(x+6.0f,y+7.0f,1.0f,6.0f);
         quad(x+9.0f,y+7.0f,1.0f,6.0f);
+    }
+}
+
+// R116: read-only representations of all eight recovered candidate widget
+// kinds. They use first-party fixed-function geometry, never callbacks,
+// filesystem actions, mouse capture, or gameplay state.
+unsigned hex_digit(char c) noexcept {
+    if(c>='0'&&c<='9')return static_cast<unsigned>(c-'0');
+    if(c>='a'&&c<='f')return static_cast<unsigned>(c-'a'+10);
+    if(c>='A'&&c<='F')return static_cast<unsigned>(c-'A'+10);
+    return 0;
+}
+std::uint32_t preview_swatch(const char* s) noexcept {
+    if(!s || s[0]!='#')return 0x707070u;
+    std::uint32_t value=0;
+    for(unsigned i=1;i<=6;++i) {
+        if(!s[i])return 0x707070u;
+        value=(value<<4)|hex_digit(s[i]);
+    }
+    return value;
+}
+void draw_recovered_widget(const RecoveredWidget& widget,
+                           float x,float y,float cardWidth,
+                           std::uint32_t accent) noexcept {
+    const float controlX=x+cardWidth*0.54f;
+    const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
+    const float labelW=std::max(14.0f,controlX-x-14.0f);
+    rgb(0xc9c9c9);
+    text(widget.label,x+8.0f,y+3.0f,13.0f,labelW);
+    const float controlY=y+2.0f;
+    switch(widget.kind) {
+        case RecoveredWidgetKind::Boolean: {
+            const float bx=controlX+controlW-34.0f;
+            rgb(widget.example_enabled?accent:0x404040u);
+            round_rect(bx,controlY+1.0f,34.0f,18.0f,9.0f);
+            rgb(0x141414);
+            round_rect(bx+(widget.example_enabled?21.0f:5.0f),
+                       controlY+6.0f,8.0f,8.0f,4.0f);
+            break;
+        }
+        case RecoveredWidgetKind::Slider:
+        case RecoveredWidgetKind::Range: {
+            const float minV=widget.min_value,maxV=widget.max_value;
+            const float denominator=maxV>minV?maxV-minV:1.0f;
+            const float a=std::max(0.0f,std::min(1.0f,
+                (widget.example_value-minV)/denominator));
+            rgb(0x404040u);
+            round_rect(controlX,controlY+9.0f,controlW,4.0f,2.0f);
+            rgb(accent);
+            if(widget.kind==RecoveredWidgetKind::Range) {
+                const float b=std::max(0.0f,std::min(1.0f,
+                    (widget.example_other-minV)/denominator));
+                const float lo=std::min(a,b),hi=std::max(a,b);
+                round_rect(controlX+controlW*lo,controlY+9.0f,
+                           std::max(0.01f,controlW*(hi-lo)),4.0f,2.0f);
+                round_rect(controlX+controlW*b-5.0f,
+                           controlY+5.0f,10.0f,12.0f,5.0f);
+            } else
+                round_rect(controlX,controlY+9.0f,
+                           std::max(0.01f,controlW*a),4.0f,2.0f);
+            round_rect(controlX+controlW*a-5.0f,
+                       controlY+5.0f,10.0f,12.0f,5.0f);
+            break;
+        }
+        case RecoveredWidgetKind::Dropdown:
+        case RecoveredWidgetKind::MultiSelect:
+        case RecoveredWidgetKind::Text: {
+            rgb(0x404040u);
+            round_rect(controlX,controlY,controlW,22.0f,9.0f);
+            rgb(0x141414u);
+            round_rect(controlX+2.0f,controlY+2.0f,
+                       controlW-4.0f,18.0f,7.0f);
+            std::string_view label;
+            if(widget.kind==RecoveredWidgetKind::Dropdown) {
+                label=widget.options;
+                label=label.substr(0,label.find('|'));
+            } else if(widget.kind==RecoveredWidgetKind::MultiSelect) {
+                label="Select options";
+            } else label=widget.auxiliary;
+            rgb(0x999999u);
+            text(label,controlX+6.0f,controlY+3.0f,12.0f,
+                 controlW-12.0f);
+            break;
+        }
+        case RecoveredWidgetKind::Color: {
+            rgb(0x404040u);
+            round_rect(controlX+controlW-42.0f,controlY,42.0f,22.0f,7.0f);
+            rgb(preview_swatch(widget.auxiliary));
+            round_rect(controlX+controlW-39.0f,controlY+3.0f,
+                       36.0f,16.0f,5.0f);
+            break;
+        }
+        case RecoveredWidgetKind::Button: {
+            rgb(0x404040u);
+            round_rect(controlX,controlY,controlW,22.0f,8.0f);
+            rgb(0xdddddd);
+            text("Preview action",controlX+8.0f,
+                 controlY+3.0f,12.0f,controlW-16.0f);
+            break;
+        }
     }
 }
 
@@ -417,6 +520,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             round_rect(left,y,3.0f,rect.height,1.5f);
         }
         const bool supported=module_has_profile_setting(item.catalog_index);
+        const bool hasReferenceSettings=recovered_widget_count(item.title)>0;
         const float titleFont=16.0f;
         const float nameX=left+menu_card_inner_padding;
         const float titleLimit=std::max(20.0f,rect.width-108.0f);
@@ -459,9 +563,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         }
         if(!frame.appearance.compact) {
             const float expX=left+20.0f,expY=y+40.0f;
-            rgb(supported?0x404040:0x343434);
+            rgb((supported||hasReferenceSettings)?0x404040:0x343434);
             round_rect(expX,expY,20.0f,20.0f,5.0f);
-            rgb(supported?0xdddddd:0x777777);
+            rgb((supported||hasReferenceSettings)?0xdddddd:0x777777);
             quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
             if(!item.expanded)
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
@@ -471,49 +575,44 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                  std::max(10.0f,rect.width-54.0f));
         } else {
             const float expX=left+8.0f,expY=y+8.0f;
-            rgb(supported?0x404040:0x343434);
+            rgb((supported||hasReferenceSettings)?0x404040:0x343434);
             round_rect(expX,expY,20.0f,20.0f,5.0f);
-            rgb(supported?0xdddddd:0x777777);
+            rgb((supported||hasReferenceSettings)?0xdddddd:0x777777);
             quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
             if(!item.expanded)
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
         }
         if(item.expanded) {
+            // R116: first five typed control records from the candidate
+            // decrypted GUI. The complete 378-item reference catalog is
+            // static and read-only. No setting click, file IO, or gameplay.
+            std::array<const RecoveredWidget*,5> preview{};
+            const std::size_t count=recovered_widget_preview(
+                item.title.c_str(),preview);
             const float settingY=y+body;
             rgb(0x999999);
-            text(item.catalog_index==2?"In-game":"Main",
-                 left+8.0f,settingY+11.0f,15.0f,rect.width-16.0f);
-            const MenuRenderParameter* numeric=nullptr;
-            for(const auto& p:frame.parameters)
-                if(p.catalog_index==item.catalog_index) {
-                    numeric=&p;
-                    break;
-                }
-            std::string_view caption=numeric?numeric->caption:
-                                     "Settings preview";
-            const auto colon=caption.find(':');
-            const auto field=colon==std::string_view::npos?
-                             caption:caption.substr(0,colon);
-            const float fieldY=settingY+37.0f;
-            rgb(0xdddddd);
-            text(field,left+8.0f,fieldY+1.0f,15.0f,
-                 std::max(15.0f,rect.width*0.44f));
-            // Unlike the earlier mock dropdown, actual native numeric
-            // settings now render as read-only slider geometry.
-            const float trackX=left+rect.width*0.5f;
-            const float trackW=rect.width*0.5f-10.0f;
-            rgb(0x404040);
-            round_rect(trackX,fieldY+8.0f,trackW,4.0f,2.0f);
-            if(numeric && numeric->numeric &&
-               numeric->maximum>numeric->minimum) {
-                const float ratio=std::max(0.0f,std::min(1.0f,
-                    (numeric->value-numeric->minimum)/
-                    (numeric->maximum-numeric->minimum)));
-                const float knobX=trackX+trackW*ratio;
-                rgb(frame.appearance.accent_rgb);
-                round_rect(trackX,fieldY+8.0f,
-                           std::max(0.01f,knobX-trackX),4.0f,2.0f);
-                round_rect(knobX-6.0f,fieldY+4.0f,12.0f,12.0f,6.0f);
+            if(preview[0])
+                text(preview[0]->group,left+8.0f,settingY+8.0f,
+                     15.0f,rect.width-16.0f);
+            else
+                text("No recovered settings",left+8.0f,settingY+8.0f,
+                     15.0f,rect.width-16.0f);
+            rgb(0x777777);
+            text("REFERENCE PREVIEW - READ ONLY",left+8.0f,
+                 settingY+25.0f,11.0f,rect.width-16.0f);
+            for(std::size_t j=0;j<preview.size() && preview[j];++j) {
+                draw_recovered_widget(*preview[j],left,
+                    settingY+43.0f+27.0f*static_cast<float>(j),
+                    rect.width,frame.appearance.accent_rgb);
+            }
+            if(count>5) {
+                char remaining[55]{};
+                std::snprintf(remaining,sizeof(remaining),
+                              "%zu additional controls in source",count-5);
+                rgb(0x999999u);
+                text(remaining,left+8.0f,
+                     settingY+47.0f+27.0f*5.0f,
+                     12.0f,rect.width-16.0f);
             }
         }
     }

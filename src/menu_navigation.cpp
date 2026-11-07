@@ -1,5 +1,6 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <vector>
 
@@ -116,11 +117,16 @@ bool MenuNavigation::apply(MenuNavAction action) {
         case MenuNavAction::IncreaseSetting:
         case MenuNavAction::DecreaseSetting: {
             std::size_t index=0;
-            if(!focused_visible(&index) ||
-               !module_has_profile_setting(index))
-                return false; // 58 unsupported rows remain inert.
+            if(!focused_visible(&index))return false;
+            // Read-only source settings may be expanded even when their
+            // gameplay module has no first-party implementation. Preview
+            // enablement and numeric mutation remain gated separately.
             if(action==MenuNavAction::ExpandFocused)
-                return menu_.toggle_expanded(index);
+                return recovered_widget_count(
+                    official_module_catalog()[index].name)>0 &&
+                    menu_.toggle_expanded(index);
+            if(!module_has_profile_setting(index))
+                return false;
             if(action==MenuNavAction::ToggleFocusedPreview)
                 return profile_.toggle(index);
             return profile_.adjust_primary(

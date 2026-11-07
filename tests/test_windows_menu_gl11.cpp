@@ -833,9 +833,9 @@ int main() {
         REQUIRE(retained.apply(MenuNavAction::NextRow)); // unsupported #3
         REQUIRE(retained.focused_row() && *retained.focused_row()==3);
         REQUIRE(!retained.apply(MenuNavAction::ToggleFocusedPreview));
-        REQUIRE(!retained.apply(MenuNavAction::ExpandFocused));
-        REQUIRE(!retained.preview_enabled(3));
-        REQUIRE(retained.refused_actions()==2);
+        REQUIRE(retained.apply(MenuNavAction::ExpandFocused));
+        REQUIRE(!retained.preview_enabled(3)); // still no gameplay toggle
+        REQUIRE(retained.refused_actions()==1);
         REQUIRE(retained.apply(MenuNavAction::NextTab));
         REQUIRE(retained.tab()==MenuTab::Move);
         REQUIRE(retained.draw(context.gl,context.dc,676,630));
@@ -1076,6 +1076,84 @@ int main() {
                 MenuPanelMode::StandalonePreview,150,82));
             if(const char* output=std::getenv("SLINKYWINKY_R115_900_PROFILES_PPM"))
                 REQUIRE(save_gl_framebuffer_ppm(output,900,630));
+            // R116: four diverse control-kind fixtures rendered in the
+            // *actual* 900px WGL preview, with no game input or module
+            // activation. Dropdown/slider/bool, text/buttons, multiselect,
+            // and color are all present in recovered source records.
+            const auto renderSettings=[&](MenuTab tab,const char* name,
+                                          RecoveredWidgetKind expected,
+                                          const char* env) {
+                REQUIRE(sourceMenu.select(tab));
+                const auto& sourceCatalog=official_module_catalog();
+                std::size_t catalogIndex=sourceCatalog.size(),ordinal=0,total=0;
+                for(std::size_t idx=0;idx<sourceCatalog.size();++idx) {
+                    if(sourceCatalog[idx].tab!=tab)continue;
+                    if(std::string_view(sourceCatalog[idx].name)==name) {
+                        catalogIndex=idx;
+                        ordinal=total;
+                    }
+                    ++total;
+                }
+                REQUIRE(catalogIndex<sourceCatalog.size());
+                const std::size_t maxScroll=total>8?total-8:0;
+                const std::size_t desired=std::min(ordinal,maxScroll);
+                if(desired)
+                    REQUIRE(sourceMenu.scroll_by(static_cast<int>(desired)));
+                const auto page=sourceMenu.page();
+                bool displayed=false;
+                for(const auto& row:page)
+                    displayed=displayed||row.catalog_index==catalogIndex;
+                REQUIRE(displayed);
+                REQUIRE(recovered_widget_count(name)>0);
+                std::array<const RecoveredWidget*,5> preview{};
+                REQUIRE(recovered_widget_preview(name,preview)>0);
+                REQUIRE(preview[0] && preview[0]->kind==expected);
+                REQUIRE(sourceMenu.toggle_expanded(catalogIndex));
+                const auto snap=sourceFrames.next(sourceMenu,&sourceProfile);
+                REQUIRE(snap);
+                const auto found=std::find_if(snap->visible.begin(),
+                    snap->visible.end(),[&](const MenuItem& row) {
+                        return row.catalog_index==catalogIndex;
+                    });
+                REQUIRE(found!=snap->visible.end() && found->expanded);
+                const auto card=menu_module_card_rect(*snap,900.0f,
+                    static_cast<std::size_t>(
+                        std::distance(snap->visible.begin(),found)));
+                REQUIRE(!hit_test_menu(*snap,
+                    MenuPanelMode::StandalonePreview,
+                    static_cast<int>(card.x+card.width-24.0f),
+                    static_cast<int>(card.y+menu_row_body_height(*snap)+70.0f)));
+                glClear(GL_COLOR_BUFFER_BIT);
+                REQUIRE(draw_menu_gl11(*snap,sourceWide.gl,sourceWide.dc));
+                REQUIRE(glGetError()==GL_NO_ERROR);
+                same(wideBefore,snapshot());
+                if(env && std::getenv(env))
+                    REQUIRE(save_gl_framebuffer_ppm(std::getenv(env),900,630));
+                // An unsupported module can expose its reference settings
+                // for inspection, but still cannot toggle gameplay state.
+                if(!module_has_profile_setting(catalogIndex))
+                    REQUIRE(!sourceProfile.toggle(catalogIndex));
+                REQUIRE(sourceMenu.toggle_expanded(catalogIndex));
+            };
+            REQUIRE(sourceMenu.select(MenuTab::Combat));
+            REQUIRE(sourceMenu.toggle_expanded(2)); // previous R115 demo
+            renderSettings(MenuTab::Combat,"Aim Assist",
+                RecoveredWidgetKind::Dropdown,"SLINKYWINKY_R116_AIM_PPM");
+            {
+                std::array<const RecoveredWidget*,5> controls{};
+                REQUIRE(recovered_widget_preview("Backtrack",controls)>=3);
+                REQUIRE(controls[1] &&
+                        controls[1]->kind==RecoveredWidgetKind::Range);
+            }
+            renderSettings(MenuTab::Combat,"Backtrack",
+                RecoveredWidgetKind::Slider,"SLINKYWINKY_R116_RANGE_PPM");
+            renderSettings(MenuTab::Utility,"Friends",
+                RecoveredWidgetKind::Boolean,"SLINKYWINKY_R116_FRIENDS_PPM");
+            renderSettings(MenuTab::Combat,"Piercing",
+                RecoveredWidgetKind::MultiSelect,"SLINKYWINKY_R116_PIERCING_PPM");
+            renderSettings(MenuTab::Visual,"Item ESP",
+                RecoveredWidgetKind::Text,"SLINKYWINKY_R116_ITEM_ESP_PPM");
+            std::cout<<"R116_TYPED_RECOVERED_WIDGETS_FIVE_REAL_WGL_PREVIEWS_PASS\n";
             REQUIRE(sourceFrames.detach());
         }
         REQUIRE(wglMakeCurrent(context.dc,context.gl));

@@ -41,9 +41,9 @@ int main() {
     CHECK(input.apply(MenuNavAction::NextRow));
     CHECK(*input.visible_focus()==3);
     CHECK(!input.apply(MenuNavAction::ToggleFocusedPreview));
-    CHECK(!input.apply(MenuNavAction::ExpandFocused));
+    CHECK(input.apply(MenuNavAction::ExpandFocused)); // read-only source controls
     CHECK(!input.apply(MenuNavAction::IncreaseSetting));
-    CHECK(!menu.preview_enabled(3) && !menu.expanded(3));
+    CHECK(!menu.preview_enabled(3) && menu.expanded(3));
 
     // All 17 combat rows are navigable; the eight-row viewport auto-scrolls.
     for(std::size_t i=4;i<=16;i++) {

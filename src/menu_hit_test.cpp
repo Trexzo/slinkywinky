@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 
 namespace slinkywinky {
@@ -103,7 +104,7 @@ std::optional<MenuHit> hit_test_menu(
                             rect.x+8.0f:rect.x+20.0f;
         const float expandY=frame.appearance.compact?
                             rect.y+8.0f:rect.y+40.0f;
-        if(implemented &&
+        if(recovered_widget_count(frame.visible[i].title)>0 &&
            x>=expandX && x<expandX+menu_expand_size &&
            y>=expandY && y<expandY+menu_expand_size)
             return MenuHit{MenuHitKind::Expand,frame.tab,index};

@@ -1,5 +1,6 @@
 #pragma once
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cstddef>
 
@@ -36,16 +37,22 @@ inline unsigned menu_module_columns(float width) noexcept {
 inline float menu_row_body_height(const MenuRenderFrame& frame) noexcept {
     return frame.appearance.compact?36.0f:68.0f;
 }
-inline float menu_expanded_height(const MenuRenderFrame& frame) noexcept {
-    // One section caption + one first-party setting row; there may be more
-    // settings in the source, but are not active/owned by this runtime yet.
-    return frame.appearance.compact?63.0f:63.0f;
+inline float menu_expanded_height(const MenuRenderFrame& frame,
+                                  std::size_t index) noexcept {
+    if(index>=frame.visible.size())return 0.0f;
+    // A bounded, read-only viewport into 378 candidate GUI controls.
+    // Settings beyond five remain in the typed catalog for the next
+    // scrolling/interaction pass; never paint them outside the card.
+    const std::size_t count=recovered_widget_count(
+        frame.visible[index].title);
+    const float visible=static_cast<float>(std::min<std::size_t>(count,5u));
+    return 52.0f+visible*27.0f+(count>5?22.0f:12.0f);
 }
 inline float menu_row_total_height(const MenuRenderFrame& frame,
                                    std::size_t index) noexcept {
     return menu_row_body_height(frame)+
         (index<frame.visible.size() && frame.visible[index].expanded?
-         menu_expanded_height(frame):0.0f);
+         menu_expanded_height(frame,index):0.0f);
 }
 struct MenuModuleCardRect {
     float x,y,width,height;
