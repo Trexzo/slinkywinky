@@ -67,6 +67,12 @@ bool MenuProfileBridge::scroll_by(int delta) {
     synchronize_visible();
     return true;
 }
+bool MenuProfileBridge::scroll_by_visible(
+        int delta,std::size_t visible_limit) {
+    if(!menu_.scroll_by_visible(delta,visible_limit))return false;
+    synchronize_visible();
+    return true;
+}
 bool MenuProfileBridge::enabled(std::size_t index) const noexcept {
     const bool* stored=flag(index);
     return stored!=nullptr && *stored;
