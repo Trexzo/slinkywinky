@@ -307,6 +307,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_KILLFOCUS:
             pendingTextHigh=0;
             menu.blur_recovered_text_preview();
+            menu.blur_profile_name_preview();
+            menu.cancel_profile_action_preview();
             menu.cancel_bind_capture();
             menu.set_bind_hover_row(std::nullopt);
             cancel_mouse(hwnd);
@@ -317,6 +319,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(!wp) {
                 pendingTextHigh=0;
                 menu.blur_recovered_text_preview();
+                menu.blur_profile_name_preview();
+                menu.cancel_profile_action_preview();
                 menu.cancel_bind_capture();
                 menu.set_bind_hover_row(std::nullopt);
                 cancel_mouse(hwnd);
@@ -386,6 +390,14 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // A background/label click blurs a focused text field. A
             // separate verified GUI target may still be activated on the
             // same mouse-up, where focus is cleared before dispatch.
+            if(menu.profile_name_focused() &&
+               !slinkywinky::hit_test_menu(*frame,panel_mode(),x,y)) {
+                menu.blur_profile_name_preview();
+                pendingTextHigh=0;
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             if(menu.focused_text_widget() &&
                !slinkywinky::hit_test_menu(*frame,panel_mode(),x,y)) {
                 menu.blur_recovered_text_preview();
@@ -477,8 +489,27 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             cancel_mouse(hwnd);
             if(hit) {
                 using slinkywinky::MenuHitKind;
-                if(hit->kind==MenuHitKind::ModalClose ||
-                   hit->kind==MenuHitKind::ModalContinue)
+                if(hit->kind==MenuHitKind::ProfileModalClose)
+                    menu.cancel_profile_action_preview();
+                else if(hit->kind==MenuHitKind::ProfileModalContinue)
+                    menu.confirm_profile_action_preview();
+                else if(hit->kind==MenuHitKind::ProfileNameField) {
+                    pendingTextHigh=0;
+                    menu.focus_profile_name_preview();
+                }
+                else if(hit->kind==MenuHitKind::ProfileCreate) {
+                    pendingTextHigh=0;
+                    menu.create_profile_preview();
+                }
+                else if(hit->kind==MenuHitKind::ProfileAction) {
+                    pendingTextHigh=0;
+                    menu.begin_profile_action_preview(
+                        hit->catalog_index,
+                        static_cast<slinkywinky::MenuProfileAction>(
+                            hit->control_index));
+                }
+                else if(hit->kind==MenuHitKind::ModalClose ||
+                        hit->kind==MenuHitKind::ModalContinue)
                     menu.close_unload_confirmation_preview();
                 else if(hit->kind==MenuHitKind::UnloadTab) {
                     menu.blur_recovered_text_preview();
@@ -491,6 +522,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     menu.select_preview_dropdown_option(
                         static_cast<unsigned>(hit->control_index));
                 } else if(hit->kind==MenuHitKind::Tab) {
+                    menu.blur_profile_name_preview();
                     menu.blur_recovered_text_preview();
                     pendingTextHigh=0;
                     navigation.select_tab(hit->tab);
@@ -647,7 +679,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_CHAR: {
-            if(!menu.focused_text_widget() ||
+            if((!menu.focused_text_widget() &&
+                 !menu.profile_name_focused()) ||
                !preview_focused(hwnd) || GetFocus()!=hwnd)
                 return 0;
             const std::uint32_t unit=static_cast<std::uint16_t>(wp);
@@ -686,7 +719,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     0x80u|((scalar>>6u)&0x3Fu)));
                 fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
             }
-            if(menu.append_recovered_text_preview(fragment))
+            if(menu.profile_name_focused()) {
+                if(menu.append_profile_name_preview(fragment))
+                    request_paint(hwnd);
+            } else if(menu.append_recovered_text_preview(fragment))
                 request_paint(hwnd);
             return 0;
         }
@@ -716,6 +752,23 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                               (1u<<24u))?0xA5u:0xA4u;
                     menu.commit_bind_capture(code);
                 }
+                request_paint(hwnd);
+                return 0;
+            }
+            if(menu.profile_action_preview()) {
+                if(wp==VK_ESCAPE)menu.cancel_profile_action_preview();
+                else if(wp==VK_RETURN)
+                    menu.confirm_profile_action_preview();
+                request_paint(hwnd);
+                return 0; // modal owns all keyboard input
+            }
+            if(menu.profile_name_focused()) {
+                // Source profile-name field only. Prevent normal game
+                // shortcuts, navigation and bind capture while editing.
+                pendingTextHigh=0;
+                if(wp==VK_ESCAPE)menu.blur_profile_name_preview();
+                else if(wp==VK_RETURN)menu.create_profile_preview();
+                else if(wp==VK_BACK)menu.erase_profile_name_preview();
                 request_paint(hwnd);
                 return 0;
             }
