@@ -296,6 +296,59 @@ bool MenuState::toggle_recovered_boolean_preview(
     return true;
 }
 
+std::optional<float> MenuState::recovered_slider_override(
+        std::size_t widget_index) const noexcept {
+    if(widget_index>=recovered_slider_overrides_.size())return std::nullopt;
+    return recovered_slider_overrides_[widget_index];
+}
+bool MenuState::set_recovered_slider_preview(
+        std::size_t catalog_index,std::size_t widget_index,
+        float requested_value) noexcept {
+    // R132 only accepts a source-indexed slider on the rendered page.
+    // These numeric fixture ranges are reconstructed, not authenticated
+    // gameplay defaults; this function never writes ClientSettings.
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(!std::isfinite(requested_value) || dropdown_preview_ ||
+       unload_confirmation_preview_ ||
+       catalog_index>=catalog.size() || widget_index>=all.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       all[widget_index].kind!=RecoveredWidgetKind::Slider ||
+       std::string_view(all[widget_index].module)!=
+           catalog[catalog_index].name)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+        [catalog_index](const MenuItem& row){
+            return row.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> pageWidgets{};
+    if(!recovered_widget_visible_page(
+         catalog[catalog_index].name,settings_offsets_[catalog_index],
+         static_cast<int>(aim_preview_mode_),
+         static_cast<int>(target_preview_mode_),pageWidgets))
+        return false;
+    if(std::none_of(pageWidgets.begin(),pageWidgets.end(),
+        [&](const RecoveredWidget* widget){
+            return widget==&all[widget_index];}))
+        return false;
+    const auto& widget=all[widget_index];
+    const double min=widget.min_value;
+    const double max=widget.max_value;
+    const double step=widget.step;
+    if(!std::isfinite(min) || !std::isfinite(max) ||
+       !std::isfinite(step) || max<=min || step<=0.0 ||
+       requested_value<min || requested_value>max)
+        return false;
+    const double steps=std::floor(
+        (static_cast<double>(requested_value)-min)/step+0.5);
+    const double snapped=std::clamp(min+steps*step,min,max);
+    if(!std::isfinite(snapped))return false;
+    recovered_slider_overrides_[widget_index]=static_cast<float>(snapped);
+    return true;
+}
+
 bool MenuState::open_unload_confirmation_preview() noexcept {
     if(unload_confirmation_preview_)return false;
     dropdown_preview_.reset();
