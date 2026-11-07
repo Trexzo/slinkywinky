@@ -42,6 +42,7 @@ struct MenuRenderFrame {
     unsigned aim_preview_mode=0;
     unsigned target_preview_mode=0;
     PiercingPreview piercing_preview{}; // local GUI sandbox, no game
+    std::optional<MenuDropdownPreview> dropdown_preview{}; // R127 snapshot
     std::size_t piercing_selected=0;
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
