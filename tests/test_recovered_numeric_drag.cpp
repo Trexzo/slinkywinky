@@ -126,6 +126,37 @@ int main() {
         CHECK(paged && !gate.release(*paged,mode,
                    start.first,start.second,5050u,true));
         CHECK(model.recovered_slider_override(cps)==stored);
+        // R148: captured numeric pointer may leave its thin track yet
+        // remain inside the owned preview panel; it clamps to min and
+        // accepts a deliberate 3-second drag. Ordinary buttons do not.
+        CHECK(model.change_settings_page(2u,-1));
+        frame=session.next(model,&profile,&nav);
+        CHECK(frame && gate.press(*frame,mode,
+             start.first,start.second,8000u,true));
+        CHECK(model.begin_numeric_drag_preview(2u,cps,0u));
+        const auto offTrack=xy(track->x-18.0f,
+                               track->y+track->height*0.5f);
+        auto captureFrame=session.next(model,&profile,&nav);
+        CHECK(captureFrame && gate.move(*captureFrame,mode,
+             offTrack.first,offTrack.second,true));
+        const auto outsideValue=menu_slider_value_at_x(
+             all[cps],*track,track->x-18.0f);
+        CHECK(outsideValue && *outsideValue==all[cps].min_value);
+        CHECK(model.move_numeric_drag_preview(*outsideValue));
+        captureFrame=session.next(model,&profile,&nav);
+        const auto capturedTooltip=menu_numeric_tooltip_geometry(
+             *captureFrame,panel->logical_width(),panel->logical_height());
+        CHECK(capturedTooltip);
+        const auto releaseOutside=gate.release(*captureFrame,mode,
+            offTrack.first,offTrack.second,11000u,true);
+        CHECK(releaseOutside &&
+              releaseOutside->kind==MenuHitKind::RecoveredSliderPreview &&
+              releaseOutside->control_index==cps);
+        CHECK(model.cancel_numeric_drag_preview());
+        CHECK(model.recovered_slider_override(cps)==stored);
+        CHECK(model.set_recovered_slider_preview(
+            2u,cps,*outsideValue));
+        CHECK(model.recovered_slider_override(cps)==all[cps].min_value);
         CHECK(!profile.enabled(2u) && !model.preview_enabled(2u));
         CHECK(session.detach());
 
