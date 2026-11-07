@@ -40,6 +40,8 @@ enum class MenuHitKind : std::uint8_t {
     RecoveredColorSwatch, // R136: independent 24-bit RGB preview
     RecoveredTextField, // R137: local source-indexed UTF-8 edit field
     BindChip, BindHold, // R140: preview-only module key and HOLD widgets
+    ProfileNameField, ProfileCreate, ProfileAction, // R142-R143
+    ProfileModalClose, ProfileModalContinue, // local confirmation only
     RecoveredSliderPreview, // R132: source-indexed inert drag-on-release
     RecoveredRangePreview // R133: dual-handle guarded preview
 };
