@@ -21,7 +21,8 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
                frame.profile_name_draft.empty() &&
                !frame.profile_name_focused &&
                !frame.profile_name_taken &&
-               !frame.profile_action_preview;
+               !frame.profile_action_preview &&
+               !frame.profile_bind_capture_index;
     if(!frame.is_placeholder || !frame.visible.empty() ||
        !frame.parameters.empty() || frame.profile_cards.empty() ||
        frame.profile_cards.size()>6)return false;
@@ -39,6 +40,11 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
            frame.profile_name_focused || frame.unload_confirmation_preview)
             return false;
     }
+    if(frame.profile_bind_capture_index &&
+       (*frame.profile_bind_capture_index>=frame.profile_cards.size() ||
+        frame.profile_name_focused || frame.profile_action_preview ||
+        frame.unload_confirmation_preview))
+        return false;
     if(frame.profile_name_focused && frame.profile_cards.size()>=6u)
         return false;
     bool has_default=false;
