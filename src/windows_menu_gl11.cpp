@@ -7,6 +7,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -685,6 +686,33 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                      addedHeadings,
                      12.0f,rect.width-16.0f);
             }
+        }
+    }
+    // R127: draw the source-shaped dropdown *after* cards so it floats
+    // above later columns. This is a preview-only, immutable frame surface.
+    if(frame.dropdown_preview) {
+        const auto popup=menu_dropdown_popup_geometry(frame,w,h);
+        if(!popup)return false;
+        const float height=popup->row_height*popup->option_count;
+        rgb(0x404040);
+        round_rect(popup->x,popup->y,popup->width,height,10.0f);
+        rgb(0x141414);
+        round_rect(popup->x+2.0f,popup->y+2.0f,
+                   popup->width-4.0f,height-4.0f,8.0f);
+        for(unsigned i=0;i<popup->option_count;++i) {
+            const float y=popup->y+popup->row_height*i;
+            if(i>0u) {
+                rgba(0x404040,128);
+                quad(popup->x+2.0f,y,popup->width-4.0f,1.0f);
+            }
+            const auto label=menu_dropdown_option_label(
+                frame.dropdown_preview->kind,i);
+            const float measured=measure_menu_system_text(label,15.0f);
+            const float fallback=static_cast<float>(label.size())*8.0f;
+            const float left=popup->x+std::max(
+                4.0f,(popup->width-(measured>0?measured:fallback))*0.5f);
+            rgb(i==popup->selected?frame.appearance.accent_rgb:0x999999);
+            text(label,left,y+7.0f,15.0f,popup->width-8.0f);
         }
     }
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture
