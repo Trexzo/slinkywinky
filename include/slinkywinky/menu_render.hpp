@@ -46,6 +46,8 @@ struct MenuRenderFrame {
     bool unload_confirmation_preview=false; // R128 modal, no runtime unload
     std::array<std::optional<bool>,385> recovered_boolean_overrides{};
     // R130: changes only inert typed UI preview values.
+    std::array<std::optional<unsigned>,385> recovered_choice_overrides{};
+    // R131: local typed-choice selections are never gameplay settings.
     std::size_t piercing_selected=0;
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
