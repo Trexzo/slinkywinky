@@ -100,6 +100,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_multiselect_preview_safety
     COMMAND slinkywinky_recovered_multi_preview_tests)
+  add_executable(slinkywinky_menu_adaptive_scroll_tests
+    tests/test_menu_adaptive_scroll.cpp)
+  target_link_libraries(slinkywinky_menu_adaptive_scroll_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_narrow_menu_adaptive_scroll
+    COMMAND slinkywinky_menu_adaptive_scroll_tests)
   add_executable(slinkywinky_menu_profile_tests tests/test_menu_profile.cpp)
   target_link_libraries(slinkywinky_menu_profile_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_profile_binding COMMAND slinkywinky_menu_profile_tests)
