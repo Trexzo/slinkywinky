@@ -141,6 +141,11 @@ public:
     std::optional<std::size_t> bind_capture_index() const noexcept {
         return bind_capture_index_;
     }
+    bool set_bind_hover_row(
+        std::optional<std::size_t> catalog_index) noexcept;
+    std::optional<std::size_t> bind_hover_row() const noexcept {
+        return bind_hover_row_;
+    }
     bool toggle_expanded(std::size_t catalog_index) noexcept;
     bool change_settings_page(std::size_t catalog_index,int direction) noexcept;
     std::size_t settings_offset(std::size_t catalog_index) const noexcept;
@@ -272,6 +277,7 @@ private:
         return bindings;
     }();
     std::optional<std::size_t> bind_capture_index_{};
+    std::optional<std::size_t> bind_hover_row_{};
     std::array<bool,67> expanded_{};
     std::array<std::size_t,67> settings_offsets_{};
     unsigned aim_preview_mode_=0; // Regular, Linear, Lock-on, Silent
