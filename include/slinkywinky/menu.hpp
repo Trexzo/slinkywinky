@@ -106,6 +106,20 @@ struct MenuLocalProfile {
 enum class MenuProfileAction : std::uint8_t {
     Load, Save, OpenFolder, Delete
 };
+// R145: hover-only tooltip for the four Profiles icons, including
+// protected Default actions. No action or filesystem permission implied.
+struct MenuProfileIconHover {
+    std::size_t profile_index=0;
+    unsigned action=0;
+};
+inline bool operator==(const MenuProfileIconHover& a,
+                       const MenuProfileIconHover& b) noexcept {
+    return a.profile_index==b.profile_index && a.action==b.action;
+}
+inline bool operator!=(const MenuProfileIconHover& a,
+                       const MenuProfileIconHover& b) noexcept {
+    return !(a==b);
+}
 struct MenuProfileActionPreview {
     std::size_t profile_index=0u;
     MenuProfileAction action=MenuProfileAction::Load;
@@ -180,6 +194,10 @@ public:
     }
     std::optional<MenuProfileActionPreview> profile_action_preview()
         const noexcept { return profile_action_preview_; }
+    bool set_profile_icon_hover(
+        std::optional<MenuProfileIconHover> hover) noexcept;
+    std::optional<MenuProfileIconHover> profile_icon_hover()
+        const noexcept { return profile_icon_hover_; }
     bool begin_profile_action_preview(std::size_t profile_index,
                                       MenuProfileAction action) noexcept;
     bool cancel_profile_action_preview() noexcept;
@@ -326,6 +344,7 @@ private:
     bool profile_name_focused_=false;
     bool profile_name_taken_=false;
     std::optional<MenuProfileActionPreview> profile_action_preview_{};
+    std::optional<MenuProfileIconHover> profile_icon_hover_{};
     std::optional<std::size_t> profile_bind_capture_index_{};
     std::array<bool,67> enabled_{};
     // Default examples mirror the supplied HTML transcription's st.binds,
