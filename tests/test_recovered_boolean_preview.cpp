@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #define CHECK(x) do {if(!(x))throw std::runtime_error( \
@@ -117,6 +118,27 @@ int main() {
         CHECK(menu.close_unload_confirmation_preview());
         CHECK(frames.detach());
     }
+    // A branch-hidden Aim Assist switch is not editable merely because
+    // it exists in the 385-record fixture. Switching to Lock-on reveals
+    // the exact recovered callsite on the first five-control page.
+    MenuState aim;
+    MenuProfileBridge aimProfile(aim);
+    MenuNavigation aimNav(aim,aimProfile);
+    CHECK(aimNav.apply(MenuNavAction::ExpandFocused));
+    std::size_t vertical=catalog.size();
+    for(std::size_t i=0;i<catalog.size();++i)
+        if(std::string_view(catalog[i].module)=="Aim Assist" &&
+           std::string_view(catalog[i].group)=="Aim" &&
+           std::string_view(catalog[i].label)=="Vertical" &&
+           catalog[i].visibility==RecoveredWidgetVisibility::AimModeLockOn)
+            vertical=i;
+    CHECK(vertical<catalog.size());
+    CHECK(!aim.toggle_recovered_boolean_preview(0u,vertical));
+    CHECK(aim.set_aim_preview_mode(2u)); // Lock-on
+    CHECK(aim.toggle_recovered_boolean_preview(0u,vertical));
+    CHECK(aim.recovered_boolean_override(vertical).has_value());
+    CHECK(aim.set_aim_preview_mode(0u)); // conditional control is hidden
+    CHECK(!aim.toggle_recovered_boolean_preview(0u,vertical));
     // Existing Piercing settings are deliberately routed to their own
     // preview state and cannot be edited by the generic Boolean pathway.
     MenuState piercing;
