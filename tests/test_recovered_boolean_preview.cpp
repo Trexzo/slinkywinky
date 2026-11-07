@@ -5,6 +5,7 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <array>
@@ -61,9 +62,10 @@ int main() {
         CHECK(!menu.recovered_boolean_override(idx));
         const bool sourceExample=widgets[2]->example_enabled;
         // These coordinates intentionally mirror the actual GL drawing:
-        // right-aligned 34x18 switch, third recovered setting row.
-        const float controlW=std::max(16.0f,rect.width*0.46f-10.0f);
-        const float controlX=rect.x+rect.width*0.54f;
+        // right-aligned 40x20 switch, third recovered setting row.
+        const auto column=menu_setting_column(rect.x,rect.width);
+        const float controlW=column.width;
+        const float controlX=column.x;
         const float y=rect.y+menu_row_body_height(*frame)+
                       43.0f+2.0f+27.0f*2.0f;
         const auto onSwitch=xy(controlX+controlW-17.0f,y+10.0f);

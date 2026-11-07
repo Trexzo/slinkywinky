@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
@@ -43,7 +44,7 @@ struct MenuColorSwatchRect {
     float x=0.0f;
     float y=0.0f;
     float width=42.0f;
-    float height=22.0f;
+    float height=20.0f;
 };
 
 // Mirrors the currently drawn GL11 42x22 right-aligned swatch. The
@@ -92,10 +93,10 @@ inline std::optional<MenuColorSwatchRect> menu_color_swatch_geometry(
     }
     const float controlY=rect.y+menu_row_body_height(frame)+43.0f+
         27.0f*static_cast<float>(position)+headings+2.0f;
-    const float controlX=rect.x+rect.width*0.54f;
-    const float controlW=std::max(16.0f,rect.width*0.46f-10.0f);
+    const float controlX=menu_setting_column(rect.x,rect.width).x;
+    const float controlW=menu_setting_column(rect.x,rect.width).width;
     MenuColorSwatchRect swatch{
-        controlX+controlW-42.0f,controlY,42.0f,22.0f
+        controlX+controlW-40.0f,controlY,40.0f,20.0f
     };
     if(swatch.x<rect.x || swatch.x+swatch.width>rect.x+rect.width ||
        swatch.y<rect.y || swatch.y+swatch.height>rect.y+rect.height ||

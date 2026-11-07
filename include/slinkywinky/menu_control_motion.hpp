@@ -30,12 +30,12 @@ inline float menu_control_center_text_y(
 inline std::uint32_t menu_control_hover_tint(
         std::uint32_t color,float alpha) noexcept {
     if(!std::isfinite(alpha))return color;
-    const float t=0.13f*std::clamp(alpha,0.0f,1.0f);
+    const float t=std::clamp(alpha,0.0f,1.0f);
     std::uint32_t out=0;
     for(const unsigned shift:{16u,8u,0u}) {
         const auto c=(color>>shift)&255u;
         out|=static_cast<std::uint32_t>(
-            std::lround(static_cast<float>(c)+(255.0f-c)*t))<<shift;
+            std::lround(static_cast<float>(c)+16.0f*t))<<shift;
     }
     return out;
 }

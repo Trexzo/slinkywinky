@@ -3,6 +3,7 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
@@ -189,24 +190,25 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                            bool textFocused=false,
                            float booleanHover=0.0f)
                            noexcept {
-    const float controlX=x+cardWidth*0.54f;
-    const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
+    const auto column=menu_setting_column(x,cardWidth);
+    const float controlX=column.x;
+    const float controlW=column.width;
     const float labelW=std::max(14.0f,controlX-x-14.0f);
     rgb(0xc9c9c9);
     // R139: source HTML renders Button as the entire row, without a
     // duplicate left-side setting label or an OS/game action.
     if(widget.kind!=RecoveredWidgetKind::Button)
         text(widget.label,x+8.0f,
-             menu_control_center_text_y(y,22.0f,13.0f),13.0f,labelW);
+             menu_control_center_text_y(y,20.0f,15.0f),15.0f,labelW);
     const float controlY=y+2.0f;
     switch(widget.kind) {
         case RecoveredWidgetKind::Boolean: {
-            const float bx=controlX+controlW-34.0f;
-            rgb(menu_control_hover_tint(
-                widget.example_enabled?accent:0x404040u,booleanHover));
-            round_rect(bx,controlY+1.0f,34.0f,18.0f,9.0f);
+            const float bx=menu_setting_switch_x(column);
+            rgb(widget.example_enabled?accent:
+                menu_control_hover_tint(0x404040u,booleanHover));
+            round_rect(bx,controlY,40.0f,20.0f,10.0f);
             rgb(0x141414);
-            round_rect(bx+(widget.example_enabled?21.0f:5.0f),
+            round_rect(bx+(widget.example_enabled?26.0f:6.0f),
                        controlY+6.0f,8.0f,8.0f,4.0f);
             break;
         }
@@ -217,22 +219,22 @@ void draw_recovered_widget(const RecoveredWidget& widget,
             const float a=std::max(0.0f,std::min(1.0f,
                 (widget.example_value-minV)/denominator));
             rgb(0x404040u);
-            round_rect(controlX,controlY+9.0f,controlW,4.0f,2.0f);
+            round_rect(controlX,controlY+8.0f,controlW,4.0f,2.0f);
             rgb(accent);
             if(widget.kind==RecoveredWidgetKind::Range) {
                 const float b=std::max(0.0f,std::min(1.0f,
                     (widget.example_other-minV)/denominator));
                 const float lo=std::min(a,b),hi=std::max(a,b);
-                round_rect(controlX+controlW*lo,controlY+9.0f,
+                round_rect(controlX+controlW*lo,controlY+8.0f,
                            std::max(0.01f,controlW*(hi-lo)),4.0f,2.0f);
                 // Source NanoVG knob is r6: 12px diameter.
                 round_rect(controlX+controlW*b-6.0f,
-                           controlY+5.0f,12.0f,12.0f,6.0f);
+                           controlY+4.0f,12.0f,12.0f,6.0f);
             } else
-                round_rect(controlX,controlY+9.0f,
+                round_rect(controlX,controlY+8.0f,
                            std::max(0.01f,controlW*a),4.0f,2.0f);
             round_rect(controlX+controlW*a-6.0f,
-                       controlY+5.0f,12.0f,12.0f,6.0f);
+                       controlY+4.0f,12.0f,12.0f,6.0f);
             break;
         }
         case RecoveredWidgetKind::Dropdown:
@@ -240,10 +242,10 @@ void draw_recovered_widget(const RecoveredWidget& widget,
         case RecoveredWidgetKind::Text: {
             rgb(widget.kind==RecoveredWidgetKind::Text && textFocused?
                 accent:0x404040u);
-            round_rect(controlX,controlY,controlW,22.0f,9.0f);
+            round_rect(controlX,controlY,controlW,20.0f,10.0f);
             rgb(0x141414u);
             round_rect(controlX+2.0f,controlY+2.0f,
-                       controlW-4.0f,18.0f,7.0f);
+                       controlW-4.0f,16.0f,8.0f);
             std::string_view label;
             if(widget.kind==RecoveredWidgetKind::Dropdown) {
                 label=dropdownOverride.empty()?
@@ -256,25 +258,23 @@ void draw_recovered_widget(const RecoveredWidget& widget,
             rgb(widget.kind==RecoveredWidgetKind::Text &&
                 !textOverride.empty()?0xDDDDDDu:0x999999u);
             text(label,controlX+6.0f,
-                 menu_control_center_text_y(controlY,22.0f,12.0f),
-                 12.0f,controlW-12.0f);
+                 menu_control_center_text_y(controlY,20.0f,15.0f),
+                 15.0f,controlW-12.0f);
             if(widget.kind==RecoveredWidgetKind::Text && textFocused) {
                 const float measured=textOverride.empty()?0.0f:
-                    measure_menu_system_text(textOverride,12.0f);
+                    measure_menu_system_text(textOverride,15.0f);
                 const float xCaret=controlX+6.0f+
                     std::clamp(measured,0.0f,
                                std::max(0.0f,controlW-16.0f));
                 rgb(accent);
-                quad(xCaret,controlY+4.0f,1.0f,14.0f);
+                quad(xCaret,controlY+3.0f,1.0f,14.0f);
             }
             break;
         }
         case RecoveredWidgetKind::Color: {
-            rgb(0x404040u);
-            round_rect(controlX+controlW-42.0f,controlY,42.0f,22.0f,7.0f);
             rgb(colorOverride.value_or(preview_swatch(widget.auxiliary)));
-            round_rect(controlX+controlW-39.0f,controlY+3.0f,
-                       36.0f,16.0f,5.0f);
+            round_rect(menu_setting_switch_x(column),controlY,
+                       40.0f,20.0f,10.0f);
             break;
         }
         case RecoveredWidgetKind::Button: {

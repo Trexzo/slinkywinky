@@ -74,7 +74,7 @@ int main() {
         const auto box=menu_color_swatch_geometry(
             *frame,panel->logical_width(),panel->logical_height(),
             32u,accent);
-        CHECK(box && box->width==42.0f && box->height==22.0f);
+        CHECK(box && box->width==40.0f && box->height==20.0f);
         const auto inside=logicalPoint(box->x+21.0f,box->y+11.0f);
         const auto before=hit_test_menu(*frame,mode,
                                         inside.first,inside.second);

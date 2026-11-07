@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
@@ -67,8 +68,8 @@ inline std::optional<MenuNumericTrack> menu_numeric_track_geometry(
     const float controlY=rect.y+menu_row_body_height(frame)+43.0f+
         27.0f*static_cast<float>(slot)+headings+2.0f;
     MenuNumericTrack track{
-        rect.x+rect.width*0.54f,controlY+4.0f,
-        std::max(16.0f,rect.width*0.46f-10.0f),18.0f
+        menu_setting_column(rect.x,rect.width).x,controlY+4.0f,
+        menu_setting_column(rect.x,rect.width).width,18.0f
     };
     if(track.x<rect.x || track.x+track.width>rect.x+rect.width ||
        track.y<rect.y || track.y+track.height>rect.y+rect.height ||

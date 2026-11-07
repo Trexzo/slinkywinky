@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include <algorithm>
 #include <array>
@@ -199,8 +200,8 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
     const float controlY=rect.y+menu_row_body_height(frame)+
         43.0f+27.0f*static_cast<float>(position)+headings+2.0f;
     MenuDropdownPopupRect result;
-    result.x=rect.x+rect.width*0.54f;
-    result.width=std::max(16.0f,rect.width*0.46f-10.0f);
+    result.x=menu_setting_column(rect.x,rect.width).x;
+    result.width=menu_setting_column(rect.x,rect.width).width;
     result.total_options=options;
     result.option_count=std::min(options,6u);
     if(popup.option_offset>options-result.option_count)
@@ -229,7 +230,7 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
     // Open upward when the reference-style option list would be clipped.
     // If no full, safe placement exists, the popup does not receive input.
     if(result.y+height>logical_height-menu_panel_padding)
-        result.y=controlY-height+22.0f;
+        result.y=controlY-height+20.0f;
     if(result.y<menu_first_row_y ||
        result.y+height>logical_height-menu_panel_padding ||
        result.x<menu_panel_padding ||

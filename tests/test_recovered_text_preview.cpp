@@ -66,7 +66,7 @@ int main() {
         const auto field=menu_text_field_geometry(
             *frame,panel->logical_width(),panel->logical_height(),
             42u,searchItem);
-        CHECK(field && field->height==22.0f && field->width>30.0f);
+        CHECK(field && field->height==20.0f && field->width>30.0f);
         const auto inside=xy(field->x+field->width*0.5f,field->y+11.0f);
         const auto label=xy(field->x-60.0f,field->y+11.0f);
         const auto hit=hit_test_menu(

@@ -1,3 +1,4 @@
+#include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
@@ -207,8 +208,9 @@ std::optional<MenuHit> hit_test_menu(
                 static_cast<int>(frame.target_preview_mode),widgets);
             if(!count || (index==11 && count!=8u))
                 return std::nullopt; // source shape contract
-            const float controlX=rect.x+rect.width*0.54f;
-            const float controlW=std::max(16.0f,rect.width*0.46f-10.0f);
+            const auto column=menu_setting_column(rect.x,rect.width);
+            const float controlX=column.x;
+            const float controlW=column.width;
             const float settingsY=rect.y+body;
             float extraHeadings=0.0f;
             std::string_view previousGroup=widgets[0]?
@@ -225,7 +227,7 @@ std::optional<MenuHit> hit_test_menu(
                     27.0f*static_cast<float>(j)+extraHeadings+2.0f;
                 const bool dropdown=widget.kind==RecoveredWidgetKind::Dropdown &&
                     x>=controlX && x<controlX+controlW &&
-                    y>=controlY && y<controlY+22.0f;
+                    y>=controlY && y<controlY+20.0f;
                 if(index==0) {
                     // Only two known standalone preview enums have a
                     // writable owner. All other recovered widgets are inert.
@@ -245,9 +247,9 @@ std::optional<MenuHit> hit_test_menu(
                         return MenuHit{MenuHitKind::PiercingControl,
                                        frame.tab,index,control};
                     if(widget.kind==RecoveredWidgetKind::Boolean &&
-                       control>0u && x>=controlX+controlW-34.0f &&
+                       control>0u && x>=menu_setting_switch_x(column) &&
                        x<controlX+controlW &&
-                       y>=controlY+1.0f && y<controlY+19.0f)
+                       y>=controlY && y<controlY+20.0f)
                         return MenuHit{MenuHitKind::PiercingControl,
                                        frame.tab,index,control};
                     continue;
@@ -288,7 +290,7 @@ std::optional<MenuHit> hit_test_menu(
                 }
                 if(widget.kind==RecoveredWidgetKind::MultiSelect &&
                    x>=controlX && x<controlX+controlW &&
-                   y>=controlY && y<controlY+22.0f) {
+                   y>=controlY && y<controlY+20.0f) {
                     const auto& all=recovered_widget_catalog();
                     const auto global=static_cast<std::size_t>(
                         widgets[j]-all.data());
@@ -350,9 +352,9 @@ std::optional<MenuHit> hit_test_menu(
                 // recovered_widget_visible_page identifies the exact
                 // callsite, including Aim's conditional branches.
                 if(widget.kind==RecoveredWidgetKind::Boolean &&
-                   x>=controlX+controlW-34.0f &&
+                   x>=menu_setting_switch_x(column) &&
                    x<controlX+controlW &&
-                   y>=controlY+1.0f && y<controlY+19.0f) {
+                   y>=controlY && y<controlY+20.0f) {
                     const auto& all=recovered_widget_catalog();
                     const auto global=static_cast<std::size_t>(
                         widgets[j]-all.data());
