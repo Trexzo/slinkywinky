@@ -7,6 +7,7 @@
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
+#include <cmath>
 
 namespace slinkywinky {
 std::optional<MenuPanelGeometry> menu_panel_geometry(
@@ -206,6 +207,40 @@ std::optional<MenuHit> hit_test_menu(
                        y<numeric->y+numeric->height)
                         return MenuHit{MenuHitKind::RecoveredSliderPreview,
                                        frame.tab,index,global};
+                }
+                if(widget.kind==RecoveredWidgetKind::Range) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    const auto track=menu_numeric_track_geometry(
+                        frame,w,panel->logical_height(),index,global);
+                    if(track && x>=track->x &&
+                       x<track->x+track->width &&
+                       y>=track->y &&
+                       y<track->y+track->height) {
+                        const auto value=frame.recovered_range_overrides[global]
+                            .value_or(RecoveredRangePreview{
+                                widget.example_value,widget.example_other});
+                        const float span=widget.max_value-widget.min_value;
+                        if(!std::isfinite(span) || span<=0.0f ||
+                           !std::isfinite(value.lower) ||
+                           !std::isfinite(value.upper) ||
+                           value.lower<widget.min_value ||
+                           value.upper>widget.max_value ||
+                           value.lower>value.upper)
+                            return std::nullopt;
+                        const float lowerX=track->x+track->width*
+                            ((value.lower-widget.min_value)/span);
+                        const float upperX=track->x+track->width*
+                            ((value.upper-widget.min_value)/span);
+                        // Same nearest-handle choice as the recovered
+                        // clickgui.tpl.html pointerdown algorithm. Ties
+                        // deterministically select the lower endpoint.
+                        const unsigned handle=std::fabs(x-lowerX)<=
+                            std::fabs(x-upperX)?0u:1u;
+                        return MenuHit{MenuHitKind::RecoveredRangePreview,
+                                       frame.tab,index,global,handle};
+                    }
                 }
                 // Generic typed Boolean fixture: the pointer returned by
                 // recovered_widget_visible_page identifies the exact
