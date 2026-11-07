@@ -36,7 +36,8 @@ enum class MenuHitKind : std::uint8_t {
     UnloadTab, ModalClose, ModalContinue, // R128: inert modal preview
     RecoveredBooleanPreview, // R130: catalog-indexed inert Boolean switch
     RecoveredChoiceControl, // R131: source-global dropdown widget
-    RecoveredSliderPreview // R132: source-indexed inert drag-on-release
+    RecoveredSliderPreview, // R132: source-indexed inert drag-on-release
+    RecoveredRangePreview // R133: dual-handle guarded preview
 };
 
 // Catalog index is meaningful only for non-Tab hits. No raw input pointers,
