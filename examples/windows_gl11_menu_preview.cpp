@@ -341,6 +341,17 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(!frame) {cancel_mouse(hwnd);return 0;}
             const int x=static_cast<short>(LOWORD(lp));
             const int y=static_cast<short>(HIWORD(lp));
+            // A background/label click blurs a focused text field. A
+            // separate verified GUI target may still be activated on the
+            // same mouse-up, where focus is cleared before dispatch.
+            if(menu.focused_text_widget() &&
+               !slinkywinky::hit_test_menu(*frame,panel_mode(),x,y)) {
+                menu.blur_recovered_text_preview();
+                pendingTextHigh=0;
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             // A click outside an open popup closes it, never dispatching
             // to an underlying module/tab in the same mouse gesture.
             if(frame->dropdown_preview &&
