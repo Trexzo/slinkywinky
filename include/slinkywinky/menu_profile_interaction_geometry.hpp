@@ -43,6 +43,57 @@ inline std::optional<MenuProfileControlRect> menu_profile_bind_rect(
         chipX,card.y+8.0f,chipWidth,20.0f
     };
 }
+// R145: visual icon rectangle is present even for disabled Save/Delete
+// on Default. Pointer admission still uses menu_profile_action_rect(),
+// which refuses those actions. Hover is strictly a display operation.
+inline std::optional<MenuProfileControlRect> menu_profile_icon_visual_rect(
+        const MenuRenderFrame& frame,float width,float height,
+        std::size_t profile_index,unsigned action) noexcept {
+    if(!menu_profile_preview_valid(frame,width,height) ||
+       frame.profile_action_preview || frame.unload_confirmation_preview ||
+       action>3u || profile_index>=frame.profile_cards.size())
+        return std::nullopt;
+    const auto card=menu_profile_card_rect(frame,width,profile_index);
+    const float x=card.x+card.width-124.0f+
+                  static_cast<float>(action)*32.0f;
+    const float y=card.y+10.0f;
+    if(x<card.x || x+20.0f>card.x+card.width ||
+       y+20.0f>card.y+card.height)return std::nullopt;
+    return MenuProfileControlRect{x,y,20.0f,20.0f};
+}
+inline std::string_view menu_profile_icon_tooltip(
+        std::size_t profile_index,unsigned action) noexcept {
+    switch(action) {
+        case 0u:return "Click to load";
+        case 1u:return profile_index==0u?
+            "Default profile cannot be overwritten":"Click to save";
+        case 2u:return "Click to open folder";
+        case 3u:return profile_index==0u?
+            "Default profile cannot be deleted":"Click to delete";
+        default:return {};
+    }
+}
+inline std::optional<MenuProfileControlRect> menu_profile_tooltip_rect(
+        const MenuRenderFrame& frame,float width,float height) noexcept {
+    if(!frame.profile_icon_hover)return std::nullopt;
+    const auto hover=*frame.profile_icon_hover;
+    const auto icon=menu_profile_icon_visual_rect(
+        frame,width,height,hover.profile_index,hover.action);
+    if(!icon)return std::nullopt;
+    // The transcription draws a 20px-high tooltip 28px above its
+    // icon's center, with 5px horizontal padding and radius 5.
+    const auto label=menu_profile_icon_tooltip(
+        hover.profile_index,hover.action);
+    if(label.empty())return std::nullopt;
+    const float estimatedWidth=static_cast<float>(label.size())*7.4f+10.0f;
+    const float w=std::min(width-16.0f,estimatedWidth);
+    const float x=std::clamp(icon->x+icon->width*0.5f-w*0.5f,
+                             8.0f,width-w-8.0f);
+    const float y=std::max(8.0f,icon->y+icon->height*0.5f-28.0f);
+    if(w<=10.0f || y+20.0f>height-8.0f)
+        return std::nullopt;
+    return MenuProfileControlRect{x,y,w,20.0f};
+}
 inline std::optional<MenuProfileControlRect> menu_profile_action_rect(
         const MenuRenderFrame& frame,float width,float height,
         std::size_t profile_index,unsigned action) noexcept {
