@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <cmath>
@@ -14,8 +15,11 @@ namespace slinkywinky {
 // clickgui.tpl.html reference. No Minecraft input, JNI, packets or globals.
 struct MenuDropdownPopupRect {
     float x=0, y=0, width=0, row_height=28.0f;
-    unsigned option_count=0;
+    unsigned option_count=0; // visible rows, capped at six
+    unsigned total_options=0;
+    unsigned first_option=0;
     unsigned selected=0;
+    std::uint32_t selected_mask=0; // multiselect only
 };
 inline unsigned menu_source_choice_count(
         std::size_t widget_index) noexcept {
@@ -49,6 +53,38 @@ inline std::string_view menu_source_choice_label(
     return options.substr(begin,end==std::string_view::npos?
                                  end:end-begin);
 }
+inline unsigned menu_source_multi_count(
+        std::size_t widget_index) noexcept {
+    const auto& all=recovered_widget_catalog();
+    if(widget_index>=all.size() ||
+       all[widget_index].kind!=RecoveredWidgetKind::MultiSelect)return 0u;
+    const std::string_view options(all[widget_index].options);
+    if(options.empty())return 0u;
+    unsigned count=1u;
+    bool needs_text=true;
+    for(const char c:options) {
+        if(c=='|') {
+            if(needs_text || count>=16u)return 0u;
+            ++count;
+            needs_text=true;
+        } else needs_text=false;
+    }
+    return needs_text?0u:count;
+}
+inline std::string_view menu_source_multi_label(
+        std::size_t widget_index,unsigned ordinal) noexcept {
+    if(ordinal>=menu_source_multi_count(widget_index))return {};
+    std::string_view options(recovered_widget_catalog()[widget_index].options);
+    std::size_t start=0;
+    for(unsigned i=0;i<ordinal;++i) {
+        const auto pos=options.find('|',start);
+        if(pos==std::string_view::npos)return {};
+        start=pos+1;
+    }
+    const auto end=options.find('|',start);
+    return options.substr(start,end==std::string_view::npos?
+                          end:end-start);
+}
 inline unsigned menu_dropdown_option_count(
         MenuDropdownKind kind,std::size_t widget_index=0) noexcept {
     switch(kind) {
@@ -57,6 +93,8 @@ inline unsigned menu_dropdown_option_count(
         case MenuDropdownKind::PiercingSort:return 2u;
         case MenuDropdownKind::RecoveredChoice:
             return menu_source_choice_count(widget_index);
+        case MenuDropdownKind::RecoveredMulti:
+            return menu_source_multi_count(widget_index);
         default:return 0u;
     }
 }
@@ -77,6 +115,8 @@ inline std::string_view menu_dropdown_option_label(
             return ordinal<piercing.size()?piercing[ordinal]:std::string_view{};
         case MenuDropdownKind::RecoveredChoice:
             return menu_source_choice_label(widget_index,ordinal);
+        case MenuDropdownKind::RecoveredMulti:
+            return menu_source_multi_label(widget_index,ordinal);
         default:return {};
     }
 }
@@ -88,12 +128,14 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
        logical_height<240.0f)return std::nullopt;
     const auto popup=*frame.dropdown_preview;
     if(popup.kind!=MenuDropdownKind::RecoveredChoice &&
+       popup.kind!=MenuDropdownKind::RecoveredMulti &&
        frame.tab!=MenuTab::Combat)return std::nullopt;
     const unsigned options=menu_dropdown_option_count(
         popup.kind,popup.widget_index);
     if(!options)return std::nullopt;
     const std::size_t expected_index=
-        popup.kind==MenuDropdownKind::RecoveredChoice?
+        (popup.kind==MenuDropdownKind::RecoveredChoice ||
+         popup.kind==MenuDropdownKind::RecoveredMulti)?
         popup.catalog_index:
         (popup.kind==MenuDropdownKind::PiercingSort?11u:0u);
     if(expected_index>=official_module_catalog().size() ||
@@ -115,11 +157,16 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
         static_cast<int>(frame.aim_preview_mode),
         static_cast<int>(frame.target_preview_mode),widgets);
     const std::size_t position=popup.control_index-popup.page_offset;
-    if(!count || position>=widgets.size() || !widgets[position] ||
-       widgets[position]->kind!=RecoveredWidgetKind::Dropdown)
+    if(!count || position>=widgets.size() || !widgets[position])
+        return std::nullopt;
+    if(popup.kind==MenuDropdownKind::RecoveredMulti) {
+        if(widgets[position]->kind!=RecoveredWidgetKind::MultiSelect)
+            return std::nullopt;
+    } else if(widgets[position]->kind!=RecoveredWidgetKind::Dropdown)
         return std::nullopt;
     const auto& widget=*widgets[position];
-    if(popup.kind==MenuDropdownKind::RecoveredChoice) {
+    if(popup.kind==MenuDropdownKind::RecoveredChoice ||
+       popup.kind==MenuDropdownKind::RecoveredMulti) {
         const auto& all=recovered_widget_catalog();
         if(popup.widget_index>=all.size() ||
            widgets[position]!=&all[popup.widget_index])
@@ -154,8 +201,16 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
     MenuDropdownPopupRect result;
     result.x=rect.x+rect.width*0.54f;
     result.width=std::max(16.0f,rect.width*0.46f-10.0f);
-    result.option_count=options;
-    if(popup.kind==MenuDropdownKind::RecoveredChoice) {
+    result.total_options=options;
+    result.option_count=std::min(options,6u);
+    if(popup.option_offset>options-result.option_count)
+        return std::nullopt;
+    result.first_option=popup.option_offset;
+    if(popup.kind==MenuDropdownKind::RecoveredMulti) {
+        result.selected_mask=
+            frame.recovered_multi_overrides[popup.widget_index].value_or(0u);
+        if((result.selected_mask>>options)!=0u)return std::nullopt;
+    } else if(popup.kind==MenuDropdownKind::RecoveredChoice) {
         const float example=widget.example_value;
         if(!std::isfinite(example) || example<0.0f ||
            example>=static_cast<float>(options))
@@ -166,7 +221,8 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
         frame.aim_preview_mode:
         (popup.kind==MenuDropdownKind::TargetMode?
          frame.target_preview_mode:frame.piercing_preview.sort);
-    if(result.selected>=options)return std::nullopt;
+    if(popup.kind!=MenuDropdownKind::RecoveredMulti &&
+       result.selected>=options)return std::nullopt;
     const float height=result.row_height*static_cast<float>(options);
     result.y=controlY;
     // Open upward when the reference-style option list would be clipped.
