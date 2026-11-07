@@ -110,8 +110,10 @@ void text(std::string_view label,float x,float y,
 
 // Four independent, hand-drawn glyphs for the read-only profile preview.
 // Not buttons: hit testing and keyboard navigation NEVER act on these.
-void profile_action_glyph(unsigned kind,float x,float y) noexcept {
-    rgb(kind==3?0xe74a50:0x9e9ea2);
+void profile_action_glyph(
+        unsigned kind,float x,float y,bool disabled=false) noexcept {
+    rgba(kind==3?0xe74a50:0x9e9ea2,
+         disabled?128u:255u);
     if(kind==0 || kind==1) {
         // Save/upload and load/download: tray, stem and arrow head.
         quad(x+2.0f,y+12.0f,12.0f,2.0f);
@@ -138,7 +140,7 @@ void profile_action_glyph(unsigned kind,float x,float y) noexcept {
         round_rect(x+3.0f,y+5.0f,10.0f,10.0f,2.0f);
         quad(x+2.0f,y+3.0f,12.0f,2.0f);
         quad(x+6.0f,y+1.0f,4.0f,2.0f);
-        rgb(0x161617);
+        rgba(0x161617,disabled?128u:255u);
         quad(x+6.0f,y+7.0f,1.0f,6.0f);
         quad(x+9.0f,y+7.0f,1.0f,6.0f);
     }
@@ -519,7 +521,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             }
             for(unsigned action=0;action<4;++action)
                 profile_action_glyph(action,iconX+action*32.0f,
-                                     rect.y+10.0f);
+                                     rect.y+10.0f,
+                                     i==0u && (action==1u || action==3u));
         }
         const auto nameInput=menu_profile_input_rect(frame,w,h);
         const auto create=menu_profile_create_rect(frame,w,h);
@@ -912,6 +915,22 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     }
     // R128: the source-backed seventh tab displays only an inert modal.
     // The commercial client's unload operation is deliberately NOT wired.
+    // R145: source tooltip: 20px, radius 5, #404040, 5px padding,
+    // 14px text, 28px above the hovered profile icon. The same geometry
+    // validates hover ownership for both enabled and protected Default icons.
+    if(frame.profile_icon_hover && !frame.profile_action_preview) {
+        const auto tip=menu_profile_tooltip_rect(frame,w,h);
+        if(tip) {
+            const auto hover=*frame.profile_icon_hover;
+            const auto label=menu_profile_icon_tooltip(
+                hover.profile_index,hover.action);
+            rgb(0x404040);
+            round_rect(tip->x,tip->y,tip->width,tip->height,5.0f);
+            rgb(0xdddddd);
+            text(label,tip->x+5.0f,tip->y+2.0f,14.0f,
+                 tip->width-10.0f);
+        }
+    }
     if(frame.profile_action_preview) {
         const auto modal=menu_profile_modal_geometry(frame,w,h);
         if(!modal)return false;
