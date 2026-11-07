@@ -349,6 +349,75 @@ bool MenuState::set_recovered_slider_preview(
     return true;
 }
 
+std::optional<RecoveredRangePreview> MenuState::recovered_range_override(
+        std::size_t widget_index) const noexcept {
+    if(widget_index>=recovered_range_overrides_.size())return std::nullopt;
+    return recovered_range_overrides_[widget_index];
+}
+bool MenuState::set_recovered_range_preview(
+        std::size_t catalog_index,std::size_t widget_index,
+        unsigned handle,float requested_value) noexcept {
+    // The R133 range model has no link to original Minecraft packets,
+    // client hooks, injected settings, profiles or native gameplay state.
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(handle>1u || !std::isfinite(requested_value) ||
+       dropdown_preview_ || unload_confirmation_preview_ ||
+       catalog_index>=catalog.size() || widget_index>=all.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       all[widget_index].kind!=RecoveredWidgetKind::Range ||
+       std::string_view(all[widget_index].module)!=
+           catalog[catalog_index].name)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+        [catalog_index](const MenuItem& row){
+            return row.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> pageWidgets{};
+    if(!recovered_widget_visible_page(
+         catalog[catalog_index].name,settings_offsets_[catalog_index],
+         static_cast<int>(aim_preview_mode_),
+         static_cast<int>(target_preview_mode_),pageWidgets))
+        return false;
+    if(std::none_of(pageWidgets.begin(),pageWidgets.end(),
+        [&](const RecoveredWidget* widget){
+            return widget==&all[widget_index];}))
+        return false;
+    const auto& widget=all[widget_index];
+    const double min=widget.min_value;
+    const double max=widget.max_value;
+    const double step=widget.step;
+    if(!std::isfinite(min) || !std::isfinite(max) ||
+       !std::isfinite(step) || !std::isfinite(widget.example_value) ||
+       !std::isfinite(widget.example_other) ||
+       max<=min || step<=0.0 ||
+       widget.example_value<min || widget.example_value>max ||
+       widget.example_other<min || widget.example_other>max ||
+       widget.example_value>widget.example_other ||
+       requested_value<min || requested_value>max)
+        return false;
+    const double units=std::floor(
+        (static_cast<double>(requested_value)-min)/step+0.5);
+    const double snapped=std::clamp(min+units*step,min,max);
+    if(!std::isfinite(snapped))return false;
+    RecoveredRangePreview next=recovered_range_overrides_[widget_index]
+        .value_or(RecoveredRangePreview{
+            widget.example_value,widget.example_other});
+    if(!std::isfinite(next.lower) || !std::isfinite(next.upper) ||
+       next.lower<min || next.upper>max ||
+       next.lower>next.upper)return false;
+    // The handle chosen at press remains the only editable handle
+    // throughout the verified gesture. It cannot cross the other handle.
+    if(handle==0u)next.lower=static_cast<float>(
+        std::min(snapped,static_cast<double>(next.upper)));
+    else next.upper=static_cast<float>(
+        std::max(snapped,static_cast<double>(next.lower)));
+    recovered_range_overrides_[widget_index]=next;
+    return true;
+}
+
 bool MenuState::open_unload_confirmation_preview() noexcept {
     if(unload_confirmation_preview_)return false;
     dropdown_preview_.reset();
