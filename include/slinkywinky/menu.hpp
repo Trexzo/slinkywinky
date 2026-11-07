@@ -141,6 +141,17 @@ public:
     recovered_choice_overrides() const noexcept {
         return recovered_choice_overrides_;
     }
+    // R132: source-indexed, step-quantized preview sliders only.
+    // Not copied into gameplay settings.
+    bool set_recovered_slider_preview(std::size_t catalog_index,
+                                      std::size_t widget_index,
+                                      float requested_value) noexcept;
+    std::optional<float> recovered_slider_override(
+        std::size_t widget_index) const noexcept;
+    const std::array<std::optional<float>,385>&
+    recovered_slider_overrides() const noexcept {
+        return recovered_slider_overrides_;
+    }
     // Only for explicitly preview-only persistence; never changes gameplay.
     bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
@@ -172,6 +183,7 @@ private:
     // nullopt renders the unverified reference-example state; no game writes.
     std::array<std::optional<bool>,385> recovered_boolean_overrides_{};
     std::array<std::optional<unsigned>,385> recovered_choice_overrides_{};
+    std::array<std::optional<float>,385> recovered_slider_overrides_{};
 };
 
 } // namespace slinkywinky
