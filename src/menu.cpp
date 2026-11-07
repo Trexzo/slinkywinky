@@ -67,6 +67,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     bind_hover_row_.reset();
     unload_confirmation_preview_=false;
     profile_action_preview_.reset();
+    profile_bind_capture_index_.reset();
     profile_name_focused_=false;
     profile_name_draft_.clear();
     profile_name_taken_=false;
@@ -152,6 +153,7 @@ bool MenuState::focus_profile_name_preview() noexcept {
     if(profile_name_focused_)return false;
     profile_name_focused_=true;
     bind_capture_index_.reset();
+    profile_bind_capture_index_.reset();
     return true;
 }
 bool MenuState::blur_profile_name_preview() noexcept {
@@ -199,6 +201,33 @@ bool MenuState::create_profile_preview() {
     profile_name_taken_=false;
     return true;
 }
+bool MenuState::begin_profile_bind_capture(
+        std::size_t index) noexcept {
+    if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
+       dropdown_preview_ || profile_action_preview_ ||
+       profile_name_focused_ || profile_bind_capture_index_ ||
+       index>=local_profiles_.size())return false;
+    profile_bind_capture_index_=index;
+    return true;
+}
+bool MenuState::commit_profile_bind_capture(std::uint16_t code) {
+    if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
+       dropdown_preview_ || profile_action_preview_ ||
+       profile_name_focused_ || !profile_bind_capture_index_ ||
+       !menu_valid_bind_code(code))return false;
+    const auto index=*profile_bind_capture_index_;
+    if(index>=local_profiles_.size())return false;
+    const auto display=menu_bind_code_label(code);
+    if(code && display.size()>8u)return false;
+    local_profiles_[index].bind=code==0u?std::string{}:display;
+    profile_bind_capture_index_.reset();
+    return true;
+}
+bool MenuState::cancel_profile_bind_capture() noexcept {
+    if(!profile_bind_capture_index_)return false;
+    profile_bind_capture_index_.reset();
+    return true;
+}
 bool MenuState::begin_profile_action_preview(
         std::size_t profile_index,MenuProfileAction action) noexcept {
     if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
@@ -211,6 +240,7 @@ bool MenuState::begin_profile_action_preview(
             action==MenuProfileAction::Delete)))
         return false;
     profile_name_focused_=false;
+    profile_bind_capture_index_.reset();
     profile_action_preview_=MenuProfileActionPreview{profile_index,action};
     return true;
 }
@@ -847,6 +877,7 @@ bool MenuState::open_unload_confirmation_preview() noexcept {
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     profile_action_preview_.reset();
+    profile_bind_capture_index_.reset();
     profile_name_focused_=false;
     unload_confirmation_preview_=true;
     return true;
