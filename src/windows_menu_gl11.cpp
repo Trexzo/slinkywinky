@@ -12,6 +12,7 @@
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
+#include "slinkywinky/menu_profile_interaction_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_system_font.hpp"
 #include <GL/gl.h>
@@ -519,29 +520,43 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 profile_action_glyph(action,iconX+action*32.0f,
                                      rect.y+10.0f);
         }
-        // Source also has a semi-transparent create-profile card. This
-        // preview presents only its appearance, not a live text input.
-        const auto add=menu_profile_card_rect(frame,w,
-                                               frame.profile_cards.size());
-        if(add.y+add.height<=h-menu_panel_padding) {
+        const auto nameInput=menu_profile_input_rect(frame,w,h);
+        const auto create=menu_profile_create_rect(frame,w,h);
+        if(nameInput && create) {
+            // Source candidate: transparent half-opacity two-row card.
+            const float cardX=nameInput->x-8.0f;
+            const float cardY=nameInput->y-8.0f;
             rgba(0x141414,128);
-            round_rect(add.x,add.y,add.width,add.height,20.0f);
-            rgb(0x404040);
-            round_rect(add.x+8,add.y+8,add.width-16,20.0f,10.0f);
+            round_rect(cardX,cardY,nameInput->width+16.0f,68.0f,20.0f);
+            rgb(frame.profile_name_focused?frame.appearance.accent_rgb:
+                0x404040u);
+            round_rect(nameInput->x,nameInput->y,
+                       nameInput->width,nameInput->height,10.0f);
             rgb(0x202020);
-            round_rect(add.x+10,add.y+10,add.width-20,16.0f,8.0f);
-            rgb(0x999999);
-            text("Profile name",add.x+16,add.y+9,14.0f,
-                 add.width-33.0f);
+            round_rect(nameInput->x+2.0f,nameInput->y+2.0f,
+                       nameInput->width-4.0f,16.0f,8.0f);
+            const std::string_view displayed=frame.profile_name_draft.empty()?
+                (frame.profile_name_taken?
+                 "Profile name is taken.":"Profile name"):
+                std::string_view(frame.profile_name_draft);
+            rgb(frame.profile_name_draft.empty()?0x999999u:0xdddddd);
+            text(displayed,nameInput->x+8.0f,nameInput->y+2.0f,
+                 15.0f,nameInput->width-16.0f);
+            if(frame.profile_name_focused) {
+                const float measured=frame.profile_name_draft.empty()?0.0f:
+                    measure_menu_system_text(frame.profile_name_draft,15.0f);
+                rgb(frame.appearance.accent_rgb);
+                quad(nameInput->x+8.0f+
+                     std::clamp(measured,0.0f,nameInput->width-22.0f),
+                     nameInput->y+3.0f,1.0f,14.0f);
+            }
             rgb(0xdddddd);
-            const std::string_view label="CREATE NEW PROFILE";
+            constexpr std::string_view label="CREATE NEW PROFILE";
             const float textW=measure_menu_system_text(label,15.0f);
-            text(label,add.x+std::max(10.0f,(add.width-textW)*0.5f),
-                 add.y+39.0f,15.0f,add.width-16.0f);
+            text(label,create->x+
+                 std::max(8.0f,(create->width-textW)*0.5f),
+                 create->y+2.0f,15.0f,create->width-12.0f);
         }
-        rgb(0x999999);
-        text("Profile actions unavailable in this preview",
-             menu_panel_padding,h-22.0f,12.0f,w-16.0f);
     }
 
     for(std::size_t i=0;i<frame.visible.size();++i) {
@@ -896,6 +911,39 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     }
     // R128: the source-backed seventh tab displays only an inert modal.
     // The commercial client's unload operation is deliberately NOT wired.
+    if(frame.profile_action_preview) {
+        const auto modal=menu_profile_modal_geometry(frame,w,h);
+        if(!modal)return false;
+        rgba(0x303030,190);
+        quad(0.0f,0.0f,w,h);
+        rgb(0x141414);
+        round_rect(modal->x,modal->y,modal->width,modal->height,20.0f);
+        rgb(0xdddddd);
+        text("Are you sure?",modal->x+8.0f,modal->y+10.0f,
+             16.0f,modal->width-50.0f);
+        rgb(0x999999);
+        const auto question=menu_profile_action_question(frame);
+        text(question,modal->x+8.0f,modal->y+42.0f,
+             15.0f,modal->width-16.0f);
+        rgb(0x404040);
+        round_rect(modal->continue_x,modal->continue_y,
+                   modal->continue_width,20.0f,8.0f);
+        rgb(0xdddddd);
+        const std::string_view label="Continue";
+        const float textWidth=measure_menu_system_text(label,15.0f);
+        text(label,modal->continue_x+
+             std::max(8.0f,(modal->continue_width-textWidth)*0.5f),
+             modal->continue_y+3.0f,15.0f,
+             modal->continue_width-16.0f);
+        rgb(0x999999);
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glVertex2f(modal->close_x+4.0f,modal->close_y+4.0f);
+        glVertex2f(modal->close_x+16.0f,modal->close_y+16.0f);
+        glVertex2f(modal->close_x+16.0f,modal->close_y+4.0f);
+        glVertex2f(modal->close_x+4.0f,modal->close_y+16.0f);
+        glEnd();
+    }
     if(frame.unload_confirmation_preview) {
         const auto modal=menu_unload_modal_geometry(frame,w,h);
         if(!modal)return false;
