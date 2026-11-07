@@ -30,6 +30,21 @@ struct MenuProfileCard {
     std::string bind; // Empty or short printable display-only badge.
     bool is_default=false;
 };
+// R138: only the six source Text fields can have an entered value.
+// Store edited values sparsely in render snapshots; a dense 385-slot array
+// of std::optional<std::string> caused a Windows WGL test stack overflow.
+struct MenuRenderTextValue {
+    std::size_t widget_index=0;
+    std::string value;
+};
+inline bool operator==(const MenuRenderTextValue& a,
+                       const MenuRenderTextValue& b) noexcept {
+    return a.widget_index==b.widget_index && a.value==b.value;
+}
+inline bool operator!=(const MenuRenderTextValue& a,
+                       const MenuRenderTextValue& b) noexcept {
+    return !(a==b);
+}
 // R63: a first-party, renderer-neutral admission boundary.
 // This never calls OpenGL, Minecraft, JNI, a loader, or gameplay input.
 struct MenuRenderFrame {
@@ -52,7 +67,7 @@ struct MenuRenderFrame {
     // R134: each bit represents one selected option, never game state.
     std::array<std::optional<std::uint32_t>,385> recovered_color_overrides{};
     // R136: independent RGB swatch values for native GL11 preview.
-    std::array<std::optional<std::string>,385> recovered_text_overrides{};
+    std::vector<MenuRenderTextValue> recovered_text_overrides; // max six
     std::optional<std::size_t> focused_text_widget{};
     // R137: local editable UTF-8 text, never a gameplay action.
     std::array<std::optional<float>,385> recovered_slider_overrides{};
