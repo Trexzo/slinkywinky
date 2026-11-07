@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstring>
 #include <set>
+#include <initializer_list>
+#include <utility>
 #include <stdexcept>
 #include <string_view>
 
@@ -173,6 +175,46 @@ int main() {
     CHECK(std::string_view(autoSecondPage[2]->group)=="Conditions");
     native_label("Piercing","Sort targets by",
         RecoveredWidgetKind::Dropdown,"Hurt time|Health");
+    // R121: native callback W_* ordering for three additional modules.
+    // Display-label text and group membership are source-backed, not
+    // evidence that the example control values or game logic are verified.
+    const auto check_native_callback=[&](
+        std::string_view module,
+        std::initializer_list<std::pair<std::string_view,std::string_view>> expected) {
+        auto it=expected.begin();
+        for(const auto& widget:items) {
+            if(std::string_view(widget.module)!=module)continue;
+            CHECK(it!=expected.end());
+            CHECK(std::string_view(widget.group)==it->first);
+            CHECK(std::string_view(widget.label)==it->second);
+            ++it;
+        }
+        CHECK(it==expected.end());
+    };
+    check_native_callback("Auto Block",{
+        {"Main","Range"},{"Main","Maximum hurt time"},{"Main","Maximum hold duration"},
+        {"Force block animation","Enabled"},{"Force block animation","Only within range"},
+        {"Lag","Chance"},{"Lag","Maximum duration"},
+        {"Lag","Prevent delaying attacks"},{"Lag","Block again immediately"},
+        {"Conditions","Left mouse pressed"},{"Conditions","Right mouse pressed"},
+        {"Conditions","Damaged"}
+    });
+    check_native_callback("Backtrack",{
+        {"Main","Target distance"},{"Main","Maximum delay"},
+        {"Main","Maximum hurt time"},{"Main","Cooldown"},{"Main","Disable when hit"},
+        {"Real position indicator","Enabled"},{"Real position indicator","Color"},
+        {"Real position indicator","Line width"},{"Real position indicator","Filled"},
+        {"Real position indicator","Apply head rotation"},
+        {"Conditions","Mouse pressed"},{"Conditions","Holding weapon"}
+    });
+    check_native_callback("Bridge Assist",{
+        {"Main","Edge offset"},{"Main","Unsneak delay"},{"Main","Select blocks"},
+        {"Main","Randomize"},{"Main","Sneak on jump"},
+        {"Main","Avoid double-sneaking"},{"Conditions","Sneak key pressed"},
+        {"Conditions","Holding blocks"},{"Conditions","Looking down"},
+        {"Conditions","Not moving forward"}
+    });
+
     native_label("Anti Bot","Invalid UUID",
         RecoveredWidgetKind::Dropdown,"Off|Stationary only|Always");
     CHECK(std::none_of(items.begin(),items.end(),
