@@ -123,6 +123,16 @@ public:
     }
     bool open_unload_confirmation_preview() noexcept;
     bool close_unload_confirmation_preview() noexcept;
+    // R130: edit only the source-indexed, currently visible preview Boolean.
+    // Never toggles the gameplay module nor changes ClientSettings.
+    bool toggle_recovered_boolean_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept;
+    std::optional<bool> recovered_boolean_override(
+        std::size_t widget_index) const noexcept;
+    const std::array<std::optional<bool>,385>&
+    recovered_boolean_overrides() const noexcept {
+        return recovered_boolean_overrides_;
+    }
     // Only for explicitly preview-only persistence; never changes gameplay.
     bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
@@ -150,6 +160,9 @@ private:
     std::size_t piercing_selected_=0; // 0 dropdown + 7 bools
     std::optional<MenuDropdownPreview> dropdown_preview_{};
     bool unload_confirmation_preview_=false;
+    // Each optional maps to one immutable 385-entry recovered fixture record.
+    // nullopt renders the unverified reference-example state; no game writes.
+    std::array<std::optional<bool>,385> recovered_boolean_overrides_{};
 };
 
 } // namespace slinkywinky
