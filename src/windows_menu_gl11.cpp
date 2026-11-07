@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string_view>
+#include <string>
 
 namespace slinkywinky {
 namespace {
@@ -162,7 +163,8 @@ std::uint32_t preview_swatch(const char* s) noexcept {
 void draw_recovered_widget(const RecoveredWidget& widget,
                            float x,float y,float cardWidth,
                            std::uint32_t accent,
-                           std::string_view dropdownOverride={}) noexcept {
+                           std::string_view dropdownOverride={},
+                           std::string_view multiOverride={}) noexcept {
     const float controlX=x+cardWidth*0.54f;
     const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
     const float labelW=std::max(14.0f,controlX-x-14.0f);
@@ -217,7 +219,7 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                       std::string_view(widget.options):dropdownOverride;
                 label=label.substr(0,label.find('|'));
             } else if(widget.kind==RecoveredWidgetKind::MultiSelect) {
-                label="Select options";
+                label=multiOverride.empty()?"Select options":multiOverride;
             } else label=widget.auxiliary;
             rgb(0x999999u);
             text(label,controlX+6.0f,controlY+3.0f,12.0f,
@@ -722,9 +724,33 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         }
                     }
                 }
+                // R134: compact, source-listed selection summary.
+                // Source option labels are held in a local string until
+                // the immediate, non-retained GL11 draw call finishes.
+                std::string multiCaption;
+                if(display.kind==RecoveredWidgetKind::MultiSelect) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto slot=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(slot<all.size()) {
+                        const unsigned n=menu_source_multi_count(slot);
+                        const std::uint32_t mask=
+                            frame.recovered_multi_overrides[slot].value_or(0u);
+                        for(unsigned k=0;k<n;++k) {
+                            if(!(mask&(1u<<k)))continue;
+                            const auto option=menu_source_multi_label(slot,k);
+                            if(!multiCaption.empty())multiCaption+=", ";
+                            if(multiCaption.size()+option.size()>120u) {
+                                multiCaption+="...";break;
+                            }
+                            multiCaption.append(option.data(),option.size());
+                        }
+                    }
+                }
                 draw_recovered_widget(display,left,
                     settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
-                    rect.width,frame.appearance.accent_rgb,selectedChoice);
+                    rect.width,frame.appearance.accent_rgb,selectedChoice,
+                    multiCaption);
             }
             if(count>5) {
                 char pagination[70]{};
@@ -761,15 +787,39 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 rgba(0x404040,128);
                 quad(popup->x+2.0f,y,popup->width-4.0f,1.0f);
             }
+            const unsigned absolute=popup->first_option+i;
             const auto label=menu_dropdown_option_label(
-                frame.dropdown_preview->kind,i,
+                frame.dropdown_preview->kind,absolute,
                 frame.dropdown_preview->widget_index);
             const float measured=measure_menu_system_text(label,15.0f);
             const float fallback=static_cast<float>(label.size())*8.0f;
             const float left=popup->x+std::max(
                 4.0f,(popup->width-(measured>0?measured:fallback))*0.5f);
-            rgb(i==popup->selected?frame.appearance.accent_rgb:0x999999);
+            const bool selected=frame.dropdown_preview->kind==
+                MenuDropdownKind::RecoveredMulti?
+                (popup->selected_mask&(1u<<absolute))!=0u:
+                absolute==popup->selected;
+            rgb(selected?frame.appearance.accent_rgb:0x999999);
             text(label,left,y+7.0f,15.0f,popup->width-8.0f);
+        }
+        if(popup->total_options>popup->option_count) {
+            // A small, source-neutral scrollbar for oversized recovered
+            // lists; wheel moves this viewport, never the module page.
+            const float track=height-12.0f;
+            const float thumb=std::max(10.0f,track*
+                static_cast<float>(popup->option_count)/
+                static_cast<float>(popup->total_options));
+            const unsigned maxOffset=
+                popup->total_options-popup->option_count;
+            const float ratio=maxOffset?
+                static_cast<float>(popup->first_option)/maxOffset:0.0f;
+            rgb(0x505050);
+            round_rect(popup->x+popup->width-6.0f,
+                       popup->y+6.0f,3.0f,track,1.5f);
+            rgb(frame.appearance.accent_rgb);
+            round_rect(popup->x+popup->width-6.0f,
+                       popup->y+6.0f+(track-thumb)*ratio,
+                       3.0f,thumb,1.5f);
         }
     }
     // R128: the source-backed seventh tab displays only an inert modal.
