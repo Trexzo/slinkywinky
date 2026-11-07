@@ -133,6 +133,12 @@ std::optional<MenuHit> hit_test_menu(
         return std::nullopt;
     }
     if(frame.tab==MenuTab::Profiles) {
+        for(std::size_t i=0;i<frame.profile_cards.size();++i) {
+            const auto bind=menu_profile_bind_rect(
+                frame,w,panel->logical_height(),i);
+            if(bind && menu_profile_contains(*bind,x,y))
+                return MenuHit{MenuHitKind::ProfileBindChip,frame.tab,i};
+        }
         // Source icon row: four 20x20 controls 12px apart, ordered
         // load/save/folder/delete. Default Save/Delete are disabled.
         for(std::size_t i=0;i<frame.profile_cards.size();++i) {
