@@ -1,6 +1,7 @@
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
+#include "slinkywinky/menu_text_geometry.hpp"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -60,6 +61,7 @@ std::size_t MenuState::tab_count(MenuTab tab) const noexcept {
 bool MenuState::select(MenuTab tab) noexcept {
     if(tab==MenuTab::Count || tab==MenuTab::Unload)return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     unload_confirmation_preview_=false;
     selected_=tab;
     scroll_=0;
@@ -77,6 +79,7 @@ bool MenuState::scroll_by(int delta) noexcept {
     const auto next=static_cast<std::size_t>(capped);
     if(next==scroll_)return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     scroll_=next;
     return true;
 }
@@ -94,6 +97,7 @@ bool MenuState::scroll_by_visible(
     const auto next=static_cast<std::size_t>(capped);
     if(next==scroll_)return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     scroll_=next;
     return true;
 }
@@ -105,6 +109,7 @@ bool MenuState::toggle_preview(std::size_t index) noexcept {
 bool MenuState::toggle_expanded(std::size_t index) noexcept {
     if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     expanded_[index]=!expanded_[index];
     if(!expanded_[index])settings_offsets_[index]=0;
     return true;
@@ -116,6 +121,7 @@ bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
     if(selected_!=MenuTab::Combat || mode>3 || mode==aim_preview_mode_)
         return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     aim_preview_mode_=mode;
     settings_offsets_[0]=0;
     return true;
@@ -124,6 +130,7 @@ bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
     if(selected_!=MenuTab::Combat || mode>1 || mode==target_preview_mode_)
         return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     target_preview_mode_=mode;
     settings_offsets_[0]=0;
     return true;
@@ -137,6 +144,7 @@ bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     if(count==0)return false;
     const std::size_t previous=settings_offsets_[index];
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     // No arithmetic on untrusted or potentially overflowing offsets.
     if(direction<0) {
         if(previous<5)return false;
@@ -228,6 +236,7 @@ bool MenuState::open_preview_dropdown(
        (index!=11u || control_index!=0u || group!="Always hit through" ||
         std::string_view(widgets[relative]->label)!="Sort targets by"))
         return false;
+    focused_text_widget_.reset();
     dropdown_preview_=MenuDropdownPreview{
         kind,index,control_index,settings_offsets_[index]
     };
@@ -269,7 +278,8 @@ bool MenuState::open_recovered_choice_preview(
            (catalog_index==11u && i==0u &&
             std::string_view(widget.label)=="Sort targets by"))
             return false;
-        dropdown_preview_=MenuDropdownPreview{
+        focused_text_widget_.reset();
+    dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredChoice,catalog_index,
             settings_offsets_[catalog_index]+i,
             settings_offsets_[catalog_index],widget_index
@@ -304,7 +314,8 @@ bool MenuState::open_recovered_multi_preview(
         return false;
     for(std::size_t i=0;i<pageWidgets.size();++i) {
         if(pageWidgets[i]!=&all[widget_index])continue;
-        dropdown_preview_=MenuDropdownPreview{
+        focused_text_widget_.reset();
+    dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredMulti,catalog_index,
             settings_offsets_[catalog_index]+i,
             settings_offsets_[catalog_index],widget_index,0u
@@ -377,6 +388,84 @@ bool MenuState::toggle_recovered_boolean_preview(
     const bool previous=recovered_boolean_overrides_[widget_index].value_or(
         widgets[widget_index].example_enabled);
     recovered_boolean_overrides_[widget_index]=!previous;
+    return true;
+}
+
+bool MenuState::focus_recovered_text_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept {
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(dropdown_preview_ || unload_confirmation_preview_ ||
+       catalog_index>=catalog.size() || widget_index>=all.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       all[widget_index].kind!=RecoveredWidgetKind::Text ||
+       std::string_view(all[widget_index].module)!=
+           catalog[catalog_index].name)
+        return false;
+    const auto visible=page();
+    if(std::none_of(visible.begin(),visible.end(),
+        [catalog_index](const MenuItem& item){
+            return item.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> pageWidgets{};
+    if(!recovered_widget_visible_page(
+         catalog[catalog_index].name,settings_offsets_[catalog_index],
+         static_cast<int>(aim_preview_mode_),
+         static_cast<int>(target_preview_mode_),pageWidgets))
+        return false;
+    if(std::none_of(pageWidgets.begin(),pageWidgets.end(),
+         [&](const RecoveredWidget* widget){
+             return widget==&all[widget_index];}))
+        return false;
+    focused_text_widget_=widget_index;
+    return true;
+}
+bool MenuState::blur_recovered_text_preview() noexcept {
+    if(!focused_text_widget_)return false;
+    focused_text_widget_.reset();
+    return true;
+}
+bool MenuState::append_recovered_text_preview(
+        std::string_view unicode_scalar) {
+    if(!focused_text_widget_ ||
+       !menu_one_printable_utf8(unicode_scalar))return false;
+    const auto widgetIndex=*focused_text_widget_;
+    const auto& widget=recovered_widget_catalog()[widgetIndex];
+    const auto& catalog=official_module_catalog();
+    std::size_t moduleIndex=catalog.size();
+    for(std::size_t i=0;i<catalog.size();++i)
+        if(std::string_view(widget.module)==catalog[i].name)
+            {moduleIndex=i;break;}
+    if(moduleIndex>=catalog.size() ||
+       !focus_recovered_text_preview(moduleIndex,widgetIndex))
+        return false;
+    auto& value=recovered_text_overrides_[widgetIndex];
+    const std::size_t used=value?value->size():0u;
+    if(used+unicode_scalar.size()>128u)return false;
+    if(!value)value.emplace();
+    value->append(unicode_scalar.data(),unicode_scalar.size());
+    return true;
+}
+bool MenuState::erase_recovered_text_preview() noexcept {
+    if(!focused_text_widget_)return false;
+    const auto widgetIndex=*focused_text_widget_;
+    const auto& widget=recovered_widget_catalog()[widgetIndex];
+    const auto& catalog=official_module_catalog();
+    std::size_t moduleIndex=catalog.size();
+    for(std::size_t i=0;i<catalog.size();++i)
+        if(std::string_view(widget.module)==catalog[i].name)
+            {moduleIndex=i;break;}
+    if(moduleIndex>=catalog.size() ||
+       !focus_recovered_text_preview(moduleIndex,widgetIndex))
+        return false;
+    auto& value=recovered_text_overrides_[widgetIndex];
+    if(!value || value->empty())return false;
+    std::size_t cut=value->size()-1u;
+    while(cut>0u &&
+         (static_cast<unsigned char>((*value)[cut])&0xC0u)==0x80u)
+        --cut;
+    value->resize(cut);
     return true;
 }
 
@@ -547,6 +636,7 @@ bool MenuState::set_recovered_range_preview(
 bool MenuState::open_unload_confirmation_preview() noexcept {
     if(unload_confirmation_preview_)return false;
     dropdown_preview_.reset();
+    focused_text_widget_.reset();
     unload_confirmation_preview_=true;
     return true;
 }
