@@ -14,6 +14,7 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
+#include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -238,6 +239,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
+            if(menu.bind_capture_index())return 0;
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
             if(menu.unload_confirmation_preview())return 0;
             if(menu.dropdown_preview()) {
@@ -305,6 +307,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_KILLFOCUS:
             pendingTextHigh=0;
             menu.blur_recovered_text_preview();
+            menu.cancel_bind_capture();
             cancel_mouse(hwnd);
             menu.close_preview_dropdown();
             menu.close_unload_confirmation_preview();
@@ -313,6 +316,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(!wp) {
                 pendingTextHigh=0;
                 menu.blur_recovered_text_preview();
+                menu.cancel_bind_capture();
                 cancel_mouse(hwnd);
                 menu.close_preview_dropdown();
                 menu.close_unload_confirmation_preview();
@@ -333,7 +337,43 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // action is enough. Never start a second gesture on this down.
             cancel_mouse(hwnd);
             return 0;
+        case WM_MBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+        case WM_XBUTTONDOWN: {
+            // Reconstructed DOM button ordering: middle=MOUSE2,
+            // right=MOUSE3 and XBUTTON1/2=MOUSE4/5.
+            if(menu.bind_capture_index()) {
+                if(!preview_focused(hwnd) || GetFocus()!=hwnd)
+                    menu.cancel_bind_capture();
+                else {
+                    const std::uint16_t code=msg==WM_MBUTTONDOWN?
+                        slinkywinky::menu_bind_mouse2:
+                        (msg==WM_RBUTTONDOWN?
+                         slinkywinky::menu_bind_mouse3:
+                         (HIWORD(wp)==XBUTTON1?
+                          slinkywinky::menu_bind_mouse4:
+                          slinkywinky::menu_bind_mouse5));
+                    menu.commit_bind_capture(code);
+                }
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 1;
+            }
+            break;
+        }
         case WM_LBUTTONDOWN:{
+            // R140: source click-capture policy. A fresh left click outside
+            // a waiting key chip clears it and never falls through to GUI
+            // activation. Capture ownership is only this native window.
+            if(menu.bind_capture_index()) {
+                if(preview_focused(hwnd) && GetFocus()==hwnd)
+                    menu.commit_bind_capture(0u);
+                else menu.cancel_bind_capture();
+                pendingTextHigh=0;
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             // R98 never changes state on DOWN. It only stores a bounded,
             // immutable owner-thread render snapshot for later comparison.
             if(GetCapture() && GetCapture()!=hwnd)return 0;
@@ -415,7 +455,11 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         menu.blur_recovered_text_preview();
                         pendingTextHigh=0;
                     }
-                    if(hit->kind==MenuHitKind::Expand)
+                    if(hit->kind==MenuHitKind::BindChip)
+                        menu.begin_bind_capture(hit->catalog_index);
+                    else if(hit->kind==MenuHitKind::BindHold)
+                        menu.toggle_bind_hold(hit->catalog_index);
+                    else if(hit->kind==MenuHitKind::Expand)
                         navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
                     else if(hit->kind==MenuHitKind::Toggle)
                         navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
@@ -607,6 +651,30 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // Never act on a spoofed/late key message while this demo
             // window has lost its exact focus or foreground ownership.
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
+            if(menu.bind_capture_index()) {
+                // Only a fresh keydown is admitted. ESC clears; a loss of
+                // foreground would cancel instead. The original app's
+                // key input tables are not modified by this preview.
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0u) {
+                    std::uint16_t code=static_cast<std::uint16_t>(wp);
+                    if(wp==VK_ESCAPE)code=0u;
+                    else if(wp==VK_SHIFT) {
+                        const UINT scan=static_cast<UINT>(
+                            (static_cast<std::uint32_t>(lp)>>16u)&0xFFu);
+                        const UINT mapped=MapVirtualKeyW(
+                            scan,MAPVK_VSC_TO_VK_EX);
+                        code=mapped==VK_RSHIFT?0xA1u:0xA0u;
+                    } else if(wp==VK_CONTROL)
+                        code=(static_cast<std::uint32_t>(lp)&
+                              (1u<<24u))?0xA3u:0xA2u;
+                    else if(wp==VK_MENU)
+                        code=(static_cast<std::uint32_t>(lp)&
+                              (1u<<24u))?0xA5u:0xA4u;
+                    menu.commit_bind_capture(code);
+                }
+                request_paint(hwnd);
+                return 0;
+            }
             if(menu.focused_text_widget()) {
                 // Focused inline editing owns keyboard events. Do not
                 // dispatch typed module shortcuts through the text field.
