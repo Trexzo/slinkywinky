@@ -77,6 +77,7 @@ bool MenuMouseGesture::equivalent_frame(
        frame.profile_name_focused!=original.profile_name_focused ||
        frame.profile_name_taken!=original.profile_name_taken ||
        frame.profile_action_preview!=original.profile_action_preview ||
+       frame.profile_icon_hover!=original.profile_icon_hover ||
        frame.profile_bind_capture_index!=
            original.profile_bind_capture_index ||
        frame.appearance.wide!=original.appearance.wide ||
