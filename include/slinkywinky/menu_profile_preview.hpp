@@ -17,15 +17,36 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
                                        float panel_width,
                                        float panel_height) noexcept {
     if(frame.tab!=MenuTab::Profiles)
-        return frame.profile_cards.empty();
+        return frame.profile_cards.empty() &&
+               frame.profile_name_draft.empty() &&
+               !frame.profile_name_focused &&
+               !frame.profile_name_taken &&
+               !frame.profile_action_preview;
     if(!frame.is_placeholder || !frame.visible.empty() ||
        !frame.parameters.empty() || frame.profile_cards.empty() ||
        frame.profile_cards.size()>6)return false;
+    if(frame.profile_name_draft.size()>28u)return false;
+    for(const unsigned char c:frame.profile_name_draft)
+        if(c<32u || c>126u || c=='/' || c=='\\')return false;
+    if(frame.profile_action_preview) {
+        const auto& modal=*frame.profile_action_preview;
+        if(modal.profile_index>=frame.profile_cards.size() ||
+           static_cast<unsigned>(modal.action)>
+             static_cast<unsigned>(MenuProfileAction::Delete) ||
+           (modal.profile_index==0u &&
+            (modal.action==MenuProfileAction::Save ||
+             modal.action==MenuProfileAction::Delete)) ||
+           frame.profile_name_focused || frame.unload_confirmation_preview)
+            return false;
+    }
+    if(frame.profile_name_focused && frame.profile_cards.size()>=6u)
+        return false;
     bool has_default=false;
     for(std::size_t i=0;i<frame.profile_cards.size();++i) {
         const auto& profile=frame.profile_cards[i];
         if(!menu_profile_text_valid(profile.name,28) ||
-           !menu_profile_text_valid(profile.description,62) ||
+           ((i==0u || !profile.description.empty()) &&
+            !menu_profile_text_valid(profile.description,62)) ||
            (!profile.bind.empty() &&
             !menu_profile_text_valid(profile.bind,8)) ||
            (profile.is_default != (i==0)) ||
