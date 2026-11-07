@@ -66,6 +66,10 @@ bool MenuState::select(MenuTab tab) noexcept {
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     unload_confirmation_preview_=false;
+    profile_action_preview_.reset();
+    profile_name_focused_=false;
+    profile_name_draft_.clear();
+    profile_name_taken_=false;
     selected_=tab;
     scroll_=0;
     return true;
@@ -129,6 +133,111 @@ bool MenuState::set_bind_hover_row(
     bind_hover_row_=catalog_index;
     return true;
 }
+namespace {
+bool profile_name_byte_safe(char c) noexcept {
+    const unsigned char value=static_cast<unsigned char>(c);
+    return value>=32u && value<=126u && c!='/' && c!='\\';
+}
+std::string trim_profile_name(std::string_view name) {
+    const auto first=name.find_first_not_of(' ');
+    if(first==std::string_view::npos)return {};
+    const auto last=name.find_last_not_of(' ');
+    return std::string(name.substr(first,last-first+1u));
+}
+}
+bool MenuState::focus_profile_name_preview() noexcept {
+    if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
+       dropdown_preview_ || profile_action_preview_ ||
+       local_profiles_.size()>=6u)return false;
+    if(profile_name_focused_)return false;
+    profile_name_focused_=true;
+    bind_capture_index_.reset();
+    return true;
+}
+bool MenuState::blur_profile_name_preview() noexcept {
+    if(!profile_name_focused_)return false;
+    profile_name_focused_=false;
+    return true;
+}
+bool MenuState::append_profile_name_preview(std::string_view text) {
+    if(!profile_name_focused_ || selected_!=MenuTab::Profiles ||
+       profile_action_preview_ || unload_confirmation_preview_ ||
+       text.size()!=1u || !profile_name_byte_safe(text.front()) ||
+       profile_name_draft_.size()>=28u)return false;
+    profile_name_draft_.append(text.data(),text.size());
+    profile_name_taken_=false;
+    return true;
+}
+bool MenuState::erase_profile_name_preview() noexcept {
+    if(!profile_name_focused_ || selected_!=MenuTab::Profiles ||
+       profile_action_preview_ || profile_name_draft_.empty())
+        return false;
+    profile_name_draft_.pop_back();
+    profile_name_taken_=false;
+    return true;
+}
+bool MenuState::create_profile_preview() {
+    if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
+       dropdown_preview_ || profile_action_preview_ ||
+       local_profiles_.size()>=6u)return false;
+    const auto name=trim_profile_name(profile_name_draft_);
+    if(name.empty() || name.size()>28u)return false;
+    for(const char c:name)
+        if(!profile_name_byte_safe(c))return false;
+    if(std::any_of(local_profiles_.begin(),local_profiles_.end(),
+       [&](const MenuLocalProfile& profile) {
+           return profile.name==name;
+       })) {
+        profile_name_draft_.clear();
+        profile_name_taken_=true;
+        profile_name_focused_=true;
+        return false;
+    }
+    local_profiles_.push_back({name,"",""});
+    profile_name_draft_.clear();
+    profile_name_focused_=false;
+    profile_name_taken_=false;
+    return true;
+}
+bool MenuState::begin_profile_action_preview(
+        std::size_t profile_index,MenuProfileAction action) noexcept {
+    if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
+       dropdown_preview_ || profile_action_preview_ ||
+       profile_index>=local_profiles_.size() ||
+       static_cast<unsigned>(action)>
+           static_cast<unsigned>(MenuProfileAction::Delete) ||
+       (profile_index==0u &&
+           (action==MenuProfileAction::Save ||
+            action==MenuProfileAction::Delete)))
+        return false;
+    profile_name_focused_=false;
+    profile_action_preview_=MenuProfileActionPreview{profile_index,action};
+    return true;
+}
+bool MenuState::cancel_profile_action_preview() noexcept {
+    if(!profile_action_preview_)return false;
+    profile_action_preview_.reset();
+    return true;
+}
+bool MenuState::confirm_profile_action_preview() noexcept {
+    if(selected_!=MenuTab::Profiles || !profile_action_preview_)return false;
+    const auto state=*profile_action_preview_;
+    if(state.profile_index>=local_profiles_.size() ||
+       (state.profile_index==0u &&
+        (state.action==MenuProfileAction::Save ||
+         state.action==MenuProfileAction::Delete)))return false;
+    profile_action_preview_.reset();
+    if(state.action==MenuProfileAction::Delete) {
+        // A locally created, unsaved preview card is removed only after
+        // confirmation. The original game/OS filesystem is untouched.
+        local_profiles_.erase(local_profiles_.begin()+
+                              static_cast<std::ptrdiff_t>(state.profile_index));
+    }
+    // Load, Save and OpenFolder deliberately do no filesystem/runtime work:
+    // the supplied HTML reference uses empty confirmation callbacks.
+    return true;
+}
+
 bool MenuState::begin_bind_capture(
         std::size_t catalog_index) noexcept {
     const auto& catalog=official_module_catalog();
@@ -737,6 +846,8 @@ bool MenuState::open_unload_confirmation_preview() noexcept {
     focused_text_widget_.reset();
     bind_capture_index_.reset();
     bind_hover_row_.reset();
+    profile_action_preview_.reset();
+    profile_name_focused_=false;
     unload_confirmation_preview_=true;
     return true;
 }
