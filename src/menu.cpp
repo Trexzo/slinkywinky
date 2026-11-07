@@ -1,5 +1,6 @@
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/recovered_settings.hpp"
+#include "slinkywinky/menu_color_geometry.hpp"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -376,6 +377,48 @@ bool MenuState::toggle_recovered_boolean_preview(
     const bool previous=recovered_boolean_overrides_[widget_index].value_or(
         widgets[widget_index].example_enabled);
     recovered_boolean_overrides_[widget_index]=!previous;
+    return true;
+}
+
+std::optional<std::uint32_t> MenuState::recovered_color_override(
+        std::size_t widget_index) const noexcept {
+    if(widget_index>=recovered_color_overrides_.size())return std::nullopt;
+    return recovered_color_overrides_[widget_index];
+}
+bool MenuState::set_recovered_color_preview(
+        std::size_t catalog_index,std::size_t widget_index,
+        std::uint32_t rgb) noexcept {
+    const auto& catalog=official_module_catalog();
+    const auto& widgets=recovered_widget_catalog();
+    if(rgb>0xFFFFFFu || dropdown_preview_ ||
+       unload_confirmation_preview_ ||
+       catalog_index>=catalog.size() ||
+       widget_index>=widgets.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       widgets[widget_index].kind!=RecoveredWidgetKind::Color ||
+       std::string_view(widgets[widget_index].module)!=
+           catalog[catalog_index].name ||
+       !menu_source_widget_color(widget_index))
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+        [catalog_index](const MenuItem& row){
+            return row.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> pageWidgets{};
+    if(!recovered_widget_visible_page(
+        catalog[catalog_index].name,settings_offsets_[catalog_index],
+        static_cast<int>(aim_preview_mode_),
+        static_cast<int>(target_preview_mode_),pageWidgets))
+        return false;
+    if(std::none_of(pageWidgets.begin(),pageWidgets.end(),
+        [&](const RecoveredWidget* ptr){
+            return ptr==&widgets[widget_index];}))
+        return false;
+    // Independent GUI fixture state, never overwrites MenuAppearance's
+    // global accent or a gameplay module's ClientSettings.
+    recovered_color_overrides_[widget_index]=rgb;
     return true;
 }
 
