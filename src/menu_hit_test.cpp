@@ -100,7 +100,8 @@ std::optional<MenuHit> hit_test_menu(
             (y-pop->y)/pop->row_height);
         if(option>=pop->option_count)return std::nullopt;
         return MenuHit{MenuHitKind::DropdownOption,frame.tab,
-                       frame.dropdown_preview->catalog_index,option};
+                       frame.dropdown_preview->catalog_index,
+                       pop->first_option+option};
     }
     // R113: exactly the same shared geometry as the Slinky-style renderer.
     // "Unload" is displayed in red, but is NEVER an admitted mouse action.
@@ -190,6 +191,16 @@ std::optional<MenuHit> hit_test_menu(
                         widgets[j]-all.data());
                     if(global>=all.size())return std::nullopt;
                     return MenuHit{MenuHitKind::RecoveredChoiceControl,
+                                   frame.tab,index,global};
+                }
+                if(widget.kind==RecoveredWidgetKind::MultiSelect &&
+                   x>=controlX && x<controlX+controlW &&
+                   y>=controlY && y<controlY+22.0f) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    if(global>=all.size())return std::nullopt;
+                    return MenuHit{MenuHitKind::RecoveredMultiControl,
                                    frame.tab,index,global};
                 }
                 // R132: the same numeric track geometry is used to
