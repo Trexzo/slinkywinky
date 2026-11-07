@@ -38,6 +38,7 @@ std::size_t MenuState::tab_count(MenuTab tab) const noexcept {
 bool MenuState::select(MenuTab tab) noexcept {
     if(tab==MenuTab::Count || tab==MenuTab::Unload)return false;
     dropdown_preview_.reset();
+    unload_confirmation_preview_=false;
     selected_=tab;
     scroll_=0;
     return true;
