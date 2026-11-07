@@ -5,6 +5,7 @@
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
+#include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -130,6 +131,24 @@ std::optional<MenuHit> hit_test_menu(
         if(x<rect.x || x>=rect.x+rect.width ||
            y<rect.y || y>=rect.y+rect.height)continue;
         const std::size_t index=frame.visible[i].catalog_index;
+        // R140: source-style key and HOLD chips live in the card's
+        // first row, even when a module's settings are expanded. Reject
+        // missing/hidden/clipped or no-bind module chips by construction.
+        const auto& bind=frame.bind_previews[index];
+        const bool capturing=frame.bind_capture_index==index;
+        const std::string label=capturing?"PRESS A KEY...":
+            menu_bind_code_label(bind.code);
+        const auto chips=menu_bind_chip_geometry(
+            frame,w,panel->logical_height(),i,index,label,capturing);
+        if(chips && y>=chips->key.y &&
+           y<chips->key.y+chips->key.height) {
+            if(x>=chips->key.x &&
+               x<chips->key.x+chips->key.width)
+                return MenuHit{MenuHitKind::BindChip,frame.tab,index};
+            if(bind.code && x>=chips->hold.x &&
+               x<chips->hold.x+chips->hold.width)
+                return MenuHit{MenuHitKind::BindHold,frame.tab,index};
+        }
         // R126: only source-identified dropdowns in Aim Assist and the
         // existing Piercing sandbox can mutate local preview state.
         // The hit geometry mirrors the GL11 renderer in all three modes.
