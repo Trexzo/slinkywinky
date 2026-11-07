@@ -13,8 +13,34 @@
 
 namespace slinkywinky {
 namespace {
-// No bundled third-party typeface: request only an installed Windows font.
+// R149: the recovered HTML requests Inter at font-weight 500.
+// Prefer a *locally installed* Inter face only if GDI confirms that the
+// exact family exists; otherwise retain the Windows Segoe UI fallback.
+// Neither font binaries nor cross-process font registration are used.
 constexpr float kRasterHeight=24.0f;
+int CALLBACK find_exact_inter_family(
+        const LOGFONTW* record,const TEXTMETRICW*,DWORD,
+        LPARAM result) noexcept {
+    if(!record || !result)return 1;
+    if(lstrcmpiW(record->lfFaceName,L"Inter")==0) {
+        *reinterpret_cast<bool*>(result)=true;
+        return 0;
+    }
+    return 1;
+}
+bool inter_installed(HDC dc) noexcept {
+    if(!dc)return false;
+    LOGFONTW query{};
+    const wchar_t* name=L"Inter";
+    for(std::size_t i=0;name[i] && i<LF_FACESIZE-1u;++i)
+        query.lfFaceName[i]=name[i];
+    query.lfCharSet=DEFAULT_CHARSET;
+    bool found=false;
+    EnumFontFamiliesExW(
+        dc,&query,find_exact_inter_family,
+        reinterpret_cast<LPARAM>(&found),0);
+    return found;
+}
 struct Glyph {
     int left=0, origin_y=0, width=0, height=0, pitch=0, advance=12;
     std::vector<unsigned char> coverage;
@@ -25,9 +51,11 @@ public:
         try {
             dc_=CreateCompatibleDC(nullptr);
             if(!dc_)return;
-            font_=CreateFontW(-24,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,
+            const wchar_t* family=inter_installed(dc_)?
+                L"Inter":L"Segoe UI";
+            font_=CreateFontW(-24,0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,
                 DEFAULT_CHARSET,OUT_TT_ONLY_PRECIS,CLIP_DEFAULT_PRECIS,
-                ANTIALIASED_QUALITY,DEFAULT_PITCH|FF_SWISS,L"Segoe UI");
+                ANTIALIASED_QUALITY,DEFAULT_PITCH|FF_SWISS,family);
             if(!font_)return;
             old_=SelectObject(dc_,font_);
             if(!old_ || old_==HGDI_ERROR)return;
