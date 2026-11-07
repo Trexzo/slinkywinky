@@ -142,6 +142,12 @@ public final class R112KeyboardBridgeSmoke implements Opcodes {
         check(stat(rewritten,"delivered")==1 &&
               nav.equals(Arrays.asList("30:D","30:U","31:D","31:U")),
               "R111 synthetic live callsite leaked events or repeated a key");
+        // R119 decisive behavioral negative control: suppressing the
+        // LWJGL queue does NOT suspend code before or after the loop.
+        // The exact real ave.s()V has keybind dispatch in both regions.
+        check(stat(rewritten,"beforeQueue")==2 &&
+              stat(rewritten,"afterQueue")==2,
+              "Queue-only modal unexpectedly suppressed residual game logic");
         check(KeyboardQueueOwner.close(true),"Modal close refused");
         call.invoke(null);
         check("VANILLA".equals(KeyboardQueueOwner.state()),
@@ -157,6 +163,7 @@ public final class R112KeyboardBridgeSmoke implements Opcodes {
 
         System.out.println("R112_SYNTHETIC_TRANSFORMED_CLASS_EXECUTION_AND_KEY_OWNER_PASS");
         System.out.println("R112_EXACT_ONE_CALLSITE_MODAL_NO_QUEUE_PASSTHROUGH_FIXTURE_PASS");
+        System.out.println("R119_ONE_CALLSITE_MODAL_EXECUTES_PRE_AND_POST_LOGIC_FIXTURE_PASS");
         System.out.println("R112_NO_LIVE_MINECRAFT_OR_ANTICHEAT_OR_GAMEPLAY_HOOK");
     }
     private R112KeyboardBridgeSmoke(){}

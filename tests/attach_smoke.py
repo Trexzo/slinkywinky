@@ -4,6 +4,7 @@ import pathlib
 import subprocess
 import sys
 import time
+import zipfile
 
 faulthandler.enable()
 # Diagnostic only: if a subprocess or pipe deadlocks on Windows, emit the
@@ -20,7 +21,25 @@ target = subprocess.Popen([str(java), "-cp", str(classes),
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                           universal_newlines=True, env=env)
 try:
-    classpath = str(classes) + ";" + str(loader.parent / "slinkywinky_instrument.jar")
+    instrument_jar = loader.parent / "slinkywinky_instrument.jar"
+    # R119: test-only ASM/input-audit and mock-LWJGL code must not be
+    # bundled into the runtime Java 8 instrument jar.
+    with zipfile.ZipFile(instrument_jar, "r") as agent:
+        entries = set(agent.namelist())
+        required = {
+            "dev/slinkywinky/instrument/KeyboardQueueOwner.class",
+            "dev/slinkywinky/instrument/KeyboardPageRelay.class",
+        }
+        forbidden = {
+            "org/lwjgl/input/Keyboard.class",
+            "dev/slinkywinky/attach/OriginalInputOwnershipAudit.class",
+            "dev/slinkywinky/attach/OriginalInputOwnershipSmoke.class",
+            "dev/slinkywinky/attach/R112KeyboardTarget.class",
+        }
+        if not required.issubset(entries) or entries.intersection(forbidden):
+            raise AssertionError("R119 runtime JAR input-owner/fixture separation broken")
+    print("PASS: R119 test-only keyboard fixtures absent from instrument JAR")
+    classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],
         capture_output=True, text=True, env=env, timeout=15)
@@ -65,6 +84,21 @@ try:
         raise AssertionError("R107 keyboard path negative controls failed: " +
                              keyboard_audit.stdout + keyboard_audit.stderr)
     print("PASS: R107 original keyboard path source-shape negative controls")
+    # R119: deeper, independent full input-method inventory. Reject
+    # queue-only 'modal safety' when game keybindings are still reachable.
+    # Synthetic bytecode only; full SHA-pinned vanilla jar tested separately.
+    input_owner = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.OriginalInputOwnershipSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (input_owner.returncode != 0 or
+        "R119_SYNTHETIC_PRE_AND_POST_KEYBINDING_MODAL_DENIAL_PASS"
+        not in input_owner.stdout or
+        "R119_UNVERIFIED_ORIGINAL_AND_MALFORMED_CLASS_DENIAL_PASS"
+        not in input_owner.stdout):
+        raise AssertionError("R119 full input ownership negative gate failed: " +
+                             input_owner.stdout + input_owner.stderr)
+    print("PASS: R119 residual game-keybinding modal guard, fixture only")
     # R109: a second offline ASM-only guard proves that a keyboard queue
     # callsite may be substituted in memory with NO other opcode changes.
     # Nothing here is installed in the actual game or instrumentation JAR.
@@ -118,6 +152,8 @@ try:
         "R112_SYNTHETIC_TRANSFORMED_CLASS_EXECUTION_AND_KEY_OWNER_PASS"
         not in executable_bridge.stdout or
         "R112_EXACT_ONE_CALLSITE_MODAL_NO_QUEUE_PASSTHROUGH_FIXTURE_PASS"
+        not in executable_bridge.stdout or
+        "R119_ONE_CALLSITE_MODAL_EXECUTES_PRE_AND_POST_LOGIC_FIXTURE_PASS"
         not in executable_bridge.stdout):
         raise AssertionError("R112 executable isolated keyboard bridge failed: " +
                              executable_bridge.stdout + executable_bridge.stderr)
