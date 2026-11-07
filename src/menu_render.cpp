@@ -68,6 +68,8 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.recovered_choice_overrides=menu.recovered_choice_overrides();
     frame.recovered_multi_overrides=menu.recovered_multi_overrides();
     frame.recovered_color_overrides=menu.recovered_color_overrides();
+    frame.recovered_text_overrides=menu.recovered_text_overrides();
+    frame.focused_text_widget=menu.focused_text_widget();
     frame.recovered_slider_overrides=menu.recovered_slider_overrides();
     frame.recovered_range_overrides=menu.recovered_range_overrides();
     frame.piercing_selected=menu.piercing_selected();
