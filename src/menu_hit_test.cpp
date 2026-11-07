@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
+#include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -189,6 +190,22 @@ std::optional<MenuHit> hit_test_menu(
                     if(global>=all.size())return std::nullopt;
                     return MenuHit{MenuHitKind::RecoveredChoiceControl,
                                    frame.tab,index,global};
+                }
+                // R132: the same numeric track geometry is used to
+                // calculate release values in the Windows preview. A hit
+                // always identifies the immutable recovered widget ID.
+                if(widget.kind==RecoveredWidgetKind::Slider) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    const auto numeric=menu_numeric_track_geometry(
+                        frame,w,panel->logical_height(),index,global);
+                    if(numeric && x>=numeric->x &&
+                       x<numeric->x+numeric->width &&
+                       y>=numeric->y &&
+                       y<numeric->y+numeric->height)
+                        return MenuHit{MenuHitKind::RecoveredSliderPreview,
+                                       frame.tab,index,global};
                 }
                 // Generic typed Boolean fixture: the pointer returned by
                 // recovered_widget_visible_page identifies the exact
