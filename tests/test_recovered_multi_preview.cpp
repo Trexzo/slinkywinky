@@ -119,67 +119,73 @@ int main() {
         CHECK(menu.close_preview_dropdown());
         CHECK(!menu.select_preview_dropdown_option(0u));
 
-        // Teams has sixteen independently selectable colors. Only six
-        // rows appear at a time, but wheel exposes the full option set.
-        CHECK(nav.select_tab(MenuTab::Utility));
-        CHECK(profile.scroll_by(10)); // 18 utility modules -> last 8
-        CHECK(nav.focus_visible_row(65u)); // Teams
-        CHECK(nav.apply(MenuNavAction::ExpandFocused));
-        CHECK(!menu.open_recovered_multi_preview(42u,large));
-        CHECK(menu.open_recovered_multi_preview(65u,large));
-        frame=frames.next(menu,&profile,&nav);
-        CHECK(frame && frame->dropdown_preview &&
-              frame->dropdown_preview->widget_index==large);
-        popup=menu_dropdown_popup_geometry(
-            *frame,panel->logical_width(),panel->logical_height());
-        CHECK(popup && popup->total_options==16u &&
-              popup->option_count==6u && popup->first_option==0u);
-        CHECK(!menu.select_preview_dropdown_option(15u));
-        for(unsigned i=0;i<10u;++i)CHECK(menu.scroll_preview_popup(1));
-        CHECK(!menu.scroll_preview_popup(1));
-        CHECK(menu.dropdown_preview()->option_offset==10u);
-        changed=frames.next(menu,&profile,&nav);
-        popup=menu_dropdown_popup_geometry(
-            *changed,panel->logical_width(),panel->logical_height());
-        CHECK(popup && popup->first_option==10u &&
-              popup->option_count==6u);
-        const auto white=xy(popup->x+popup->width*0.5f,
-            popup->y+popup->row_height*5.5f);
-        const auto whiteHit=hit_test_menu(*changed,mode,
-                                          white.first,white.second);
-        CHECK(whiteHit && whiteHit->kind==MenuHitKind::DropdownOption &&
-              whiteHit->control_index==15u);
-        CHECK(gesture.press(*changed,mode,white.first,white.second,
-                            2000,true));
-        const auto committed=gesture.release(
-            *changed,mode,white.first,white.second,2020,true);
-        CHECK(committed && committed->control_index==15u);
-        CHECK(menu.select_preview_dropdown_option(15u));
-        CHECK(menu.dropdown_preview());
-        CHECK(menu.recovered_multi_overrides()[large].value_or(0u)==
-              (1u<<15u));
-        CHECK(menu.scroll_preview_popup(-1));
-        CHECK(menu.dropdown_preview()->option_offset==9u);
-        CHECK(!menu.select_preview_dropdown_option(0u));
-        // A popup scroll invalidates the same held click's frame.
-        auto held=frames.next(menu,&profile,&nav);
-        const auto heldRect=menu_dropdown_popup_geometry(
-            *held,panel->logical_width(),panel->logical_height());
-        CHECK(heldRect);
-        const auto heldPos=xy(heldRect->x+heldRect->width*0.5f,
-            heldRect->y+heldRect->row_height*2.5f);
-        CHECK(gesture.press(*held,mode,
-                            heldPos.first,heldPos.second,3000,true));
-        CHECK(menu.scroll_preview_popup(-1));
-        const auto stale=frames.next(menu,&profile,&nav);
-        CHECK(!gesture.release(*stale,mode,
-              heldPos.first,heldPos.second,3020,true));
-        CHECK(menu.recovered_multi_overrides()[large].value_or(0u)==
-              (1u<<15u));
-        CHECK(menu.close_preview_dropdown());
-        CHECK(menu.open_unload_confirmation_preview());
-        CHECK(!menu.open_recovered_multi_preview(65u,large));
-        CHECK(menu.close_unload_confirmation_preview());
+        // The 900x630 compact/bounded one-column panel clips the
+        // seventh visible Utility card. Test the full sixteen-option
+        // Teams popup in the original two-column 900px standalone panel;
+        // all three modes were tested above on first-row Auto Tool.
+        if(mode==MenuPanelMode::StandalonePreview) {
+            // Teams has sixteen independently selectable colors. Only six
+            // rows appear at a time, but wheel exposes the full option set.
+            CHECK(nav.select_tab(MenuTab::Utility));
+            CHECK(profile.scroll_by(10)); // 18 utility modules -> last 8
+            CHECK(nav.focus_visible_row(65u)); // Teams
+            CHECK(nav.apply(MenuNavAction::ExpandFocused));
+            CHECK(!menu.open_recovered_multi_preview(42u,large));
+            CHECK(menu.open_recovered_multi_preview(65u,large));
+            frame=frames.next(menu,&profile,&nav);
+            CHECK(frame && frame->dropdown_preview &&
+                  frame->dropdown_preview->widget_index==large);
+            popup=menu_dropdown_popup_geometry(
+                *frame,panel->logical_width(),panel->logical_height());
+            CHECK(popup && popup->total_options==16u &&
+                  popup->option_count==6u && popup->first_option==0u);
+            CHECK(!menu.select_preview_dropdown_option(15u));
+            for(unsigned i=0;i<10u;++i)CHECK(menu.scroll_preview_popup(1));
+            CHECK(!menu.scroll_preview_popup(1));
+            CHECK(menu.dropdown_preview()->option_offset==10u);
+            changed=frames.next(menu,&profile,&nav);
+            popup=menu_dropdown_popup_geometry(
+                *changed,panel->logical_width(),panel->logical_height());
+            CHECK(popup && popup->first_option==10u &&
+                  popup->option_count==6u);
+            const auto white=xy(popup->x+popup->width*0.5f,
+                popup->y+popup->row_height*5.5f);
+            const auto whiteHit=hit_test_menu(*changed,mode,
+                                              white.first,white.second);
+            CHECK(whiteHit && whiteHit->kind==MenuHitKind::DropdownOption &&
+                  whiteHit->control_index==15u);
+            CHECK(gesture.press(*changed,mode,white.first,white.second,
+                                2000,true));
+            const auto committed=gesture.release(
+                *changed,mode,white.first,white.second,2020,true);
+            CHECK(committed && committed->control_index==15u);
+            CHECK(menu.select_preview_dropdown_option(15u));
+            CHECK(menu.dropdown_preview());
+            CHECK(menu.recovered_multi_overrides()[large].value_or(0u)==
+                  (1u<<15u));
+            CHECK(menu.scroll_preview_popup(-1));
+            CHECK(menu.dropdown_preview()->option_offset==9u);
+            CHECK(!menu.select_preview_dropdown_option(0u));
+            // A popup scroll invalidates the same held click's frame.
+            auto held=frames.next(menu,&profile,&nav);
+            const auto heldRect=menu_dropdown_popup_geometry(
+                *held,panel->logical_width(),panel->logical_height());
+            CHECK(heldRect);
+            const auto heldPos=xy(heldRect->x+heldRect->width*0.5f,
+                heldRect->y+heldRect->row_height*2.5f);
+            CHECK(gesture.press(*held,mode,
+                                heldPos.first,heldPos.second,3000,true));
+            CHECK(menu.scroll_preview_popup(-1));
+            const auto stale=frames.next(menu,&profile,&nav);
+            CHECK(!gesture.release(*stale,mode,
+                  heldPos.first,heldPos.second,3020,true));
+            CHECK(menu.recovered_multi_overrides()[large].value_or(0u)==
+                  (1u<<15u));
+            CHECK(menu.close_preview_dropdown());
+            CHECK(menu.open_unload_confirmation_preview());
+            CHECK(!menu.open_recovered_multi_preview(65u,large));
+            CHECK(menu.close_unload_confirmation_preview());
+        }
         CHECK(frames.detach());
     }
     // R131 regression: a ten-option *single-choice* dropdown also uses
