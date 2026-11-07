@@ -90,8 +90,53 @@ std::optional<MenuHit> hit_test_menu(
         if(rect.y+rect.height>panel->logical_height()-menu_panel_padding)
             continue;
         if(x<rect.x || x>=rect.x+rect.width ||
-           y<rect.y || y>=rect.y+body)continue;
+           y<rect.y || y>=rect.y+rect.height)continue;
         const std::size_t index=frame.visible[i].catalog_index;
+        // R125: only the actual rendered interactive control surface
+        // of the isolated Piercing sandbox is an admitted settings click.
+        // Source rows/headers remain inert; hit geometry mirrors GL11.
+        if(index==11 && frame.tab==MenuTab::Combat &&
+           frame.visible[i].expanded && y>=rect.y+body) {
+            std::array<const RecoveredWidget*,5> widgets{};
+            const auto& card=frame.visible[i];
+            const auto count=recovered_widget_visible_page(
+                card.title.c_str(),card.settings_offset,
+                static_cast<int>(frame.aim_preview_mode),
+                static_cast<int>(frame.target_preview_mode),widgets);
+            if(count!=8u)return std::nullopt; // source shape contract
+            const float controlX=rect.x+rect.width*0.54f;
+            const float controlW=std::max(16.0f,rect.width*0.46f-10.0f);
+            const float settingsY=rect.y+body;
+            float extraHeadings=0.0f;
+            std::string_view previousGroup=widgets[0]?
+                std::string_view(widgets[0]->group):std::string_view{};
+            for(std::size_t j=0;j<widgets.size() && widgets[j];++j) {
+                const std::string_view group(widgets[j]->group);
+                if(j>0 && group!=previousGroup) {
+                    extraHeadings+=20.0f;
+                    previousGroup=group;
+                }
+                const auto& widget=*widgets[j];
+                const std::size_t control=card.settings_offset+j;
+                if(control>=8u)return std::nullopt;
+                const float controlY=settingsY+43.0f+
+                    27.0f*static_cast<float>(j)+extraHeadings+2.0f;
+                if(widget.kind==RecoveredWidgetKind::Dropdown &&
+                   control==0u && x>=controlX &&
+                   x<controlX+controlW &&
+                   y>=controlY && y<controlY+22.0f)
+                    return MenuHit{MenuHitKind::PiercingControl,
+                                   frame.tab,index,control};
+                if(widget.kind==RecoveredWidgetKind::Boolean &&
+                   control>0u && x>=controlX+controlW-34.0f &&
+                   x<controlX+controlW &&
+                   y>=controlY+1.0f && y<controlY+19.0f)
+                    return MenuHit{MenuHitKind::PiercingControl,
+                                   frame.tab,index,control};
+            }
+            return std::nullopt; // headings and body are never actions
+        }
+        if(y>=rect.y+body)continue;
         const bool implemented=
             index<catalog.size() && module_has_profile_setting(index);
         const float toggleX=rect.x+rect.width-

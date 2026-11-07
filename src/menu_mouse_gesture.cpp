@@ -32,7 +32,8 @@ bool MenuMouseGesture::cancel() noexcept {
 bool MenuMouseGesture::same_hit(
     const MenuHit& a,const MenuHit& b) noexcept {
     return a.kind==b.kind && a.tab==b.tab &&
-           a.catalog_index==b.catalog_index;
+           a.catalog_index==b.catalog_index &&
+           a.control_index==b.control_index;
 }
 bool MenuMouseGesture::equivalent_frame(
     const MenuRenderFrame& frame,MenuPanelMode mode) const noexcept {

@@ -30,7 +30,7 @@ std::optional<MenuPanelGeometry> menu_panel_geometry(
     MenuPanelMode mode) noexcept;
 
 enum class MenuHitKind : std::uint8_t {
-    Tab, RowBody, Expand, Toggle
+    Tab, RowBody, Expand, Toggle, PiercingControl
 };
 
 // Catalog index is meaningful only for non-Tab hits. No raw input pointers,
@@ -39,6 +39,7 @@ struct MenuHit {
     MenuHitKind kind=MenuHitKind::RowBody;
     MenuTab tab=MenuTab::Combat;
     std::size_t catalog_index=0;
+    std::size_t control_index=0; // R125 visible Piercing callsite, 0..7
 };
 
 // Client coordinates are top-left physical pixels, precisely like

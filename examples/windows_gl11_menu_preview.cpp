@@ -340,7 +340,11 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
                     else if(hit->kind==MenuHitKind::Toggle)
                         navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
-                    // Body clicks only set inert visual focus.
+                    else if(hit->kind==MenuHitKind::PiercingControl &&
+                            hit->catalog_index==11 &&
+                            menu.select_piercing_control(hit->control_index))
+                        menu.activate_piercing_selection();
+                    // A click outside the actual control remains inert.
                 }
             }
             refresh_caption(hwnd);

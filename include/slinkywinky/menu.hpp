@@ -85,6 +85,9 @@ public:
     std::size_t piercing_selected() const noexcept {return piercing_selected_;}
     bool move_piercing_selection(int direction) noexcept;
     bool activate_piercing_selection() noexcept;
+    // R125 click admission: exactly the clicked visible callsite. Never
+    // changes page, gameplay flags or any other recovered module.
+    bool select_piercing_control(std::size_t control) noexcept;
     // Only for explicitly preview-only persistence; never changes gameplay.
     bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;

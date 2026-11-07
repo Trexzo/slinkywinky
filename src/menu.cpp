@@ -115,6 +115,17 @@ bool MenuState::move_piercing_selection(int direction) noexcept {
     settings_offsets_[11]=(piercing_selected_/5u)*5u;
     return true;
 }
+bool MenuState::select_piercing_control(std::size_t control) noexcept {
+    if(control>7u || selected_!=MenuTab::Combat ||
+       !expanded_[11] || control/5u!=settings_offsets_[11]/5u)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+        [](const MenuItem& row){return row.catalog_index==11;}))
+        return false;
+    piercing_selected_=control;
+    return true;
+}
 bool MenuState::activate_piercing_selection() noexcept {
     if(selected_!=MenuTab::Combat || !expanded_[11])return false;
     const auto rows=page();
