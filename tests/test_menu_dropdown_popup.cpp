@@ -132,7 +132,7 @@ int main() {
         }
         CHECK(found);
         // No stale open popup survives a changed module tab.
-        CHECK(menu.change_settings_page(0,1));
+        CHECK(menu.open_preview_dropdown(MenuDropdownKind::AimMode,0u));
         CHECK(menu.select(MenuTab::Move));
         CHECK(!menu.dropdown_preview());
         CHECK(!menu.select_preview_dropdown_option(0u));
