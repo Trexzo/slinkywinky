@@ -779,9 +779,13 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     const auto widgetIndex=static_cast<std::size_t>(
                         preview[j]-all.data());
                     if(widgetIndex<all.size()) {
-                        const auto& current=
-                            frame.recovered_text_overrides[widgetIndex];
-                        if(current)textOverride=*current;
+                        const auto it=std::find_if(
+                            frame.recovered_text_overrides.begin(),
+                            frame.recovered_text_overrides.end(),
+                            [widgetIndex](const MenuRenderTextValue& entry){
+                                return entry.widget_index==widgetIndex;});
+                        if(it!=frame.recovered_text_overrides.end())
+                            textOverride=it->value;
                         textFocused=frame.focused_text_widget==widgetIndex;
                     }
                 }
