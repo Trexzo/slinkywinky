@@ -145,7 +145,9 @@ std::optional<MenuHit> hit_test_menu(
             if(x>=chips->key.x &&
                x<chips->key.x+chips->key.width)
                 return MenuHit{MenuHitKind::BindChip,frame.tab,index};
-            if(bind.code && x>=chips->hold.x &&
+            if(bind.code &&
+               (bind.hold || frame.bind_hover_row==index) &&
+               x>=chips->hold.x &&
                x<chips->hold.x+chips->hold.width)
                 return MenuHit{MenuHitKind::BindHold,frame.tab,index};
         }
