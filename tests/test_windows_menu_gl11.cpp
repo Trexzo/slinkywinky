@@ -1144,11 +1144,11 @@ int main() {
             {
                 std::array<const RecoveredWidget*,5> controls{};
                 REQUIRE(recovered_widget_preview("Backtrack",controls)>=3);
-                REQUIRE(controls[1] &&
-                        controls[1]->kind==RecoveredWidgetKind::Range);
+                REQUIRE(controls[0] &&
+                        controls[0]->kind==RecoveredWidgetKind::Range);
             }
             renderSettings(MenuTab::Combat,"Backtrack",
-                RecoveredWidgetKind::Slider,"SLINKYWINKY_R116_RANGE_PPM");
+                RecoveredWidgetKind::Range,"SLINKYWINKY_R116_RANGE_PPM");
             renderSettings(MenuTab::Utility,"Friends",
                 RecoveredWidgetKind::Boolean,"SLINKYWINKY_R116_FRIENDS_PPM");
             renderSettings(MenuTab::Combat,"Piercing",
