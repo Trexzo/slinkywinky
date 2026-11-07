@@ -149,6 +149,7 @@ std::string trim_profile_name(std::string_view name) {
 bool MenuState::focus_profile_name_preview() noexcept {
     if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
        dropdown_preview_ || profile_action_preview_ ||
+       profile_bind_capture_index_ ||
        local_profiles_.size()>=6u)return false;
     if(profile_name_focused_)return false;
     profile_name_focused_=true;
@@ -181,6 +182,7 @@ bool MenuState::erase_profile_name_preview() noexcept {
 bool MenuState::create_profile_preview() {
     if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
        dropdown_preview_ || profile_action_preview_ ||
+       profile_bind_capture_index_ ||
        local_profiles_.size()>=6u)return false;
     const auto name=trim_profile_name(profile_name_draft_);
     if(name.empty() || name.size()>28u)return false;
@@ -232,6 +234,7 @@ bool MenuState::begin_profile_action_preview(
         std::size_t profile_index,MenuProfileAction action) noexcept {
     if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
        dropdown_preview_ || profile_action_preview_ ||
+       profile_bind_capture_index_ ||
        profile_index>=local_profiles_.size() ||
        static_cast<unsigned>(action)>
            static_cast<unsigned>(MenuProfileAction::Delete) ||
