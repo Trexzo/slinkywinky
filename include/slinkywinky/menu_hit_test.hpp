@@ -47,6 +47,7 @@ struct MenuHit {
     MenuTab tab=MenuTab::Combat;
     std::size_t catalog_index=0;
     std::size_t control_index=0; // R125 visible Piercing callsite, 0..7
+    unsigned sub_index=0; // R133: held numeric range handle, 0 or 1
 };
 
 // Client coordinates are top-left physical pixels, precisely like
