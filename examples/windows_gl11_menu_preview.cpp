@@ -233,6 +233,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_MOUSEWHEEL:{
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
+            if(menu.close_preview_dropdown()) {
+                request_paint(hwnd); // Never scroll an underlying card too.
+                return 0;
+            }
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
             RECT client{};GetClientRect(hwnd,&client);
             const auto mode=panel_mode();
@@ -275,9 +279,13 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_KILLFOCUS:
             cancel_mouse(hwnd);
+            menu.close_preview_dropdown();
             return 0;
         case WM_ACTIVATEAPP:
-            if(!wp)cancel_mouse(hwnd);
+            if(!wp) {
+                cancel_mouse(hwnd);
+                menu.close_preview_dropdown();
+            }
             return 0;
         case WM_CANCELMODE:
             cancel_mouse(hwnd);
@@ -383,7 +391,14 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // Never act on a spoofed/late key message while this demo
             // window has lost its exact focus or foreground ownership.
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
-            if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
+            if(wp==VK_ESCAPE) {
+                if(menu.close_preview_dropdown()) {
+                    request_paint(hwnd);
+                    return 0;
+                }
+                DestroyWindow(hwnd);
+                return 0;
+            }
             // Separate Windows preview ONLY; never hooks Minecraft.
             // Cycle locally selected Aim (F7) / Target (F8) view modes.
             if(wp==VK_F7 || wp==VK_F8) {
