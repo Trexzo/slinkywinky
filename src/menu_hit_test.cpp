@@ -71,6 +71,21 @@ std::optional<MenuHit> hit_test_menu(
     const float y=static_cast<float>(
         client_y-static_cast<int>(panel->top))/panel->scale;
     const float w=panel->logical_width();
+    // R128: confirmation owns the entire pointer surface. Only the
+    // recovered X and Continue button can be hit; no click-through.
+    if(frame.unload_confirmation_preview) {
+        const auto modal=menu_unload_modal_geometry(
+            frame,w,panel->logical_height());
+        if(!modal)return std::nullopt;
+        if(x>=modal->close_x && x<modal->close_x+20.0f &&
+           y>=modal->close_y && y<modal->close_y+20.0f)
+            return MenuHit{MenuHitKind::ModalClose,frame.tab,0};
+        if(x>=modal->continue_x &&
+           x<modal->continue_x+modal->continue_width &&
+           y>=modal->continue_y && y<modal->continue_y+20.0f)
+            return MenuHit{MenuHitKind::ModalContinue,frame.tab,0};
+        return std::nullopt;
+    }
     // R127: an open dropdown owns the only admissible mouse targets.
     // No click may pass through the floating popup to modules or nav tabs.
     if(frame.dropdown_preview) {
