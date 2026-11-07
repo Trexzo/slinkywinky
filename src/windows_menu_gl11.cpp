@@ -164,7 +164,9 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                            float x,float y,float cardWidth,
                            std::uint32_t accent,
                            std::string_view dropdownOverride={},
-                           std::string_view multiOverride={}) noexcept {
+                           std::string_view multiOverride={},
+                           std::optional<std::uint32_t> colorOverride={})
+                           noexcept {
     const float controlX=x+cardWidth*0.54f;
     const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
     const float labelW=std::max(14.0f,controlX-x-14.0f);
@@ -229,7 +231,7 @@ void draw_recovered_widget(const RecoveredWidget& widget,
         case RecoveredWidgetKind::Color: {
             rgb(0x404040u);
             round_rect(controlX+controlW-42.0f,controlY,42.0f,22.0f,7.0f);
-            rgb(preview_swatch(widget.auxiliary));
+            rgb(colorOverride.value_or(preview_swatch(widget.auxiliary)));
             round_rect(controlX+controlW-39.0f,controlY+3.0f,
                        36.0f,16.0f,5.0f);
             break;
@@ -747,10 +749,19 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         }
                     }
                 }
+                std::optional<std::uint32_t> colorOverride;
+                if(display.kind==RecoveredWidgetKind::Color) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto widgetIndex=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(widgetIndex<all.size())
+                        colorOverride=frame.recovered_color_overrides[
+                            widgetIndex];
+                }
                 draw_recovered_widget(display,left,
                     settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
                     rect.width,frame.appearance.accent_rgb,selectedChoice,
-                    multiCaption);
+                    multiCaption,colorOverride);
             }
             if(count>5) {
                 char pagination[70]{};
