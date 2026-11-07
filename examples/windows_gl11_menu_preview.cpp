@@ -344,6 +344,14 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                             hit->catalog_index==11 &&
                             menu.select_piercing_control(hit->control_index))
                         menu.activate_piercing_selection();
+                    else if(hit->kind==MenuHitKind::AimModeControl &&
+                            hit->catalog_index==0 && hit->control_index==0)
+                        navigation.apply(
+                            slinkywinky::MenuNavAction::NextAimPreviewMode);
+                    else if(hit->kind==MenuHitKind::TargetModeControl &&
+                            hit->catalog_index==0)
+                        navigation.apply(
+                            slinkywinky::MenuNavAction::NextTargetPreviewMode);
                     // A click outside the actual control remains inert.
                 }
             }
