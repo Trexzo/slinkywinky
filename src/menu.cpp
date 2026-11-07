@@ -14,6 +14,20 @@ namespace {
 bool is_module_tab(MenuTab tab) noexcept {
     return tab <= MenuTab::Utility;
 }
+// Bounded, read-only parsing of the recovered fixture choice labels.
+unsigned recovered_choice_count(std::string_view options) noexcept {
+    if(options.empty())return 0u;
+    unsigned count=1;
+    bool after_separator=true;
+    for(const char c:options) {
+        if(c=='|') {
+            if(after_separator || count>=12u)return 0u;
+            ++count;
+            after_separator=true;
+        } else after_separator=false;
+    }
+    return after_separator?0u:count;
+}
 } // namespace
 
 const std::array<MenuModule,67>& official_module_catalog() noexcept {return catalog;}
@@ -154,7 +168,10 @@ bool MenuState::activate_piercing_selection() noexcept {
 // dropdowns. Source-conditioned Aim widget indices must still be visible.
 bool MenuState::open_preview_dropdown(
         MenuDropdownKind kind,std::size_t control_index) noexcept {
-    if(selected_!=MenuTab::Combat)return false;
+    if(selected_!=MenuTab::Combat ||
+       (kind!=MenuDropdownKind::AimMode &&
+        kind!=MenuDropdownKind::TargetMode &&
+        kind!=MenuDropdownKind::PiercingSort))return false;
     const std::size_t index=kind==MenuDropdownKind::PiercingSort?11u:0u;
     if(!expanded_[index] || control_index<settings_offsets_[index] ||
        control_index-settings_offsets_[index]>=5u)
@@ -189,6 +206,51 @@ bool MenuState::open_preview_dropdown(
         kind,index,control_index,settings_offsets_[index]
     };
     return true;
+}
+bool MenuState::open_recovered_choice_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept {
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(dropdown_preview_ || unload_confirmation_preview_ ||
+       catalog_index>=catalog.size() || widget_index>=all.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       all[widget_index].kind!=RecoveredWidgetKind::Dropdown ||
+       std::string_view(all[widget_index].module)!=
+           catalog[catalog_index].name ||
+       recovered_choice_count(all[widget_index].options)<2u)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+       [catalog_index](const MenuItem& item){
+           return item.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> pageWidgets{};
+    if(!recovered_widget_visible_page(
+       catalog[catalog_index].name,settings_offsets_[catalog_index],
+       static_cast<int>(aim_preview_mode_),
+       static_cast<int>(target_preview_mode_),pageWidgets))
+        return false;
+    for(std::size_t i=0;i<pageWidgets.size();++i) {
+        if(pageWidgets[i]!=&all[widget_index])continue;
+        const auto& widget=all[widget_index];
+        // Dedicated source callsites retain their existing specialized
+        // in-memory states and never alias the generic option store.
+        if((catalog_index==0u &&
+            std::string_view(widget.label)=="Mode" &&
+            (std::string_view(widget.group)=="Aim" ||
+             std::string_view(widget.group)=="Target")) ||
+           (catalog_index==11u && i==0u &&
+            std::string_view(widget.label)=="Sort targets by"))
+            return false;
+        dropdown_preview_=MenuDropdownPreview{
+            MenuDropdownKind::RecoveredChoice,catalog_index,
+            settings_offsets_[catalog_index]+i,
+            settings_offsets_[catalog_index],widget_index
+        };
+        return true;
+    }
+    return false;
 }
 std::optional<bool> MenuState::recovered_boolean_override(
         std::size_t widget_index) const noexcept {
@@ -250,8 +312,13 @@ bool MenuState::close_preview_dropdown() noexcept {
     return true;
 }
 bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
-    if(!dropdown_preview_ || selected_!=MenuTab::Combat)return false;
+    if(!dropdown_preview_)return false;
     const auto popup=*dropdown_preview_;
+    if(popup.kind!=MenuDropdownKind::RecoveredChoice &&
+       selected_!=MenuTab::Combat)return false;
+    if(popup.kind==MenuDropdownKind::RecoveredChoice &&
+       (popup.catalog_index>=catalog.size() ||
+        catalog[popup.catalog_index].tab!=selected_))return false;
     if(popup.catalog_index>=catalog.size() ||
        !expanded_[popup.catalog_index] ||
        settings_offsets_[popup.catalog_index]!=popup.page_offset)
@@ -296,6 +363,15 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
             piercing_preview_.sort=option;
             piercing_selected_=0;
             break;
+        case MenuDropdownKind::RecoveredChoice: {
+            const auto& all=recovered_widget_catalog();
+            if(popup.widget_index>=all.size() ||
+               widget!=&all[popup.widget_index] ||
+               option>=recovered_choice_count(widget->options))
+                return false;
+            recovered_choice_overrides_[popup.widget_index]=option;
+            break;
+        }
         default:return false;
     }
     dropdown_preview_.reset();
