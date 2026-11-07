@@ -106,7 +106,8 @@ bool MenuNavigation::move_row(int direction) {
     return visible_focus()==focused_;
 }
 bool MenuNavigation::apply(MenuNavAction action) {
-    if(!owner_thread() || !profile_.owns(menu_))return false;
+    if(!owner_thread() || !profile_.owns(menu_) ||
+       menu_.unload_confirmation_preview())return false;
     switch(action) {
         case MenuNavAction::NextTab: return switch_tab(1);
         case MenuNavAction::PreviousTab: return switch_tab(-1);
