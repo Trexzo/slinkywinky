@@ -636,6 +636,18 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     lastGroup=group;
                 }
                 RecoveredWidget display=*preview[j]; // never edits catalog
+                // R130: show the exact pointer-indexed Boolean sandbox
+                // value, never mutate the source fixture or ClientSettings.
+                if(item.catalog_index!=11u &&
+                   display.kind==RecoveredWidgetKind::Boolean) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto slot=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(slot<all.size() &&
+                       frame.recovered_boolean_overrides[slot])
+                        display.example_enabled=
+                            *frame.recovered_boolean_overrides[slot];
+                }
                 std::string_view selectedChoice;
                 if(item.catalog_index==0 && frame.tab==MenuTab::Combat &&
                    display.kind==RecoveredWidgetKind::Dropdown &&
