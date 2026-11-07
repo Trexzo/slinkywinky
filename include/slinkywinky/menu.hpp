@@ -77,6 +77,20 @@ inline bool operator!=(const MenuDropdownPreview& a,
     return !(a==b);
 }
 
+// R133: two bounded source-fixture values, *only* for GUI previews.
+struct RecoveredRangePreview {
+    float lower=0.0f;
+    float upper=0.0f;
+};
+inline bool operator==(const RecoveredRangePreview& a,
+                       const RecoveredRangePreview& b) noexcept {
+    return a.lower==b.lower && a.upper==b.upper;
+}
+inline bool operator!=(const RecoveredRangePreview& a,
+                       const RecoveredRangePreview& b) noexcept {
+    return !(a==b);
+}
+
 struct MenuItem {
     std::size_t catalog_index=0;
     std::string title;
@@ -152,6 +166,17 @@ public:
     recovered_slider_overrides() const noexcept {
         return recovered_slider_overrides_;
     }
+    // R133: nearest-handle source-range preview, never ClientSettings.
+    bool set_recovered_range_preview(std::size_t catalog_index,
+                                     std::size_t widget_index,
+                                     unsigned handle,
+                                     float requested_value) noexcept;
+    std::optional<RecoveredRangePreview> recovered_range_override(
+        std::size_t widget_index) const noexcept;
+    const std::array<std::optional<RecoveredRangePreview>,385>&
+    recovered_range_overrides() const noexcept {
+        return recovered_range_overrides_;
+    }
     // Only for explicitly preview-only persistence; never changes gameplay.
     bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
@@ -184,6 +209,8 @@ private:
     std::array<std::optional<bool>,385> recovered_boolean_overrides_{};
     std::array<std::optional<unsigned>,385> recovered_choice_overrides_{};
     std::array<std::optional<float>,385> recovered_slider_overrides_{};
+    std::array<std::optional<RecoveredRangePreview>,385>
+        recovered_range_overrides_{};
 };
 
 } // namespace slinkywinky
