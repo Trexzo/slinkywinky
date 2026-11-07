@@ -94,6 +94,21 @@ inline bool operator!=(const RecoveredRangePreview& a,
     return !(a==b);
 }
 
+// R140: recovered binding chips are an inert, per-module GUI preview.
+// codes are source-normalized Win32 VKs (or 0x103/0x104 for mouse 4/5).
+struct MenuBindPreview {
+    std::uint16_t code=0u;
+    bool hold=false;
+};
+inline bool operator==(const MenuBindPreview& a,
+                       const MenuBindPreview& b) noexcept {
+    return a.code==b.code && a.hold==b.hold;
+}
+inline bool operator!=(const MenuBindPreview& a,
+                       const MenuBindPreview& b) noexcept {
+    return !(a==b);
+}
+
 struct MenuItem {
     std::size_t catalog_index=0;
     std::string title;
@@ -115,6 +130,17 @@ public:
     // window; this never changes enabled flags or gameplay state.
     bool scroll_by_visible(int delta,std::size_t visible_limit) noexcept;
     bool toggle_preview(std::size_t catalog_index) noexcept;
+    // R140: no global hooks, Java keybindings or client settings writes.
+    bool begin_bind_capture(std::size_t catalog_index) noexcept;
+    bool commit_bind_capture(std::uint16_t code) noexcept;
+    bool cancel_bind_capture() noexcept;
+    bool toggle_bind_hold(std::size_t catalog_index) noexcept;
+    const std::array<MenuBindPreview,67>& bind_previews() const noexcept {
+        return bind_previews_;
+    }
+    std::optional<std::size_t> bind_capture_index() const noexcept {
+        return bind_capture_index_;
+    }
     bool toggle_expanded(std::size_t catalog_index) noexcept;
     bool change_settings_page(std::size_t catalog_index,int direction) noexcept;
     std::size_t settings_offset(std::size_t catalog_index) const noexcept;
@@ -233,6 +259,19 @@ private:
     std::size_t scroll_=0;
     MenuAppearance appearance_{};
     std::array<bool,67> enabled_{};
+    // Default examples mirror the supplied HTML transcription's st.binds,
+    // not an authenticated native Slinky configuration.
+    std::array<MenuBindPreview,67> bind_previews_=[] {
+        std::array<MenuBindPreview,67> bindings{};
+        bindings[0].code=0x52u;  // Aim Assist R
+        bindings[2].code=0x103u; // Auto Clicker MOUSE4
+        bindings[15].code=0x56u; // Velocity V
+        bindings[32].code=0xA1u; // GUI RSHIFT
+        bindings[53].code=0x43u; // Blink C
+        bindings[53].hold=true;
+        return bindings;
+    }();
+    std::optional<std::size_t> bind_capture_index_{};
     std::array<bool,67> expanded_{};
     std::array<std::size_t,67> settings_offsets_{};
     unsigned aim_preview_mode_=0; // Regular, Linear, Lock-on, Silent
