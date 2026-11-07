@@ -30,7 +30,8 @@ std::optional<MenuPanelGeometry> menu_panel_geometry(
     MenuPanelMode mode) noexcept;
 
 enum class MenuHitKind : std::uint8_t {
-    Tab, RowBody, Expand, Toggle, PiercingControl
+    Tab, RowBody, Expand, Toggle, PiercingControl,
+    AimModeControl, TargetModeControl // R126: preview-only dropdowns
 };
 
 // Catalog index is meaningful only for non-Tab hits. No raw input pointers,
