@@ -679,6 +679,26 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                              3.0f,13.0f);
                     }
                 }
+                if(display.kind==RecoveredWidgetKind::Dropdown &&
+                   selectedChoice.empty()) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto widgetIndex=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(widgetIndex<all.size()) {
+                        const auto count=menu_source_choice_count(widgetIndex);
+                        const float example=display.example_value;
+                        if(count && std::isfinite(example) &&
+                           example>=0.0f &&
+                           example<static_cast<float>(count)) {
+                            const auto selected=
+                                frame.recovered_choice_overrides[widgetIndex]
+                                .value_or(static_cast<unsigned>(example));
+                            if(selected<count)
+                                selectedChoice=menu_source_choice_label(
+                                    widgetIndex,selected);
+                        }
+                    }
+                }
                 draw_recovered_widget(display,left,
                     settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
                     rect.width,frame.appearance.accent_rgb,selectedChoice);
@@ -719,7 +739,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 quad(popup->x+2.0f,y,popup->width-4.0f,1.0f);
             }
             const auto label=menu_dropdown_option_label(
-                frame.dropdown_preview->kind,i);
+                frame.dropdown_preview->kind,i,
+                frame.dropdown_preview->widget_index);
             const float measured=measure_menu_system_text(label,15.0f);
             const float fallback=static_cast<float>(label.size())*8.0f;
             const float left=popup->x+std::max(
