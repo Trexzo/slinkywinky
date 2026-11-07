@@ -67,6 +67,7 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.bind_previews=menu.bind_previews();
     frame.bind_capture_index=menu.bind_capture_index();
     frame.bind_hover_row=menu.bind_hover_row();
+    frame.numeric_hover=menu.numeric_hover();
     frame.recovered_boolean_overrides=menu.recovered_boolean_overrides();
     frame.recovered_choice_overrides=menu.recovered_choice_overrides();
     frame.recovered_multi_overrides=menu.recovered_multi_overrides();
