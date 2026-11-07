@@ -110,6 +110,9 @@ public:
     const MenuAppearance& appearance() const noexcept {return appearance_;}
     bool select(MenuTab tab) noexcept;
     bool scroll_by(int delta) noexcept;
+    // R135: the bounded one-column preview can admit a smaller visible
+    // window; this never changes enabled flags or gameplay state.
+    bool scroll_by_visible(int delta,std::size_t visible_limit) noexcept;
     bool toggle_preview(std::size_t catalog_index) noexcept;
     bool toggle_expanded(std::size_t catalog_index) noexcept;
     bool change_settings_page(std::size_t catalog_index,int direction) noexcept;
