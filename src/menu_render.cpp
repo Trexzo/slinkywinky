@@ -68,7 +68,17 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.recovered_choice_overrides=menu.recovered_choice_overrides();
     frame.recovered_multi_overrides=menu.recovered_multi_overrides();
     frame.recovered_color_overrides=menu.recovered_color_overrides();
-    frame.recovered_text_overrides=menu.recovered_text_overrides();
+    // Avoid a large dense per-frame std::optional<std::string> copy:
+    // the source fixture has six Text callsites among 385 widgets.
+    frame.recovered_text_overrides.reserve(6u);
+    const auto& sourceTexts=menu.recovered_text_overrides();
+    for(std::size_t i=0;i<sourceTexts.size();++i) {
+        if(!sourceTexts[i])continue;
+        if(frame.recovered_text_overrides.size()>=6u)
+            return std::nullopt;
+        frame.recovered_text_overrides.push_back(
+            MenuRenderTextValue{i,*sourceTexts[i]});
+    }
     frame.focused_text_widget=menu.focused_text_widget();
     frame.recovered_slider_overrides=menu.recovered_slider_overrides();
     frame.recovered_range_overrides=menu.recovered_range_overrides();
