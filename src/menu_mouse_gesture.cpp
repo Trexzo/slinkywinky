@@ -51,6 +51,7 @@ bool MenuMouseGesture::equivalent_frame(
        frame.recovered_boolean_overrides!=original.recovered_boolean_overrides ||
        frame.recovered_choice_overrides!=original.recovered_choice_overrides ||
        frame.recovered_slider_overrides!=original.recovered_slider_overrides ||
+       frame.recovered_range_overrides!=original.recovered_range_overrides ||
        !(frame.piercing_preview==original.piercing_preview) ||
        frame.is_placeholder!=original.is_placeholder ||
        frame.appearance.wide!=original.appearance.wide ||
