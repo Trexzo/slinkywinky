@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <iostream>
 #include <string>
 #include <utility>
 #define CHECK(x) do {if(!(x))throw std::runtime_error( \
@@ -90,6 +91,18 @@ int main() {
         CHECK(frame && frame->bind_hover_row==0u);
         const auto holdHit=hit_test_menu(
             *frame,mode,hold.first,hold.second);
+        if(!holdHit || holdHit->kind!=MenuHitKind::BindHold ||
+           holdHit->catalog_index!=0u) {
+            std::cerr<<"R141_HOVER_DIAG mode="<<static_cast<unsigned>(mode)
+                     <<" hover="<<frame->bind_hover_row.value_or(999u)
+                     <<" x="<<hold.first<<" y="<<hold.second
+                     <<" scale="<<panel->scale
+                     <<" chipHoldX="<<chips->hold.x
+                     <<" chipHoldY="<<chips->hold.y
+                     <<" result="<<(holdHit?
+                        static_cast<unsigned>(holdHit->kind):999u)
+                     <<"\n";
+        }
         CHECK(holdHit && holdHit->kind==MenuHitKind::BindHold &&
               holdHit->catalog_index==0u);
         CHECK(!menu.begin_bind_capture(57u));
