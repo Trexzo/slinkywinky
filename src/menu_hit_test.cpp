@@ -1,6 +1,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
