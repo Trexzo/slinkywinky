@@ -316,7 +316,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         frame->visual_motion=visualMotion.value();
                         controlMotion.retarget(
                             frame->dropdown_preview.has_value(),
-                            controlMotion.hover_target());
+                            controlMotion.hover_target(),
+                            controlMotion.expander_target());
                         frame->control_motion=controlMotion.value();
                     }
                     if(frame && slinkywinky::draw_menu_gl11(
@@ -670,6 +671,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     }
                 }
                 std::optional<std::size_t> hoveredBoolean;
+                std::optional<std::size_t> hoveredExpander;
                 if(frame && preview_focused(hwnd) &&
                    !frame->dropdown_preview &&
                    !frame->unload_confirmation_preview) {
@@ -680,10 +682,14 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     if(hit && hit->kind==
                        slinkywinky::MenuHitKind::RecoveredBooleanPreview)
                         hoveredBoolean=hit->control_index;
+                    if(hit && hit->kind==
+                       slinkywinky::MenuHitKind::Expand)
+                        hoveredExpander=hit->catalog_index;
                 }
                 bool repaint=menu.set_bind_hover_row(row);
                 if(controlMotion.retarget(
-                    menu.dropdown_preview().has_value(),hoveredBoolean))
+                    menu.dropdown_preview().has_value(),
+                    hoveredBoolean,hoveredExpander))
                     repaint=true;
                 if(menu.set_profile_icon_hover(iconHover))repaint=true;
                 if(menu.set_numeric_hover(numericHover))repaint=true;

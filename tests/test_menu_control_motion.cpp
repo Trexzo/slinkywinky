@@ -42,11 +42,27 @@ int main() {
     CHECK(c.value().switch_hover_opacity==0.0f);
     CHECK(c.retarget(false,385u) && c.settled());
     CHECK(!c.value().hovered_boolean);
+    CHECK(c.retarget(false,std::nullopt,2u));
+    CHECK(c.value().hovered_expand==2u);
+    CHECK(!c.retarget(false,std::nullopt,2u));
+    CHECK(c.retarget(false,std::nullopt,66u));
+    CHECK(c.value().hovered_expand==66u);
+    CHECK(c.retarget(false,std::nullopt,67u));
+    CHECK(!c.value().hovered_expand);
+    CHECK(c.retarget(false,21u,2u));
+    CHECK(c.value().hovered_expand==2u);
+    CHECK(c.retarget(true,21u,2u));
+    CHECK(!c.value().hovered_expand);
+    CHECK(c.value().popup_opacity==0.0f);
     CHECK(!c.advance(std::numeric_limits<float>::infinity()));
     CHECK(!c.advance(-1.0f));
     CHECK(menu_control_center_text_y(10.0f,22.0f,12.0f)==15.0f);
     CHECK(menu_control_center_text_y(5.0f,10.0f,15.0f)==5.0f);
     CHECK(!menu_control_motion_valid(MenuControlMotion{385u,1.0f,1.0f}));
+    CHECK(!menu_control_motion_valid(MenuControlMotion{
+        std::nullopt,0.0f,1.0f,67u}));
+    CHECK(menu_control_motion_valid(MenuControlMotion{
+        std::nullopt,0.0f,1.0f,2u}));
     CHECK(!menu_control_motion_valid(MenuControlMotion{
         std::nullopt,0.5f,1.0f}));
     CHECK(!menu_control_motion_valid(MenuControlMotion{

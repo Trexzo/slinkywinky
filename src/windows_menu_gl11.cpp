@@ -622,10 +622,14 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         }
         const bool supported=module_has_profile_setting(item.catalog_index);
         const bool hasReferenceSettings=recovered_widget_count(item.title)>0;
+        const bool expandHovered=frame.control_motion &&
+            frame.control_motion->hovered_expand==item.catalog_index &&
+            hasReferenceSettings;
         const float titleFont=16.0f;
         const float nameX=left+menu_card_inner_padding;
         const float titleLimit=std::max(20.0f,rect.width-108.0f);
-        rgb(0xdddddd);
+        rgb(expandHovered && frame.appearance.compact?
+            0xffffffu:0xdddddd);
         text(item.title,nameX,y+8.0f,titleFont,titleLimit);
 
         // R140: source-scoped key chip and independent HOLD badge.
@@ -680,21 +684,25 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         }
         if(!frame.appearance.compact) {
             const float expX=left+20.0f,expY=y+40.0f;
-            rgb((supported||hasReferenceSettings)?0x404040:0x343434);
+            rgb(expandHovered?0x505050u:
+                ((supported||hasReferenceSettings)?0x404040u:0x343434u));
             round_rect(expX,expY,20.0f,20.0f,5.0f);
-            rgb((supported||hasReferenceSettings)?0xdddddd:0x777777);
+            rgb(expandHovered?0xffffffu:
+                ((supported||hasReferenceSettings)?0xdddddd:0x777777));
             quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
             if(!item.expanded)
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
-            rgb(0x999999);
+            rgb(expandHovered?0xbbbbbbu:0x999999u);
             text(menu_preview_description(item.catalog_index),
                  left+46.0f,y+42.0f,14.0f,
                  std::max(10.0f,rect.width-54.0f));
         } else {
             const float expX=left+8.0f,expY=y+8.0f;
-            rgb((supported||hasReferenceSettings)?0x404040:0x343434);
+            rgb(expandHovered?0x505050u:
+                ((supported||hasReferenceSettings)?0x404040u:0x343434u));
             round_rect(expX,expY,20.0f,20.0f,5.0f);
-            rgb((supported||hasReferenceSettings)?0xdddddd:0x777777);
+            rgb(expandHovered?0xffffffu:
+                ((supported||hasReferenceSettings)?0xdddddd:0x777777));
             quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
             if(!item.expanded)
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
