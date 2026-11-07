@@ -167,6 +167,16 @@ public:
     recovered_multi_overrides() const noexcept {
         return recovered_multi_overrides_;
     }
+    // R136: independent 24-bit swatch edits, not MenuAppearance or game.
+    bool set_recovered_color_preview(
+        std::size_t catalog_index,std::size_t widget_index,
+        std::uint32_t rgb) noexcept;
+    std::optional<std::uint32_t> recovered_color_override(
+        std::size_t widget_index) const noexcept;
+    const std::array<std::optional<std::uint32_t>,385>&
+    recovered_color_overrides() const noexcept {
+        return recovered_color_overrides_;
+    }
     // R132: source-indexed, step-quantized preview sliders only.
     // Not copied into gameplay settings.
     bool set_recovered_slider_preview(std::size_t catalog_index,
@@ -221,6 +231,7 @@ private:
     std::array<std::optional<bool>,385> recovered_boolean_overrides_{};
     std::array<std::optional<unsigned>,385> recovered_choice_overrides_{};
     std::array<std::optional<std::uint32_t>,385> recovered_multi_overrides_{};
+    std::array<std::optional<std::uint32_t>,385> recovered_color_overrides_{};
     std::array<std::optional<float>,385> recovered_slider_overrides_{};
     std::array<std::optional<RecoveredRangePreview>,385>
         recovered_range_overrides_{};
