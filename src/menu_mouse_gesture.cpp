@@ -211,8 +211,11 @@ std::optional<MenuHit> MenuMouseGesture::release(
         return std::nullopt;
     // R133: retain the *press-selected* range handle. Moving across the
     // other handle never changes ownership or causes a cross-handle write.
-    const MenuHit committed=previous.kind==MenuHitKind::RecoveredRangePreview?
-        previous:*released;
+    // A pointer-captured slider, like a dual-handle range, retains
+    // the exact numeric press owner even if the release now hits a label,
+    // another row or empty panel space. Never dereference an absent
+    // released hit or dispatch the unrelated row's action.
+    const MenuHit committed=numeric_hit(previous)?previous:*released;
     // Ignore the second click of a rapid double click on the same action.
     // Allow a different target (e.g. a different row) without delay.
     if(last_committed_ && same_hit(committed,*last_committed_) &&
