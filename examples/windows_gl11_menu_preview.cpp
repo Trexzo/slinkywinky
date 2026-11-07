@@ -547,11 +547,69 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             request_paint(hwnd);
             return 0;
         }
+        case WM_CHAR: {
+            if(!menu.focused_text_widget() ||
+               !preview_focused(hwnd) || GetFocus()!=hwnd)
+                return 0;
+            const std::uint32_t unit=static_cast<std::uint16_t>(wp);
+            std::uint32_t scalar=unit;
+            if(unit>=0xD800u && unit<=0xDBFFu) {
+                pendingTextHigh=static_cast<std::uint16_t>(unit);
+                return 0;
+            }
+            if(unit>=0xDC00u && unit<=0xDFFFu) {
+                if(pendingTextHigh<0xD800u ||
+                   pendingTextHigh>0xDBFFu)return 0;
+                scalar=0x10000u+
+                    ((static_cast<std::uint32_t>(pendingTextHigh)-
+                      0xD800u)<<10u)+(unit-0xDC00u);
+                pendingTextHigh=0;
+            } else pendingTextHigh=0;
+            if(scalar<0x20u || scalar==0x7Fu ||
+               (scalar>=0x80u && scalar<=0x9Fu) ||
+               scalar>0x10FFFFu)return 0;
+            std::string fragment;
+            if(scalar<0x80u) {
+                fragment.push_back(static_cast<char>(scalar));
+            } else if(scalar<0x800u) {
+                fragment.push_back(static_cast<char>(0xC0u|(scalar>>6u)));
+                fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
+            } else if(scalar<0x10000u) {
+                fragment.push_back(static_cast<char>(0xE0u|(scalar>>12u)));
+                fragment.push_back(static_cast<char>(
+                    0x80u|((scalar>>6u)&0x3Fu)));
+                fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
+            } else {
+                fragment.push_back(static_cast<char>(0xF0u|(scalar>>18u)));
+                fragment.push_back(static_cast<char>(
+                    0x80u|((scalar>>12u)&0x3Fu)));
+                fragment.push_back(static_cast<char>(
+                    0x80u|((scalar>>6u)&0x3Fu)));
+                fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
+            }
+            if(menu.append_recovered_text_preview(fragment))
+                request_paint(hwnd);
+            return 0;
+        }
         case WM_KEYDOWN:{
             cancel_mouse(hwnd); // Keyboard can change tab/page/appearance.
             // Never act on a spoofed/late key message while this demo
             // window has lost its exact focus or foreground ownership.
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
+            if(menu.focused_text_widget()) {
+                // Focused inline editing owns keyboard events. Do not
+                // dispatch typed module shortcuts through the text field.
+                if(wp==VK_ESCAPE || wp==VK_RETURN) {
+                    menu.blur_recovered_text_preview();
+                    pendingTextHigh=0;
+                    request_paint(hwnd);
+                } else if(wp==VK_BACK) {
+                    pendingTextHigh=0;
+                    if(menu.erase_recovered_text_preview())
+                        request_paint(hwnd);
+                }
+                return 0;
+            }
             if(menu.unload_confirmation_preview()) {
                 if(wp==VK_ESCAPE || wp==VK_RETURN) {
                     menu.close_unload_confirmation_preview();
