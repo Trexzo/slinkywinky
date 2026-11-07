@@ -186,7 +186,8 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                            std::string_view multiOverride={},
                            std::optional<std::uint32_t> colorOverride={},
                            std::string_view textOverride={},
-                           bool textFocused=false)
+                           bool textFocused=false,
+                           float booleanHover=0.0f)
                            noexcept {
     const float controlX=x+cardWidth*0.54f;
     const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
@@ -195,12 +196,14 @@ void draw_recovered_widget(const RecoveredWidget& widget,
     // R139: source HTML renders Button as the entire row, without a
     // duplicate left-side setting label or an OS/game action.
     if(widget.kind!=RecoveredWidgetKind::Button)
-        text(widget.label,x+8.0f,y+3.0f,13.0f,labelW);
+        text(widget.label,x+8.0f,
+             menu_control_center_text_y(y,22.0f,13.0f),13.0f,labelW);
     const float controlY=y+2.0f;
     switch(widget.kind) {
         case RecoveredWidgetKind::Boolean: {
             const float bx=controlX+controlW-34.0f;
-            rgb(widget.example_enabled?accent:0x404040u);
+            rgb(menu_control_hover_tint(
+                widget.example_enabled?accent:0x404040u,booleanHover));
             round_rect(bx,controlY+1.0f,34.0f,18.0f,9.0f);
             rgb(0x141414);
             round_rect(bx+(widget.example_enabled?21.0f:5.0f),
@@ -252,8 +255,9 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                     std::string_view(widget.auxiliary):textOverride;
             rgb(widget.kind==RecoveredWidgetKind::Text &&
                 !textOverride.empty()?0xDDDDDDu:0x999999u);
-            text(label,controlX+6.0f,controlY+3.0f,12.0f,
-                 controlW-12.0f);
+            text(label,controlX+6.0f,
+                 menu_control_center_text_y(controlY,22.0f,12.0f),
+                 12.0f,controlW-12.0f);
             if(widget.kind==RecoveredWidgetKind::Text && textFocused) {
                 const float measured=textOverride.empty()?0.0f:
                     measure_menu_system_text(textOverride,12.0f);
@@ -287,8 +291,9 @@ void draw_recovered_widget(const RecoveredWidget& widget,
             const float estimated=measured>0.0f?measured:
                 static_cast<float>(label.size())*7.5f;
             const float tx=bx+std::max(8.0f,(bw-estimated)*0.5f);
-            text(label,tx,controlY+2.0f,15.0f,
-                 std::max(2.0f,bx+bw-tx-8.0f));
+            text(label,tx,
+                 menu_control_center_text_y(controlY,20.0f,15.0f),
+                 15.0f,std::max(2.0f,bx+bw-tx-8.0f));
             break;
         }
     }
@@ -431,7 +436,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
        !menu_profile_preview_valid(
             frame,panel->logical_width(),panel->logical_height()) ||
        (frame.visual_motion && !menu_visual_motion_valid(
-            *frame.visual_motion,frame.tab,panel->logical_height())))
+            *frame.visual_motion,frame.tab,panel->logical_height())) ||
+       (frame.control_motion && !menu_control_motion_valid(
+            *frame.control_motion)))
         return false;
     ScopedFixedFunctionState state;
     if(!state.ready())return false;
@@ -886,10 +893,16 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         textFocused=frame.focused_text_widget==widgetIndex;
                     }
                 }
+                const auto visualWidgetIndex=static_cast<std::size_t>(
+                    preview[j]-recovered_widget_catalog().data());
+                const float hover=
+                    frame.control_motion &&
+                    frame.control_motion->hovered_boolean==visualWidgetIndex?
+                    frame.control_motion->switch_hover_opacity:0.0f;
                 draw_recovered_widget(display,left,
                     settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
                     rect.width,frame.appearance.accent_rgb,selectedChoice,
-                    multiCaption,colorOverride,textOverride,textFocused);
+                    multiCaption,colorOverride,textOverride,textFocused,hover);
             }
             if(count>5) {
                 char pagination[70]{};
@@ -912,6 +925,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     // R127: draw the source-shaped dropdown *after* cards so it floats
     // above later columns. This is a preview-only, immutable frame surface.
     if(frame.dropdown_preview) {
+        ScopedVisualAlpha popupFade(frame.control_motion?
+            frame.control_motion->popup_opacity:1.0f);
         const auto popup=menu_dropdown_popup_geometry(frame,w,h);
         if(!popup)return false;
         const float height=popup->row_height*popup->option_count;
@@ -939,7 +954,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 (popup->selected_mask&(1u<<absolute))!=0u:
                 absolute==popup->selected;
             rgb(selected?frame.appearance.accent_rgb:0x999999);
-            text(label,left,y+7.0f,15.0f,popup->width-8.0f);
+            text(label,left,
+                 menu_control_center_text_y(y,popup->row_height,15.0f),
+                 15.0f,popup->width-8.0f);
         }
         if(popup->total_options>popup->option_count) {
             // A small, source-neutral scrollbar for oversized recovered

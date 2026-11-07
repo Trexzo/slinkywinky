@@ -160,6 +160,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_numeric_drag_transaction
     COMMAND slinkywinky_recovered_numeric_drag_tests)
+  add_executable(slinkywinky_control_motion_tests
+    tests/test_menu_control_motion.cpp)
+  target_link_libraries(slinkywinky_control_motion_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_recovered_gui_control_visual_motion
+    COMMAND slinkywinky_control_motion_tests)
   add_executable(slinkywinky_visual_motion_tests
     tests/test_menu_visual_motion.cpp)
   target_link_libraries(slinkywinky_visual_motion_tests

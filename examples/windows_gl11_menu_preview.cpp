@@ -20,6 +20,7 @@
 #include "slinkywinky/menu_numeric_tooltip.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_visual_motion.hpp"
+#include "slinkywinky/menu_control_motion.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
@@ -42,6 +43,7 @@ slinkywinky::MenuNavigation navigation(menu,profile);
 slinkywinky::MenuMouseGesture mouseGesture;
 // R149 standalone-window visual clock only; no Minecraft/WGL host hook.
 slinkywinky::MenuVisualMotionClock visualMotion;
+slinkywinky::MenuControlMotionClock controlMotion;
 constexpr UINT_PTR kVisualTimer=149u;
 ULONGLONG visualLastTick=0u;
 bool visualTimerEnabled=false;
@@ -141,7 +143,9 @@ bool visual_motion_busy() noexcept {
     if(!visualTimerEnabled || overlayDemo)return false;
     return !visualMotion.settled() ||
        std::fabs(visualMotion.value().tab_position-
-                 static_cast<float>(menu.tab()))>=0.001f;
+                 static_cast<float>(menu.tab()))>=0.001f ||
+       (menu.dropdown_preview().has_value() &&
+        controlMotion.value().popup_opacity<1.0f);
 }
 bool advance_visual_motion(HWND hwnd,float seconds) {
     if(!visualTimerEnabled || !hwnd)return false;
@@ -250,6 +254,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             mouseGesture.set_double_click_window(GetDoubleClickTime());
             if(!create_context(hwnd))return -1;
             visualMotion.reset();
+            controlMotion.reset();
             visualLastTick=GetTickCount64();
             visualTimerEnabled=SetTimer(
                 hwnd,kVisualTimer,16u,nullptr)!=0u;
@@ -263,10 +268,11 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 const ULONGLONG elapsed=now>=visualLastTick?
                     now-visualLastTick:0u;
                 visualLastTick=now;
-                if(advance_visual_motion(hwnd,
-                    static_cast<float>(std::min<ULONGLONG>(
-                        elapsed,100u))/1000.0f))
-                    request_paint(hwnd);
+                const float dt=static_cast<float>(
+                    std::min<ULONGLONG>(elapsed,100u))/1000.0f;
+                const bool pageChanged=advance_visual_motion(hwnd,dt);
+                const bool controlsChanged=controlMotion.advance(dt);
+                if(pageChanged || controlsChanged)request_paint(hwnd);
                 return 0;
             }
             break;
@@ -308,6 +314,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     if(frame && visualTimerEnabled) {
                         advance_visual_motion(hwnd,0.0f);
                         frame->visual_motion=visualMotion.value();
+                        controlMotion.retarget(
+                            frame->dropdown_preview.has_value(),
+                            controlMotion.hover_target());
+                        frame->control_motion=controlMotion.value();
                     }
                     if(frame && slinkywinky::draw_menu_gl11(
                         *frame,graphics,device,
@@ -659,7 +669,22 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         }
                     }
                 }
+                std::optional<std::size_t> hoveredBoolean;
+                if(frame && preview_focused(hwnd) &&
+                   !frame->dropdown_preview &&
+                   !frame->unload_confirmation_preview) {
+                    const auto hit=slinkywinky::hit_test_menu(
+                        *frame,panel_mode(),
+                        static_cast<short>(LOWORD(lp)),
+                        static_cast<short>(HIWORD(lp)));
+                    if(hit && hit->kind==
+                       slinkywinky::MenuHitKind::RecoveredBooleanPreview)
+                        hoveredBoolean=hit->control_index;
+                }
                 bool repaint=menu.set_bind_hover_row(row);
+                if(controlMotion.retarget(
+                    menu.dropdown_preview().has_value(),hoveredBoolean))
+                    repaint=true;
                 if(menu.set_profile_icon_hover(iconHover))repaint=true;
                 if(menu.set_numeric_hover(numericHover))repaint=true;
                 if(repaint)request_paint(hwnd);
@@ -692,12 +717,15 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // ends; clearing hover now would invalidate its source frame.
             if(mouseGesture.pending())return 0;
             bool repaint=menu.set_bind_hover_row(std::nullopt);
+            if(controlMotion.retarget(false,std::nullopt))repaint=true;
             if(menu.set_profile_icon_hover(std::nullopt))repaint=true;
             if(menu.set_numeric_hover(std::nullopt))repaint=true;
             if(repaint)request_paint(hwnd);
             return 0;
         }
         case WM_LBUTTONUP:{
+            // A fading popup must not accept a click before it is painted.
+            if(visual_motion_busy()) {cancel_mouse(hwnd);return 0;}
             const auto frame=mouse_frame(hwnd);
             std::optional<slinkywinky::MenuHit> hit;
             if(frame && GetCapture()==hwnd)
