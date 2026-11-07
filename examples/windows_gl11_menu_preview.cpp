@@ -346,9 +346,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 if(!preview_focused(hwnd) || GetFocus()!=hwnd)
                     menu.cancel_bind_capture();
                 else {
-                    const std::uint16_t code=msg==WM_MBUTTONDOWN?
+                    const std::uint16_t code=message==WM_MBUTTONDOWN?
                         slinkywinky::menu_bind_mouse2:
-                        (msg==WM_RBUTTONDOWN?
+                        (message==WM_RBUTTONDOWN?
                          slinkywinky::menu_bind_mouse3:
                          (HIWORD(wp)==XBUTTON1?
                           slinkywinky::menu_bind_mouse4:
