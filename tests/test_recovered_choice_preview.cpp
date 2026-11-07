@@ -97,9 +97,10 @@ int main() {
         CHECK(popupHit && popupHit->kind==MenuHitKind::DropdownOption &&
               popupHit->control_index==1u);
         // A popup cannot leak a click to the underlying card.
-        CHECK(!hit_test_menu(
-            *snap,mode,target.first,target.second) ||
-            popup->x<=controlX+controlW*0.5f);
+        const auto blocked=hit_test_menu(
+            *snap,mode,target.first,target.second);
+        CHECK(blocked && blocked->kind==MenuHitKind::DropdownOption &&
+              blocked->control_index==0u);
         CHECK(gesture.press(*snap,mode,p.first,p.second,1000,true));
         const auto chosen=gesture.release(
             *snap,mode,p.first,p.second,1020,true);
