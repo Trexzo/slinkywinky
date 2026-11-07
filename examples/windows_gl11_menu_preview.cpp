@@ -34,6 +34,7 @@ slinkywinky::MenuState menu;
 slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuNavigation navigation(menu,profile);
 slinkywinky::MenuMouseGesture mouseGesture;
+std::uint16_t pendingTextHigh=0; // R137 UTF-16 surrogate pairing
 slinkywinky::MenuRenderSession session;
 slinkywinky::WglMenuOverlayHost overlayHost;
 constexpr wchar_t title[]=L"SlinkyWinky GL1.1 Menu Preview - Offline";
@@ -302,12 +303,16 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             request_paint(hwnd);return 0;
         }
         case WM_KILLFOCUS:
+            pendingTextHigh=0;
+            menu.blur_recovered_text_preview();
             cancel_mouse(hwnd);
             menu.close_preview_dropdown();
             menu.close_unload_confirmation_preview();
             return 0;
         case WM_ACTIVATEAPP:
             if(!wp) {
+                pendingTextHigh=0;
+                menu.blur_recovered_text_preview();
                 cancel_mouse(hwnd);
                 menu.close_preview_dropdown();
                 menu.close_unload_confirmation_preview();
@@ -380,16 +385,25 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 if(hit->kind==MenuHitKind::ModalClose ||
                    hit->kind==MenuHitKind::ModalContinue)
                     menu.close_unload_confirmation_preview();
-                else if(hit->kind==MenuHitKind::UnloadTab)
+                else if(hit->kind==MenuHitKind::UnloadTab) {
+                    menu.blur_recovered_text_preview();
+                    pendingTextHigh=0;
                     menu.open_unload_confirmation_preview();
+                }
                 else if(hit->kind==MenuHitKind::DropdownOption) {
                     // Only a verified visible popup option can mutate the
                     // inert GUI preview, and the popup closes on selection.
                     menu.select_preview_dropdown_option(
                         static_cast<unsigned>(hit->control_index));
-                } else if(hit->kind==MenuHitKind::Tab)
+                } else if(hit->kind==MenuHitKind::Tab) {
+                    menu.blur_recovered_text_preview();
+                    pendingTextHigh=0;
                     navigation.select_tab(hit->tab);
-                else if(navigation.focus_visible_row(hit->catalog_index)) {
+                } else if(navigation.focus_visible_row(hit->catalog_index)) {
+                    if(hit->kind!=MenuHitKind::RecoveredTextField) {
+                        menu.blur_recovered_text_preview();
+                        pendingTextHigh=0;
+                    }
                     if(hit->kind==MenuHitKind::Expand)
                         navigation.apply(slinkywinky::MenuNavAction::ExpandFocused);
                     else if(hit->kind==MenuHitKind::Toggle)
@@ -403,6 +417,11 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(hit->kind==MenuHitKind::RecoveredMultiControl)
                         menu.open_recovered_multi_preview(
                             hit->catalog_index,hit->control_index);
+                    else if(hit->kind==MenuHitKind::RecoveredTextField) {
+                        pendingTextHigh=0;
+                        menu.focus_recovered_text_preview(
+                            hit->catalog_index,hit->control_index);
+                    }
                     else if(hit->kind==MenuHitKind::RecoveredColorSwatch &&
                             frame) {
                         // The source HTML candidate used an input type=color
