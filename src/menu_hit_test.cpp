@@ -92,10 +92,10 @@ std::optional<MenuHit> hit_test_menu(
         if(x<rect.x || x>=rect.x+rect.width ||
            y<rect.y || y>=rect.y+rect.height)continue;
         const std::size_t index=frame.visible[i].catalog_index;
-        // R125: only the actual rendered interactive control surface
-        // of the isolated Piercing sandbox is an admitted settings click.
-        // Source rows/headers remain inert; hit geometry mirrors GL11.
-        if(index==11 && frame.tab==MenuTab::Combat &&
+        // R126: only source-identified dropdowns in Aim Assist and the
+        // existing Piercing sandbox can mutate local preview state.
+        // The hit geometry mirrors the GL11 renderer in all three modes.
+        if((index==0 || index==11) && frame.tab==MenuTab::Combat &&
            frame.visible[i].expanded && y>=rect.y+body) {
             std::array<const RecoveredWidget*,5> widgets{};
             const auto& card=frame.visible[i];
@@ -103,7 +103,8 @@ std::optional<MenuHit> hit_test_menu(
                 card.title.c_str(),card.settings_offset,
                 static_cast<int>(frame.aim_preview_mode),
                 static_cast<int>(frame.target_preview_mode),widgets);
-            if(count!=8u)return std::nullopt; // source shape contract
+            if(!count || (index==11 && count!=8u))
+                return std::nullopt; // source shape contract
             const float controlX=rect.x+rect.width*0.54f;
             const float controlW=std::max(16.0f,rect.width*0.46f-10.0f);
             const float settingsY=rect.y+body;
@@ -118,13 +119,27 @@ std::optional<MenuHit> hit_test_menu(
                 }
                 const auto& widget=*widgets[j];
                 const std::size_t control=card.settings_offset+j;
-                if(control>=8u)return std::nullopt;
                 const float controlY=settingsY+43.0f+
                     27.0f*static_cast<float>(j)+extraHeadings+2.0f;
-                if(widget.kind==RecoveredWidgetKind::Dropdown &&
-                   control==0u && x>=controlX &&
-                   x<controlX+controlW &&
-                   y>=controlY && y<controlY+22.0f)
+                const bool dropdown=widget.kind==RecoveredWidgetKind::Dropdown &&
+                    x>=controlX && x<controlX+controlW &&
+                    y>=controlY && y<controlY+22.0f;
+                if(index==0) {
+                    // Only two known standalone preview enums have a
+                    // writable owner. All other recovered widgets are inert.
+                    if(dropdown && std::string_view(widget.label)=="Mode") {
+                        if(control==0u &&
+                           std::string_view(widget.group)=="Aim")
+                            return MenuHit{MenuHitKind::AimModeControl,
+                                           frame.tab,index,control};
+                        if(std::string_view(widget.group)=="Target")
+                            return MenuHit{MenuHitKind::TargetModeControl,
+                                           frame.tab,index,control};
+                    }
+                    continue;
+                }
+                if(control>=8u)return std::nullopt;
+                if(dropdown && control==0u)
                     return MenuHit{MenuHitKind::PiercingControl,
                                    frame.tab,index,control};
                 if(widget.kind==RecoveredWidgetKind::Boolean &&
