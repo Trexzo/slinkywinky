@@ -118,5 +118,32 @@ int main() {
     CHECK(recovered_widget_page("Aim Assist",99999,refused)==0);
     CHECK(recovered_widget_page("Aim Assist",5,refused)>5);
     CHECK(std::string_view(refused[0]->label)=="Keep move direction");
+    // R120: these three GUI strings are verified against the native
+    // registration structures in the pinned, user-provided decrypted .data
+    // section, NOT against the estimated mods_block.js fixture.
+    const auto native_label=[&](std::string_view module,
+                                std::string_view label,
+                                RecoveredWidgetKind kind,
+                                std::string_view options) {
+        const auto it=std::find_if(items.begin(),items.end(),
+            [&](const RecoveredWidget& widget) {
+                return std::string_view(widget.module)==module &&
+                    std::string_view(widget.label)==label &&
+                    widget.kind==kind;
+            });
+        CHECK(it!=items.end());
+        CHECK(std::string_view(it->options)==options);
+    };
+    native_label("Auto Clicker","Click pattern",
+        RecoveredWidgetKind::Dropdown,"Jitter|Butterfly");
+    native_label("Piercing","Sort targets by",
+        RecoveredWidgetKind::Dropdown,"Hurt time|Health");
+    native_label("Anti Bot","Invalid UUID",
+        RecoveredWidgetKind::Dropdown,"Off|Stationary only|Always");
+    CHECK(std::none_of(items.begin(),items.end(),
+        [](const RecoveredWidget& item) {
+            return std::string_view(item.module)=="Anti Bot" &&
+                std::string_view(item.label)=="Always stationary";
+        }));
     return 0;
 }
