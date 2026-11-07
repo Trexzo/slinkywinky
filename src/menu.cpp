@@ -190,6 +190,49 @@ bool MenuState::open_preview_dropdown(
     };
     return true;
 }
+std::optional<bool> MenuState::recovered_boolean_override(
+        std::size_t widget_index) const noexcept {
+    if(widget_index>=recovered_boolean_overrides_.size())return std::nullopt;
+    return recovered_boolean_overrides_[widget_index];
+}
+bool MenuState::toggle_recovered_boolean_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept {
+    // This is an independent, inert UI sandbox. Piercing's seven Boolean
+    // controls already have their separate, source-indexed editor.
+    const auto& catalog=official_module_catalog();
+    const auto& widgets=recovered_widget_catalog();
+    if(unload_confirmation_preview_ || dropdown_preview_ ||
+       catalog_index>=catalog.size() || catalog_index==11u ||
+       widget_index>=widgets.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       widgets[widget_index].kind!=RecoveredWidgetKind::Boolean ||
+       std::string_view(widgets[widget_index].module)!=
+           catalog[catalog_index].name)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+       [catalog_index](const MenuItem& item){
+           return item.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> visible{};
+    if(!recovered_widget_visible_page(
+       catalog[catalog_index].name,settings_offsets_[catalog_index],
+       static_cast<int>(aim_preview_mode_),
+       static_cast<int>(target_preview_mode_),visible))
+        return false;
+    // Only the five callsites actually drawn on this page are editable.
+    bool on_page=false;
+    for(const auto* ptr:visible) {
+        if(ptr==&widgets[widget_index])on_page=true;
+    }
+    if(!on_page)return false;
+    const bool previous=recovered_boolean_overrides_[widget_index].value_or(
+        widgets[widget_index].example_enabled);
+    recovered_boolean_overrides_[widget_index]=!previous;
+    return true;
+}
+
 bool MenuState::open_unload_confirmation_preview() noexcept {
     if(unload_confirmation_preview_)return false;
     dropdown_preview_.reset();
