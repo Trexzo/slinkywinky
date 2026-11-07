@@ -48,6 +48,7 @@ bool MenuMouseGesture::equivalent_frame(
        frame.piercing_selected!=original.piercing_selected ||
        frame.dropdown_preview!=original.dropdown_preview ||
        frame.unload_confirmation_preview!=original.unload_confirmation_preview ||
+       frame.recovered_boolean_overrides!=original.recovered_boolean_overrides ||
        !(frame.piercing_preview==original.piercing_preview) ||
        frame.is_placeholder!=original.is_placeholder ||
        frame.appearance.wide!=original.appearance.wide ||
