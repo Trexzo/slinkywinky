@@ -81,6 +81,12 @@ struct MenuRenderFrame {
     bool is_placeholder=false; // Profiles is informational; Unload not admitted.
 };
 
+// Guard against reintroducing a large dense string array in the
+// immutable frame. The WGL fixture keeps several frame snapshots live
+// in the same Windows 1 MB test thread stack.
+static_assert(sizeof(MenuRenderFrame)<32768u,
+    "MenuRenderFrame too large; use sparse text/metadata snapshots");
+
 class MenuRenderSession {
 public:
     // Must be invoked on the actual graphics-context owner; epoch is unique
