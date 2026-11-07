@@ -497,19 +497,20 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             const float titleWidth=std::max(30.0f,iconX-nameX-45.0f);
             rgb(0xdddddd);
             text(card.name,nameX,rect.y+8.0f,16.0f,titleWidth);
-            const float measured=measure_menu_system_text(card.name,16.0f);
-            const float titleW=measured>0?measured:
-                               card.name.size()*9.0f;
-            const float chipX=std::min(iconX-46.0f,
-                                     nameX+std::min(titleW,titleWidth)+5.0f);
-            if(chipX>=nameX+15.0f) {
+            const auto chip=menu_profile_bind_rect(frame,w,h,i);
+            if(chip) {
+                const bool capturing=frame.profile_bind_capture_index==i;
                 const bool bound=!card.bind.empty()&&card.bind!="NONE";
-                rgba(bound?frame.appearance.accent_rgb:0x999999,38);
-                round_rect(chipX,rect.y+8.0f,41.0f,20.0f,5.0f);
-                rgb(bound?frame.appearance.accent_rgb:0x999999);
-                text(card.bind.empty()?"NONE":
-                     std::string_view{card.bind},chipX+6.0f,
-                     rect.y+11.0f,12.0f,34.0f);
+                rgba(capturing?0x999999u:
+                     (bound?frame.appearance.accent_rgb:0x999999u),38);
+                round_rect(chip->x,chip->y,chip->width,20.0f,5.0f);
+                rgb(capturing?0x999999u:
+                    (bound?frame.appearance.accent_rgb:0x999999u));
+                const std::string_view label=capturing?"PRESS A KEY...":
+                    (card.bind.empty()?"NONE":
+                     std::string_view{card.bind});
+                text(label,chip->x+6.0f,
+                     chip->y+3.0f,12.0f,chip->width-12.0f);
             }
             if(!card.description.empty() && !frame.appearance.compact) {
                 rgb(0x999999);
