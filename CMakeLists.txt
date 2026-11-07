@@ -197,7 +197,7 @@ if(WIN32)
     add_executable(slinkywinky_gl11_menu_preview WIN32
       examples/windows_gl11_menu_preview.cpp)
     target_link_libraries(slinkywinky_gl11_menu_preview PRIVATE
-      slinkywinky_menu_gl11 slinkywinky_core opengl32 user32 gdi32)
+      slinkywinky_menu_gl11 slinkywinky_core opengl32 user32 gdi32 comdlg32)
     target_include_directories(slinkywinky_gl11_menu_preview PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_compile_features(slinkywinky_gl11_menu_preview PRIVATE cxx_std_17)
