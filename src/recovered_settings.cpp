@@ -2,28 +2,32 @@
 #include <algorithm>
 namespace slinkywinky {
 namespace {
-constexpr std::array<RecoveredWidget,378> recovered{{
+constexpr std::array<RecoveredWidget,385> recovered{{
+    // R122 native W_* callsite order; branches are mutually exclusive.
     {"Aim Assist", "Aim", "Mode", RecoveredWidgetKind::Dropdown, "Regular|Linear|Lock-on|Silent", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Aim", "Horizontal speed", RecoveredWidgetKind::Slider, "", "", 0.0f, 10.0f, 0.1f, 4.5f, 0.0f, false},
-    {"Aim Assist", "Aim", "Vertical speed", RecoveredWidgetKind::Slider, "", "", 0.0f, 10.0f, 0.1f, 2.0f, 0.0f, false},
-    {"Aim Assist", "Aim", "Vertical", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Aim", "Ignore manual aim", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Aim", "Keep move direction", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
-    {"Aim Assist", "Aim", "Randomization", RecoveredWidgetKind::Slider, "", "", 0.0f, 100.0f, 1.0f, 20.0f, 0.0f, false},
-    {"Aim Assist", "Aim", "Multi-point", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    {"Aim Assist", "Aim", "Vertical", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false, RecoveredWidgetVisibility::AimModeLockOn},
+    {"Aim Assist", "Aim", "Keep move direction", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, RecoveredWidgetVisibility::AimModeSilent},
+    {"Aim Assist", "Aim", "Ignore manual aim", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false, RecoveredWidgetVisibility::AimModeSilent},
+    {"Aim Assist", "Aim", "Horizontal speed", RecoveredWidgetKind::Slider, "", "", 0.0f, 10.0f, 0.1f, 4.5f, 0.0f, false, RecoveredWidgetVisibility::AimModeSilent},
+    {"Aim Assist", "Aim", "Vertical speed", RecoveredWidgetKind::Slider, "", "", 0.0f, 10.0f, 0.1f, 2.0f, 0.0f, false, RecoveredWidgetVisibility::AimModeSilent},
+    {"Aim Assist", "Aim", "Horizontal speed", RecoveredWidgetKind::Slider, "", "", 0.0f, 10.0f, 0.1f, 4.5f, 0.0f, false, RecoveredWidgetVisibility::AimModeRegularLinear},
+    {"Aim Assist", "Aim", "Vertical speed", RecoveredWidgetKind::Slider, "", "", 0.0f, 10.0f, 0.1f, 2.0f, 0.0f, false, RecoveredWidgetVisibility::AimModeRegularLinear},
     {"Aim Assist", "Aim", "Predict", RecoveredWidgetKind::Slider, "", "", 0.0f, 100.0f, 1.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Target", "Mode", RecoveredWidgetKind::Dropdown, "Single|Switch", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Target", "Sort by", RecoveredWidgetKind::Dropdown, "Distance|Health|Hurt time|Aim angle", "", 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, false},
+    {"Aim Assist", "Aim", "Randomization", RecoveredWidgetKind::Slider, "", "", 0.0f, 100.0f, 1.0f, 20.0f, 0.0f, false},
+    {"Aim Assist", "Multi-point", "Horizontal", RecoveredWidgetKind::Slider, "", "", 0.0f, 1.0f, 0.01f, 0.5f, 0.0f, false},
+    {"Aim Assist", "Multi-point", "Vertical", RecoveredWidgetKind::Slider, "", "", 0.0f, 1.0f, 0.01f, 0.5f, 0.0f, false},
+    {"Aim Assist", "Target", "Mode", RecoveredWidgetKind::Dropdown, "Regular|Linear|Lock-on|Silent", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Aim Assist", "Target", "Increased FOV while locked", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false, RecoveredWidgetVisibility::TargetSingle},
+    {"Aim Assist", "Target", "Sort by", RecoveredWidgetKind::Dropdown, "Distance|Health|Hurt time|Aim angle", "", 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, false, RecoveredWidgetVisibility::TargetSwitch},
     {"Aim Assist", "Target", "Range", RecoveredWidgetKind::Range, "", "", 1.0f, 8.0f, 0.1f, 3.0f, 4.5f, false},
     {"Aim Assist", "Target", "FOV", RecoveredWidgetKind::Range, "", "", 10.0f, 360.0f, 1.0f, 60.0f, 90.0f, false},
-    {"Aim Assist", "Target", "Increased FOV while locked", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Target", "Ignore invisibles", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
-    {"Aim Assist", "Target", "Not behind blocks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
-    {"Aim Assist", "Conditions", "Sprinting", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Aim Assist", "Conditions", "Sprinting", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false, RecoveredWidgetVisibility::AimModeNotSilent},
     {"Aim Assist", "Conditions", "Mouse pressed", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Aim Assist", "Conditions", "Mouse moved", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Aim Assist", "Conditions", "Holding weapon", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Aim Assist", "Conditions", "Disable while breaking blocks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    {"Aim Assist", "Conditions", "Holding weapon", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    {"Aim Assist", "Conditions", "Ignore invisibles", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    {"Aim Assist", "Conditions", "Not behind blocks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     // R121 native W_* callback order and section membership, not the
     // older mods_block.js approximation. Example values are still estimates.
     {"Auto Clicker", "In-game", "Click pattern", RecoveredWidgetKind::Dropdown, "Jitter|Butterfly", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
@@ -130,10 +134,15 @@ constexpr std::array<RecoveredWidget,378> recovered{{
     {"Knockback Displace", "Condition", "Holding weapon", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Knockback Displace", "Condition", "Knockback enchantment", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
     {"Knockback Displace", "Condition", "Target facing away", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Piercing", "Main", "Always hit through", RecoveredWidgetKind::MultiSelect, "Friendlies|Bots|Non-player entities|Blocks", "", 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, false},
-    {"Piercing", "Main", "Sort targets by", RecoveredWidgetKind::Dropdown, "Hurt time|Health", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Piercing", "Conditions", "Inside entity hitbox", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    // R122 native W_* callsite order; branches are mutually exclusive.
+    {"Piercing", "Always hit through", "Sort targets by", RecoveredWidgetKind::Dropdown, "Hurt time|Health", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Piercing", "Always hit through", "Non-player entities", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Piercing", "Always hit through", "Friendlies", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Piercing", "Always hit through", "Bots", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Piercing", "Always hit through", "Enemies", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Piercing", "Always hit through", "Blocks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
     {"Piercing", "Conditions", "Holding weapon", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Piercing", "Conditions", "Inside entity hitbox", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Weapon", "Main", "Activation time", RecoveredWidgetKind::Slider, "", "", 0.0f, 500.0f, 10.0f, 0.0f, 0.0f, false},
     {"Auto Weapon", "Conditions", "Mouse pressed", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Rod", "Main", "Throw speed", RecoveredWidgetKind::Slider, "", "", 1.0f, 20.0f, 0.1f, 8.0f, 0.0f, false},
@@ -388,7 +397,7 @@ constexpr std::array<RecoveredWidget,378> recovered{{
     {"Debug", "Main", "Clicks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
 }};
 } // namespace
-const std::array<RecoveredWidget,378>& recovered_widget_catalog() noexcept {
+const std::array<RecoveredWidget,385>& recovered_widget_catalog() noexcept {
     return recovered;
 }
 std::size_t recovered_widget_count(std::string_view module) noexcept {
@@ -418,5 +427,21 @@ std::size_t recovered_widget_page(
 std::size_t recovered_widget_preview(
     const char* module,std::array<const RecoveredWidget*,5>& output) noexcept {
     return recovered_widget_page(module,0,output);
+}
+// Read-only source-branch predicate. Does not activate any game setting.
+bool recovered_preview_branch_matches(RecoveredWidgetVisibility rule,
+                                     int aimMode,int targetMode) noexcept {
+    if(aimMode<0 || aimMode>3 || targetMode<0 || targetMode>1)return false;
+    switch(rule) {
+        case RecoveredWidgetVisibility::Always:return true;
+        case RecoveredWidgetVisibility::AimModeLockOn:return aimMode==2;
+        case RecoveredWidgetVisibility::AimModeSilent:return aimMode==3;
+        case RecoveredWidgetVisibility::AimModeRegularLinear:
+            return aimMode==0 || aimMode==1;
+        case RecoveredWidgetVisibility::AimModeNotSilent:return aimMode!=3;
+        case RecoveredWidgetVisibility::TargetSingle:return targetMode==0;
+        case RecoveredWidgetVisibility::TargetSwitch:return targetMode==1;
+        default:return false;
+    }
 }
 } // namespace slinkywinky

@@ -15,7 +15,7 @@ int main() {
     using namespace slinkywinky;
     const auto& items=recovered_widget_catalog();
     const auto& catalog=official_module_catalog();
-    CHECK(items.size()==378);
+    CHECK(items.size()==385);
     CHECK(catalog.size()==67);
     std::array<std::size_t,8> counts{};
     std::set<std::string_view> names;
@@ -47,10 +47,10 @@ int main() {
             CHECK(std::strlen(widget.options)>0);
         ++total;
     }
-    CHECK(total==378);
-    CHECK(counts[0]==202 && counts[1]==111 &&
+    CHECK(total==385);
+    CHECK(counts[0]==206 && counts[1]==115 &&
           counts[2]==32 && counts[3]==4 &&
-          counts[4]==13 && counts[5]==8 &&
+          counts[4]==13 && counts[5]==7 &&
           counts[6]==6 && counts[7]==2);
     std::size_t modulesWithSettings=0;
     std::size_t counted=0;
@@ -69,7 +69,7 @@ int main() {
         }
     }
     CHECK(modulesWithSettings>=55);
-    CHECK(counted==378);
+    CHECK(counted==385);
     CHECK(recovered_widget_count("Does Not Exist")==0);
     std::array<const RecoveredWidget*,5> empty{};
     CHECK(recovered_widget_preview(nullptr,empty)==0);
@@ -77,14 +77,14 @@ int main() {
     CHECK(recovered_widget_preview("Aim Assist",empty)>=5);
     CHECK(empty[0]->kind==RecoveredWidgetKind::Dropdown);
     CHECK(std::string_view(empty[0]->label)=="Mode");
-    CHECK(empty[1]->kind==RecoveredWidgetKind::Slider);
-    CHECK(std::string_view(empty[1]->label)=="Horizontal speed");
+    CHECK(empty[1]->kind==RecoveredWidgetKind::Boolean);
+    CHECK(std::string_view(empty[1]->label)=="Vertical");
     CHECK(recovered_widget_preview("Friends",empty)>=4);
     CHECK(empty[0]->kind==RecoveredWidgetKind::Boolean);
     CHECK(empty[1]->kind==RecoveredWidgetKind::Text);
     CHECK(empty[2]->kind==RecoveredWidgetKind::Button);
     CHECK(recovered_widget_preview("Piercing",empty)>=1);
-    CHECK(empty[0]->kind==RecoveredWidgetKind::MultiSelect);
+    CHECK(empty[0]->kind==RecoveredWidgetKind::Dropdown);
     CHECK(recovered_widget_preview("Backtrack",empty)>=5);
     CHECK(recovered_widget_preview("Pointers",empty)>=5);
     // R117: every recovered control must be reachable exactly once through
@@ -113,13 +113,13 @@ int main() {
         CHECK(recovered_widget_page(m.name,1,refused)==0);
         CHECK(refused[0]==nullptr);
     }
-    CHECK(pageVisited==378);
+    CHECK(pageVisited==385);
     std::array<const RecoveredWidget*,5> refused{};
     CHECK(recovered_widget_page(nullptr,0,refused)==0);
     CHECK(recovered_widget_page("Unknown module",0,refused)==0);
     CHECK(recovered_widget_page("Aim Assist",99999,refused)==0);
     CHECK(recovered_widget_page("Aim Assist",5,refused)>5);
-    CHECK(std::string_view(refused[0]->label)=="Keep move direction");
+    CHECK(std::string_view(refused[0]->label)=="Vertical speed");
     // R120: these three GUI strings are verified against the native
     // registration structures in the pinned, user-provided decrypted .data
     // section, NOT against the estimated mods_block.js fixture.
@@ -222,5 +222,82 @@ int main() {
             return std::string_view(item.module)=="Anti Bot" &&
                 std::string_view(item.label)=="Always stationary";
         }));
+
+    // R122 exhaustively compares native W_* callsite ordering and branch
+    // metadata, including two copies of each mode-specific speed slider.
+    struct Expected {
+        const char* group;
+        const char* label;
+        RecoveredWidgetKind kind;
+        RecoveredWidgetVisibility visibility;
+    };
+    const std::array<Expected,24> aimNative{{
+        {"Aim","Mode",RecoveredWidgetKind::Dropdown,RecoveredWidgetVisibility::Always},
+        {"Aim","Vertical",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::AimModeLockOn},
+        {"Aim","Keep move direction",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::AimModeSilent},
+        {"Aim","Ignore manual aim",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::AimModeSilent},
+        {"Aim","Horizontal speed",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::AimModeSilent},
+        {"Aim","Vertical speed",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::AimModeSilent},
+        {"Aim","Horizontal speed",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::AimModeRegularLinear},
+        {"Aim","Vertical speed",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::AimModeRegularLinear},
+        {"Aim","Predict",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::Always},
+        {"Aim","Randomization",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::Always},
+        {"Multi-point","Horizontal",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::Always},
+        {"Multi-point","Vertical",RecoveredWidgetKind::Slider,RecoveredWidgetVisibility::Always},
+        {"Target","Mode",RecoveredWidgetKind::Dropdown,RecoveredWidgetVisibility::Always},
+        {"Target","Increased FOV while locked",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::TargetSingle},
+        {"Target","Sort by",RecoveredWidgetKind::Dropdown,RecoveredWidgetVisibility::TargetSwitch},
+        {"Target","Range",RecoveredWidgetKind::Range,RecoveredWidgetVisibility::Always},
+        {"Target","FOV",RecoveredWidgetKind::Range,RecoveredWidgetVisibility::Always},
+        {"Conditions","Sprinting",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::AimModeNotSilent},
+        {"Conditions","Mouse pressed",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Mouse moved",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Disable while breaking blocks",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Holding weapon",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Ignore invisibles",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Not behind blocks",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always}
+    }};
+    const std::array<Expected,8> piercingNative{{
+        {"Always hit through","Sort targets by",RecoveredWidgetKind::Dropdown,RecoveredWidgetVisibility::Always},
+        {"Always hit through","Non-player entities",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Always hit through","Friendlies",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Always hit through","Bots",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Always hit through","Enemies",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Always hit through","Blocks",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Holding weapon",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always},
+        {"Conditions","Inside entity hitbox",RecoveredWidgetKind::Boolean,RecoveredWidgetVisibility::Always}
+    }};
+    const auto verifyNative=[&](std::string_view module,const auto& rows){
+        std::size_t i=0;
+        for(const auto& widget:items) {
+            if(std::string_view(widget.module)!=module)continue;
+            CHECK(i<rows.size());
+            CHECK(std::string_view(widget.group)==rows[i].group);
+            CHECK(std::string_view(widget.label)==rows[i].label);
+            CHECK(widget.kind==rows[i].kind);
+            CHECK(widget.visibility==rows[i].visibility);
+            ++i;
+        }
+        CHECK(i==rows.size());
+    };
+    verifyNative("Aim Assist",aimNative);
+    verifyNative("Piercing",piercingNative);
+    CHECK(recovered_widget_count("Aim Assist")==24);
+    CHECK(recovered_widget_count("Piercing")==8);
+    for(int a=0;a<4;++a)
+      for(int t=0;t<2;++t) {
+        std::size_t shown=0;
+        for(const auto& widget:items)
+            if(std::string_view(widget.module)=="Aim Assist" &&
+               recovered_preview_branch_matches(widget.visibility,a,t))
+                ++shown;
+        CHECK(shown==(a==2?17u:a==3?19u:18u));
+      }
+    CHECK(!recovered_preview_branch_matches(
+        RecoveredWidgetVisibility::Always,4,0));
+    CHECK(!recovered_preview_branch_matches(
+        RecoveredWidgetVisibility::Always,0,-1));
+    CHECK(!recovered_preview_branch_matches(
+        static_cast<RecoveredWidgetVisibility>(99),0,0));
     return 0;
 }

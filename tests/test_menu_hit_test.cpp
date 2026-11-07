@@ -159,7 +159,7 @@ int main() {
         MenuRenderSession session;
         const unsigned viewportW=1024,viewportH=768;
         CHECK(session.attach(118,viewportW,viewportH));
-        CHECK(menu.toggle_expanded(0)); // Aim Assist: 21 read-only controls
+        CHECK(menu.toggle_expanded(0)); // Aim Assist: 24 callsites (some conditional)
         const auto frame=session.next(menu,&profile);
         const auto panel=menu_panel_geometry(
             viewportW,viewportH,false,mode);

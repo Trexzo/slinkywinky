@@ -1152,7 +1152,11 @@ int main() {
             renderSettings(MenuTab::Utility,"Friends",
                 RecoveredWidgetKind::Boolean,"SLINKYWINKY_R116_FRIENDS_PPM");
             renderSettings(MenuTab::Combat,"Piercing",
-                RecoveredWidgetKind::MultiSelect,"SLINKYWINKY_R116_PIERCING_PPM");
+                RecoveredWidgetKind::Dropdown,"SLINKYWINKY_R116_PIERCING_PPM");
+            // Retain actual GL multiselect coverage on another source
+            // metadata-only module; Piercing is not a multiselect.
+            renderSettings(MenuTab::Block,"Ghost Hand",
+                RecoveredWidgetKind::MultiSelect,nullptr);
             renderSettings(MenuTab::Visual,"Item ESP",
                 RecoveredWidgetKind::Text,"SLINKYWINKY_R116_ITEM_ESP_PPM");
             std::cout<<"R116_TYPED_RECOVERED_WIDGETS_FIVE_REAL_WGL_PREVIEWS_PASS\n";
