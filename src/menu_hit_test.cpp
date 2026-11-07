@@ -128,8 +128,7 @@ std::optional<MenuHit> hit_test_menu(
         // R126: only source-identified dropdowns in Aim Assist and the
         // existing Piercing sandbox can mutate local preview state.
         // The hit geometry mirrors the GL11 renderer in all three modes.
-        if((index==0 || index==11) && frame.tab==MenuTab::Combat &&
-           frame.visible[i].expanded && y>=rect.y+body) {
+        if(frame.visible[i].expanded && y>=rect.y+body) {
             std::array<const RecoveredWidget*,5> widgets{};
             const auto& card=frame.visible[i];
             const auto count=recovered_widget_visible_page(
@@ -169,18 +168,34 @@ std::optional<MenuHit> hit_test_menu(
                             return MenuHit{MenuHitKind::TargetModeControl,
                                            frame.tab,index,control};
                     }
+                }
+                if(index==11u) {
+                    if(control>=8u)return std::nullopt;
+                    if(dropdown && control==0u)
+                        return MenuHit{MenuHitKind::PiercingControl,
+                                       frame.tab,index,control};
+                    if(widget.kind==RecoveredWidgetKind::Boolean &&
+                       control>0u && x>=controlX+controlW-34.0f &&
+                       x<controlX+controlW &&
+                       y>=controlY+1.0f && y<controlY+19.0f)
+                        return MenuHit{MenuHitKind::PiercingControl,
+                                       frame.tab,index,control};
                     continue;
                 }
-                if(control>=8u)return std::nullopt;
-                if(dropdown && control==0u)
-                    return MenuHit{MenuHitKind::PiercingControl,
-                                   frame.tab,index,control};
+                // Generic typed Boolean fixture: the pointer returned by
+                // recovered_widget_visible_page identifies the exact
+                // callsite, including Aim's conditional branches.
                 if(widget.kind==RecoveredWidgetKind::Boolean &&
-                   control>0u && x>=controlX+controlW-34.0f &&
+                   x>=controlX+controlW-34.0f &&
                    x<controlX+controlW &&
-                   y>=controlY+1.0f && y<controlY+19.0f)
-                    return MenuHit{MenuHitKind::PiercingControl,
-                                   frame.tab,index,control};
+                   y>=controlY+1.0f && y<controlY+19.0f) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    if(global>=all.size())return std::nullopt;
+                    return MenuHit{MenuHitKind::RecoveredBooleanPreview,
+                                   frame.tab,index,global};
+                }
             }
             return std::nullopt; // headings and body are never actions
         }
