@@ -108,6 +108,22 @@ enum class MenuProfileAction : std::uint8_t {
 };
 // R145: hover-only tooltip for the four Profiles icons, including
 // protected Default actions. No action or filesystem permission implied.
+// R147: renderer-neutral pointer hover for a *visible* numeric widget.
+// This is a presentation tooltip only; the binding never changes gameplay.
+struct MenuNumericHover {
+    std::size_t catalog_index=0;
+    std::size_t widget_index=0;
+};
+inline bool operator==(const MenuNumericHover& a,
+                       const MenuNumericHover& b) noexcept {
+    return a.catalog_index==b.catalog_index &&
+           a.widget_index==b.widget_index;
+}
+inline bool operator!=(const MenuNumericHover& a,
+                       const MenuNumericHover& b) noexcept {
+    return !(a==b);
+}
+
 struct MenuProfileIconHover {
     std::size_t profile_index=0;
     unsigned action=0;
@@ -214,6 +230,11 @@ public:
     }
     std::optional<std::size_t> bind_capture_index() const noexcept {
         return bind_capture_index_;
+    }
+    bool set_numeric_hover(
+        std::optional<MenuNumericHover> hover) noexcept;
+    std::optional<MenuNumericHover> numeric_hover() const noexcept {
+        return numeric_hover_;
     }
     bool set_bind_hover_row(
         std::optional<std::size_t> catalog_index) noexcept;
@@ -361,6 +382,7 @@ private:
     }();
     std::optional<std::size_t> bind_capture_index_{};
     std::optional<std::size_t> bind_hover_row_{};
+    std::optional<MenuNumericHover> numeric_hover_{};
     std::array<bool,67> expanded_{};
     std::array<std::size_t,67> settings_offsets_{};
     unsigned aim_preview_mode_=0; // Regular, Linear, Lock-on, Silent
