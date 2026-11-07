@@ -410,6 +410,39 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                             }
                         }
                     }
+                    else if(hit->kind==MenuHitKind::RecoveredRangePreview &&
+                            frame && hit->sub_index<=1u) {
+                        // R133: selection of lower or upper range knob is
+                        // frozen at pointer-down by MenuMouseGesture.
+                        // Releasing near the other knob cannot change it.
+                        const auto panel=slinkywinky::menu_panel_geometry(
+                            frame->viewport_width,frame->viewport_height,
+                            frame->appearance.wide,panel_mode());
+                        if(panel) {
+                            const auto track=slinkywinky::
+                                menu_numeric_track_geometry(
+                                    *frame,panel->logical_width(),
+                                    panel->logical_height(),
+                                    hit->catalog_index,hit->control_index);
+                            if(track) {
+                                const auto& all=slinkywinky::
+                                    recovered_widget_catalog();
+                                const float logicalX=(
+                                    static_cast<float>(
+                                        static_cast<short>(LOWORD(lp)))-
+                                    static_cast<float>(panel->left))/
+                                    panel->scale;
+                                const auto value=slinkywinky::
+                                    menu_numeric_value_at_x(
+                                        all[hit->control_index],*track,logicalX);
+                                if(value)
+                                    menu.set_recovered_range_preview(
+                                        hit->catalog_index,
+                                        hit->control_index,
+                                        hit->sub_index,*value);
+                            }
+                        }
+                    }
                     else if(hit->kind==MenuHitKind::PiercingControl &&
                             hit->catalog_index==11) {
                         if(hit->control_index==0u)
