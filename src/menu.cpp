@@ -64,6 +64,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     bind_capture_index_.reset();
+    bind_hover_row_.reset();
     unload_confirmation_preview_=false;
     selected_=tab;
     scroll_=0;
@@ -83,6 +84,7 @@ bool MenuState::scroll_by(int delta) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     bind_capture_index_.reset();
+    bind_hover_row_.reset();
     scroll_=next;
     return true;
 }
@@ -102,7 +104,29 @@ bool MenuState::scroll_by_visible(
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     bind_capture_index_.reset();
+    bind_hover_row_.reset();
     scroll_=next;
+    return true;
+}
+bool MenuState::set_bind_hover_row(
+        std::optional<std::size_t> catalog_index) noexcept {
+    if(catalog_index) {
+        const auto& catalog=official_module_catalog();
+        const std::size_t index=*catalog_index;
+        if(dropdown_preview_ || unload_confirmation_preview_ ||
+           index>=catalog.size() ||
+           catalog[index].tab!=selected_ ||
+           !menu_bind_supported_module(index))
+            return false;
+        const auto visible=page();
+        if(std::none_of(visible.begin(),visible.end(),
+            [index](const MenuItem& row) {
+                return row.catalog_index==index;
+            }))
+            return false;
+    }
+    if(bind_hover_row_==catalog_index)return false;
+    bind_hover_row_=catalog_index;
     return true;
 }
 bool MenuState::begin_bind_capture(
@@ -712,6 +736,7 @@ bool MenuState::open_unload_confirmation_preview() noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     bind_capture_index_.reset();
+    bind_hover_row_.reset();
     unload_confirmation_preview_=true;
     return true;
 }
