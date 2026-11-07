@@ -33,7 +33,18 @@ bool MenuMouseGesture::same_hit(
     const MenuHit& a,const MenuHit& b) noexcept {
     return a.kind==b.kind && a.tab==b.tab &&
            a.catalog_index==b.catalog_index &&
-           a.control_index==b.control_index;
+           a.control_index==b.control_index &&
+           a.sub_index==b.sub_index;
+}
+// Only a source-typed range track may change which handle is nearest
+// during a drag. The originally captured handle remains the owner.
+static bool same_range_track(const MenuHit& press,
+                             const MenuHit& next) noexcept {
+    return press.kind==MenuHitKind::RecoveredRangePreview &&
+           next.kind==MenuHitKind::RecoveredRangePreview &&
+           press.tab==next.tab &&
+           press.catalog_index==next.catalog_index &&
+           press.control_index==next.control_index;
 }
 bool MenuMouseGesture::equivalent_frame(
     const MenuRenderFrame& frame,MenuPanelMode mode) const noexcept {
@@ -112,7 +123,8 @@ bool MenuMouseGesture::move(
         return false;
     }
     const auto hit=hit_test_menu(frame,mode,x,y);
-    if(!hit || !same_hit(*hit,active_->hit)) {
+    if(!hit || !(same_hit(*hit,active_->hit) ||
+                  same_range_track(active_->hit,*hit))) {
         // Dragging off the target is terminal; re-entering cannot revive it.
         active_.reset();
         return false;
@@ -132,16 +144,21 @@ std::optional<MenuHit> MenuMouseGesture::release(
     active_.reset(); // A release is consumed even if it fails validation.
     if(!valid)return std::nullopt;
     const auto released=hit_test_menu(frame,mode,x,y);
-    if(!released || !same_hit(previous,*released))return std::nullopt;
-
+    if(!released || !(same_hit(previous,*released) ||
+                      same_range_track(previous,*released)))
+        return std::nullopt;
+    // R133: retain the *press-selected* range handle. Moving across the
+    // other handle never changes ownership or causes a cross-handle write.
+    const MenuHit committed=previous.kind==MenuHitKind::RecoveredRangePreview?
+        previous:*released;
     // Ignore the second click of a rapid double click on the same action.
     // Allow a different target (e.g. a different row) without delay.
-    if(last_committed_ && same_hit(*released,*last_committed_) &&
+    if(last_committed_ && same_hit(committed,*last_committed_) &&
        monotonic_ms>=last_committed_ms_ &&
        monotonic_ms-last_committed_ms_<=double_click_ms_)
         return std::nullopt;
-    last_committed_=*released;
+    last_committed_=committed;
     last_committed_ms_=monotonic_ms;
-    return released;
+    return committed;
 }
 } // namespace slinkywinky
