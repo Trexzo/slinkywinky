@@ -235,8 +235,15 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_MOUSEWHEEL:{
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
             if(menu.unload_confirmation_preview())return 0;
-            if(menu.close_preview_dropdown()) {
-                request_paint(hwnd); // Never scroll an underlying card too.
+            if(menu.dropdown_preview()) {
+                // Source lists can contain up to 16 options. Wheel changes
+                // only the popup's bounded six-row viewport, never the
+                // underlying module list, and invalidates held gestures.
+                if(preview_focused(hwnd) && GetFocus()==hwnd) {
+                    const auto delta=GET_WHEEL_DELTA_WPARAM(wp);
+                    if(delta)menu.scroll_preview_popup(delta>0?-1:1);
+                }
+                request_paint(hwnd);
                 return 0;
             }
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
@@ -378,6 +385,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(hit->kind==MenuHitKind::RecoveredChoiceControl)
                         menu.open_recovered_choice_preview(
                             hit->catalog_index,hit->control_index);
+                    else if(hit->kind==MenuHitKind::RecoveredMultiControl)
+                        menu.open_recovered_multi_preview(
+                            hit->catalog_index,hit->control_index);
                     else if(hit->kind==MenuHitKind::RecoveredSliderPreview &&
                             frame) {
                         // Commit only a validated same-widget mouse-up.
@@ -484,6 +494,18 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     return 0;
                 }
                 DestroyWindow(hwnd);
+                return 0;
+            }
+            if(menu.dropdown_preview()) {
+                // The open popup owns keyboard navigation too.
+                // Never pass page/arrow/module hotkeys through it.
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0) {
+                    if(wp==VK_UP || wp==VK_PRIOR)
+                        menu.scroll_preview_popup(-1);
+                    if(wp==VK_DOWN || wp==VK_NEXT)
+                        menu.scroll_preview_popup(1);
+                }
+                request_paint(hwnd);
                 return 0;
             }
             // Separate Windows preview ONLY; never hooks Minecraft.
