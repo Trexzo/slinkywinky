@@ -43,8 +43,12 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
     const float cell=menu_tab_width(w);
     const auto tab=exact_hit(*frame,mode,*p,menu_nav_x+4.5f*cell,35.f,MenuHitKind::Tab);
     CHECK(tab.tab==MenuTab::Utility);
-    CHECK(!hit_test_menu(*frame,mode,
-                         pixel_x(*p,menu_nav_x+6.5f*cell),pixel_y(*p,35.f)));
+    const auto unload=hit_test_menu(*frame,mode,
+        pixel_x(*p,menu_nav_x+6.5f*cell),pixel_y(*p,35.f));
+    // R128: Unload is an inert confirmation-modal opener, never a
+    // gameplay/uninject action. The old R97 no-hit assertion is stale.
+    CHECK(unload && unload->kind==MenuHitKind::UnloadTab &&
+          unload->tab==MenuTab::Unload);
     CHECK(!hit_test_menu(*frame,mode,static_cast<int>(p->left)-1,
                          pixel_y(*p,175.f)));
     CHECK(!hit_test_menu(*frame,mode,
