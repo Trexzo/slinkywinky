@@ -1177,7 +1177,9 @@ int main() {
                     enter.action_applied);
             REQUIRE(pageKeys.event(28,false,true,true,true).delivery==
                     MenuKeyDelivery::MenuExclusive);
-            const auto pageCount=recovered_widget_count("Aim Assist");
+            const auto pageCount=recovered_widget_visible_count(
+                "Aim Assist",static_cast<int>(sourceMenu.aim_preview_mode()),
+                static_cast<int>(sourceMenu.target_preview_mode()));
             REQUIRE(pageCount>10);
             const auto capturePage=[&](const char* env)->MenuRenderFrame {
                 const auto frame=sourceFrames.next(
@@ -1260,6 +1262,54 @@ int main() {
             REQUIRE(pageKeys.event(1,false,true,true,false).delivery==
                     MenuKeyDelivery::Quarantined);
             REQUIRE(!pageKeys.active() && !pageKeys.revoked());
+            // R123: render every Aim Assist branch in the ACTUAL WGL
+            // context. These transitions are owner-scoped preview-only
+            // navigation, not a live Minecraft keyboard hook.
+            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            const auto regular=capturePage(nullptr);
+            REQUIRE(regular.aim_preview_mode==0);
+            REQUIRE(recovered_widget_visible_count("Aim Assist",0,0)==18);
+            REQUIRE(pageNav.apply(MenuNavAction::NextSettingsPage));
+            REQUIRE(sourceMenu.settings_offset(0)==5);
+            MenuMouseGesture modeHeld;
+            const auto beforeMode=capturePage(nullptr);
+            REQUIRE(modeHeld.press(beforeMode,
+                MenuPanelMode::StandalonePreview,40,30,300,true));
+            REQUIRE(pageNav.apply(MenuNavAction::NextAimPreviewMode));
+            const auto linear=capturePage(nullptr);
+            REQUIRE(linear.aim_preview_mode==1 &&
+                    linear.visible[0].settings_offset==0);
+            REQUIRE(!modeHeld.release(linear,
+                MenuPanelMode::StandalonePreview,40,30,310,true));
+            REQUIRE(pageNav.apply(MenuNavAction::NextAimPreviewMode));
+            const auto locked=capturePage("SLINKYWINKY_R123_LOCKON_PPM");
+            REQUIRE(locked.aim_preview_mode==2 &&
+                    recovered_widget_visible_count("Aim Assist",2,0)==17);
+            REQUIRE(pageNav.apply(MenuNavAction::NextAimPreviewMode));
+            const auto silent=capturePage("SLINKYWINKY_R123_SILENT_PPM");
+            REQUIRE(silent.aim_preview_mode==3 &&
+                    recovered_widget_visible_count("Aim Assist",3,0)==19);
+            REQUIRE(pageNav.apply(MenuNavAction::NextAimPreviewMode));
+            REQUIRE(capturePage(nullptr).aim_preview_mode==0);
+            REQUIRE(pageNav.apply(MenuNavAction::NextTargetPreviewMode));
+            const auto switched=capturePage("SLINKYWINKY_R123_SWITCH_PPM");
+            REQUIRE(switched.target_preview_mode==1);
+            REQUIRE(pageNav.apply(MenuNavAction::NextTargetPreviewMode));
+            REQUIRE(capturePage(nullptr).target_preview_mode==0);
+            tampered=switched;
+            tampered.aim_preview_mode=99;
+            REQUIRE(!draw_menu_gl11(tampered,sourceWide.gl,sourceWide.dc));
+            REQUIRE(!hit_test_menu(tampered,
+                MenuPanelMode::StandalonePreview,40,30));
+            tampered=switched;
+            tampered.target_preview_mode=99;
+            REQUIRE(!draw_menu_gl11(tampered,sourceWide.gl,sourceWide.dc));
+            REQUIRE(!hit_test_menu(tampered,
+                MenuPanelMode::StandalonePreview,40,30));
+            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            REQUIRE(sourceMenu.settings_offset(0)==0);
+            std::cout<<"R123_EIGHT_SOURCE_CONDITIONAL_AIM_WGL_STATES_PASS\n";
+            std::cout<<"R123_STALE_MODAL_SELECTION_AND_FORGED_FRAME_DENIAL_PASS\n";
             std::cout<<"R118_SYNTHETIC_LWJGL2_PAGE_KEYS_TO_REAL_WGL_PAGES_PASS\n";
             std::cout<<"R117_ALL_RECOVERED_AIM_SETTINGS_PAGED_AND_WGL_RESTORED_PASS\n";
             std::cout<<"R117_STALE_MOUSE_AND_FORGED_PAGE_REFUSAL_PASS\n";

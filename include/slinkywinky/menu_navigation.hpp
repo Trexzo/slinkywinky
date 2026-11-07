@@ -13,7 +13,8 @@ class MenuProfileBridge;
 enum class MenuNavAction : unsigned char {
     NextTab, PreviousTab, NextRow, PreviousRow,
     ExpandFocused, ToggleFocusedPreview, IncreaseSetting, DecreaseSetting,
-    NextSettingsPage, PreviousSettingsPage
+    NextSettingsPage, PreviousSettingsPage,
+    NextAimPreviewMode, NextTargetPreviewMode
 };
 
 // The navigation controller is bound to one menu/profile pair and the

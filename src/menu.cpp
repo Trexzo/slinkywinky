@@ -68,10 +68,26 @@ bool MenuState::toggle_expanded(std::size_t index) noexcept {
 std::size_t MenuState::settings_offset(std::size_t index) const noexcept {
     return index<settings_offsets_.size()?settings_offsets_[index]:0;
 }
+bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
+    if(selected_!=MenuTab::Combat || mode>3 || mode==aim_preview_mode_)
+        return false;
+    aim_preview_mode_=mode;
+    settings_offsets_[0]=0;
+    return true;
+}
+bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
+    if(selected_!=MenuTab::Combat || mode>1 || mode==target_preview_mode_)
+        return false;
+    target_preview_mode_=mode;
+    settings_offsets_[0]=0;
+    return true;
+}
 bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     if((direction!=1&&direction!=-1) || index>=catalog.size() ||
        catalog[index].tab!=selected_ || !expanded_[index])return false;
-    const std::size_t count=recovered_widget_count(catalog[index].name);
+    const std::size_t count=recovered_widget_visible_count(
+        catalog[index].name,static_cast<int>(aim_preview_mode_),
+        static_cast<int>(target_preview_mode_));
     if(count==0)return false;
     const std::size_t previous=settings_offsets_[index];
     // No arithmetic on untrusted or potentially overflowing offsets.

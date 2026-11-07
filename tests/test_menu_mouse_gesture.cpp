@@ -208,5 +208,35 @@ int main() {
                             40,30,215,true));
     CHECK(!pageGate.pending());
     CHECK(pageFrames.detach());
+    // R123: a mode switch with the same module, card and page offset
+    // still invalidates an old held click. Prevent stale GUI actions.
+    MenuState modeMenu;
+    MenuProfileBridge modeProfile(modeMenu);
+    MenuNavigation modeNav(modeMenu,modeProfile);
+    CHECK(modeNav.apply(MenuNavAction::ExpandFocused));
+    MenuRenderSession modeFrames;
+    CHECK(modeFrames.attach(703,900,630));
+    const auto modeBefore=modeFrames.next(
+        modeMenu,&modeProfile,&modeNav);
+    CHECK(modeBefore && modeBefore->visible[0].settings_offset==0);
+    MenuMouseGesture modeGate;
+    CHECK(modeGate.press(*modeBefore,
+        MenuPanelMode::StandalonePreview,40,30,300,true));
+    CHECK(modeNav.apply(MenuNavAction::NextAimPreviewMode));
+    const auto modeAfter=modeFrames.next(
+        modeMenu,&modeProfile,&modeNav);
+    CHECK(modeAfter && modeAfter->aim_preview_mode==1);
+    CHECK(!modeGate.release(*modeAfter,
+        MenuPanelMode::StandalonePreview,40,30,315,true));
+    CHECK(!modeGate.pending());
+    CHECK(modeGate.press(*modeAfter,
+        MenuPanelMode::StandalonePreview,40,30,400,true));
+    CHECK(modeNav.apply(MenuNavAction::NextTargetPreviewMode));
+    const auto targetAfter=modeFrames.next(
+        modeMenu,&modeProfile,&modeNav);
+    CHECK(targetAfter && targetAfter->target_preview_mode==1);
+    CHECK(!modeGate.release(*targetAfter,
+        MenuPanelMode::StandalonePreview,40,30,420,true));
+    CHECK(modeFrames.detach());
     return 0;
 }

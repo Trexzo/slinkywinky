@@ -41,11 +41,12 @@ inline float menu_row_body_height(const MenuRenderFrame& frame) noexcept {
 inline float menu_expanded_height(const MenuRenderFrame& frame,
                                   std::size_t index) noexcept {
     if(index>=frame.visible.size())return 0.0f;
-    // A bounded, read-only viewport into 378 candidate GUI controls.
-    // Settings beyond five remain in the typed catalog for the next
-    // scrolling/interaction pass; never paint them outside the card.
+    // Display the source-conditional Aim Assist view; keep the full
+    // 385-record forensic catalog unchanged and read-only.
     const auto& item=frame.visible[index];
-    const std::size_t count=recovered_widget_count(item.title);
+    const std::size_t count=recovered_widget_visible_count(
+        item.title,static_cast<int>(frame.aim_preview_mode),
+        static_cast<int>(frame.target_preview_mode));
     const std::size_t remaining=item.settings_offset<count?
         count-item.settings_offset:0;
     const float visible=static_cast<float>(
@@ -53,7 +54,9 @@ inline float menu_expanded_height(const MenuRenderFrame& frame,
     // R121: new section headings inside one five-control page must use
     // the same vertical geometry in both the GL renderer and hit tester.
     std::array<const RecoveredWidget*,5> page{};
-    recovered_widget_page(item.title.c_str(),item.settings_offset,page);
+    recovered_widget_visible_page(item.title.c_str(),item.settings_offset,
+        static_cast<int>(frame.aim_preview_mode),
+        static_cast<int>(frame.target_preview_mode),page);
     float extraHeadings=0.0f;
     std::string_view last=page[0]?std::string_view(page[0]->group):
                                   std::string_view{};
@@ -70,8 +73,12 @@ inline float menu_expanded_height(const MenuRenderFrame& frame,
 // settings offsets before drawing/dispatching any native GUI action.
 inline bool menu_settings_offsets_valid(
         const MenuRenderFrame& frame) noexcept {
+    if(frame.aim_preview_mode>3u || frame.target_preview_mode>1u)
+        return false;
     for(const auto& item:frame.visible) {
-        const auto count=recovered_widget_count(item.title);
+        const auto count=recovered_widget_visible_count(
+            item.title,static_cast<int>(frame.aim_preview_mode),
+            static_cast<int>(frame.target_preview_mode));
         if((!item.expanded || count==0) && item.settings_offset!=0)
             return false;
         if(item.settings_offset%5u!=0u ||

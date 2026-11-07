@@ -112,6 +112,18 @@ bool MenuNavigation::apply(MenuNavAction action) {
         case MenuNavAction::PreviousTab: return switch_tab(-1);
         case MenuNavAction::NextRow: return move_row(1);
         case MenuNavAction::PreviousRow: return move_row(-1);
+        case MenuNavAction::NextAimPreviewMode:
+        case MenuNavAction::NextTargetPreviewMode: {
+            std::size_t index=0;
+            if(!focused_visible(&index) || index!=0 ||
+               menu_.tab()!=MenuTab::Combat || !menu_.expanded(index))
+                return false;
+            if(action==MenuNavAction::NextAimPreviewMode)
+                return menu_.set_aim_preview_mode(
+                    (menu_.aim_preview_mode()+1u)%4u);
+            return menu_.set_target_preview_mode(
+                (menu_.target_preview_mode()+1u)%2u);
+        }
         case MenuNavAction::NextSettingsPage:
         case MenuNavAction::PreviousSettingsPage:
         case MenuNavAction::ExpandFocused:

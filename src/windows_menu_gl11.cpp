@@ -584,12 +584,13 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
         }
         if(item.expanded) {
-            // R117: five typed controls from the selected, bounded page
-            // of the candidate decrypted GUI. All 378 reference records
-            // remain static/read-only. No setting clicks or gameplay.
+            // R123: selected read-only Aim mode chooses visible controls.
+            // 385 source callsites remain available in the forensic catalog.
             std::array<const RecoveredWidget*,5> preview{};
-            const std::size_t count=recovered_widget_page(
-                item.title.c_str(),item.settings_offset,preview);
+            const std::size_t count=recovered_widget_visible_page(
+                item.title.c_str(),item.settings_offset,
+                static_cast<int>(frame.aim_preview_mode),
+                static_cast<int>(frame.target_preview_mode),preview);
             const float settingY=y+body;
             rgb(0x999999);
             if(preview[0])
@@ -599,8 +600,20 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 text("No recovered settings",left+8.0f,settingY+8.0f,
                      15.0f,rect.width-16.0f);
             rgb(0x777777);
-            text("REFERENCE PREVIEW - READ ONLY",left+8.0f,
-                 settingY+25.0f,11.0f,rect.width-16.0f);
+            if(item.catalog_index==0 && frame.tab==MenuTab::Combat) {
+                static constexpr const char* modes[]{
+                    "REGULAR","LINEAR","LOCK-ON","SILENT"
+                };
+                char label[90]{};
+                std::snprintf(label,sizeof(label),
+                    "READ-ONLY AIM: %s  TARGET: %s",
+                    modes[frame.aim_preview_mode],
+                    frame.target_preview_mode==0?"SINGLE":"SWITCH");
+                text(label,left+8.0f,settingY+25.0f,11.0f,
+                     rect.width-16.0f);
+            } else
+                text("REFERENCE PREVIEW - READ ONLY",left+8.0f,
+                     settingY+25.0f,11.0f,rect.width-16.0f);
             float addedHeadings=0.0f;
             std::string_view lastGroup=preview[0]?
                 std::string_view(preview[0]->group):std::string_view{};

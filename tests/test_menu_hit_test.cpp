@@ -184,6 +184,13 @@ int main() {
         altered.visible[0].settings_offset=7; // forged unaligned page
         CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
         altered=*frame;
+        altered.aim_preview_mode=7; // forged invalid selection state
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        CHECK(!hit_test_menu(altered,mode,insideX,insideY));
+        altered=*frame;
+        altered.target_preview_mode=2;
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        altered=*frame;
         altered.visible[0].title="Forged page";
         CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
         altered=*frame;

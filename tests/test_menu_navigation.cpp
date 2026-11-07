@@ -134,7 +134,9 @@ int main() {
     CHECK(!input.apply(MenuNavAction::NextSettingsPage)); // collapsed
     CHECK(input.apply(MenuNavAction::ExpandFocused));
     CHECK(menu.expanded(0) && menu.settings_offset(0)==0);
-    const auto count=recovered_widget_count("Aim Assist");
+    const auto count=recovered_widget_visible_count(
+        "Aim Assist",static_cast<int>(menu.aim_preview_mode()),
+        static_cast<int>(menu.target_preview_mode()));
     CHECK(count>10);
     std::size_t pages=1;
     while(input.apply(MenuNavAction::NextSettingsPage)) {
@@ -163,8 +165,43 @@ int main() {
     CHECK(!menu.change_settings_page(67,1));
     CHECK(!menu.change_settings_page(0,0));
     CHECK(!menu.change_settings_page(0,2));
+    // R123: preview enums require focused, expanded Aim Assist and
+    // never update game settings. A mode switch resets pagination.
+    CHECK(input.focus_visible_row(0));
+    CHECK(!input.apply(MenuNavAction::NextAimPreviewMode));
+    CHECK(input.apply(MenuNavAction::ExpandFocused));
+    CHECK(input.apply(MenuNavAction::NextSettingsPage));
+    CHECK(menu.settings_offset(0)==5);
+    CHECK(input.apply(MenuNavAction::NextAimPreviewMode));
+    CHECK(menu.aim_preview_mode()==1 && menu.settings_offset(0)==0);
+    CHECK(input.apply(MenuNavAction::NextAimPreviewMode));
+    CHECK(menu.aim_preview_mode()==2);
+    CHECK(recovered_widget_visible_count(
+        "Aim Assist",2,0)==17);
+    CHECK(input.apply(MenuNavAction::NextAimPreviewMode));
+    CHECK(menu.aim_preview_mode()==3);
+    CHECK(recovered_widget_visible_count(
+        "Aim Assist",3,0)==19);
+    CHECK(input.apply(MenuNavAction::NextAimPreviewMode));
+    CHECK(menu.aim_preview_mode()==0);
+    CHECK(input.apply(MenuNavAction::NextSettingsPage));
+    CHECK(input.apply(MenuNavAction::NextTargetPreviewMode));
+    CHECK(menu.target_preview_mode()==1 && menu.settings_offset(0)==0);
+    CHECK(input.apply(MenuNavAction::NextTargetPreviewMode));
+    CHECK(menu.target_preview_mode()==0);
+    CHECK(!menu.set_aim_preview_mode(4));
+    CHECK(!menu.set_target_preview_mode(2));
+    CHECK(!menu.set_aim_preview_mode(0)); // no redundant mutation
+    CHECK(input.focus_visible_row(1));
+    CHECK(!input.apply(MenuNavAction::NextAimPreviewMode));
+    CHECK(!input.apply(MenuNavAction::NextTargetPreviewMode));
+    CHECK(input.focus_visible_row(0));
+    CHECK(input.apply(MenuNavAction::ExpandFocused));
+    CHECK(!menu.expanded(0) && menu.settings_offset(0)==0);
     CHECK(input.select_tab(MenuTab::Move));
     CHECK(!menu.change_settings_page(3,1)); // different module category
+    CHECK(!menu.set_aim_preview_mode(1)); // wrong tab denied
+    CHECK(!menu.set_target_preview_mode(1));
     // No game/OS keyboard input is ever used by this test.
     return 0;
     } catch(const std::exception& e) {

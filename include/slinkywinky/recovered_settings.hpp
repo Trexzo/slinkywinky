@@ -30,6 +30,13 @@ const std::array<RecoveredWidget,385>& recovered_widget_catalog() noexcept;
 bool recovered_preview_branch_matches(RecoveredWidgetVisibility visibility,
                                      int aimMode,int targetMode) noexcept;
 std::size_t recovered_widget_count(std::string_view module) noexcept;
+// Conditioned, READ-ONLY GUI view. The full forensic callsite catalog
+// stays intact and remains available via recovered_widget_page().
+std::size_t recovered_widget_visible_count(std::string_view module,
+                                           int aimMode,int targetMode) noexcept;
+std::size_t recovered_widget_visible_page(const char* module,
+        std::size_t offset,int aimMode,int targetMode,
+        std::array<const RecoveredWidget*,5>& output) noexcept;
 std::size_t recovered_widget_preview(const char* module,
                                      std::array<const RecoveredWidget*,5>& output) noexcept;
 // Page is five controls, offset must be five-aligned and in range.

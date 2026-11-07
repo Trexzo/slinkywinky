@@ -24,7 +24,7 @@
 
 namespace {
 using slinkywinky::MenuTab;
-using slinkywinky::recovered_widget_count;
+using slinkywinky::recovered_widget_visible_count;
 slinkywinky::MenuState menu;
 slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuNavigation navigation(menu,profile);
@@ -76,8 +76,20 @@ void refresh_caption(HWND hwnd) {
                 <<parameter->value<<L"  (+/-)";
             label+=formatted.str();
         }
-        const auto count=recovered_widget_count(
-            slinkywinky::official_module_catalog()[*focused].name);
+        const auto count=recovered_widget_visible_count(
+            slinkywinky::official_module_catalog()[*focused].name,
+            static_cast<int>(menu.aim_preview_mode()),
+            static_cast<int>(menu.target_preview_mode()));
+        if(*focused==0) {
+            static constexpr const wchar_t* modes[]{
+                L"Regular",L"Linear",L"Lock-on",L"Silent"
+            };
+            label+=L" | Aim: ";
+            label+=modes[menu.aim_preview_mode()];
+            label+=menu.target_preview_mode()==0?
+                L" | Target: Single":L" | Target: Switch";
+            label+=L" (F7/F8)";
+        }
         if(count>5) {
             std::wostringstream paging;
             paging<<L" | Settings "<<menu.settings_offset(*focused)/5+1
@@ -327,6 +339,17 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // window has lost its exact focus or foreground ownership.
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
+            // Separate Windows preview ONLY; never hooks Minecraft.
+            // Cycle locally selected Aim (F7) / Target (F8) view modes.
+            if(wp==VK_F7 || wp==VK_F8) {
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0)
+                    navigation.apply(wp==VK_F7?
+                        slinkywinky::MenuNavAction::NextAimPreviewMode:
+                        slinkywinky::MenuNavAction::NextTargetPreviewMode);
+                refresh_caption(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             // Native Windows key codes, distinct from LWJGL2's 201/209.
             // Page keys only navigate the first-party read-only preview.
             // Autorepeat cannot race two page changes for one physical hold.

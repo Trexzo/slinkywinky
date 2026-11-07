@@ -406,6 +406,36 @@ std::size_t recovered_widget_count(std::string_view module) noexcept {
         if(module==item.module)++count;
     return count;
 }
+std::size_t recovered_widget_visible_count(std::string_view module,
+                                           int aimMode,int targetMode) noexcept {
+    if(aimMode<0 || aimMode>3 || targetMode<0 || targetMode>1)return 0;
+    const bool aim=module=="Aim Assist";
+    std::size_t n=0;
+    for(const auto& w:recovered)
+        if(module==w.module &&
+           (!aim || recovered_preview_branch_matches(
+               w.visibility,aimMode,targetMode)))++n;
+    return n;
+}
+std::size_t recovered_widget_visible_page(
+    const char* module,std::size_t offset,int aimMode,int targetMode,
+    std::array<const RecoveredWidget*,5>& output) noexcept {
+    output.fill(nullptr);
+    if(!module || offset%output.size()!=0 ||
+       aimMode<0 || aimMode>3 || targetMode<0 || targetMode>1)
+        return 0;
+    const std::string_view key(module);
+    const bool aim=key=="Aim Assist";
+    std::size_t n=0;
+    for(const auto& w:recovered) {
+        if(key!=w.module || (aim && !recovered_preview_branch_matches(
+                w.visibility,aimMode,targetMode)))continue;
+        if(n>=offset && n-offset<output.size())output[n-offset]=&w;
+        ++n;
+    }
+    if(offset>=n) {output.fill(nullptr);return 0;}
+    return n;
+}
 std::size_t recovered_widget_page(
     const char* module,std::size_t offset,
     std::array<const RecoveredWidget*,5>& output) noexcept {

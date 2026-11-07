@@ -39,6 +39,8 @@ struct MenuRenderFrame {
     unsigned viewport_height=0;
     MenuTab tab=MenuTab::Combat;
     MenuAppearance appearance{};
+    unsigned aim_preview_mode=0;
+    unsigned target_preview_mode=0;
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
     std::vector<MenuProfileCard> profile_cards; // inert, bounded render snapshot

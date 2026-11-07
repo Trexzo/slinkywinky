@@ -149,7 +149,9 @@ std::optional<std::size_t> settings_page_wheel_target(
         client_y-static_cast<int>(panel->top))/panel->scale;
     for(std::size_t i=0;i<frame.visible.size();++i) {
         const auto& item=frame.visible[i];
-        if(!item.expanded || recovered_widget_count(item.title)<=5)
+        if(!item.expanded || recovered_widget_visible_count(
+                item.title,static_cast<int>(frame.aim_preview_mode),
+                static_cast<int>(frame.target_preview_mode))<=5)
             continue;
         const auto card=menu_module_card_rect(
             frame,panel->logical_width(),i);

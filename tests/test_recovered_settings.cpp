@@ -299,5 +299,45 @@ int main() {
         RecoveredWidgetVisibility::Always,0,-1));
     CHECK(!recovered_preview_branch_matches(
         static_cast<RecoveredWidgetVisibility>(99),0,0));
+    // R123: compare the source's 24 original Aim callsites against
+    // each filtered read-only GUI mode/target view. Other modules must
+    // stay unchanged; a stale/unaligned page must expose no pointers.
+    for(int a=0;a<4;++a)for(int t=0;t<2;++t) {
+        const std::size_t n=recovered_widget_visible_count(
+            "Aim Assist",a,t);
+        CHECK(n==(a==2?17u:a==3?19u:18u));
+        std::size_t scanned=0;
+        for(std::size_t off=0;off<n;off+=5) {
+            std::array<const RecoveredWidget*,5> shown{};
+            CHECK(recovered_widget_visible_page(
+                "Aim Assist",off,a,t,shown)==n);
+            for(std::size_t i=0;i<shown.size();++i) {
+                if(off+i<n) {
+                    CHECK(shown[i]);
+                    CHECK(std::string_view(shown[i]->module)=="Aim Assist");
+                    CHECK(recovered_preview_branch_matches(
+                        shown[i]->visibility,a,t));
+                    ++scanned;
+                } else CHECK(shown[i]==nullptr);
+            }
+        }
+        CHECK(scanned==n);
+        std::array<const RecoveredWidget*,5> none{};
+        CHECK(recovered_widget_visible_page(
+            "Aim Assist",5*((n+4)/5),a,t,none)==0);
+        CHECK(!none[0]);
+        CHECK(recovered_widget_visible_page(
+            "Aim Assist",1,a,t,none)==0);
+        CHECK(!none[0]);
+        CHECK(recovered_widget_visible_count("Piercing",a,t)==8);
+        CHECK(recovered_widget_visible_page("Piercing",5,a,t,none)==8);
+        CHECK(none[0]!=nullptr && none[3]==nullptr);
+    }
+    std::array<const RecoveredWidget*,5> bad{};
+    CHECK(recovered_widget_visible_page(nullptr,0,0,0,bad)==0);
+    CHECK(recovered_widget_visible_page("Aim Assist",0,-1,0,bad)==0);
+    CHECK(recovered_widget_visible_page("Aim Assist",0,3,2,bad)==0);
+    CHECK(recovered_widget_visible_count("Aim Assist",5,0)==0);
+    CHECK(recovered_widget_visible_count("Piercing",0,-1)==0);
     return 0;
 }

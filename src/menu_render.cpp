@@ -59,6 +59,8 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.viewport_height=height_;
     frame.tab=menu.tab();
     frame.appearance=menu.appearance();
+    frame.aim_preview_mode=menu.aim_preview_mode();
+    frame.target_preview_mode=menu.target_preview_mode();
     frame.visible=menu.page();
     if(frame.visible.size()>8)return std::nullopt;
     if(profile) {

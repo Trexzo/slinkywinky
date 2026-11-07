@@ -60,6 +60,11 @@ public:
     bool toggle_expanded(std::size_t catalog_index) noexcept;
     bool change_settings_page(std::size_t catalog_index,int direction) noexcept;
     std::size_t settings_offset(std::size_t catalog_index) const noexcept;
+    // Preview-only enums; no Minecraft input, gameplay or profile writes.
+    unsigned aim_preview_mode() const noexcept {return aim_preview_mode_;}
+    unsigned target_preview_mode() const noexcept {return target_preview_mode_;}
+    bool set_aim_preview_mode(unsigned mode) noexcept;
+    bool set_target_preview_mode(unsigned mode) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
     bool expanded(std::size_t catalog_index) const noexcept;
     void set_compact(bool value) noexcept {appearance_.compact=value;}
@@ -79,6 +84,8 @@ private:
     std::array<bool,67> enabled_{};
     std::array<bool,67> expanded_{};
     std::array<std::size_t,67> settings_offsets_{};
+    unsigned aim_preview_mode_=0; // Regular, Linear, Lock-on, Silent
+    unsigned target_preview_mode_=0; // Single, Switch
 };
 
 } // namespace slinkywinky

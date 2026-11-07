@@ -42,6 +42,8 @@ bool MenuMouseGesture::equivalent_frame(
        frame.viewport_width!=original.viewport_width ||
        frame.viewport_height!=original.viewport_height ||
        frame.tab!=original.tab ||
+       frame.aim_preview_mode!=original.aim_preview_mode ||
+       frame.target_preview_mode!=original.target_preview_mode ||
        frame.is_placeholder!=original.is_placeholder ||
        frame.appearance.wide!=original.appearance.wide ||
        frame.appearance.compact!=original.appearance.compact ||
