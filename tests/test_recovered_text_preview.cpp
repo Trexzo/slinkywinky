@@ -101,10 +101,10 @@ int main() {
         CHECK(menu.erase_recovered_text_preview());
         CHECK(*menu.recovered_text_overrides()[searchItem]=="aB");
         const auto changed=frames.next(menu,&profile,&nav);
-        CHECK(changed &&
-              changed->focused_text_widget==searchItem &&
-              changed->recovered_text_overrides[searchItem] &&
-              *changed->recovered_text_overrides[searchItem]=="aB");
+        CHECK(changed && changed->focused_text_widget==searchItem &&
+              changed->recovered_text_overrides.size()==1u &&
+              changed->recovered_text_overrides[0].widget_index==searchItem &&
+              changed->recovered_text_overrides[0].value=="aB");
         CHECK(gesture.press(*changed,mode,
             inside.first,inside.second,1000,true));
         CHECK(menu.append_recovered_text_preview("x"));
