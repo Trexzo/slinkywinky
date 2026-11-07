@@ -5,6 +5,7 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -12,6 +13,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <atomic>
 #define CHECK(x) do {if(!(x))throw std::runtime_error( \
@@ -286,6 +288,117 @@ int main() {
         };
         CHECK(wrongTab());
         CHECK(clickedFrames.detach());
+    }
+
+    // R126: actual standalone Aim Assist dropdowns, including the
+    // conditionally positioned Target group. No gameplay settings are edited.
+    for(const auto mode:{MenuPanelMode::StandalonePreview,
+                         MenuPanelMode::BoundedOverlay,
+                         MenuPanelMode::CompactOverlay}) {
+        MenuState aim;
+        MenuProfileBridge aimProfile(aim);
+        MenuNavigation aimNav(aim,aimProfile);
+        CHECK(aimNav.visible_focus() && *aimNav.visible_focus()==0u);
+        CHECK(aimNav.apply(MenuNavAction::ExpandFocused));
+        MenuRenderSession aimFrames;
+        CHECK(aimFrames.attach(126,900,630));
+        const auto panel=menu_panel_geometry(900,630,false,mode);
+        CHECK(panel);
+        const auto translate=[&](float x,float y) {
+            return std::pair<int,int>{
+                static_cast<int>(panel->left+std::lround(panel->scale*x)),
+                static_cast<int>(panel->top+std::lround(panel->scale*y))
+            };
+        };
+        const auto initial=aimFrames.next(aim,&aimProfile,&aimNav);
+        CHECK(initial && initial->visible[0].catalog_index==0u);
+        auto rect=menu_module_card_rect(*initial,panel->logical_width(),0);
+        CHECK(rect.y+rect.height<
+              panel->logical_height()-menu_panel_padding);
+        const auto dropdown=[&](const MenuModuleCardRect& r,float y) {
+            const float controlX=r.x+r.width*0.54f;
+            const float controlW=std::max(16.0f,r.width*0.46f-10.0f);
+            return translate(controlX+controlW*0.5f,y+10.0f);
+        };
+        const auto first=dropdown(rect,rect.y+
+            menu_row_body_height(*initial)+43.0f+2.0f);
+        const auto firstHit=hit_test_menu(
+            *initial,mode,first.first,first.second);
+        CHECK(firstHit && firstHit->kind==MenuHitKind::AimModeControl &&
+              firstHit->catalog_index==0u && firstHit->control_index==0u);
+        const auto label=translate(rect.x+25.0f,rect.y+
+            menu_row_body_height(*initial)+55.0f);
+        CHECK(!hit_test_menu(*initial,mode,label.first,label.second));
+        MenuMouseGesture aimGesture;
+        CHECK(aimGesture.press(*initial,mode,first.first,first.second,
+                               100,true));
+        const auto firstCommit=aimGesture.release(
+            *initial,mode,first.first,first.second,120,true);
+        CHECK(firstCommit && firstCommit->kind==MenuHitKind::AimModeControl);
+        CHECK(aimNav.focus_visible_row(firstCommit->catalog_index));
+        CHECK(aimNav.apply(MenuNavAction::NextAimPreviewMode));
+        CHECK(aim.aim_preview_mode()==1u &&
+              aim.target_preview_mode()==0u);
+        // Branch changes invalidate the old press snapshot.
+        const auto afterAim=aimFrames.next(aim,&aimProfile,&aimNav);
+        CHECK(afterAim && afterAim->aim_preview_mode==1u);
+        CHECK(aimGesture.press(*afterAim,mode,
+               first.first,first.second,1000,true));
+        CHECK(aimNav.apply(MenuNavAction::NextAimPreviewMode));
+        const auto stale=aimFrames.next(aim,&aimProfile,&aimNav);
+        CHECK(stale && !aimGesture.release(
+            *stale,mode,first.first,first.second,1020,true));
+        CHECK(aim.aim_preview_mode()==2u);
+        // Find the actual Target/Mode widget on its *visible* page.
+        bool foundTarget=false;
+        for(int page=0;page<6 && !foundTarget;++page) {
+            const auto frame=aimFrames.next(aim,&aimProfile,&aimNav);
+            CHECK(frame && frame->visible[0].expanded);
+            rect=menu_module_card_rect(*frame,panel->logical_width(),0);
+            CHECK(rect.y+rect.height<
+                  panel->logical_height()-menu_panel_padding);
+            std::array<const RecoveredWidget*,5> widgets{};
+            const auto count=recovered_widget_visible_page(
+                "Aim Assist",frame->visible[0].settings_offset,
+                static_cast<int>(frame->aim_preview_mode),
+                static_cast<int>(frame->target_preview_mode),widgets);
+            CHECK(count>0u && widgets[0]);
+            std::string_view previous=widgets[0]->group;
+            float headings=0.0f;
+            for(std::size_t j=0;j<widgets.size() && widgets[j];++j) {
+                const std::string_view group=widgets[j]->group;
+                if(j && group!=previous) {
+                    headings+=20.0f;
+                    previous=group;
+                }
+                if(group!="Target" ||
+                   std::string_view(widgets[j]->label)!="Mode")
+                    continue;
+                const float y=rect.y+menu_row_body_height(*frame)+
+                    43.0f+27.0f*static_cast<float>(j)+headings+2.0f;
+                const auto target=dropdown(rect,y);
+                auto hit=hit_test_menu(
+                    *frame,mode,target.first,target.second);
+                CHECK(hit && hit->kind==MenuHitKind::TargetModeControl &&
+                      hit->catalog_index==0u &&
+                      hit->control_index==frame->visible[0].settings_offset+j);
+                CHECK(aimGesture.press(*frame,mode,
+                    target.first,target.second,2000,true));
+                const auto committed=aimGesture.release(
+                    *frame,mode,target.first,target.second,2020,true);
+                CHECK(committed &&
+                      committed->kind==MenuHitKind::TargetModeControl);
+                CHECK(aimNav.focus_visible_row(committed->catalog_index));
+                CHECK(aimNav.apply(MenuNavAction::NextTargetPreviewMode));
+                CHECK(aim.target_preview_mode()==1u &&
+                      aim.aim_preview_mode()==2u);
+                foundTarget=true;
+                break;
+            }
+            if(!foundTarget)CHECK(aim.change_settings_page(0,1));
+        }
+        CHECK(foundTarget);
+        CHECK(aimFrames.detach());
     }
     std::filesystem::remove(file,ignored);
     std::filesystem::remove(file.string()+".tmp",ignored);
