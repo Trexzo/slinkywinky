@@ -16,6 +16,33 @@ inline bool menu_profile_contains(const MenuProfileControlRect& rect,
     return x>=rect.x && x<rect.x+rect.width &&
            y>=rect.y && y<rect.y+rect.height;
 }
+inline std::optional<MenuProfileControlRect> menu_profile_bind_rect(
+        const MenuRenderFrame& frame,float width,float height,
+        std::size_t profile_index) noexcept {
+    if(!menu_profile_preview_valid(frame,width,height) ||
+       frame.profile_action_preview || frame.unload_confirmation_preview ||
+       profile_index>=frame.profile_cards.size())
+        return std::nullopt;
+    const auto card=menu_profile_card_rect(frame,width,profile_index);
+    const float nameX=card.x+8.0f;
+    const float iconX=card.x+card.width-124.0f;
+    const float titleWidth=std::max(30.0f,iconX-nameX-45.0f);
+    const float titleW=std::min(titleWidth,
+        static_cast<float>(frame.profile_cards[profile_index].name.size())*
+        9.0f);
+    const float chipX=std::min(iconX-46.0f,nameX+titleW+5.0f);
+    const bool capturing=frame.profile_bind_capture_index==profile_index;
+    const std::size_t chars=capturing?14u:
+        (frame.profile_cards[profile_index].bind.empty()?4u:
+         frame.profile_cards[profile_index].bind.size());
+    const float chipWidth=std::min(iconX-chipX-5.0f,
+        std::max(41.0f,static_cast<float>(chars)*7.0f+12.0f));
+    if(chipX<nameX+15.0f || chipWidth<41.0f ||
+       chipX+chipWidth>iconX-4.0f)return std::nullopt;
+    return MenuProfileControlRect{
+        chipX,card.y+8.0f,chipWidth,20.0f
+    };
+}
 inline std::optional<MenuProfileControlRect> menu_profile_action_rect(
         const MenuRenderFrame& frame,float width,float height,
         std::size_t profile_index,unsigned action) noexcept {
