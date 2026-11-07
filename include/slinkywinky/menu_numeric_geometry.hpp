@@ -31,7 +31,8 @@ inline std::optional<MenuNumericTrack> menu_numeric_track_geometry(
         return std::nullopt;
     const auto& all=recovered_widget_catalog();
     const auto& widget=all[widget_index];
-    if(widget.kind!=RecoveredWidgetKind::Slider ||
+    if((widget.kind!=RecoveredWidgetKind::Slider &&
+        widget.kind!=RecoveredWidgetKind::Range) ||
        std::string_view(widget.module)!=
            official_module_catalog()[catalog_index].name)
         return std::nullopt;
@@ -75,10 +76,11 @@ inline std::optional<MenuNumericTrack> menu_numeric_track_geometry(
         return std::nullopt;
     return track;
 }
-inline std::optional<float> menu_slider_value_at_x(
+inline std::optional<float> menu_numeric_value_at_x(
         const RecoveredWidget& widget,
         const MenuNumericTrack& track,float logical_x) noexcept {
-    if(widget.kind!=RecoveredWidgetKind::Slider ||
+    if((widget.kind!=RecoveredWidgetKind::Slider &&
+        widget.kind!=RecoveredWidgetKind::Range) ||
        !std::isfinite(logical_x) ||
        !std::isfinite(track.x) || !std::isfinite(track.width) ||
        track.width<=0.0f ||
@@ -94,5 +96,11 @@ inline std::optional<float> menu_slider_value_at_x(
     return static_cast<float>(std::clamp(requested,
         static_cast<double>(widget.min_value),
         static_cast<double>(widget.max_value)));
+}
+inline std::optional<float> menu_slider_value_at_x(
+        const RecoveredWidget& widget,
+        const MenuNumericTrack& track,float logical_x) noexcept {
+    if(widget.kind!=RecoveredWidgetKind::Slider)return std::nullopt;
+    return menu_numeric_value_at_x(widget,track,logical_x);
 }
 } // namespace slinkywinky
