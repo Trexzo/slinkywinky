@@ -108,6 +108,8 @@ std::optional<MenuHit> hit_test_menu(
             (x-menu_nav_x)/menu_tab_width(w));
         if(tab<6u)return MenuHit{
             MenuHitKind::Tab,static_cast<MenuTab>(tab),0};
+        if(tab==6u)return MenuHit{
+            MenuHitKind::UnloadTab,MenuTab::Unload,0};
         return std::nullopt;
     }
     if(frame.tab>=MenuTab::Profiles)return std::nullopt;
