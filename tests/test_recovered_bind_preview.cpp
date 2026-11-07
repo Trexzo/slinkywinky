@@ -79,6 +79,15 @@ int main() {
             *frame,mode,key.first,key.second);
         CHECK(keyHit && keyHit->kind==MenuHitKind::BindChip &&
               keyHit->catalog_index==0u);
+        // R141: source HTML's HOLD chip is hidden until the row
+        // is hovered, unless HOLD has already been enabled.
+        CHECK(!hit_test_menu(*frame,mode,hold.first,hold.second) ||
+              hit_test_menu(*frame,mode,hold.first,hold.second)->kind!=
+                  MenuHitKind::BindHold);
+        CHECK(!menu.set_bind_hover_row(57u));
+        CHECK(menu.set_bind_hover_row(0u));
+        frame=frames.next(menu,&profile,&nav);
+        CHECK(frame && frame->bind_hover_row==0u);
         const auto holdHit=hit_test_menu(
             *frame,mode,hold.first,hold.second);
         CHECK(holdHit && holdHit->kind==MenuHitKind::BindHold &&
@@ -106,6 +115,11 @@ int main() {
         CHECK(menu.bind_previews()[0].code==0x5Au);
         CHECK(menu.toggle_bind_hold(0u));
         CHECK(menu.bind_previews()[0].hold);
+        CHECK(menu.set_bind_hover_row(std::nullopt));
+        auto persistentHold=frames.next(menu,&profile,&nav);
+        const auto remains=hit_test_menu(
+            *persistentHold,mode,hold.first,hold.second);
+        CHECK(remains && remains->kind==MenuHitKind::BindHold);
         CHECK(!menu.preview_enabled(0u) && !profile.enabled(0u));
         // A prior click cannot commit after binding state changed.
         const auto edited=frames.next(menu,&profile,&nav);
