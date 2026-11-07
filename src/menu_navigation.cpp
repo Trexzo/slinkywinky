@@ -59,7 +59,8 @@ bool MenuNavigation::select_tab(MenuTab tab) {
     return true;
 }
 bool MenuNavigation::focus_visible_row(std::size_t catalog_index) {
-    if(!owner_thread() || !profile_.owns(menu_))return false;
+    if(menu_.unload_confirmation_preview() ||
+       !owner_thread() || !profile_.owns(menu_))return false;
     const auto rows=menu_.page();
     const auto found=std::find_if(rows.begin(),rows.end(),
         [catalog_index](const MenuItem& row){
