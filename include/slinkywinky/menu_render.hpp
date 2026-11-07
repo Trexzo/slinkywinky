@@ -86,7 +86,8 @@ struct MenuRenderFrame {
     bool profile_name_focused=false;
     bool profile_name_taken=false;
     std::optional<MenuProfileActionPreview> profile_action_preview{};
-    // R142-R143: local reconstructed Profiles tab state, no disk access.
+    std::optional<std::size_t> profile_bind_capture_index{};
+    // R142-R144: local reconstructed Profiles tab state, no disk access.
     bool is_placeholder=false; // Profiles is informational; Unload not admitted.
 };
 
