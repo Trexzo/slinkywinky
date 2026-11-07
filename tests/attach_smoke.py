@@ -92,6 +92,21 @@ try:
         raise AssertionError("R110 Java 8 input-owner isolated regression failed: " +
                              queue_owner.stdout + queue_owner.stderr)
     print("PASS: R110 independent Java 8 modal queue owner, no live game hook")
+    # R112 adds a real Java 8 classloader execution test for the same
+    # single-call rewrite primitive used by the R111 SHA-pinned owner.
+    # Only the first-party synthetic target and fake LWJGL2 are executable.
+    executable_bridge = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.R112KeyboardBridgeSmoke"],
+        capture_output=True, text=True, env=env, timeout=20)
+    if (executable_bridge.returncode != 0 or
+        "R112_SYNTHETIC_TRANSFORMED_CLASS_EXECUTION_AND_KEY_OWNER_PASS"
+        not in executable_bridge.stdout or
+        "R112_EXACT_ONE_CALLSITE_MODAL_NO_QUEUE_PASSTHROUGH_FIXTURE_PASS"
+        not in executable_bridge.stdout):
+        raise AssertionError("R112 executable isolated keyboard bridge failed: " +
+                             executable_bridge.stdout + executable_bridge.stderr)
+    print("PASS: R112 executed bytecode bridge and original queue delivery guards")
     # R72: generated bfk class only; source and transformed bytes stay in
     # the disposable JVM heap. The real Mojang JAR is tested separately in CI.
     offline_weave = subprocess.run(
