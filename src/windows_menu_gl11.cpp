@@ -165,7 +165,9 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                            std::uint32_t accent,
                            std::string_view dropdownOverride={},
                            std::string_view multiOverride={},
-                           std::optional<std::uint32_t> colorOverride={})
+                           std::optional<std::uint32_t> colorOverride={},
+                           std::string_view textOverride={},
+                           bool textFocused=false)
                            noexcept {
     const float controlX=x+cardWidth*0.54f;
     const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
@@ -210,7 +212,8 @@ void draw_recovered_widget(const RecoveredWidget& widget,
         case RecoveredWidgetKind::Dropdown:
         case RecoveredWidgetKind::MultiSelect:
         case RecoveredWidgetKind::Text: {
-            rgb(0x404040u);
+            rgb(widget.kind==RecoveredWidgetKind::Text && textFocused?
+                accent:0x404040u);
             round_rect(controlX,controlY,controlW,22.0f,9.0f);
             rgb(0x141414u);
             round_rect(controlX+2.0f,controlY+2.0f,
@@ -222,10 +225,21 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                 label=label.substr(0,label.find('|'));
             } else if(widget.kind==RecoveredWidgetKind::MultiSelect) {
                 label=multiOverride.empty()?"Select options":multiOverride;
-            } else label=widget.auxiliary;
-            rgb(0x999999u);
+            } else label=textOverride.empty()?
+                    std::string_view(widget.auxiliary):textOverride;
+            rgb(widget.kind==RecoveredWidgetKind::Text &&
+                !textOverride.empty()?0xDDDDDDu:0x999999u);
             text(label,controlX+6.0f,controlY+3.0f,12.0f,
                  controlW-12.0f);
+            if(widget.kind==RecoveredWidgetKind::Text && textFocused) {
+                const float measured=textOverride.empty()?0.0f:
+                    measure_menu_system_text(textOverride,12.0f);
+                const float xCaret=controlX+6.0f+
+                    std::clamp(measured,0.0f,
+                               std::max(0.0f,controlW-16.0f));
+                rgb(accent);
+                quad(xCaret,controlY+4.0f,1.0f,14.0f);
+            }
             break;
         }
         case RecoveredWidgetKind::Color: {
@@ -758,10 +772,23 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         colorOverride=frame.recovered_color_overrides[
                             widgetIndex];
                 }
+                std::string_view textOverride;
+                bool textFocused=false;
+                if(display.kind==RecoveredWidgetKind::Text) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto widgetIndex=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(widgetIndex<all.size()) {
+                        const auto& current=
+                            frame.recovered_text_overrides[widgetIndex];
+                        if(current)textOverride=*current;
+                        textFocused=frame.focused_text_widget==widgetIndex;
+                    }
+                }
                 draw_recovered_widget(display,left,
                     settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
                     rect.width,frame.appearance.accent_rgb,selectedChoice,
-                    multiCaption,colorOverride);
+                    multiCaption,colorOverride,textOverride,textFocused);
             }
             if(count>5) {
                 char pagination[70]{};
