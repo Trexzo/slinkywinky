@@ -11,6 +11,7 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
+#include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
@@ -377,6 +378,38 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(hit->kind==MenuHitKind::RecoveredChoiceControl)
                         menu.open_recovered_choice_preview(
                             hit->catalog_index,hit->control_index);
+                    else if(hit->kind==MenuHitKind::RecoveredSliderPreview &&
+                            frame) {
+                        // Commit only a validated same-widget mouse-up.
+                        // The mouse-gesture gate already checked foreground,
+                        // owner thread, full press/release and stale frame.
+                        const auto panel=slinkywinky::menu_panel_geometry(
+                            frame->viewport_width,frame->viewport_height,
+                            frame->appearance.wide,panel_mode());
+                        if(panel) {
+                            const auto track=slinkywinky::
+                                menu_numeric_track_geometry(
+                                    *frame,panel->logical_width(),
+                                    panel->logical_height(),
+                                    hit->catalog_index,hit->control_index);
+                            if(track) {
+                                const auto& all=slinkywinky::
+                                    recovered_widget_catalog();
+                                const float logicalX=(
+                                    static_cast<float>(
+                                        static_cast<short>(LOWORD(lp)))-
+                                    static_cast<float>(panel->left))/
+                                    panel->scale;
+                                const auto value=slinkywinky::
+                                    menu_slider_value_at_x(
+                                        all[hit->control_index],*track,logicalX);
+                                if(value)
+                                    menu.set_recovered_slider_preview(
+                                        hit->catalog_index,
+                                        hit->control_index,*value);
+                            }
+                        }
+                    }
                     else if(hit->kind==MenuHitKind::PiercingControl &&
                             hit->catalog_index==11) {
                         if(hit->control_index==0u)
