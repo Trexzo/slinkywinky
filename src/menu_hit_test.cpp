@@ -3,6 +3,7 @@
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_color_geometry.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -192,6 +193,19 @@ std::optional<MenuHit> hit_test_menu(
                     if(global>=all.size())return std::nullopt;
                     return MenuHit{MenuHitKind::RecoveredChoiceControl,
                                    frame.tab,index,global};
+                }
+                if(widget.kind==RecoveredWidgetKind::Color) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    const auto swatch=menu_color_swatch_geometry(
+                        frame,w,panel->logical_height(),index,global);
+                    if(swatch && x>=swatch->x &&
+                       x<swatch->x+swatch->width &&
+                       y>=swatch->y &&
+                       y<swatch->y+swatch->height)
+                        return MenuHit{MenuHitKind::RecoveredColorSwatch,
+                                       frame.tab,index,global};
                 }
                 if(widget.kind==RecoveredWidgetKind::MultiSelect &&
                    x>=controlX && x<controlX+controlW &&
