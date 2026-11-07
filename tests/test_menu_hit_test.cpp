@@ -1,9 +1,11 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_navigation.hpp"
+#include "slinkywinky/menu_visual_geometry.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <iostream>
 #include <thread>
 #include <atomic>
 #define CHECK(x) do {if(!(x))throw std::runtime_error("R97 hit test: " #x);}while(false)
@@ -38,11 +40,11 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
           p->width==expected_width && p->height==expected_height &&
           std::fabs(p->scale-expected_scale)<0.0001f);
     const float w=p->logical_width();
-    const float cell=(w-36.0f)/7.0f;
-    const auto tab=exact_hit(*frame,mode,*p,18+4.5f*cell,99.f,MenuHitKind::Tab);
+    const float cell=menu_tab_width(w);
+    const auto tab=exact_hit(*frame,mode,*p,menu_nav_x+4.5f*cell,35.f,MenuHitKind::Tab);
     CHECK(tab.tab==MenuTab::Utility);
     CHECK(!hit_test_menu(*frame,mode,
-                         pixel_x(*p,18+6.5f*cell),pixel_y(*p,99.f)));
+                         pixel_x(*p,menu_nav_x+6.5f*cell),pixel_y(*p,35.f)));
     CHECK(!hit_test_menu(*frame,mode,static_cast<int>(p->left)-1,
                          pixel_y(*p,175.f)));
     CHECK(!hit_test_menu(*frame,mode,
@@ -52,39 +54,42 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
                          static_cast<int>(p->top)-1));
     CHECK(!hit_test_menu(*frame,mode,pixel_x(*p,50.f),
                          static_cast<int>(p->top+p->height)));
-    const auto expand=exact_hit(*frame,mode,*p,w-114.f,153.f+22.f,
+    const auto expand=exact_hit(*frame,mode,*p,(frame->appearance.compact?w-108.f:39.f),
+                                menu_first_row_y+(frame->appearance.compact?20.f:43.f),
                                 MenuHitKind::Expand);
     CHECK(expand.catalog_index==0 && expand.tab==MenuTab::Combat);
-    const auto toggle=exact_hit(*frame,mode,*p,w-54.f,153.f+23.f,
+    const auto toggle=exact_hit(*frame,mode,*p,w-54.f,menu_first_row_y+20.f,
                                 MenuHitKind::Toggle);
     CHECK(toggle.catalog_index==0);
-    const auto body=exact_hit(*frame,mode,*p,60.f,153.f+20.f,
+    const auto body=exact_hit(*frame,mode,*p,60.f,menu_first_row_y+20.f,
                               MenuHitKind::RowBody);
     CHECK(body.catalog_index==0);
     // Unsupported catalog index 3: even on painted toggle/expand widgets
     // hit testing yields only inert focus and can never activate the module.
-    const auto unsupported=exact_hit(*frame,mode,*p,w-54.f,153.f+3*49.f+23.f,
+    const auto unsupported=exact_hit(*frame,mode,*p,w-54.f,menu_row_top(*frame,3)+20.f,
                                       MenuHitKind::RowBody);
     CHECK(unsupported.catalog_index==3);
-    CHECK(!hit_test_menu(*frame,mode,pixel_x(*p,60.f),pixel_y(*p,153.f+44.5f)));
-    CHECK(!hit_test_menu(*frame,mode,pixel_x(*p,60.f),pixel_y(*p,153.f+8*49.f+20.f)));
+    CHECK(!hit_test_menu(*frame,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+menu_row_body_height(*frame)+3.f)));
+    CHECK(!hit_test_menu(*frame,mode,pixel_x(*p,60.f),pixel_y(*p,menu_row_top(*frame,7)+
+                           menu_row_total_height(*frame,7)+20.f)));
     // Mismatched/forged render frame metadata is never actionable.
     auto forged=*frame;
     forged.visible[0].catalog_index=64;
-    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;
     forged.visible[0].title="FORGED";
-    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;forged.sequence=0;
-    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;forged.visible[1]=forged.visible[0];
-    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;std::swap(forged.visible[0],forged.visible[1]);
-    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,170.f)));
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     CHECK(session.detach());
 }
 }
 int main() {
+    try {
     CHECK(!menu_panel_geometry(319,630,false,MenuPanelMode::StandalonePreview));
     CHECK(!menu_panel_geometry(676,239,false,MenuPanelMode::CompactOverlay));
     CHECK(!menu_panel_geometry(8193,630,false,MenuPanelMode::BoundedOverlay));
@@ -105,9 +110,9 @@ int main() {
         CHECK(frame && p && p->left==12 && p->top==12 &&
               p->width==296 && p->height==216);
         CHECK(hit_test_menu(*frame,MenuPanelMode::CompactOverlay,
-                            pixel_x(*p,60.f),pixel_y(*p,153.f+2*49.f+20.f)));
+                            pixel_x(*p,60.f),pixel_y(*p,menu_row_top(*frame,2)+20.f)));
         CHECK(!hit_test_menu(*frame,MenuPanelMode::CompactOverlay,
-                             pixel_x(*p,60.f),pixel_y(*p,153.f+3*49.f+4.f)));
+                             pixel_x(*p,60.f),pixel_y(*p,menu_row_top(*frame,3)+4.f)));
         CHECK(session.detach());
     }
     // New scroll pages hit their real catalog indices rather than stale
@@ -122,13 +127,13 @@ int main() {
         const auto p=menu_panel_geometry(676,630,false,MenuPanelMode::CompactOverlay);
         CHECK(frame && p);
         const auto hit=hit_test_menu(*frame,MenuPanelMode::CompactOverlay,
-                                    pixel_x(*p,60.f),pixel_y(*p,170.f));
+                                    pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f));
         CHECK(hit && hit->kind==MenuHitKind::RowBody && hit->catalog_index==9);
         CHECK(profile.select(MenuTab::Profiles));
         const auto profiles=session.next(menu,&profile);
         CHECK(profiles && profiles->is_placeholder);
         CHECK(!hit_test_menu(*profiles,MenuPanelMode::CompactOverlay,
-                             pixel_x(*p,60.f),pixel_y(*p,170.f)));
+                             pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
         CHECK(session.detach());
     }
     // Consumer never reaches another thread's UI/model.
@@ -145,4 +150,8 @@ int main() {
         CHECK(rejected && !profile.enabled(0));
     }
     return 0;
+    } catch(const std::exception& error) {
+        std::cerr<<error.what()<<'\n';
+        return 1;
+    }
 }

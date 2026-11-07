@@ -346,8 +346,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 menu.set_compact(!menu.appearance().compact);persist();
             }
             if(wp==L'G'){
-                menu.set_accent(menu.appearance().accent_rgb==0xE88C46u
-                    ?0x779ADBu:0xE88C46u);persist();
+                menu.set_accent(menu.appearance().accent_rgb==0xFF6016u
+                    ?0x779ADBu:0xFF6016u);persist();
             }
             if(wp==L'W'){
                 menu.set_wide(!menu.appearance().wide);

@@ -1,6 +1,7 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_visual_geometry.hpp"
 #include <atomic>
 #include <cmath>
 #include <stdexcept>
@@ -26,10 +27,11 @@ void all_modes(MenuPanelMode mode) {
     const auto panel=menu_panel_geometry(676,630,false,mode);
     CHECK(frame && panel);
     const float w=panel->logical_width();
-    const Point toggle=physical(*panel,w-54.f,176.f);
-    const Point expand=physical(*panel,w-114.f,175.f);
-    const Point body=physical(*panel,60.f,175.f);
-    const Point nextrow=physical(*panel,60.f,224.f);
+    const Point toggle=physical(*panel,w-54.f,menu_first_row_y+21.f);
+    const Point expand=physical(*panel,frame->appearance.compact?
+        w-108.f:39.f,menu_first_row_y+(frame->appearance.compact?20.f:43.f));
+    const Point body=physical(*panel,60.f,menu_first_row_y+20.f);
+    const Point nextrow=physical(*panel,60.f,menu_row_top(*frame,1)+20.f);
     const Point outside={static_cast<int>(panel->left)-1,toggle.y};
     MenuMouseGesture gate;
     CHECK(gate.owner_thread() && !gate.pending());

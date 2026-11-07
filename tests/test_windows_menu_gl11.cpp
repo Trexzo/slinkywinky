@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/windows_menu_system_font.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
@@ -19,6 +20,10 @@
 #include <cstdint>
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <vector>
+#include <cstdlib>
+#include <cstring>
 #include <stdexcept>
 #include <thread>
 #ifdef SW_R91_TEST_JNI_OVERLAY
@@ -173,6 +178,26 @@ std::array<GLubyte,4> readback(int x,int y) {
     REQUIRE(glGetError()==GL_NO_ERROR);
     return pixels;
 }
+// Optional, own-frame WGL screenshot: never captures another application,
+// game window, keyboard input, or clipboard.
+bool save_gl_framebuffer_ppm(const char* output) {
+    if(!output || std::strlen(output)>=500)return false;
+    GLint old=0;
+    glGetIntegerv(GL_READ_BUFFER,&old);
+    glReadBuffer(GL_BACK);
+    std::vector<unsigned char> pixels(676u*630u*3u);
+    glReadPixels(0,0,676,630,GL_RGB,GL_UNSIGNED_BYTE,pixels.data());
+    glReadBuffer(static_cast<GLenum>(old));
+    if(glGetError()!=GL_NO_ERROR)return false;
+    std::ofstream out(output,std::ios::binary);
+    if(!out)return false;
+    out<<"P6\n676 630\n255\n";
+    for(int y=629;y>=0;--y)
+        out.write(reinterpret_cast<const char*>(
+            pixels.data()+static_cast<std::size_t>(y)*676u*3u),676u*3u);
+    out.close();
+    return out.good();
+}
 }
 
 int main() {
@@ -244,22 +269,32 @@ int main() {
         REQUIRE(draw_menu_gl11(*frame,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
-        // A successful call must actually draw first-party glyph pixels:
-        // top accent, white 'S' at the first title row, and its empty cell.
-        const auto accent=readback(4,628);
-        REQUIRE(accent[0]>=210 && accent[1]>=125 && accent[2]>=50);
-        const auto titleInk=readback(27,610);
-        REQUIRE(titleInk[0]>=190 && titleInk[1]>=190 && titleInk[2]>=190);
-        const auto titleGap=readback(24,610);
-        REQUIRE(titleGap[0]<80 && titleGap[1]<80 && titleGap[2]<80);
-        const auto moduleInk=readback(34,466);
-        REQUIRE(moduleInk[0]>=190 && moduleInk[1]>=190 && moduleInk[2]>=190);
+        // Opt-in deterministic raw framebuffer evidence. This uses only the
+        // disposable WGL test context; no Minecraft or Windows screen capture.
+        if(const char* output=std::getenv("SLINKYWINKY_GL11_SNAPSHOT_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(output));
+        // R113: source-style black menu rather than old orange title strip.
+        // Stable samples avoid glyph edges and validate rounded panel ink.
+        const auto background=readback(4,628);
+        REQUIRE(background[0]<65 && background[1]<65 && background[2]<65);
+        REQUIRE(measure_menu_system_text("Aim Assist",20.0f)>55.0f);
+        const auto selectedTab=readback(60,595);
+        REQUIRE(selectedTab[0]>background[0] && selectedTab[1]>background[1]);
+        const auto cardFill=readback(19,534);
+        REQUIRE(cardFill[0]<55 && cardFill[1]<55 && cardFill[2]<55);
+        const auto inactiveTrack=readback(603,534);
+        REQUIRE(inactiveTrack[0]>cardFill[0]);
         REQUIRE(menu.toggle_preview(frame->visible.front().catalog_index));
         const auto changed=admitted.next(menu);
         REQUIRE(changed && changed->visible.front().preview_enabled);
         REQUIRE(draw_menu_gl11(*changed,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+        const auto activeTrack=readback(603,534);
+        REQUIRE(activeTrack[0]>inactiveTrack[0]+40);
+        // Optional source-owned evidence of the orange enabled preview.
+        if(const char* enabled=std::getenv("SLINKYWINKY_GL11_ENABLED_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(enabled));
         // R88: the native GL renderer consumes typed, immutable profile
         // snapshots. It rejects untrusted or stale row captions before GL.
         MenuProfileBridge profile(menu);
@@ -272,6 +307,8 @@ int main() {
         REQUIRE(draw_menu_gl11(*configured,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+        if(const char* expanded=std::getenv("SLINKYWINKY_GL11_EXPANDED_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(expanded));
         wrong=*configured;
         wrong.parameters[0].catalog_index=3; // Unsupported module.
         REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
@@ -307,10 +344,8 @@ int main() {
         REQUIRE(readback(675,315)==outsideRight);
         REQUIRE(readback(335,625)==outsideTop);
         REQUIRE(readback(335,5)==outsideBottom);
-        const auto overlayAccent=readback(15,615);
-        REQUIRE(overlayAccent[0]>outsideLeft[0]);
-        REQUIRE(overlayAccent[1]>outsideLeft[1]);
-        REQUIRE(overlayAccent[2]<outsideLeft[2]);
+        const auto overlayFill=readback(15,615);
+        REQUIRE(overlayFill!=outsideLeft);
         const auto panelInk=readback(40,588);
         REQUIRE(panelInk!=outsideLeft);
         // Redraw with a different active tab. Original scene outside the
@@ -588,13 +623,13 @@ int main() {
         const State focusBefore=snapshot();
         REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
                                MenuGL11Mode::StandalonePreview));
-        const auto unselected=readback(40,475);
+        const auto unselected=readback(17,535);
         same(focusBefore,snapshot());
         glClear(GL_COLOR_BUFFER_BIT);
         REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
                                MenuGL11Mode::StandalonePreview,
                                focusNavigation.visible_focus()));
-        const auto firstSelected=readback(40,475);
+        const auto firstSelected=readback(17,535);
         REQUIRE(firstSelected!=unselected);
         REQUIRE(firstSelected[0]>unselected[0] &&
                 firstSelected[1]>unselected[1]);
@@ -607,8 +642,8 @@ int main() {
         REQUIRE(draw_menu_gl11(*nextFocusedFrame,context.gl,context.dc,
                                MenuGL11Mode::StandalonePreview,
                                focusNavigation.visible_focus()));
-        REQUIRE(readback(40,475)==unselected);
-        const auto secondSelected=readback(40,426);
+        REQUIRE(readback(17,535)==unselected);
+        const auto secondSelected=readback(17,471);
         REQUIRE(secondSelected[0]>unselected[0] &&
                 secondSelected[1]>unselected[1]);
         same(focusBefore,snapshot());
@@ -635,15 +670,17 @@ int main() {
         const int toggleX=static_cast<int>(compactPanel->left)+
             static_cast<int>(std::lround(compactPanel->scale*(logicalW-54.0f)));
         const int toggleY=static_cast<int>(compactPanel->top)+
-            static_cast<int>(std::lround(compactPanel->scale*(153.0f+23.0f)));
+            static_cast<int>(std::lround(compactPanel->scale*(72.0f+20.0f)));
         const auto compactHit=hit_test_menu(
             *focusedFrame,MenuPanelMode::CompactOverlay,toggleX,toggleY);
         REQUIRE(compactHit && compactHit->kind==MenuHitKind::Toggle &&
                 compactHit->catalog_index==0);
         const int expandX=static_cast<int>(compactPanel->left)+
-            static_cast<int>(std::lround(compactPanel->scale*(logicalW-114.0f)));
+            static_cast<int>(std::lround(compactPanel->scale*39.0f));
         const auto compactExpand=hit_test_menu(
-            *focusedFrame,MenuPanelMode::CompactOverlay,expandX,toggleY);
+            *focusedFrame,MenuPanelMode::CompactOverlay,expandX,
+            static_cast<int>(compactPanel->top)+
+            static_cast<int>(std::lround(compactPanel->scale*(72.0f+43.0f))));
         REQUIRE(compactExpand && compactExpand->kind==MenuHitKind::Expand &&
                 compactExpand->catalog_index==0);
         glClearColor(0.10f,0.38f,0.69f,1.0f);

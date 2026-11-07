@@ -1,0 +1,78 @@
+#pragma once
+#include <array>
+#include <cstddef>
+
+namespace slinkywinky {
+// Original, concise preview descriptions following the public Slinky module
+// taxonomy. They describe intended module purpose, not implemented behavior.
+inline const char* menu_preview_description(std::size_t index) noexcept {
+    static constexpr std::array<const char*,65> copy{{
+        "Adjusts your aim towards nearby players.",
+        "Controls automatic defensive blocking.",
+        "Handles automatic mouse-click patterns.",
+        "Selects a suitable weapon automatically.",
+        "Adjusts target position history.",
+        "Configures critical-hit timing.",
+        "Manages when attacks are registered.",
+        "Adjusts enemy targeting hitboxes.",
+        "Configures delayed knockback effects.",
+        "Adjusts knockback displacement.",
+        "Controls hit timing using delayed actions.",
+        "Configures attacks through obstacles.",
+        "Adjusts interaction and attack reach.",
+        "Controls sprint reset timing.",
+        "Adjusts timing around attack range.",
+        "Configures received knockback behavior.",
+        "Defines which items count as weapons.",
+        "Adjusts movement acceleration.",
+        "Stops motion when directional input ends.",
+        "Controls walking inside inventories.",
+        "Keeps sprint active when eligible.",
+        "Changes jump cooldown behavior.",
+        "Adjusts slowdown when using items.",
+        "Controls keyboard movement transitions.",
+        "Avoids accidentally walking off blocks.",
+        "Controls sprint activation.",
+        "Configures strafing behavior.",
+        "Filters unwanted visual effects.",
+        "Highlights selected blocks.",
+        "Adjusts visibility of player models.",
+        "Highlights nearby chests.",
+        "Moves the camera without turning the player.",
+        "Configures the menu appearance and bind.",
+        "Shows configurable in-game indicators.",
+        "Highlights dropped items.",
+        "Displays active modules on the screen.",
+        "Customizes player name tags.",
+        "Adjusts screen damage shake.",
+        "Displays event notifications.",
+        "Highlights nearby players.",
+        "Shows directional player pointers.",
+        "Visualizes projectile paths.",
+        "Automatically selects useful tools.",
+        "Helps with block placement positioning.",
+        "Assists with careful block bridging.",
+        "Configures automatic clutch actions.",
+        "Adjusts mining speed and timing.",
+        "Controls block placement intervals.",
+        "Allows selected interactions through blocks.",
+        "Identifies and filters suspected bots.",
+        "Configures automatic potion use.",
+        "Configures automatic fishing-rod use.",
+        "Configures automatic soup use.",
+        "Controls temporary packet buffering.",
+        "Adjusts outgoing packet timing.",
+        "Maintains the friendly-player list.",
+        "Configures inventory management.",
+        "Corrects item-use behavior.",
+        "Adjusts the missed-attack delay.",
+        "Controls held-item release behavior.",
+        "Reduces item-use delays.",
+        "Adjusts ping-related handling.",
+        "Refills inventory hotbar slots.",
+        "Recognizes and manages team members.",
+        "Controls Minecraft timer speed."
+    }};
+    return index<copy.size()?copy[index]:"";
+}
+} // namespace slinkywinky

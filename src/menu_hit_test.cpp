@@ -1,5 +1,6 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_visual_geometry.hpp"
 #include <algorithm>
 
 namespace slinkywinky {
@@ -63,32 +64,37 @@ std::optional<MenuHit> hit_test_menu(
     const float y=static_cast<float>(
         client_y-static_cast<int>(panel->top))/panel->scale;
     const float w=panel->logical_width();
-    // Tabs exactly match the 7 equal cells drawn at x=18..w-18,
-    // y=78..120. "Unload" has a painted label but no admitted hit.
-    if(y>=78.0f && y<120.0f && x>=18.0f && x<w-18.0f) {
-        const float cell=(w-36.0f)/7.0f;
-        const unsigned tab=static_cast<unsigned>((x-18.0f)/cell);
+    // R113: exactly the same shared geometry as the Slinky-style renderer.
+    // "Unload" is displayed in red, but is NEVER an admitted mouse action.
+    if(y>=menu_nav_y && y<menu_nav_y+menu_nav_height &&
+       x>=menu_nav_x && x<w-menu_nav_x) {
+        const unsigned tab=static_cast<unsigned>(
+            (x-menu_nav_x)/menu_tab_width(w));
         if(tab<6u)return MenuHit{
             MenuHitKind::Tab,static_cast<MenuTab>(tab),0};
         return std::nullopt;
     }
     if(frame.tab>=MenuTab::Profiles)return std::nullopt;
-    if(x<18.0f || x>=w-18.0f)return std::nullopt;
+    if(x<16.0f || x>=w-16.0f)return std::nullopt;
+    const float body=menu_row_body_height(frame);
     for(std::size_t i=0;i<frame.visible.size();++i) {
-        const float top=153.0f+static_cast<float>(i)*49.0f;
-        // A clipped partial row is deliberately not an actionable target.
-        if(top+44.0f>panel->logical_height())continue;
-        if(y<top || y>=top+44.0f)continue; // 5px row gaps inert.
+        const float top=menu_row_top(frame,i);
+        const float full=menu_row_total_height(frame,i);
+        // No clipped rows or settings panes become an actionable target.
+        if(top+full>panel->logical_height()-12.0f)continue;
+        if(y<top || y>=top+body)continue;
         const std::size_t index=frame.visible[i].catalog_index;
         const bool implemented=
             index<catalog.size() && module_has_profile_setting(index);
         if(implemented &&
-           x>=w-76.0f && x<w-31.0f &&
-           y>=top+12.0f && y<top+34.0f)
+           x>=w-80.0f && x<w-26.0f &&
+           y>=top+8.0f && y<top+35.0f)
             return MenuHit{MenuHitKind::Toggle,frame.tab,index};
+        const float expandX=frame.appearance.compact?w-119.0f:28.0f;
+        const float expandY=frame.appearance.compact?top+10.0f:top+33.0f;
         if(implemented &&
-           x>=w-123.0f && x<w-105.0f &&
-           y>=top+13.0f && y<top+31.0f)
+           x>=expandX && x<expandX+21.0f &&
+           y>=expandY && y<expandY+21.0f)
             return MenuHit{MenuHitKind::Expand,frame.tab,index};
         return MenuHit{MenuHitKind::RowBody,frame.tab,index};
     }

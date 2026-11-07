@@ -92,10 +92,11 @@ endif()
 if(WIN32)
   # R67: isolated native WGL fixed-function draw adapter. No hook/injector.
   add_library(slinkywinky_menu_gl11 STATIC src/windows_menu_gl11.cpp
+    src/windows_menu_system_font.cpp
     src/windows_menu_overlay_host.cpp src/windows_retained_menu_preview.cpp)
   target_include_directories(slinkywinky_menu_gl11 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_features(slinkywinky_menu_gl11 PUBLIC cxx_std_17)
-  target_link_libraries(slinkywinky_menu_gl11 PUBLIC slinkywinky_core opengl32)
+  target_link_libraries(slinkywinky_menu_gl11 PUBLIC slinkywinky_core opengl32 gdi32)
   if(BUILD_TESTING)
     # R104: no Minecraft JVM/OS input. Isolated foreground/epoch/refusal
     # contract cannot authorize gameplay event capture.

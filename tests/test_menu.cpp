@@ -61,7 +61,7 @@ int main() {
     CHECK(state.select(MenuTab::Combat) && state.expanded(0));
     CHECK(!state.appearance().compact && !state.appearance().wide);
     CHECK(!state.appearance().allow_input_while_open);
-    CHECK(state.appearance().accent_rgb==0xE88C46u);
+    CHECK(state.appearance().accent_rgb==0xFF6016u);
     state.set_compact(true);
     state.set_wide(true);
     state.set_allow_input(true);

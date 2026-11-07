@@ -6,8 +6,12 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
+#include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_visual_copy.hpp"
+#include "slinkywinky/windows_menu_system_font.hpp"
 #include <GL/gl.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string_view>
 
@@ -40,11 +44,37 @@ void rgb(std::uint32_t c) noexcept {
     rgba(c);
 }
 
-// Draw original 5x7 block glyphs in the currently admitted GL1.1 context.
-// Clamp characters and width before issuing any geometry. Glyph data is
-// first-party, textureless and uppercase-only by explicit design.
+// R113: rounded, antialiased-free GL1.1 geometry. The radius is clamped
+// to prevent invalid vertices at narrow panels or tiny controls.
+void round_rect(float x,float y,float w,float h,float radius) noexcept {
+    if(w<=0 || h<=0)return;
+    const float r=std::max(0.0f,std::min(radius,std::min(w,h)*0.5f));
+    if(r<=0.01f){quad(x,y,w,h);return;}
+    constexpr float pi=3.14159265358979323846f;
+    constexpr int steps=6;
+    const float cx[4]={x+w-r,x+w-r,x+r,x+r};
+    const float cy[4]={y+r,y+h-r,y+h-r,y+r};
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(x+w*0.5f,y+h*0.5f);
+    for(int corner=0;corner<4;++corner) {
+        const float start=static_cast<float>(corner-1)*0.5f*pi;
+        for(int step=0;step<=steps;++step) {
+            const float a=start+static_cast<float>(step)*(0.5f*pi/steps);
+            glVertex2f(cx[corner]+r*std::cos(a),
+                       cy[corner]+r*std::sin(a));
+        }
+    }
+    // Close the fan along its flat top. Without this final point the wedge
+    // between the top corners was omitted, producing a diagonal cutout.
+    glVertex2f(x+w-r,y);
+    glEnd();
+}
+// Legacy glyphs remain a deterministic fallback if a Windows font isn't
+// available; the default is grayscale Segoe UI supplied by the local OS.
 void text(std::string_view label,float x,float y,
-          float pixelScale,float maxWidth) noexcept {
+          float fontPx,float maxWidth) noexcept {
+    if(draw_menu_system_text(label,x,y,fontPx,maxWidth))return;
+    const float pixelScale=fontPx/9.0f;
     if(pixelScale<=0.0f || maxWidth<5.0f*pixelScale)return;
     const float advance=6.0f*pixelScale;
     const float glyphWidth=5.0f*pixelScale;
@@ -203,118 +233,154 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     glDisable(GL_CULL_FACE);
     glDisable(GL_FOG);
     glDisable(GL_ALPHA_TEST);
+
     const bool overlay=mode!=MenuGL11Mode::StandalonePreview;
-    // R97: draw and hit-test consume ONE validated physical panel geometry.
+    // R113: font antialiasing needs blending even in standalone previews.
+    // Every modified GL flag, matrix and current color is independently
+    // restored by ScopedFixedFunctionState.
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
     const unsigned paneWidth=panel->width;
     const unsigned paneHeight=panel->height;
     const unsigned paneLeft=panel->left;
     const unsigned paneTop=panel->top;
     if(overlay) {
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
         glEnable(GL_SCISSOR_TEST);
         glScissor(static_cast<GLint>(paneLeft),
                   static_cast<GLint>(frame.viewport_height-paneTop-paneHeight),
                   static_cast<GLsizei>(paneWidth),
                   static_cast<GLsizei>(paneHeight));
-    }else{
-        glDisable(GL_BLEND);
-        glDisable(GL_SCISSOR_TEST);
-    }
+    } else glDisable(GL_SCISSOR_TEST);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    const GLdouble width=static_cast<GLdouble>(frame.viewport_width);
-    const GLdouble height=static_cast<GLdouble>(frame.viewport_height);
-    glOrtho(0,width,height,0,-1,1);
+    glOrtho(0,static_cast<GLdouble>(frame.viewport_width),
+            static_cast<GLdouble>(frame.viewport_height),0,-1,1);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glTranslatef(static_cast<GLfloat>(paneLeft),
                  static_cast<GLfloat>(paneTop),0.0f);
-    // R93: scale both geometry and the bitmap text in physical pixels;
-    // scissor stays in original viewport coordinates and is state-restored.
     const float scale=panel->scale;
     if(scale!=1.0f)glScalef(scale,scale,1.0f);
     const float w=static_cast<float>(paneWidth)/scale;
     const float h=static_cast<float>(paneHeight)/scale;
-    rgba(0x161617,overlay?static_cast<GLubyte>(225):static_cast<GLubyte>(255));
+    rgba(0x222223,overlay?static_cast<GLubyte>(243):static_cast<GLubyte>(255));
     quad(0,0,w,h);
-    rgb(frame.appearance.accent_rgb);
-    quad(0,0,w,4);
-    rgba(0x101011,overlay?static_cast<GLubyte>(238):static_cast<GLubyte>(255));
-    quad(18,78,w-36,42);
+    // Real Slinky uses a slim rounded navigation bar, rather than a
+    // large centered logo/title and an orange underline.
+    rgba(0x121213,255);
+    round_rect(menu_nav_x,menu_nav_y,w-2*menu_nav_x,
+               menu_nav_height,20.0f);
+    const float cell=menu_tab_width(w);
     const auto selected=static_cast<unsigned>(frame.tab);
     if(selected<6u) {
-        const float cell=(w-36.0f)/7.0f;
-        rgb(frame.appearance.accent_rgb);
-        quad(18.0f+static_cast<float>(selected)*cell,115,cell,3);
+        rgb(0x424244);
+        round_rect(menu_nav_x+static_cast<float>(selected)*cell+2.0f,
+                   menu_nav_y+3.0f,cell-4.0f,menu_nav_height-6.0f,16.0f);
     }
-    for(std::size_t i=0;i<frame.visible.size();++i) {
-        const auto& item=frame.visible[i];
-        const float y=153.0f+static_cast<float>(i)*49.0f;
-        rgba(i%2==0?0x1c1c1d:0x252526,
-             overlay?static_cast<GLubyte>(235):static_cast<GLubyte>(255));
-        quad(18,y,w-36,44);
-        if(focused_catalog_index &&
-           item.catalog_index==*focused_catalog_index) {
-            // R96: first-party row focus is a *render-only* accent, never
-            // a gameplay toggle. Inherits compact viewport clip/GL restore.
-            rgb(frame.appearance.accent_rgb);
-            quad(18,y+1,w-36,2);
-            quad(18,y+3,2,39);
-        }
-        if(item.preview_enabled) {
-            rgb(frame.appearance.accent_rgb);
-            quad(18,y,3,44);
-        }
-        rgb(item.expanded?0x8c8c8f:0x515154);
-        quad(w-123,y+13,18,18);
-        rgb(item.preview_enabled?frame.appearance.accent_rgb:0x555558);
-        quad(w-76,y+12,45,22);
-        rgb(0xcacacc);
-        quad(w-73+(item.preview_enabled?21.0f:0.0f),y+15,17,16);
-    }
-    // Render text last to keep it legible above the opaque controls.
-    // UI toggles remain inert: these glyphs never enable gameplay behavior.
-    rgb(0xf2f2f3);
-    text("SLINKYWINKY",23,18,2.6f,w-40.0f);
-    rgb(0x929295);
-    text("NATIVE MENU / PREVIEW ONLY",23,53,1.3f,w-45.0f);
-    const float cell=(w-36.0f)/7.0f;
     for(unsigned i=0;i<7;++i) {
         const auto tab=static_cast<MenuTab>(i);
-        rgb(i==selected?0xf2f2f3:0xb7b7b9);
-        text(menu_tab_name(tab),
-             21.0f+static_cast<float>(i)*cell,92,
-             1.35f,cell-6.0f);
+        std::string_view label=menu_tab_name(tab);
+        const float fontPx=std::min(16.0f,std::max(9.0f,cell/4.0f));
+        const float textWidth=measure_menu_system_text(label,fontPx);
+        const float fallbackWidth=label.size()*fontPx*0.62f;
+        const float measured=textWidth>0?textWidth:fallbackWidth;
+        const float left=menu_nav_x+static_cast<float>(i)*cell+
+                         std::max(2.0f,(cell-measured)*0.5f);
+        rgb(i==6?0xee5252:(i==selected?0xffffff:0xd0d0d2));
+        text(label,left,menu_nav_y+11.0f,fontPx,cell-4.0f);
     }
-    rgb(0xf2f2f3);
-    text(menu_tab_name(frame.tab),25,131,1.7f,w-45.0f);
+
     if(frame.is_placeholder) {
-        rgb(0x929295);
-        text("PROFILES NOT CONNECTED",32,178,1.45f,w-64.0f);
+        rgb(0x111112);
+        round_rect(16.0f,menu_first_row_y,w-32.0f,96.0f,14.0f);
+        rgb(0xf2f2f4);
+        text("Profiles",30.0f,menu_first_row_y+11.0f,20.0f,w-65.0f);
+        rgb(0x99999b);
+        text("Profile actions are not connected in this preview.",
+             30.0f,menu_first_row_y+48.0f,15.0f,w-65.0f);
     }
+
     for(std::size_t i=0;i<frame.visible.size();++i) {
         const auto& item=frame.visible[i];
-        const float y=153.0f+static_cast<float>(i)*49.0f;
-        rgb(0xf2f2f3);
-        text(item.title,31.0f,y+9.0f,2.0f,w-208.0f);
+        const float y=menu_row_top(frame,i);
+        const float body=menu_row_body_height(frame);
+        const float total=menu_row_total_height(frame,i);
+        // Never render a partly clipped module as actionable; the matching
+        // hit tester makes the identical full-body/expanded admission.
+        if(y+total>h-12.0f)continue;
+        const float left=16.0f;
+        const float right=w-16.0f;
+        rgb(0x111112);
+        round_rect(left,y,right-left,total,13.0f);
+        if(focused_catalog_index && item.catalog_index==*focused_catalog_index) {
+            rgb(0x545456);
+            round_rect(left,y,total>body?4.0f:3.0f,total,1.5f);
+        }
+
+        const bool supported=module_has_profile_setting(item.catalog_index);
+        const float titleFont=frame.appearance.compact?18.0f:20.0f;
+        const float titleTop=y+(frame.appearance.compact?8.0f:5.0f);
+        rgb(supported?0xf3f3f4:0xc7c7ca);
+        text(item.title,30.0f,titleTop,titleFont,
+             std::max(10.0f,w-188.0f));
+        // Authentic Slinky puts a small rounded keybind badge directly
+        // beside the module name. Here NONE is an inert preview badge.
+        const float natural=measure_menu_system_text(item.title,titleFont);
+        const float titleWidth=natural>0?natural:
+                                static_cast<float>(item.title.size())*11.0f;
+        const float bindX=std::max(32.0f,
+            std::min(30.0f+titleWidth+10.0f,w-152.0f));
+        if(bindX+51.0f < w-86.0f) {
+            rgb(0x29292b);
+            round_rect(bindX,y+9.0f,49.0f,22.0f,7.0f);
+            rgb(0xb0b0b2);
+            text("NONE",bindX+7.0f,y+12.0f,13.0f,40.0f);
+        }
+
+        const float toggleX=w-80.0f;
+        const float toggleY=y+(frame.appearance.compact?8.0f:8.0f);
+        const bool previewActive=supported && item.preview_enabled;
+        rgb(previewActive?frame.appearance.accent_rgb:0x48484a);
+        round_rect(toggleX,toggleY,54.0f,27.0f,13.0f);
+        rgb(0x171719);
+        round_rect(toggleX+(previewActive?30.0f:4.0f),
+                   toggleY+3.5f,20.0f,20.0f,10.0f);
+
+        // The compact layout hides descriptions; the normal layout places
+        // expand beside the description exactly like the source screenshots.
+        const float expandX=frame.appearance.compact?w-119.0f:28.0f;
+        const float expandY=frame.appearance.compact?y+10.0f:y+33.0f;
+        rgb(supported?0x414143:0x303032);
+        round_rect(expandX,expandY,21.0f,21.0f,5.0f);
+        rgb(supported?0xdadadc:0x777779);
+        quad(expandX+5.0f,expandY+10.0f,11.0f,2.0f);
+        if(!item.expanded)quad(expandX+10.0f,expandY+5.0f,2.0f,11.0f);
         if(!frame.appearance.compact) {
-            rgb(0x929295);
-            std::string_view status=!module_has_profile_setting(item.catalog_index)?
-                "NOT IMPLEMENTED" :
-                (item.expanded?"P SAVE  L LOAD PROFILE":"NATIVE SETTING ONLY");
+            rgb(0x98989b);
+            text(menu_preview_description(item.catalog_index),
+                 59.0f,y+35.0f,14.0f,std::max(0.0f,w-155.0f));
+        }
+        if(item.expanded) {
+            const float settingY=y+body;
+            rgb(0x333335);
+            quad(31.0f,settingY,w-62.0f,1.0f);
+            rgb(0x9b9b9e);
+            text("Main",31.0f,settingY+8.0f,14.0f,w-80.0f);
+            std::string_view caption="Settings preview";
             for(const auto& parameter:frame.parameters)
                 if(parameter.catalog_index==item.catalog_index) {
-                    status=parameter.caption;
+                    caption=parameter.caption;
                     break;
                 }
-            text(status,31.0f,y+31.0f,1.1f,w-208.0f);
+            const float fieldWidth=std::min(205.0f,std::max(75.0f,w*0.43f));
+            rgb(0x3f3f41);
+            round_rect(w-fieldWidth-28.0f,settingY+7.0f,
+                       fieldWidth,24.0f,12.0f);
+            rgb(0xeeeeef);
+            text(caption,w-fieldWidth-19.0f,settingY+10.0f,
+                 13.0f,fieldWidth-17.0f);
         }
-        rgb(0xf0f0f0);
-        text(item.expanded?"-":"+",w-117.0f,y+17.0f,1.5f,25.0f);
     }
-    rgb(0x929295);
-    text("P SAVE  L LOAD  /  NO GAME ACTIONS",23,585,1.2f,w-46.0f);
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture
     // selection or app-managed caches; state restoration is GL1.1 only.
     return true;

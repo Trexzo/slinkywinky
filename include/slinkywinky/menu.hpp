@@ -28,7 +28,7 @@ struct MenuAppearance {
     bool compact=false;
     bool wide=false;
     bool allow_input_while_open=false;
-    std::uint32_t accent_rgb=0xE88C46u;
+    std::uint32_t accent_rgb=0xFF6016u;
     float scale=1.0f;
 };
 
