@@ -33,7 +33,8 @@ enum class MenuHitKind : std::uint8_t {
     Tab, RowBody, Expand, Toggle, PiercingControl,
     AimModeControl, TargetModeControl, // R126: preview-only dropdowns
     DropdownOption, // R127: selected option in verified popup
-    UnloadTab, ModalClose, ModalContinue // R128: inert modal preview
+    UnloadTab, ModalClose, ModalContinue, // R128: inert modal preview
+    RecoveredBooleanPreview // R130: catalog-indexed inert Boolean switch
 };
 
 // Catalog index is meaningful only for non-Tab hits. No raw input pointers,
