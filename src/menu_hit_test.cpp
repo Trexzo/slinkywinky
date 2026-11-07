@@ -70,6 +70,20 @@ std::optional<MenuHit> hit_test_menu(
     const float y=static_cast<float>(
         client_y-static_cast<int>(panel->top))/panel->scale;
     const float w=panel->logical_width();
+    // R127: an open dropdown owns the only admissible mouse targets.
+    // No click may pass through the floating popup to modules or nav tabs.
+    if(frame.dropdown_preview) {
+        const auto pop=menu_dropdown_popup_geometry(
+            frame,w,panel->logical_height());
+        if(!pop || x<pop->x || x>=pop->x+pop->width ||
+           y<pop->y || y>=pop->y+pop->row_height*pop->option_count)
+            return std::nullopt;
+        const auto option=static_cast<std::size_t>(
+            (y-pop->y)/pop->row_height);
+        if(option>=pop->option_count)return std::nullopt;
+        return MenuHit{MenuHitKind::DropdownOption,frame.tab,
+                       frame.dropdown_preview->catalog_index,option};
+    }
     // R113: exactly the same shared geometry as the Slinky-style renderer.
     // "Unload" is displayed in red, but is NEVER an admitted mouse action.
     if(y>=menu_nav_y && y<menu_nav_y+menu_nav_height &&
