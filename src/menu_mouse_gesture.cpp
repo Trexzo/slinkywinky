@@ -50,6 +50,21 @@ bool MenuMouseGesture::equivalent_frame(
     const MenuRenderFrame& frame,MenuPanelMode mode) const noexcept {
     if(!active_ || active_->mode!=mode)return false;
     const auto& original=active_->frame;
+    // R148: a numeric press may change ONLY its own temporary display
+    // value while captured. All other UI mutations still invalidate the
+    // gesture, including settings, hover identity, layout and modal state.
+    if(frame.numeric_drag_preview!=original.numeric_drag_preview) {
+        const auto& hit=active_->hit;
+        const auto& drag=frame.numeric_drag_preview;
+        const bool slider=hit.kind==MenuHitKind::RecoveredSliderPreview;
+        const bool range=hit.kind==MenuHitKind::RecoveredRangePreview;
+        if(!drag || original.numeric_drag_preview ||
+           (!slider && !range) ||
+           drag->catalog_index!=hit.catalog_index ||
+           drag->widget_index!=hit.control_index ||
+           drag->handle!=(range?hit.sub_index:0u))
+            return false;
+    }
     if(frame.epoch!=original.epoch || frame.sequence<original.sequence ||
        frame.viewport_width!=original.viewport_width ||
        frame.viewport_height!=original.viewport_height ||
