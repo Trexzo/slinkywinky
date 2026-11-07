@@ -117,6 +117,12 @@ public:
                                std::size_t control_index) noexcept;
     bool select_preview_dropdown_option(unsigned option) noexcept;
     bool close_preview_dropdown() noexcept;
+    // R128: recovered seven-tab Unload confirmation is display-only.
+    bool unload_confirmation_preview() const noexcept {
+        return unload_confirmation_preview_;
+    }
+    bool open_unload_confirmation_preview() noexcept;
+    bool close_unload_confirmation_preview() noexcept;
     // Only for explicitly preview-only persistence; never changes gameplay.
     bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
@@ -143,6 +149,7 @@ private:
     PiercingPreview piercing_preview_{};
     std::size_t piercing_selected_=0; // 0 dropdown + 7 bools
     std::optional<MenuDropdownPreview> dropdown_preview_{};
+    bool unload_confirmation_preview_=false;
 };
 
 } // namespace slinkywinky
