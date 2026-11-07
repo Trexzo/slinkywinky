@@ -586,7 +586,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             // The original chip appears on row hover or when HOLD is on.
             // First-party preview shows a bound HOLD chip persistently
             // until mouse-hover reporting is wired in a later visual gate.
-            if(bind.code) {
+            if(bind.code &&
+               (bind.hold || frame.bind_hover_row==item.catalog_index)) {
                 rgba(bind.hold?0xdddddd:0x999999,38);
                 round_rect(chips->hold.x,chips->hold.y,
                            chips->hold.width,chips->hold.height,5.0f);
