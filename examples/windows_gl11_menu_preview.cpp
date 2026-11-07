@@ -12,6 +12,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
@@ -278,10 +279,21 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 // A wheel over a settings pane never scrolls modules,
                 // even when already at the first/last settings page.
             }
-            if(!expandedTarget && delta &&
-               profile.scroll_by(delta>0?-1:1)) {
-                const auto page=menu.page();
-                if(!page.empty())navigation.focus_visible_row(page.front().catalog_index);
+            if(!expandedTarget && delta) {
+                // R135: narrow one-column panels cannot show eight cards.
+                // Keep a bounded scroll window small enough that the
+                // final recovered module (including Teams) can be moved
+                // near the top before expanding its controls.
+                const bool oneColumn=slinkywinky::menu_module_columns(
+                    panel->logical_width())==1u;
+                const float height=panel->logical_height();
+                const std::size_t visibleHint=!oneColumn?8u:
+                    (height>=550.0f?3u:(height>=440.0f?2u:1u));
+                if(profile.scroll_by_visible(delta>0?-1:1,visibleHint)) {
+                    const auto page=menu.page();
+                    if(!page.empty())
+                        navigation.focus_visible_row(page.front().catalog_index);
+                }
             }
             refresh_caption(hwnd);
             request_paint(hwnd);return 0;
