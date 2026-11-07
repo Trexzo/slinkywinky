@@ -61,6 +61,7 @@ bool MenuMouseGesture::equivalent_frame(
        frame.unload_confirmation_preview!=original.unload_confirmation_preview ||
        frame.bind_previews!=original.bind_previews ||
        frame.bind_capture_index!=original.bind_capture_index ||
+       frame.bind_hover_row!=original.bind_hover_row ||
        frame.recovered_boolean_overrides!=original.recovered_boolean_overrides ||
        frame.recovered_choice_overrides!=original.recovered_choice_overrides ||
        frame.recovered_multi_overrides!=original.recovered_multi_overrides ||
