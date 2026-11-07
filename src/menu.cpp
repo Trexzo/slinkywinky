@@ -66,6 +66,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     unload_confirmation_preview_=false;
@@ -93,6 +94,7 @@ bool MenuState::scroll_by(int delta) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     scroll_=next;
@@ -114,9 +116,110 @@ bool MenuState::scroll_by_visible(
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     scroll_=next;
+    return true;
+}
+bool MenuState::begin_numeric_drag_preview(
+        std::size_t module,std::size_t widget_index,
+        unsigned handle) noexcept {
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(numeric_drag_preview_ || dropdown_preview_ ||
+       unload_confirmation_preview_ || profile_action_preview_ ||
+       selected_==MenuTab::Profiles ||
+       module>=catalog.size() || widget_index>=all.size() ||
+       catalog[module].tab!=selected_ || !expanded_[module] ||
+       std::string_view(all[widget_index].module)!=catalog[module].name)
+        return false;
+    const auto& source=all[widget_index];
+    const bool isSlider=source.kind==RecoveredWidgetKind::Slider;
+    const bool isRange=source.kind==RecoveredWidgetKind::Range;
+    if((!isSlider && !isRange) || (isSlider && handle!=0u) ||
+       handle>1u || !std::isfinite(source.min_value) ||
+       !std::isfinite(source.max_value) ||
+       !std::isfinite(source.step) ||
+       source.max_value<=source.min_value || source.step<=0.0f)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+       [module](const MenuItem& item) {
+           return item.catalog_index==module;
+       }))return false;
+    std::array<const RecoveredWidget*,5> visible{};
+    if(!recovered_widget_visible_page(
+       catalog[module].name,settings_offsets_[module],
+       static_cast<int>(aim_preview_mode_),
+       static_cast<int>(target_preview_mode_),visible))
+        return false;
+    if(std::none_of(visible.begin(),visible.end(),
+       [&](const RecoveredWidget* item) {
+           return item==&source;
+       }))return false;
+    const auto current=isSlider?
+       RecoveredRangePreview{
+           recovered_slider_overrides_[widget_index].value_or(
+               source.example_value),0.0f}:
+       recovered_range_overrides_[widget_index].value_or(
+           RecoveredRangePreview{source.example_value,source.example_other});
+    if(!std::isfinite(current.lower) ||
+       (isRange && !std::isfinite(current.upper)) ||
+       current.lower<source.min_value ||
+       current.lower>source.max_value ||
+       (isRange && (current.upper<current.lower ||
+                    current.upper>source.max_value)))
+        return false;
+    numeric_drag_preview_=MenuNumericDragPreview{
+        module,widget_index,handle,current.lower,current.upper};
+    return true;
+}
+bool MenuState::move_numeric_drag_preview(float requested) noexcept {
+    if(!numeric_drag_preview_ || !std::isfinite(requested) ||
+       dropdown_preview_ || unload_confirmation_preview_ ||
+       profile_action_preview_)return false;
+    auto& drag=*numeric_drag_preview_;
+    const auto& all=recovered_widget_catalog();
+    if(drag.widget_index>=all.size())return false;
+    const auto& source=all[drag.widget_index];
+    if(!std::isfinite(source.min_value) ||
+       !std::isfinite(source.max_value) ||
+       !std::isfinite(source.step) ||
+       source.max_value<=source.min_value ||
+       source.step<=0.0f ||
+       requested<source.min_value ||
+       requested>source.max_value)return false;
+    const double minimum=source.min_value, maximum=source.max_value;
+    const double units=std::floor(
+        (static_cast<double>(requested)-minimum)/
+        static_cast<double>(source.step)+0.5);
+    const double snapped=std::clamp(
+        minimum+units*static_cast<double>(source.step),
+        minimum,maximum);
+    if(!std::isfinite(snapped))return false;
+    const float result=static_cast<float>(snapped);
+    if(source.kind==RecoveredWidgetKind::Slider && drag.handle==0u) {
+        if(drag.lower==result)return false;
+        drag.lower=result;
+        return true;
+    }
+    if(source.kind!=RecoveredWidgetKind::Range ||
+       drag.handle>1u)return false;
+    if(drag.handle==0u) {
+        const float next=std::min(result,drag.upper);
+        if(drag.lower==next)return false;
+        drag.lower=next;
+    } else {
+        const float next=std::max(result,drag.lower);
+        if(drag.upper==next)return false;
+        drag.upper=next;
+    }
+    return true;
+}
+bool MenuState::cancel_numeric_drag_preview() noexcept {
+    if(!numeric_drag_preview_)return false;
+    numeric_drag_preview_.reset();
     return true;
 }
 bool MenuState::set_numeric_hover(
@@ -401,6 +504,7 @@ bool MenuState::toggle_expanded(std::size_t index) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     expanded_[index]=!expanded_[index];
     if(!expanded_[index])settings_offsets_[index]=0;
@@ -415,6 +519,7 @@ bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     aim_preview_mode_=mode;
     settings_offsets_[0]=0;
     return true;
@@ -425,6 +530,7 @@ bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     target_preview_mode_=mode;
     settings_offsets_[0]=0;
     return true;
@@ -440,6 +546,7 @@ bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     // No arithmetic on untrusted or potentially overflowing offsets.
     if(direction<0) {
@@ -534,6 +641,7 @@ bool MenuState::open_preview_dropdown(
         return false;
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     dropdown_preview_=MenuDropdownPreview{
         kind,index,control_index,settings_offsets_[index]
@@ -578,6 +686,7 @@ bool MenuState::open_recovered_choice_preview(
             return false;
         focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredChoice,catalog_index,
@@ -616,6 +725,7 @@ bool MenuState::open_recovered_multi_preview(
         if(pageWidgets[i]!=&all[widget_index])continue;
         focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredMulti,catalog_index,
@@ -951,6 +1061,7 @@ bool MenuState::open_unload_confirmation_preview() noexcept {
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
+    numeric_drag_preview_.reset();
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     profile_action_preview_.reset();
