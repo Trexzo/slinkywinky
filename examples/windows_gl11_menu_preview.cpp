@@ -17,6 +17,7 @@
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_profile_interaction_geometry.hpp"
+#include "slinkywinky/menu_numeric_tooltip.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
@@ -315,6 +316,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             menu.cancel_bind_capture();
             menu.set_bind_hover_row(std::nullopt);
             menu.set_profile_icon_hover(std::nullopt);
+            menu.set_numeric_hover(std::nullopt);
             cancel_mouse(hwnd);
             menu.close_preview_dropdown();
             menu.close_unload_confirmation_preview();
@@ -329,6 +331,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 menu.cancel_bind_capture();
                 menu.set_bind_hover_row(std::nullopt);
                 menu.set_profile_icon_hover(std::nullopt);
+                menu.set_numeric_hover(std::nullopt);
                 cancel_mouse(hwnd);
                 menu.close_preview_dropdown();
                 menu.close_unload_confirmation_preview();
@@ -460,6 +463,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(!mouseGesture.pending()) {
                 std::optional<std::size_t> row;
                 std::optional<slinkywinky::MenuProfileIconHover> iconHover;
+                std::optional<slinkywinky::MenuNumericHover> numericHover;
                 const auto frame=mouse_frame(hwnd);
                 if(frame && preview_focused(hwnd)) {
                     const auto panel=slinkywinky::menu_panel_geometry(
@@ -491,6 +495,51 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                                 }
                             }
                         }
+                        // Recover the same source-indexed numeric widget that
+                        // owns the pointer rectangle, not a loose label or
+                        // off-page slider. The tooltip cannot itself accept
+                        // input, capture a global pointer or modify gameplay.
+                        if(frame->tab!=slinkywinky::MenuTab::Profiles &&
+                           !frame->dropdown_preview &&
+                           !frame->unload_confirmation_preview) {
+                            const auto& all=slinkywinky::recovered_widget_catalog();
+                            for(const auto& item:frame->visible) {
+                                if(!item.expanded || numericHover)continue;
+                                std::array<const slinkywinky::RecoveredWidget*,5>
+                                    visible{};
+                                if(!slinkywinky::recovered_widget_visible_page(
+                                    item.title.c_str(),item.settings_offset,
+                                    static_cast<int>(frame->aim_preview_mode),
+                                    static_cast<int>(frame->target_preview_mode),
+                                    visible))continue;
+                                for(const auto* widget:visible) {
+                                    if(!widget)break;
+                                    if(widget->kind!=
+                                           slinkywinky::RecoveredWidgetKind::Slider &&
+                                       widget->kind!=
+                                           slinkywinky::RecoveredWidgetKind::Range)
+                                        continue;
+                                    const auto index=static_cast<std::size_t>(
+                                        widget-all.data());
+                                    if(index>=all.size() ||
+                                       slinkywinky::menu_numeric_format_for_widget(
+                                           index).empty())continue;
+                                    const auto track=
+                                        slinkywinky::menu_numeric_track_geometry(
+                                            *frame,panel->logical_width(),
+                                            panel->logical_height(),
+                                            item.catalog_index,index);
+                                    if(track && x>=track->x &&
+                                       x<track->x+track->width &&
+                                       y>=track->y &&
+                                       y<track->y+track->height) {
+                                        numericHover=slinkywinky::MenuNumericHover{
+                                            item.catalog_index,index};
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                         for(std::size_t i=0;i<frame->visible.size();++i) {
                             const auto rect=slinkywinky::menu_module_card_rect(
                                 *frame,panel->logical_width(),i);
@@ -510,6 +559,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 }
                 bool repaint=menu.set_bind_hover_row(row);
                 if(menu.set_profile_icon_hover(iconHover))repaint=true;
+                if(menu.set_numeric_hover(numericHover))repaint=true;
                 if(repaint)request_paint(hwnd);
                 TRACKMOUSEEVENT tracking{};
                 tracking.cbSize=sizeof(tracking);
@@ -531,6 +581,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_MOUSELEAVE: {
             bool repaint=menu.set_bind_hover_row(std::nullopt);
             if(menu.set_profile_icon_hover(std::nullopt))repaint=true;
+            if(menu.set_numeric_hover(std::nullopt))repaint=true;
             if(repaint)request_paint(hwnd);
             return 0;
         }
