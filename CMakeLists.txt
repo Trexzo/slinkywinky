@@ -154,6 +154,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_numeric_tooltips_hover
     COMMAND slinkywinky_recovered_numeric_tooltip_tests)
+  add_executable(slinkywinky_recovered_numeric_drag_tests
+    tests/test_recovered_numeric_drag.cpp)
+  target_link_libraries(slinkywinky_recovered_numeric_drag_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_recovered_numeric_drag_transaction
+    COMMAND slinkywinky_recovered_numeric_drag_tests)
   add_executable(slinkywinky_menu_profile_tests tests/test_menu_profile.cpp)
   target_link_libraries(slinkywinky_menu_profile_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_profile_binding COMMAND slinkywinky_menu_profile_tests)
