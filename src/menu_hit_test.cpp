@@ -8,6 +8,7 @@
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
+#include "slinkywinky/menu_profile_interaction_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cmath>
@@ -78,6 +79,19 @@ std::optional<MenuHit> hit_test_menu(
     const float w=panel->logical_width();
     // R128: confirmation owns the entire pointer surface. Only the
     // recovered X and Continue button can be hit; no click-through.
+    if(frame.profile_action_preview) {
+        const auto modal=menu_profile_modal_geometry(
+            frame,w,panel->logical_height());
+        if(!modal)return std::nullopt;
+        if(x>=modal->close_x && x<modal->close_x+20.0f &&
+           y>=modal->close_y && y<modal->close_y+20.0f)
+            return MenuHit{MenuHitKind::ProfileModalClose,frame.tab,0};
+        if(x>=modal->continue_x &&
+           x<modal->continue_x+modal->continue_width &&
+           y>=modal->continue_y && y<modal->continue_y+20.0f)
+            return MenuHit{MenuHitKind::ProfileModalContinue,frame.tab,0};
+        return std::nullopt; // no click-through from modal background
+    }
     if(frame.unload_confirmation_preview) {
         const auto modal=menu_unload_modal_geometry(
             frame,w,panel->logical_height());
@@ -116,6 +130,30 @@ std::optional<MenuHit> hit_test_menu(
             MenuHitKind::Tab,static_cast<MenuTab>(tab),0};
         if(tab==6u)return MenuHit{
             MenuHitKind::UnloadTab,MenuTab::Unload,0};
+        return std::nullopt;
+    }
+    if(frame.tab==MenuTab::Profiles) {
+        // Source icon row: four 20x20 controls 12px apart, ordered
+        // load/save/folder/delete. Default Save/Delete are disabled.
+        for(std::size_t i=0;i<frame.profile_cards.size();++i) {
+            for(unsigned action=0;action<4u;++action) {
+                const auto rect=menu_profile_action_rect(
+                    frame,w,panel->logical_height(),i,action);
+                if(rect && menu_profile_contains(*rect,x,y))
+                    return MenuHit{MenuHitKind::ProfileAction,frame.tab,
+                                   i,action};
+            }
+        }
+        const auto name=menu_profile_input_rect(
+            frame,w,panel->logical_height());
+        if(name && menu_profile_contains(*name,x,y))
+            return MenuHit{MenuHitKind::ProfileNameField,frame.tab,
+                           frame.profile_cards.size()};
+        const auto create=menu_profile_create_rect(
+            frame,w,panel->logical_height());
+        if(create && menu_profile_contains(*create,x,y))
+            return MenuHit{MenuHitKind::ProfileCreate,frame.tab,
+                           frame.profile_cards.size()};
         return std::nullopt;
     }
     if(frame.tab>=MenuTab::Profiles)return std::nullopt;
