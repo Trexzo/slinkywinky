@@ -168,7 +168,8 @@ bool MenuState::activate_piercing_selection() noexcept {
 // dropdowns. Source-conditioned Aim widget indices must still be visible.
 bool MenuState::open_preview_dropdown(
         MenuDropdownKind kind,std::size_t control_index) noexcept {
-    if(selected_!=MenuTab::Combat ||
+    if(unload_confirmation_preview_ || dropdown_preview_ ||
+       selected_!=MenuTab::Combat ||
        (kind!=MenuDropdownKind::AimMode &&
         kind!=MenuDropdownKind::TargetMode &&
         kind!=MenuDropdownKind::PiercingSort))return false;
