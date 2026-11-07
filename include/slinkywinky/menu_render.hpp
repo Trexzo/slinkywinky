@@ -1,5 +1,6 @@
 #pragma once
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/menu_visual_motion.hpp"
 #include <cstdint>
 #include <optional>
 #include <mutex>
@@ -54,6 +55,9 @@ struct MenuRenderFrame {
     unsigned viewport_height=0;
     MenuTab tab=MenuTab::Combat;
     MenuAppearance appearance{};
+    // R149 optional first-party presentation only; when absent, draw and
+    // input geometry are exactly the pre-animation behavior.
+    std::optional<MenuVisualMotion> visual_motion{};
     unsigned aim_preview_mode=0;
     unsigned target_preview_mode=0;
     PiercingPreview piercing_preview{}; // local GUI sandbox, no game
