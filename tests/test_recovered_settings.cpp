@@ -1,6 +1,7 @@
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/menu.hpp"
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <set>
@@ -84,5 +85,38 @@ int main() {
     CHECK(empty[0]->kind==RecoveredWidgetKind::MultiSelect);
     CHECK(recovered_widget_preview("Backtrack",empty)>=5);
     CHECK(recovered_widget_preview("Pointers",empty)>=5);
+    // R117: every recovered control must be reachable exactly once through
+    // aligned, bounded pages; no reading past module boundaries, and no
+    // malformed offset produces partial/stale pointers.
+    std::size_t pageVisited=0;
+    for(const auto& m:catalog) {
+        const auto expected=recovered_widget_count(m.name);
+        for(std::size_t offset=0;offset<expected;offset+=5) {
+            std::array<const RecoveredWidget*,5> page{};
+            CHECK(recovered_widget_page(m.name,offset,page)==expected);
+            for(std::size_t i=0;i<page.size();++i) {
+                if(offset+i<expected) {
+                    CHECK(page[i] && std::string_view(page[i]->module)==m.name);
+                    CHECK(std::any_of(items.begin(),items.end(),
+                        [&](const RecoveredWidget& entry) {
+                            return &entry==page[i];
+                        }));
+                    ++pageVisited;
+                } else CHECK(page[i]==nullptr);
+            }
+        }
+        std::array<const RecoveredWidget*,5> refused{};
+        CHECK(recovered_widget_page(m.name,expected+5,refused)==0);
+        CHECK(refused[0]==nullptr);
+        CHECK(recovered_widget_page(m.name,1,refused)==0);
+        CHECK(refused[0]==nullptr);
+    }
+    CHECK(pageVisited==378);
+    std::array<const RecoveredWidget*,5> refused{};
+    CHECK(recovered_widget_page(nullptr,0,refused)==0);
+    CHECK(recovered_widget_page("Unknown module",0,refused)==0);
+    CHECK(recovered_widget_page("Aim Assist",99999,refused)==0);
+    CHECK(recovered_widget_page("Aim Assist",5,refused)>5);
+    CHECK(std::string_view(refused[0]->label)=="Keep move direction");
     return 0;
 }

@@ -372,7 +372,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
          MenuPanelMode::BoundedOverlay:MenuPanelMode::CompactOverlay);
     const auto panel=menu_panel_geometry(frame.viewport_width,frame.viewport_height,
         frame.appearance.wide,geometryMode);
-    if(!panel || !menu_profile_preview_valid(
+    if(!panel || !menu_settings_offsets_valid(frame) ||
+       !menu_profile_preview_valid(
             frame,panel->logical_width(),panel->logical_height()))
         return false;
     ScopedFixedFunctionState state;
@@ -583,12 +584,12 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
         }
         if(item.expanded) {
-            // R116: first five typed control records from the candidate
-            // decrypted GUI. The complete 378-item reference catalog is
-            // static and read-only. No setting click, file IO, or gameplay.
+            // R117: five typed controls from the selected, bounded page
+            // of the candidate decrypted GUI. All 378 reference records
+            // remain static/read-only. No setting clicks or gameplay.
             std::array<const RecoveredWidget*,5> preview{};
-            const std::size_t count=recovered_widget_preview(
-                item.title.c_str(),preview);
+            const std::size_t count=recovered_widget_page(
+                item.title.c_str(),item.settings_offset,preview);
             const float settingY=y+body;
             rgb(0x999999);
             if(preview[0])
@@ -606,12 +607,18 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     rect.width,frame.appearance.accent_rgb);
             }
             if(count>5) {
-                char remaining[55]{};
-                std::snprintf(remaining,sizeof(remaining),
-                              "%zu additional controls in source",count-5);
+                char pagination[70]{};
+                const std::size_t shown=std::min<std::size_t>(
+                    5u,count-item.settings_offset);
+                const std::size_t page=item.settings_offset/5u+1u;
+                const std::size_t pages=(count+4u)/5u;
+                std::snprintf(pagination,sizeof(pagination),
+                    "PAGE %zu / %zu    CONTROLS %zu - %zu / %zu",
+                    page,pages,item.settings_offset+1u,
+                    item.settings_offset+shown,count);
                 rgb(0x999999u);
-                text(remaining,left+8.0f,
-                     settingY+47.0f+27.0f*5.0f,
+                text(pagination,left+8.0f,
+                     settingY+47.0f+27.0f*static_cast<float>(shown),
                      12.0f,rect.width-16.0f);
             }
         }

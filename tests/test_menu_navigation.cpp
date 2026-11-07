@@ -1,14 +1,17 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <atomic>
 #include <cmath>
 #include <stdexcept>
 #include <thread>
-#define CHECK(x) do {if(!(x))throw std::runtime_error("R96 menu navigation: " #x);}while(false)
+#include <iostream>
+#define CHECK(x) do {if(!(x))throw std::runtime_error("R117 line "+std::to_string(__LINE__)+": " #x);}while(false)
 
 using namespace slinkywinky;
 int main() {
+    try {
     MenuState menu;
     MenuProfileBridge profile(menu);
     MenuNavigation input(menu,profile);
@@ -124,6 +127,48 @@ int main() {
     CHECK(refused);
     CHECK(input.visible_focus() && *input.visible_focus()==1);
     CHECK(frameSource.detach());
+    // R117: keyboard-independent, owner-scoped pagination of all source
+    // controls. Changes are preview-only and never enable gameplay.
+    CHECK(input.select_tab(MenuTab::Combat));
+    CHECK(input.focus_visible_row(0));
+    CHECK(!input.apply(MenuNavAction::NextSettingsPage)); // collapsed
+    CHECK(input.apply(MenuNavAction::ExpandFocused));
+    CHECK(menu.expanded(0) && menu.settings_offset(0)==0);
+    const auto count=recovered_widget_count("Aim Assist");
+    CHECK(count>10);
+    std::size_t pages=1;
+    while(input.apply(MenuNavAction::NextSettingsPage)) {
+        CHECK(menu.settings_offset(0)==pages*5u);
+        ++pages;
+        CHECK(pages<=((count+4u)/5u));
+    }
+    CHECK(pages==(count+4u)/5u);
+    CHECK(menu.settings_offset(0)==((count-1u)/5u)*5u);
+    CHECK(!input.apply(MenuNavAction::NextSettingsPage));
+    while(input.apply(MenuNavAction::PreviousSettingsPage))
+        CHECK(menu.settings_offset(0)%5u==0u);
+    CHECK(menu.settings_offset(0)==0);
+    CHECK(!input.apply(MenuNavAction::PreviousSettingsPage));
+    CHECK(input.apply(MenuNavAction::NextSettingsPage));
+    CHECK(input.apply(MenuNavAction::ExpandFocused)); // collapse resets page
+    CHECK(!menu.expanded(0) && menu.settings_offset(0)==0);
+    CHECK(!input.apply(MenuNavAction::NextSettingsPage));
+    CHECK(input.focus_visible_row(5));
+    CHECK(input.apply(MenuNavAction::ExpandFocused)); // inert source-only
+    CHECK(input.apply(MenuNavAction::NextSettingsPage));
+    CHECK(!input.apply(MenuNavAction::ToggleFocusedPreview));
+    CHECK(!menu.preview_enabled(5));
+    CHECK(input.apply(MenuNavAction::ExpandFocused));
+    CHECK(menu.settings_offset(5)==0);
+    CHECK(!menu.change_settings_page(67,1));
+    CHECK(!menu.change_settings_page(0,0));
+    CHECK(!menu.change_settings_page(0,2));
+    CHECK(input.select_tab(MenuTab::Move));
+    CHECK(!menu.change_settings_page(3,1)); // different module category
     // No game/OS keyboard input is ever used by this test.
     return 0;
+    } catch(const std::exception& e) {
+        std::cerr<<e.what()<<'\n';
+        return 1;
+    }
 }

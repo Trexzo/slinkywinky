@@ -187,5 +187,26 @@ int main() {
                         45,35,120,true));
     CHECK(!gate.pending());
     CHECK(profileFrames.detach());
+    // R117: an in-flight pointer gesture is cancelled if a read-only
+    // settings page changes, even when the physical target is still a
+    // navigation tab and other frame fields stay unchanged.
+    MenuState pageMenu;
+    MenuProfileBridge pageProfile(pageMenu);
+    MenuNavigation pageNav(pageMenu,pageProfile);
+    CHECK(pageNav.apply(MenuNavAction::ExpandFocused));
+    MenuRenderSession pageFrames;
+    CHECK(pageFrames.attach(702,676,630));
+    const auto beforePage=pageFrames.next(pageMenu,&pageProfile,&pageNav);
+    CHECK(beforePage && beforePage->visible[0].settings_offset==0);
+    MenuMouseGesture pageGate;
+    CHECK(pageGate.press(*beforePage,MenuPanelMode::StandalonePreview,
+                         40,30,200,true));
+    CHECK(pageNav.apply(MenuNavAction::NextSettingsPage));
+    const auto afterPage=pageFrames.next(pageMenu,&pageProfile,&pageNav);
+    CHECK(afterPage && afterPage->visible[0].settings_offset==5);
+    CHECK(!pageGate.release(*afterPage,MenuPanelMode::StandalonePreview,
+                            40,30,215,true));
+    CHECK(!pageGate.pending());
+    CHECK(pageFrames.detach());
     return 0;
 }

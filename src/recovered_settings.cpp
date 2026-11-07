@@ -392,16 +392,26 @@ std::size_t recovered_widget_count(std::string_view module) noexcept {
         if(module==item.module)++count;
     return count;
 }
-std::size_t recovered_widget_preview(
-    const char* module,std::array<const RecoveredWidget*,5>& output) noexcept {
+std::size_t recovered_widget_page(
+    const char* module,std::size_t offset,
+    std::array<const RecoveredWidget*,5>& output) noexcept {
     output.fill(nullptr);
-    if(!module)return 0;
+    if(!module || offset%output.size()!=0)return 0;
     std::size_t count=0;
     for(const auto& w:recovered)
         if(std::string_view(module)==w.module) {
-            if(count<output.size())output[count]=&w;
+            if(count>=offset && count-offset<output.size())
+                output[count-offset]=&w;
             ++count;
         }
+    if(offset>=count) {
+        output.fill(nullptr);
+        return 0;
+    }
     return count;
+}
+std::size_t recovered_widget_preview(
+    const char* module,std::array<const RecoveredWidget*,5>& output) noexcept {
+    return recovered_widget_page(module,0,output);
 }
 } // namespace slinkywinky

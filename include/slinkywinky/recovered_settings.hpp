@@ -24,4 +24,8 @@ const std::array<RecoveredWidget,378>& recovered_widget_catalog() noexcept;
 std::size_t recovered_widget_count(std::string_view module) noexcept;
 std::size_t recovered_widget_preview(const char* module,
                                      std::array<const RecoveredWidget*,5>& output) noexcept;
+// Page is five controls, offset must be five-aligned and in range.
+// Returns the total module control count, or zero for invalid admission.
+std::size_t recovered_widget_page(const char* module,std::size_t offset,
+                                  std::array<const RecoveredWidget*,5>& output) noexcept;
 } // namespace slinkywinky

@@ -12,7 +12,8 @@ class MenuProfileBridge;
 // Minecraft actions. A separately admitted host may map them later.
 enum class MenuNavAction : unsigned char {
     NextTab, PreviousTab, NextRow, PreviousRow,
-    ExpandFocused, ToggleFocusedPreview, IncreaseSetting, DecreaseSetting
+    ExpandFocused, ToggleFocusedPreview, IncreaseSetting, DecreaseSetting,
+    NextSettingsPage, PreviousSettingsPage
 };
 
 // The navigation controller is bound to one menu/profile pair and the

@@ -17,6 +17,7 @@
 #include "slinkywinky/windows_menu_focus_fence.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/menu_mouse_gesture.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -1154,6 +1155,71 @@ int main() {
             renderSettings(MenuTab::Visual,"Item ESP",
                 RecoveredWidgetKind::Text,"SLINKYWINKY_R116_ITEM_ESP_PPM");
             std::cout<<"R116_TYPED_RECOVERED_WIDGETS_FIVE_REAL_WGL_PREVIEWS_PASS\n";
+            // R117: page through every recovered Aim Assist control using
+            // the real, first-party, owner-thread native navigation model.
+            // All resulting screenshots are from this disposable WGL context.
+            REQUIRE(sourceMenu.select(MenuTab::Combat));
+            MenuNavigation pageNav(sourceMenu,sourceProfile);
+            REQUIRE(pageNav.visible_focus() && *pageNav.visible_focus()==0);
+            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            const auto pageCount=recovered_widget_count("Aim Assist");
+            REQUIRE(pageCount>10);
+            const auto capturePage=[&](const char* env)->MenuRenderFrame {
+                const auto frame=sourceFrames.next(
+                    sourceMenu,&sourceProfile,&pageNav);
+                REQUIRE(frame && menu_settings_offsets_valid(*frame));
+                REQUIRE(!frame->visible.empty() &&
+                        frame->visible[0].expanded);
+                glClear(GL_COLOR_BUFFER_BIT);
+                REQUIRE(draw_menu_gl11(*frame,sourceWide.gl,sourceWide.dc));
+                REQUIRE(glGetError()==GL_NO_ERROR);
+                same(wideBefore,snapshot());
+                if(env && std::getenv(env))
+                    REQUIRE(save_gl_framebuffer_ppm(std::getenv(env),900,630));
+                return *frame;
+            };
+            const auto pageFirst=capturePage(
+                "SLINKYWINKY_R117_FIRST_PAGE_PPM");
+            REQUIRE(pageFirst.visible[0].settings_offset==0);
+            MenuMouseGesture heldClick;
+            REQUIRE(heldClick.press(pageFirst,
+                MenuPanelMode::StandalonePreview,40,30,100,true));
+            REQUIRE(pageNav.apply(MenuNavAction::NextSettingsPage));
+            const auto pageSecond=capturePage(
+                "SLINKYWINKY_R117_SECOND_PAGE_PPM");
+            REQUIRE(pageSecond.visible[0].settings_offset==5);
+            REQUIRE(!heldClick.release(pageSecond,
+                MenuPanelMode::StandalonePreview,40,30,120,true));
+            REQUIRE(!heldClick.pending());
+            std::size_t visitedPages=2;
+            while(pageNav.apply(MenuNavAction::NextSettingsPage)) {
+                ++visitedPages;
+                REQUIRE(visitedPages<=100);
+            }
+            REQUIRE(visitedPages==(pageCount+4)/5);
+            const auto pageLast=capturePage(
+                "SLINKYWINKY_R117_LAST_PAGE_PPM");
+            REQUIRE(pageLast.visible[0].settings_offset==
+                    ((pageCount-1)/5)*5);
+            REQUIRE(!pageNav.apply(MenuNavAction::NextSettingsPage));
+            auto tampered=pageLast;
+            tampered.visible[0].settings_offset=pageCount+500;
+            REQUIRE(!draw_menu_gl11(tampered,sourceWide.gl,sourceWide.dc));
+            REQUIRE(!hit_test_menu(tampered,
+                MenuPanelMode::StandalonePreview,40,30));
+            tampered=pageLast;
+            tampered.visible[0].settings_offset=7;
+            REQUIRE(!draw_menu_gl11(tampered,sourceWide.gl,sourceWide.dc));
+            REQUIRE(!hit_test_menu(tampered,
+                MenuPanelMode::StandalonePreview,40,30));
+            REQUIRE(pageNav.apply(MenuNavAction::PreviousSettingsPage));
+            REQUIRE(sourceMenu.settings_offset(0)==
+                    pageLast.visible[0].settings_offset-5);
+            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            REQUIRE(sourceMenu.settings_offset(0)==0);
+            REQUIRE(!pageNav.apply(MenuNavAction::NextSettingsPage));
+            std::cout<<"R117_ALL_RECOVERED_AIM_SETTINGS_PAGED_AND_WGL_RESTORED_PASS\n";
+            std::cout<<"R117_STALE_MOUSE_AND_FORGED_PAGE_REFUSAL_PASS\n";
             REQUIRE(sourceFrames.detach());
         }
         REQUIRE(wglMakeCurrent(context.dc,context.gl));

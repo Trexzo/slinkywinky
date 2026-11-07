@@ -91,6 +91,12 @@ int main() {
     CHECK(initial && initial->parameters.size()==1);
     CHECK(initial->parameters[0].catalog_index==0);
     CHECK(initial->parameters[0].caption=="Range: 4.00");
+    CHECK(initial->visible[0].settings_offset==0);
+    CHECK(editorMenu.change_settings_page(0,1));
+    auto page2=render.next(editorMenu,&editor);
+    CHECK(page2 && page2->visible[0].settings_offset==5);
+    CHECK(initial->visible[0].settings_offset==0);
+    CHECK(editorMenu.change_settings_page(0,-1));
     CHECK(editor.adjust_primary(0,1));
     auto updated=render.next(editorMenu,&editor);
     CHECK(updated && updated->parameters.size()==1);

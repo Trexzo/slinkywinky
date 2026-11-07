@@ -43,10 +43,27 @@ inline float menu_expanded_height(const MenuRenderFrame& frame,
     // A bounded, read-only viewport into 378 candidate GUI controls.
     // Settings beyond five remain in the typed catalog for the next
     // scrolling/interaction pass; never paint them outside the card.
-    const std::size_t count=recovered_widget_count(
-        frame.visible[index].title);
-    const float visible=static_cast<float>(std::min<std::size_t>(count,5u));
+    const auto& item=frame.visible[index];
+    const std::size_t count=recovered_widget_count(item.title);
+    const std::size_t remaining=item.settings_offset<count?
+        count-item.settings_offset:0;
+    const float visible=static_cast<float>(
+        std::min<std::size_t>(remaining,5u));
     return 52.0f+visible*27.0f+(count>5?22.0f:12.0f);
+}
+// The renderer and hit tester reject forged, unaligned, off-end or stale
+// settings offsets before drawing/dispatching any native GUI action.
+inline bool menu_settings_offsets_valid(
+        const MenuRenderFrame& frame) noexcept {
+    for(const auto& item:frame.visible) {
+        const auto count=recovered_widget_count(item.title);
+        if((!item.expanded || count==0) && item.settings_offset!=0)
+            return false;
+        if(item.settings_offset%5u!=0u ||
+           (count>0 && item.settings_offset>=count))
+            return false;
+    }
+    return true;
 }
 inline float menu_row_total_height(const MenuRenderFrame& frame,
                                    std::size_t index) noexcept {

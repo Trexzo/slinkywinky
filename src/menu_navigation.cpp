@@ -112,6 +112,8 @@ bool MenuNavigation::apply(MenuNavAction action) {
         case MenuNavAction::PreviousTab: return switch_tab(-1);
         case MenuNavAction::NextRow: return move_row(1);
         case MenuNavAction::PreviousRow: return move_row(-1);
+        case MenuNavAction::NextSettingsPage:
+        case MenuNavAction::PreviousSettingsPage:
         case MenuNavAction::ExpandFocused:
         case MenuNavAction::ToggleFocusedPreview:
         case MenuNavAction::IncreaseSetting:
@@ -125,6 +127,10 @@ bool MenuNavigation::apply(MenuNavAction action) {
                 return recovered_widget_count(
                     official_module_catalog()[index].name)>0 &&
                     menu_.toggle_expanded(index);
+            if(action==MenuNavAction::NextSettingsPage ||
+               action==MenuNavAction::PreviousSettingsPage)
+                return menu_.change_settings_page(index,
+                    action==MenuNavAction::NextSettingsPage?1:-1);
             if(!module_has_profile_setting(index))
                 return false;
             if(action==MenuNavAction::ToggleFocusedPreview)

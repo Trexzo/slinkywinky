@@ -34,7 +34,8 @@ std::optional<MenuHit> hit_test_menu(
     int client_x,int client_y) noexcept {
     const auto panel=menu_panel_geometry(
         frame.viewport_width,frame.viewport_height,frame.appearance.wide,mode);
-    if(!panel || !menu_profile_preview_valid(
+    if(!panel || !menu_settings_offsets_valid(frame) ||
+       !menu_profile_preview_valid(
             frame,panel->logical_width(),panel->logical_height()) ||
        !frame.epoch || !frame.sequence ||
        frame.visible.size()>8 ||

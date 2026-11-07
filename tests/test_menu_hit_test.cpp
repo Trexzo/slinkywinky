@@ -79,6 +79,13 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
     forged=*frame;
     forged.visible[0].title="FORGED";
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
+    forged=*frame;forged.visible[0].settings_offset=5;
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,w-54.f),
+                         pixel_y(*p,menu_first_row_y+20.f)));
+    forged=*frame;forged.visible[0].expanded=true;
+    forged.visible[0].settings_offset=99999;
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,w-54.f),
+                         pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;forged.sequence=0;
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;

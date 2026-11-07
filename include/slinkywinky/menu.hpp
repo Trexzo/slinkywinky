@@ -44,6 +44,7 @@ struct MenuItem {
     std::string title;
     bool preview_enabled=false;
     bool expanded=false;
+    std::size_t settings_offset=0; // read-only recovered control viewport start
 };
 
 // Deterministic, input-independent model for a future native game renderer.
@@ -57,6 +58,8 @@ public:
     bool scroll_by(int delta) noexcept;
     bool toggle_preview(std::size_t catalog_index) noexcept;
     bool toggle_expanded(std::size_t catalog_index) noexcept;
+    bool change_settings_page(std::size_t catalog_index,int direction) noexcept;
+    std::size_t settings_offset(std::size_t catalog_index) const noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
     bool expanded(std::size_t catalog_index) const noexcept;
     void set_compact(bool value) noexcept {appearance_.compact=value;}
@@ -75,6 +78,7 @@ private:
     MenuAppearance appearance_{};
     std::array<bool,67> enabled_{};
     std::array<bool,67> expanded_{};
+    std::array<std::size_t,67> settings_offsets_{};
 };
 
 } // namespace slinkywinky

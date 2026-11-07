@@ -57,7 +57,8 @@ bool MenuMouseGesture::equivalent_frame(
         const auto& a=frame.visible[i];
         const auto& b=original.visible[i];
         if(a.catalog_index!=b.catalog_index || a.title!=b.title ||
-           a.preview_enabled!=b.preview_enabled || a.expanded!=b.expanded)
+           a.preview_enabled!=b.preview_enabled || a.expanded!=b.expanded ||
+           a.settings_offset!=b.settings_offset)
             return false;
     }
     for(std::size_t i=0;i<frame.parameters.size();++i) {

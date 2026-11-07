@@ -1,4 +1,5 @@
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -61,6 +62,26 @@ bool MenuState::toggle_preview(std::size_t index) noexcept {
 bool MenuState::toggle_expanded(std::size_t index) noexcept {
     if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
     expanded_[index]=!expanded_[index];
+    if(!expanded_[index])settings_offsets_[index]=0;
+    return true;
+}
+std::size_t MenuState::settings_offset(std::size_t index) const noexcept {
+    return index<settings_offsets_.size()?settings_offsets_[index]:0;
+}
+bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
+    if((direction!=1&&direction!=-1) || index>=catalog.size() ||
+       catalog[index].tab!=selected_ || !expanded_[index])return false;
+    const std::size_t count=recovered_widget_count(catalog[index].name);
+    if(count==0)return false;
+    const std::size_t previous=settings_offsets_[index];
+    // No arithmetic on untrusted or potentially overflowing offsets.
+    if(direction<0) {
+        if(previous<5)return false;
+        settings_offsets_[index]-=5;
+    } else {
+        if(previous>=count || count-previous<=5)return false;
+        settings_offsets_[index]+=5;
+    }
     return true;
 }
 bool MenuState::preview_enabled(std::size_t index) const noexcept {
@@ -89,7 +110,8 @@ std::vector<MenuItem> MenuState::page(std::size_t maximum) const {
         if(catalog[i].tab!=selected_)continue;
         if(skipped++<scroll_)continue;
         if(rows.size()==cap)break;
-        rows.push_back({i,catalog[i].name,enabled_[i],expanded_[i]});
+        rows.push_back({i,catalog[i].name,enabled_[i],
+                        expanded_[i],settings_offsets_[i]});
     }
     return rows;
 }
