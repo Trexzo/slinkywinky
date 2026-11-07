@@ -22,11 +22,15 @@ struct MenuNumericTooltip {
 inline std::optional<MenuNumericTooltip> menu_numeric_tooltip_geometry(
         const MenuRenderFrame& frame,float width,
         float height) {
-    if(!frame.numeric_hover || frame.unload_confirmation_preview ||
+    if((!frame.numeric_hover && !frame.numeric_drag_preview) ||
+       frame.unload_confirmation_preview ||
        frame.dropdown_preview || frame.profile_action_preview ||
        frame.is_placeholder || width<120.0f || height<100.0f)
         return std::nullopt;
-    const auto id=*frame.numeric_hover;
+    const auto id=frame.numeric_drag_preview?
+        MenuNumericHover{frame.numeric_drag_preview->catalog_index,
+                         frame.numeric_drag_preview->widget_index}:
+        *frame.numeric_hover;
     const auto& all=recovered_widget_catalog();
     if(id.widget_index>=all.size())return std::nullopt;
     const auto& w=all[id.widget_index];
@@ -37,16 +41,23 @@ inline std::optional<MenuNumericTooltip> menu_numeric_tooltip_geometry(
     if(!track)return std::nullopt;
     if(!std::isfinite(w.min_value) || !std::isfinite(w.max_value) ||
        w.max_value<=w.min_value)return std::nullopt;
-    const float first=w.kind==RecoveredWidgetKind::Slider?
-        frame.recovered_slider_overrides[id.widget_index].value_or(
-            w.example_value):
-        frame.recovered_range_overrides[id.widget_index].value_or(
-            RecoveredRangePreview{w.example_value,w.example_other}).lower;
+    const auto temporary=frame.numeric_drag_preview &&
+        frame.numeric_drag_preview->catalog_index==id.catalog_index &&
+        frame.numeric_drag_preview->widget_index==id.widget_index?
+        frame.numeric_drag_preview:std::nullopt;
+    const float first=temporary?temporary->lower:
+        (w.kind==RecoveredWidgetKind::Slider?
+         frame.recovered_slider_overrides[id.widget_index].value_or(
+             w.example_value):
+         frame.recovered_range_overrides[id.widget_index].value_or(
+             RecoveredRangePreview{
+                 w.example_value,w.example_other}).lower);
     const std::optional<float> second=
         w.kind==RecoveredWidgetKind::Range?
-        std::optional<float>(frame.recovered_range_overrides[id.widget_index]
-            .value_or(RecoveredRangePreview{
-                w.example_value,w.example_other}).upper):std::nullopt;
+        std::optional<float>(temporary?temporary->upper:
+           frame.recovered_range_overrides[id.widget_index].value_or(
+               RecoveredRangePreview{
+                   w.example_value,w.example_other}).upper):std::nullopt;
     if(!std::isfinite(first) || first<w.min_value ||
        first>w.max_value || (second &&
        (!std::isfinite(*second) || *second<first ||
