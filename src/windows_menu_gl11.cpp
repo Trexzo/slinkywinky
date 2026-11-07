@@ -8,6 +8,7 @@
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
+#include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -714,6 +715,41 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             rgb(i==popup->selected?frame.appearance.accent_rgb:0x999999);
             text(label,left,y+7.0f,15.0f,popup->width-8.0f);
         }
+    }
+    // R128: the source-backed seventh tab displays only an inert modal.
+    // The commercial client's unload operation is deliberately NOT wired.
+    if(frame.unload_confirmation_preview) {
+        const auto modal=menu_unload_modal_geometry(frame,w,h);
+        if(!modal)return false;
+        rgba(0x303030,190);
+        quad(0.0f,0.0f,w,h);
+        rgb(0x141414);
+        round_rect(modal->x,modal->y,modal->width,modal->height,20.0f);
+        rgb(0xdddddd);
+        text("Are you sure?",modal->x+8.0f,modal->y+10.0f,
+             16.0f,modal->width-50.0f);
+        rgb(0x999999);
+        text("Unload Slinky?",modal->x+8.0f,modal->y+42.0f,
+             15.0f,modal->width-16.0f);
+        rgb(0x404040);
+        round_rect(modal->continue_x,modal->continue_y,
+                   modal->continue_width,20.0f,8.0f);
+        rgb(0xdddddd);
+        const std::string_view action="Continue (preview only)";
+        const float measured=measure_menu_system_text(action,15.0f);
+        text(action,modal->continue_x+
+            std::max(8.0f,(modal->continue_width-measured)*0.5f),
+            modal->continue_y+3.0f,15.0f,
+            modal->continue_width-16.0f);
+        // The reference uses a 2px gray cross at the right of the title.
+        rgb(0x999999);
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glVertex2f(modal->close_x+4.0f,modal->close_y+4.0f);
+        glVertex2f(modal->close_x+16.0f,modal->close_y+16.0f);
+        glVertex2f(modal->close_x+16.0f,modal->close_y+4.0f);
+        glVertex2f(modal->close_x+4.0f,modal->close_y+16.0f);
+        glEnd();
     }
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture
     // selection or app-managed caches; state restoration is GL1.1 only.
