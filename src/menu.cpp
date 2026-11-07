@@ -181,7 +181,8 @@ bool MenuState::open_preview_dropdown(
         std::string_view(widgets[relative]->label)!="Mode"))
         return false;
     if(kind==MenuDropdownKind::PiercingSort &&
-       (index!=11u || control_index!=0u || group!="Main"))
+       (index!=11u || control_index!=0u || group!="Always hit through" ||
+        std::string_view(widgets[relative]->label)!="Sort targets by"))
         return false;
     dropdown_preview_=MenuDropdownPreview{
         kind,index,control_index,settings_offsets_[index]
