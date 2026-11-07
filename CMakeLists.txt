@@ -94,6 +94,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_range_preview_safety
     COMMAND slinkywinky_recovered_range_preview_tests)
+  add_executable(slinkywinky_recovered_multi_preview_tests
+    tests/test_recovered_multi_preview.cpp)
+  target_link_libraries(slinkywinky_recovered_multi_preview_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_recovered_multiselect_preview_safety
+    COMMAND slinkywinky_recovered_multi_preview_tests)
   add_executable(slinkywinky_menu_profile_tests tests/test_menu_profile.cpp)
   target_link_libraries(slinkywinky_menu_profile_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_profile_binding COMMAND slinkywinky_menu_profile_tests)
