@@ -302,6 +302,16 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(!frame) {cancel_mouse(hwnd);return 0;}
             const int x=static_cast<short>(LOWORD(lp));
             const int y=static_cast<short>(HIWORD(lp));
+            // A click outside an open popup closes it, never dispatching
+            // to an underlying module/tab in the same mouse gesture.
+            if(frame->dropdown_preview &&
+               !slinkywinky::hit_test_menu(
+                    *frame,panel_mode(),x,y)) {
+                menu.close_preview_dropdown();
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             if(mouseGesture.press(*frame,panel_mode(),x,y,
                                   GetTickCount64(),preview_focused(hwnd))) {
                 SetCapture(hwnd);
@@ -333,7 +343,12 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             cancel_mouse(hwnd);
             if(hit) {
                 using slinkywinky::MenuHitKind;
-                if(hit->kind==MenuHitKind::Tab)
+                if(hit->kind==MenuHitKind::DropdownOption) {
+                    // Only a verified visible popup option can mutate the
+                    // inert GUI preview, and the popup closes on selection.
+                    menu.select_preview_dropdown_option(
+                        static_cast<unsigned>(hit->control_index));
+                } else if(hit->kind==MenuHitKind::Tab)
                     navigation.select_tab(hit->tab);
                 else if(navigation.focus_visible_row(hit->catalog_index)) {
                     if(hit->kind==MenuHitKind::Expand)
@@ -341,17 +356,21 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(hit->kind==MenuHitKind::Toggle)
                         navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
                     else if(hit->kind==MenuHitKind::PiercingControl &&
-                            hit->catalog_index==11 &&
-                            menu.select_piercing_control(hit->control_index))
-                        menu.activate_piercing_selection();
-                    else if(hit->kind==MenuHitKind::AimModeControl &&
+                            hit->catalog_index==11) {
+                        if(hit->control_index==0u)
+                            menu.open_preview_dropdown(
+                                slinkywinky::MenuDropdownKind::PiercingSort,0u);
+                        else if(menu.select_piercing_control(hit->control_index))
+                            menu.activate_piercing_selection();
+                    } else if(hit->kind==MenuHitKind::AimModeControl &&
                             hit->catalog_index==0 && hit->control_index==0)
-                        navigation.apply(
-                            slinkywinky::MenuNavAction::NextAimPreviewMode);
+                        menu.open_preview_dropdown(
+                            slinkywinky::MenuDropdownKind::AimMode,0u);
                     else if(hit->kind==MenuHitKind::TargetModeControl &&
                             hit->catalog_index==0)
-                        navigation.apply(
-                            slinkywinky::MenuNavAction::NextTargetPreviewMode);
+                        menu.open_preview_dropdown(
+                            slinkywinky::MenuDropdownKind::TargetMode,
+                            hit->control_index);
                     // A click outside the actual control remains inert.
                 }
             }
