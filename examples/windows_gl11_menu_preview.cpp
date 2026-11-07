@@ -38,6 +38,7 @@ HGLRC graphics=nullptr;
 HWND window=nullptr;
 std::filesystem::path preferences;
 std::filesystem::path profilePreferences;
+std::filesystem::path piercingPreferences; // separate sandbox only
 bool overlayDemo=false; // Standalone-only demonstration, never attached to Minecraft.
 slinkywinky::MenuGL11Mode overlayMode=slinkywinky::MenuGL11Mode::BoundedOverlay;
 
@@ -53,6 +54,11 @@ std::filesystem::path profile_file() {
     if(len==0 || len>=32768)return {};
     return std::filesystem::path(buffer)/L"SlinkyWinky"/
            L"module-profile-preview.conf";
+}
+std::filesystem::path piercing_preview_file() {
+    const auto profilePath=profile_file();
+    if(profilePath.empty())return {};
+    return profilePath.parent_path()/L"piercing-preview-only.conf";
 }
 void persist() {
     if(!preferences.empty())
@@ -80,6 +86,14 @@ void refresh_caption(HWND hwnd) {
             slinkywinky::official_module_catalog()[*focused].name,
             static_cast<int>(menu.aim_preview_mode()),
             static_cast<int>(menu.target_preview_mode()));
+        if(*focused==11) {
+            std::wostringstream control;
+            control<<L" | Piercing sandbox: "
+                   <<(menu.piercing_selected()+1u)
+                   <<L"/8 (F9 select, F10 change, F11 previous)"
+                   <<L" | F12 save / Shift+F12 load";
+            label+=control.str();
+        }
         if(*focused==0) {
             static constexpr const wchar_t* modes[]{
                 L"Regular",L"Linear",L"Lock-on",L"Silent"
@@ -350,6 +364,35 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 request_paint(hwnd);
                 return 0;
             }
+            // R124: actual first-party editing of only the isolated
+            // Piercing sandbox. No game key hook, JNI or module action.
+            if(wp==VK_F9 || wp==VK_F10 || wp==VK_F11) {
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0)
+                    navigation.apply(wp==VK_F9?
+                        slinkywinky::MenuNavAction::NextPiercingControl:
+                        (wp==VK_F11?
+                        slinkywinky::MenuNavAction::PreviousPiercingControl:
+                        slinkywinky::MenuNavAction::ActivatePiercingControl));
+                refresh_caption(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
+            if(wp==VK_F12) {
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0 &&
+                   !piercingPreferences.empty()) {
+                    if(GetKeyState(VK_SHIFT)&0x8000) {
+                        slinkywinky::PiercingPreview loaded{};
+                        if(slinkywinky::load_piercing_preview(
+                                piercingPreferences,loaded))
+                            menu.adopt_piercing_preview(loaded);
+                    } else
+                        slinkywinky::save_piercing_preview(
+                            piercingPreferences,menu.piercing_preview());
+                }
+                refresh_caption(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             // Native Windows key codes, distinct from LWJGL2's 201/209.
             // Page keys only navigate the first-party read-only preview.
             // Autorepeat cannot race two page changes for one physical hold.
@@ -438,6 +481,13 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR arguments,int show) {
     preferences=settings_file();
     profilePreferences=profile_file();
     if(!profilePreferences.empty())profile.load(profilePreferences);
+    // Independent, strictly-validated GUI sandbox file, not ClientSettings.
+    piercingPreferences=piercing_preview_file();
+    if(!piercingPreferences.empty()) {
+        slinkywinky::PiercingPreview saved{};
+        if(slinkywinky::load_piercing_preview(piercingPreferences,saved))
+            menu.adopt_piercing_preview(saved);
+    }
     slinkywinky::MenuAppearance stored{};
     if(!preferences.empty() &&
        slinkywinky::load_menu_appearance(preferences,stored))

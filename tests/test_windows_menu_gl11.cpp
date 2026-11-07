@@ -1310,6 +1310,41 @@ int main() {
             REQUIRE(sourceMenu.settings_offset(0)==0);
             std::cout<<"R123_EIGHT_SOURCE_CONDITIONAL_AIM_WGL_STATES_PASS\n";
             std::cout<<"R123_STALE_MODAL_SELECTION_AND_FORGED_FRAME_DENIAL_PASS\n";
+            // R124: a real isolated WGL context paints first-party
+            // Piercing preview switches and dropdown mutations. No game hook.
+            REQUIRE(sourceMenu.scroll_by(4));
+            REQUIRE(pageNav.focus_visible_row(11));
+            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            const auto piercingStart=sourceFrames.next(
+                sourceMenu,&sourceProfile,&pageNav);
+            REQUIRE(piercingStart && piercingStart->piercing_preview.sort==0);
+            REQUIRE(draw_menu_gl11(*piercingStart,
+                sourceWide.gl,sourceWide.dc));
+            same(wideBefore,snapshot());
+            REQUIRE(pageNav.apply(MenuNavAction::ActivatePiercingControl));
+            const auto piercingChanged=sourceFrames.next(
+                sourceMenu,&sourceProfile,&pageNav);
+            REQUIRE(piercingChanged && piercingChanged->piercing_preview.sort==1);
+            REQUIRE(piercingStart->piercing_preview.sort==0);
+            REQUIRE(draw_menu_gl11(*piercingChanged,
+                sourceWide.gl,sourceWide.dc));
+            same(wideBefore,snapshot());
+            REQUIRE(pageNav.apply(MenuNavAction::NextPiercingControl));
+            REQUIRE(pageNav.apply(MenuNavAction::ActivatePiercingControl));
+            const auto toggled=sourceFrames.next(
+                sourceMenu,&sourceProfile,&pageNav);
+            REQUIRE(toggled && toggled->piercing_selected==1 &&
+                    toggled->piercing_preview.enabled[0]);
+            REQUIRE(draw_menu_gl11(*toggled,
+                sourceWide.gl,sourceWide.dc));
+            same(wideBefore,snapshot());
+            auto forgedPiercing=*toggled;
+            forgedPiercing.piercing_preview.sort=2;
+            REQUIRE(!draw_menu_gl11(forgedPiercing,
+                sourceWide.gl,sourceWide.dc));
+            REQUIRE(!hit_test_menu(forgedPiercing,
+                MenuPanelMode::StandalonePreview,40,30));
+            std::cout<<"R124_ISOLATED_PIERCING_EDIT_RENDER_AND_GL_RESTORE_PASS\n";
             std::cout<<"R118_SYNTHETIC_LWJGL2_PAGE_KEYS_TO_REAL_WGL_PAGES_PASS\n";
             std::cout<<"R117_ALL_RECOVERED_AIM_SETTINGS_PAGED_AND_WGL_RESTORED_PASS\n";
             std::cout<<"R117_STALE_MOUSE_AND_FORGED_PAGE_REFUSAL_PASS\n";

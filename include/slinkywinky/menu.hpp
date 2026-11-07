@@ -39,6 +39,20 @@ bool load_menu_appearance(const std::filesystem::path& path,MenuAppearance& resu
 bool save_menu_appearance(const std::filesystem::path& path,
                           const MenuAppearance& appearance) noexcept;
 
+// R124: eight source-backed *display controls* for Piercing, all
+// disconnected from ClientSettings, original Minecraft input and gameplay.
+struct PiercingPreview {
+    unsigned sort=0;  // 0 Hurt time, 1 Health
+    std::array<bool,7> enabled{{false,false,false,false,false,false,true}};
+};
+bool operator==(const PiercingPreview& a,const PiercingPreview& b) noexcept;
+std::string serialize_piercing_preview(const PiercingPreview& prefs);
+bool parse_piercing_preview(const std::string& data,PiercingPreview& out) noexcept;
+bool load_piercing_preview(const std::filesystem::path& file,
+                          PiercingPreview& out) noexcept;
+bool save_piercing_preview(const std::filesystem::path& file,
+                          const PiercingPreview& prefs) noexcept;
+
 struct MenuItem {
     std::size_t catalog_index=0;
     std::string title;
@@ -65,6 +79,14 @@ public:
     unsigned target_preview_mode() const noexcept {return target_preview_mode_;}
     bool set_aim_preview_mode(unsigned mode) noexcept;
     bool set_target_preview_mode(unsigned mode) noexcept;
+    const PiercingPreview& piercing_preview() const noexcept {
+        return piercing_preview_;
+    }
+    std::size_t piercing_selected() const noexcept {return piercing_selected_;}
+    bool move_piercing_selection(int direction) noexcept;
+    bool activate_piercing_selection() noexcept;
+    // Only for explicitly preview-only persistence; never changes gameplay.
+    bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
     bool preview_enabled(std::size_t catalog_index) const noexcept;
     bool expanded(std::size_t catalog_index) const noexcept;
     void set_compact(bool value) noexcept {appearance_.compact=value;}
@@ -86,6 +108,8 @@ private:
     std::array<std::size_t,67> settings_offsets_{};
     unsigned aim_preview_mode_=0; // Regular, Linear, Lock-on, Silent
     unsigned target_preview_mode_=0; // Single, Switch
+    PiercingPreview piercing_preview_{};
+    std::size_t piercing_selected_=0; // 0 dropdown + 7 bools
 };
 
 } // namespace slinkywinky

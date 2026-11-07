@@ -191,6 +191,13 @@ int main() {
         altered.target_preview_mode=2;
         CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
         altered=*frame;
+        altered.piercing_preview.sort=2; // invalid sandbox state
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        CHECK(!hit_test_menu(altered,mode,insideX,insideY));
+        altered=*frame;
+        altered.piercing_selected=8; // invalid sandbox selection
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        altered=*frame;
         altered.visible[0].title="Forged page";
         CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
         altered=*frame;

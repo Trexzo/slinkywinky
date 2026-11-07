@@ -44,6 +44,8 @@ bool MenuMouseGesture::equivalent_frame(
        frame.tab!=original.tab ||
        frame.aim_preview_mode!=original.aim_preview_mode ||
        frame.target_preview_mode!=original.target_preview_mode ||
+       frame.piercing_selected!=original.piercing_selected ||
+       !(frame.piercing_preview==original.piercing_preview) ||
        frame.is_placeholder!=original.is_placeholder ||
        frame.appearance.wide!=original.appearance.wide ||
        frame.appearance.compact!=original.appearance.compact ||

@@ -112,6 +112,18 @@ bool MenuNavigation::apply(MenuNavAction action) {
         case MenuNavAction::PreviousTab: return switch_tab(-1);
         case MenuNavAction::NextRow: return move_row(1);
         case MenuNavAction::PreviousRow: return move_row(-1);
+        case MenuNavAction::NextPiercingControl:
+        case MenuNavAction::PreviousPiercingControl:
+        case MenuNavAction::ActivatePiercingControl: {
+            std::size_t index=0;
+            if(!focused_visible(&index) || index!=11 ||
+               menu_.tab()!=MenuTab::Combat || !menu_.expanded(index))
+                return false;
+            if(action==MenuNavAction::ActivatePiercingControl)
+                return menu_.activate_piercing_selection();
+            return menu_.move_piercing_selection(
+                action==MenuNavAction::NextPiercingControl?1:-1);
+        }
         case MenuNavAction::NextAimPreviewMode:
         case MenuNavAction::NextTargetPreviewMode: {
             std::size_t index=0;

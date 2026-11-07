@@ -14,7 +14,9 @@ enum class MenuNavAction : unsigned char {
     NextTab, PreviousTab, NextRow, PreviousRow,
     ExpandFocused, ToggleFocusedPreview, IncreaseSetting, DecreaseSetting,
     NextSettingsPage, PreviousSettingsPage,
-    NextAimPreviewMode, NextTargetPreviewMode
+    NextAimPreviewMode, NextTargetPreviewMode,
+    NextPiercingControl, PreviousPiercingControl,
+    ActivatePiercingControl
 };
 
 // The navigation controller is bound to one menu/profile pair and the

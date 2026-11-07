@@ -159,7 +159,8 @@ std::uint32_t preview_swatch(const char* s) noexcept {
 }
 void draw_recovered_widget(const RecoveredWidget& widget,
                            float x,float y,float cardWidth,
-                           std::uint32_t accent) noexcept {
+                           std::uint32_t accent,
+                           std::string_view dropdownOverride={}) noexcept {
     const float controlX=x+cardWidth*0.54f;
     const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
     const float labelW=std::max(14.0f,controlX-x-14.0f);
@@ -210,7 +211,8 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                        controlW-4.0f,18.0f,7.0f);
             std::string_view label;
             if(widget.kind==RecoveredWidgetKind::Dropdown) {
-                label=widget.options;
+                label=dropdownOverride.empty()?
+                      std::string_view(widget.options):dropdownOverride;
                 label=label.substr(0,label.find('|'));
             } else if(widget.kind==RecoveredWidgetKind::MultiSelect) {
                 label="Select options";
@@ -611,6 +613,10 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     frame.target_preview_mode==0?"SINGLE":"SWITCH");
                 text(label,left+8.0f,settingY+25.0f,11.0f,
                      rect.width-16.0f);
+            } else if(item.catalog_index==11 &&
+                      frame.tab==MenuTab::Combat) {
+                text("LOCAL PIERCING PREVIEW ONLY  F9/F10/F11",
+                     left+8.0f,settingY+25.0f,11.0f,rect.width-16.0f);
             } else
                 text("REFERENCE PREVIEW - READ ONLY",left+8.0f,
                      settingY+25.0f,11.0f,rect.width-16.0f);
@@ -627,9 +633,28 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     addedHeadings+=20.0f;
                     lastGroup=group;
                 }
-                draw_recovered_widget(*preview[j],left,
+                RecoveredWidget display=*preview[j]; // never edits catalog
+                std::string_view selectedChoice;
+                if(item.catalog_index==11 &&
+                   frame.tab==MenuTab::Combat) {
+                    const auto control=item.settings_offset+j;
+                    if(control==0)selectedChoice=
+                        frame.piercing_preview.sort==0?
+                            "Hurt time":"Health";
+                    else if(control<=7)
+                        display.example_enabled=
+                            frame.piercing_preview.enabled[control-1];
+                    if(control==frame.piercing_selected) {
+                        rgb(frame.appearance.accent_rgb);
+                        quad(left+2.0f,
+                             settingY+47.0f+
+                               27.0f*static_cast<float>(j)+addedHeadings,
+                             3.0f,13.0f);
+                    }
+                }
+                draw_recovered_widget(display,left,
                     settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
-                    rect.width,frame.appearance.accent_rgb);
+                    rect.width,frame.appearance.accent_rgb,selectedChoice);
             }
             if(count>5) {
                 char pagination[70]{};

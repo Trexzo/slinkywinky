@@ -73,7 +73,8 @@ inline float menu_expanded_height(const MenuRenderFrame& frame,
 // settings offsets before drawing/dispatching any native GUI action.
 inline bool menu_settings_offsets_valid(
         const MenuRenderFrame& frame) noexcept {
-    if(frame.aim_preview_mode>3u || frame.target_preview_mode>1u)
+    if(frame.aim_preview_mode>3u || frame.target_preview_mode>1u ||
+       frame.piercing_preview.sort>1u || frame.piercing_selected>7u)
         return false;
     for(const auto& item:frame.visible) {
         const auto count=recovered_widget_visible_count(

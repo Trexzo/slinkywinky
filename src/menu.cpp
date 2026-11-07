@@ -100,6 +100,44 @@ bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     }
     return true;
 }
+bool MenuState::move_piercing_selection(int direction) noexcept {
+    if((direction!=1 && direction!=-1) ||
+       selected_!=MenuTab::Combat || !expanded_[11])return false;
+    const auto rows=page();
+    const auto it=std::find_if(rows.begin(),rows.end(),
+        [](const MenuItem& row){return row.catalog_index==11;});
+    if(it==rows.end())return false;
+    if(direction>0 && piercing_selected_>=7)return false;
+    if(direction<0 && piercing_selected_==0)return false;
+    piercing_selected_=static_cast<std::size_t>(
+        static_cast<int>(piercing_selected_)+direction);
+    // Keep the selected original callsite in the bounded 5-row viewport.
+    settings_offsets_[11]=(piercing_selected_/5u)*5u;
+    return true;
+}
+bool MenuState::activate_piercing_selection() noexcept {
+    if(selected_!=MenuTab::Combat || !expanded_[11])return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+        [](const MenuItem& row){return row.catalog_index==11;}))
+        return false;
+    if(piercing_selected_>7)return false;
+    if(piercing_selected_==0)
+        piercing_preview_.sort=1u-piercing_preview_.sort;
+    else {
+        auto& flag=piercing_preview_.enabled[piercing_selected_-1];
+        flag=!flag;
+    }
+    return true;
+}
+bool MenuState::adopt_piercing_preview(
+        const PiercingPreview& prefs) noexcept {
+    if(prefs.sort>1u)return false;
+    piercing_preview_=prefs;
+    piercing_selected_=0;
+    settings_offsets_[11]=0;
+    return true;
+}
 bool MenuState::preview_enabled(std::size_t index) const noexcept {
     return index<enabled_.size() && enabled_[index];
 }
