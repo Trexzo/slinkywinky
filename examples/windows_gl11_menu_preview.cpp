@@ -145,8 +145,34 @@ std::optional<slinkywinky::MenuRenderFrame> mouse_frame(HWND hwnd) {
         return std::nullopt;
     return frame;
 }
+// R148: sample a captured, source-validated numeric track in logical
+// coordinates. The temporary value only affects the standalone GUI
+// presentation and is not persisted until the mouse-up gate succeeds.
+bool preview_numeric_drag_at(const slinkywinky::MenuRenderFrame& frame,
+                             slinkywinky::MenuPanelMode mode,
+                             const slinkywinky::MenuHit& hit,
+                             int screenX) {
+    const auto panel=slinkywinky::menu_panel_geometry(
+        frame.viewport_width,frame.viewport_height,
+        frame.appearance.wide,mode);
+    if(!panel)return false;
+    const auto track=slinkywinky::menu_numeric_track_geometry(
+        frame,panel->logical_width(),panel->logical_height(),
+        hit.catalog_index,hit.control_index);
+    const auto& widgets=slinkywinky::recovered_widget_catalog();
+    if(!track || hit.control_index>=widgets.size())return false;
+    const float logicalX=(static_cast<float>(screenX)-
+        static_cast<float>(panel->left))/panel->scale;
+    const auto value=slinkywinky::menu_numeric_value_at_x(
+        widgets[hit.control_index],*track,logicalX);
+    return value && menu.move_numeric_drag_preview(*value);
+}
 void cancel_mouse(HWND hwnd) {
     mouseGesture.cancel();
+    // Release transient drag values on every cancellation path. Invalid
+    // releases and resize/focus-loss cannot commit these preview values.
+    if(menu.cancel_numeric_drag_preview() && IsWindow(hwnd))
+        request_paint(hwnd);
     // Capture is solely owned by this separate preview window. A new
     // Minecraft client/window is never discovered or touched.
     if(GetCapture()==hwnd)ReleaseCapture();
@@ -455,7 +481,25 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             if(mouseGesture.press(*frame,panel_mode(),x,y,
                                   GetTickCount64(),preview_focused(hwnd))) {
                 SetCapture(hwnd);
-                if(GetCapture()!=hwnd)mouseGesture.cancel();
+                if(GetCapture()!=hwnd) {
+                    cancel_mouse(hwnd);
+                    return 0;
+                }
+                const auto hit=slinkywinky::hit_test_menu(
+                    *frame,panel_mode(),x,y);
+                if(hit &&
+                   (hit->kind==slinkywinky::MenuHitKind::RecoveredSliderPreview ||
+                    hit->kind==slinkywinky::MenuHitKind::RecoveredRangePreview)) {
+                    if(!menu.begin_numeric_drag_preview(
+                          hit->catalog_index,hit->control_index,
+                          hit->kind==slinkywinky::MenuHitKind::RecoveredRangePreview?
+                            hit->sub_index:0u)) {
+                        cancel_mouse(hwnd);
+                        return 0;
+                    }
+                    preview_numeric_drag_at(*frame,panel_mode(),*hit,x);
+                    request_paint(hwnd);
+                }
             }
             return 0;
         }
@@ -569,16 +613,26 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 return 0;
             }
             const auto frame=mouse_frame(hwnd);
+            const int x=static_cast<short>(LOWORD(lp));
+            const int y=static_cast<short>(HIWORD(lp));
             if(!frame || GetCapture()!=hwnd ||
-               !mouseGesture.move(*frame,panel_mode(),
-                                  static_cast<short>(LOWORD(lp)),
-                                  static_cast<short>(HIWORD(lp)),
+               !mouseGesture.move(*frame,panel_mode(),x,y,
                                   preview_focused(hwnd))) {
-                cancel_mouse(hwnd); // Leaving the target is terminal.
+                cancel_mouse(hwnd); // R98 target and ownership remain strict.
+            } else if(const auto captured=menu.numeric_drag_preview()) {
+                const slinkywinky::MenuHit source{
+                    slinkywinky::MenuHitKind::RecoveredSliderPreview,
+                    frame->tab,captured->catalog_index,
+                    captured->widget_index,captured->handle};
+                if(preview_numeric_drag_at(*frame,panel_mode(),source,x))
+                    request_paint(hwnd);
             }
             return 0;
         }
         case WM_MOUSELEAVE: {
+            // A captured drag owns the temporary tooltip until capture
+            // ends; clearing hover now would invalidate its source frame.
+            if(mouseGesture.pending())return 0;
             bool repaint=menu.set_bind_hover_row(std::nullopt);
             if(menu.set_profile_icon_hover(std::nullopt))repaint=true;
             if(menu.set_numeric_hover(std::nullopt))repaint=true;
