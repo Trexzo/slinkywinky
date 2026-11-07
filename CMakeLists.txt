@@ -130,6 +130,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_keybind_preview_safety
     COMMAND slinkywinky_recovered_bind_preview_tests)
+  add_executable(slinkywinky_recovered_profiles_interaction_tests
+    tests/test_recovered_profiles_interaction.cpp)
+  target_link_libraries(slinkywinky_recovered_profiles_interaction_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_recovered_profiles_create_and_actions
+    COMMAND slinkywinky_recovered_profiles_interaction_tests)
   add_executable(slinkywinky_menu_profile_tests tests/test_menu_profile.cpp)
   target_link_libraries(slinkywinky_menu_profile_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_profile_binding COMMAND slinkywinky_menu_profile_tests)
