@@ -215,15 +215,15 @@ int main() {
         MenuProfileBridge profile(menu);
         MenuRenderSession session;
         CHECK(session.attach(121,900,630));
-        CHECK(menu.toggle_expanded(1));  // Auto Clicker native order
+        CHECK(menu.toggle_expanded(2));  // Auto Clicker in sorted native catalog
         const auto first=session.next(menu,&profile);
-        CHECK(first && first->visible[1].settings_offset==0);
-        CHECK(menu_expanded_height(*first,1)==209.0f);
-        CHECK(menu.change_settings_page(1,1));
+        CHECK(first && first->visible[2].settings_offset==0);
+        CHECK(menu_expanded_height(*first,2)==209.0f);
+        CHECK(menu.change_settings_page(2,1));
         const auto second=session.next(menu,&profile);
-        CHECK(second && second->visible[1].settings_offset==5);
-        CHECK(menu_expanded_height(*second,1)==202.0f);
-        const auto card=menu_module_card_rect(*second,900.0f,1);
+        CHECK(second && second->visible[2].settings_offset==5);
+        CHECK(menu_expanded_height(*second,2)==202.0f);
+        const auto card=menu_module_card_rect(*second,900.0f,2);
         CHECK(card.height==menu_row_body_height(*second)+202.0f);
         CHECK(card.y+card.height<630.0f);
         const auto panel=menu_panel_geometry(
@@ -233,15 +233,15 @@ int main() {
         const auto lower=settings_page_wheel_target(*second,
             MenuPanelMode::StandalonePreview,middleX,
             pixel_y(*panel,card.y+card.height-10.0f));
-        CHECK(lower && *lower==1);
+        CHECK(lower && *lower==2);
         // The section heading and its content are read-only.
         CHECK(!hit_test_menu(*second,MenuPanelMode::StandalonePreview,
             middleX,pixel_y(*panel,card.y+card.height-48.0f)));
         CHECK(!settings_page_wheel_target(*second,
             MenuPanelMode::StandalonePreview,middleX,
             pixel_y(*panel,card.y+card.height+2.0f)));
-        CHECK(menu.change_settings_page(1,-1));
-        CHECK(menu_expanded_height(*session.next(menu,&profile),1)==209.0f);
+        CHECK(menu.change_settings_page(2,-1));
+        CHECK(menu_expanded_height(*session.next(menu,&profile),2)==209.0f);
         CHECK(session.detach());
     }
     // Consumer never reaches another thread's UI/model.
