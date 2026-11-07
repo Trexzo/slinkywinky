@@ -45,10 +45,24 @@ void quad(float x,float y,float w,float h) noexcept {
     glVertex2f(x,y+h);
     glEnd();
 }
+// R149: visual-only nested opacity. Its RAII owner restores the factor
+// even on an early render failure. GL state remains isolated by R67.
+thread_local float visual_alpha=1.0f;
+struct ScopedVisualAlpha {
+    float previous;
+    explicit ScopedVisualAlpha(float factor) noexcept :
+        previous(visual_alpha) {
+        visual_alpha*=std::clamp(factor,0.0f,1.0f);
+    }
+    ~ScopedVisualAlpha() noexcept {visual_alpha=previous;}
+};
 void rgba(std::uint32_t c,GLubyte alpha=255) noexcept {
+    const auto adjusted=static_cast<GLubyte>(
+        std::clamp(std::lround(static_cast<float>(alpha)*visual_alpha),
+                   0l,255l));
     glColor4ub(static_cast<GLubyte>((c>>16)&255),
                static_cast<GLubyte>((c>>8)&255),
-               static_cast<GLubyte>(c&255),alpha);
+               static_cast<GLubyte>(c&255),adjusted);
 }
 void rgb(std::uint32_t c) noexcept {
     rgba(c);
@@ -415,7 +429,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         frame.appearance.wide,geometryMode);
     if(!panel || !menu_settings_offsets_valid(frame) ||
        !menu_profile_preview_valid(
-            frame,panel->logical_width(),panel->logical_height()))
+            frame,panel->logical_width(),panel->logical_height()) ||
+       (frame.visual_motion && !menu_visual_motion_valid(
+            *frame.visual_motion,frame.tab,panel->logical_height())))
         return false;
     ScopedFixedFunctionState state;
     if(!state.ready())return false;
@@ -455,6 +471,14 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     if(scale!=1.0f)glScalef(scale,scale,1.0f);
     const float w=static_cast<float>(paneWidth)/scale;
     const float h=static_cast<float>(paneHeight)/scale;
+    // Apply source .animate 250ms opening translation/fade only to this
+    // optional display frame. The original frame/geometry is unchanged.
+    const float openY=frame.visual_motion?
+        frame.visual_motion->opening_offset_y:0.0f;
+    const float openAlpha=frame.visual_motion?
+        frame.visual_motion->opening_opacity:1.0f;
+    ScopedVisualAlpha openFade(openAlpha);
+    if(openY!=0.0f)glTranslatef(0.0f,openY,0.0f);
     rgba(0x303030,overlay?static_cast<GLubyte>(192):static_cast<GLubyte>(255));
     quad(0,0,w,h);
     // Real Slinky uses a slim rounded navigation bar, rather than a
@@ -464,9 +488,11 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                menu_nav_height,menu_nav_radius);
     const float cell=menu_tab_width(w);
     const auto selected=static_cast<unsigned>(frame.tab);
+    const float pill=frame.visual_motion?
+        frame.visual_motion->tab_position:static_cast<float>(selected);
     if(selected<6u) {
         rgb(0x404040);
-        round_rect(menu_nav_x+static_cast<float>(selected)*cell+
+        round_rect(menu_nav_x+pill*cell+
                        menu_nav_selected_inset,
                    menu_nav_y+menu_nav_selected_inset,
                    cell-2.0f*menu_nav_selected_inset,
@@ -486,6 +512,14 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     }
 
 
+    // Source #page animation runs only on presentation. Pointer dispatch
+    // is withheld by the WGL owner until this translation settles.
+    const float pageY=frame.visual_motion?
+        frame.visual_motion->page_offset_y:0.0f;
+    {
+    ScopedVisualAlpha pageFade(frame.visual_motion?
+        frame.visual_motion->page_opacity:1.0f);
+    if(pageY!=0.0f)glTranslatef(0.0f,pageY,0.0f);
     if(frame.is_placeholder) {
         // R115 source layout: genuine 430px-target card grid. Real session
         // snapshots contain only the actual native Default card. No file
@@ -959,6 +993,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                  tip->width-10.0f);
         }
     }
+    if(pageY!=0.0f)glTranslatef(0.0f,-pageY,0.0f);
+    } // page fade ends; confirmation dialog lives above the moving page
     if(frame.profile_action_preview) {
         const auto modal=menu_profile_modal_geometry(frame,w,h);
         if(!modal)return false;
