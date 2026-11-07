@@ -1,9 +1,11 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
+#include "slinkywinky/menu_numeric_geometry.hpp"
 #include <utility>
 
 namespace slinkywinky {
 namespace {
 constexpr std::uint64_t max_press_ms=1500;
+constexpr std::uint64_t max_numeric_press_ms=30000; // bounded captured drag
 constexpr std::uint64_t max_configured_double_click_ms=5000;
 }
 
@@ -38,6 +40,31 @@ bool MenuMouseGesture::same_hit(
 }
 // Only a source-typed range track may change which handle is nearest
 // during a drag. The originally captured handle remains the owner.
+static bool numeric_hit(const MenuHit& hit) noexcept {
+    return hit.kind==MenuHitKind::RecoveredSliderPreview ||
+           hit.kind==MenuHitKind::RecoveredRangePreview;
+}
+// A numeric drag can follow pointer capture beyond the track, provided
+// the pointer still belongs to the current isolated preview panel and the
+// original numeric track remains source-visible. Other GUI gestures keep
+// the strict same-hit rule from R98.
+static bool numeric_captured_point(const MenuRenderFrame& frame,
+                                   MenuPanelMode mode,
+                                   const MenuHit& held,int x,int y) noexcept {
+    if(!numeric_hit(held))return false;
+    const auto panel=menu_panel_geometry(
+        frame.viewport_width,frame.viewport_height,frame.appearance.wide,mode);
+    if(!panel || x<static_cast<int>(panel->left) ||
+       y<static_cast<int>(panel->top) ||
+       static_cast<std::int64_t>(x)>=
+         static_cast<std::int64_t>(panel->left)+panel->width ||
+       static_cast<std::int64_t>(y)>=
+         static_cast<std::int64_t>(panel->top)+panel->height)
+        return false;
+    return menu_numeric_track_geometry(
+        frame,panel->logical_width(),panel->logical_height(),
+        held.catalog_index,held.control_index).has_value();
+}
 static bool same_range_track(const MenuHit& press,
                              const MenuHit& next) noexcept {
     return press.kind==MenuHitKind::RecoveredRangePreview &&
@@ -154,13 +181,15 @@ bool MenuMouseGesture::move(
         return false;
     }
     const auto hit=hit_test_menu(frame,mode,x,y);
-    if(!hit || !(same_hit(*hit,active_->hit) ||
-                  same_range_track(active_->hit,*hit))) {
-        // Dragging off the target is terminal; re-entering cannot revive it.
-        active_.reset();
-        return false;
-    }
-    return true;
+    if(hit && (same_hit(*hit,active_->hit) ||
+               same_range_track(active_->hit,*hit)))
+        return true;
+    if(numeric_captured_point(
+        frame,mode,active_->hit,x,y))return true;
+    // Non-numeric drags and any pointer outside the owned panel still
+    // cancel terminally; re-entering never revives the old gesture.
+    active_.reset();
+    return false;
 }
 std::optional<MenuHit> MenuMouseGesture::release(
     const MenuRenderFrame& frame,MenuPanelMode mode,
@@ -171,12 +200,14 @@ std::optional<MenuHit> MenuMouseGesture::release(
     const auto pressed_at=active_->timestamp;
     const bool valid=foreground && equivalent_frame(frame,mode) &&
         monotonic_ms>=pressed_at &&
-        monotonic_ms-pressed_at<=max_press_ms;
+        monotonic_ms-pressed_at<=
+            (numeric_hit(previous)?max_numeric_press_ms:max_press_ms);
     active_.reset(); // A release is consumed even if it fails validation.
     if(!valid)return std::nullopt;
     const auto released=hit_test_menu(frame,mode,x,y);
-    if(!released || !(same_hit(previous,*released) ||
-                      same_range_track(previous,*released)))
+    if(!(released && (same_hit(previous,*released) ||
+                       same_range_track(previous,*released))) &&
+       !numeric_captured_point(frame,mode,previous,x,y))
         return std::nullopt;
     // R133: retain the *press-selected* range handle. Moving across the
     // other handle never changes ownership or causes a cross-handle write.
