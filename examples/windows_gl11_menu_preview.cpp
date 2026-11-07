@@ -239,7 +239,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
-            if(menu.bind_capture_index())return 0;
+            if(menu.bind_capture_index() ||
+               menu.profile_bind_capture_index())return 0;
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
             if(menu.unload_confirmation_preview())return 0;
             if(menu.dropdown_preview()) {
@@ -309,6 +310,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             menu.blur_recovered_text_preview();
             menu.blur_profile_name_preview();
             menu.cancel_profile_action_preview();
+            menu.cancel_profile_bind_capture();
             menu.cancel_bind_capture();
             menu.set_bind_hover_row(std::nullopt);
             cancel_mouse(hwnd);
@@ -321,6 +323,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 menu.blur_recovered_text_preview();
                 menu.blur_profile_name_preview();
                 menu.cancel_profile_action_preview();
+                menu.cancel_profile_bind_capture();
                 menu.cancel_bind_capture();
                 menu.set_bind_hover_row(std::nullopt);
                 cancel_mouse(hwnd);
@@ -348,6 +351,23 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_XBUTTONDOWN: {
             // Reconstructed DOM button ordering: middle=MOUSE2,
             // right=MOUSE3 and XBUTTON1/2=MOUSE4/5.
+            if(menu.profile_bind_capture_index()) {
+                if(!preview_focused(hwnd) || GetFocus()!=hwnd)
+                    menu.cancel_profile_bind_capture();
+                else {
+                    const std::uint16_t code=message==WM_MBUTTONDOWN?
+                        slinkywinky::menu_bind_mouse2:
+                        (message==WM_RBUTTONDOWN?
+                         slinkywinky::menu_bind_mouse3:
+                         (HIWORD(wp)==XBUTTON1?
+                          slinkywinky::menu_bind_mouse4:
+                          slinkywinky::menu_bind_mouse5));
+                    menu.commit_profile_bind_capture(code);
+                }
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 1;
+            }
             if(menu.bind_capture_index()) {
                 if(!preview_focused(hwnd) || GetFocus()!=hwnd)
                     menu.cancel_bind_capture();
@@ -368,6 +388,16 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             break;
         }
         case WM_LBUTTONDOWN:{
+            if(menu.profile_bind_capture_index()) {
+                if(preview_focused(hwnd) && GetFocus()==hwnd)
+                    menu.commit_profile_bind_capture(
+                        slinkywinky::menu_bind_mouse1);
+                else menu.cancel_profile_bind_capture();
+                pendingTextHigh=0;
+                cancel_mouse(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             // R140: source click-capture policy. A fresh left click outside
             // a waiting key chip clears it and never falls through to GUI
             // activation. Capture ownership is only this native window.
@@ -493,6 +523,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     menu.cancel_profile_action_preview();
                 else if(hit->kind==MenuHitKind::ProfileModalContinue)
                     menu.confirm_profile_action_preview();
+                else if(hit->kind==MenuHitKind::ProfileBindChip) {
+                    pendingTextHigh=0;
+                    menu.begin_profile_bind_capture(hit->catalog_index);
+                }
                 else if(hit->kind==MenuHitKind::ProfileNameField) {
                     pendingTextHigh=0;
                     menu.focus_profile_name_preview();
@@ -731,6 +765,30 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // Never act on a spoofed/late key message while this demo
             // window has lost its exact focus or foreground ownership.
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
+            if(menu.profile_bind_capture_index()) {
+                // The source's profile bind chip listens only while
+                // selected; this separate window never registers global
+                // hotkeys, handlers or actual Minecraft profile binds.
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0u) {
+                    std::uint16_t code=static_cast<std::uint16_t>(wp);
+                    if(wp==VK_ESCAPE)code=0u;
+                    else if(wp==VK_SHIFT) {
+                        const UINT scan=static_cast<UINT>(
+                            (static_cast<std::uint32_t>(lp)>>16u)&0xFFu);
+                        const UINT mapped=MapVirtualKeyW(
+                            scan,MAPVK_VSC_TO_VK_EX);
+                        code=mapped==VK_RSHIFT?0xA1u:0xA0u;
+                    } else if(wp==VK_CONTROL)
+                        code=(static_cast<std::uint32_t>(lp)&
+                              (1u<<24u))?0xA3u:0xA2u;
+                    else if(wp==VK_MENU)
+                        code=(static_cast<std::uint32_t>(lp)&
+                              (1u<<24u))?0xA5u:0xA4u;
+                    menu.commit_profile_bind_capture(code);
+                }
+                request_paint(hwnd);
+                return 0;
+            }
             if(menu.bind_capture_index()) {
                 // Only a fresh keydown is admitted. ESC clears; a loss of
                 // foreground would cancel instead. The original app's
