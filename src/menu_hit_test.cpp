@@ -182,6 +182,14 @@ std::optional<MenuHit> hit_test_menu(
                                        frame.tab,index,control};
                     continue;
                 }
+                if(dropdown) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    if(global>=all.size())return std::nullopt;
+                    return MenuHit{MenuHitKind::RecoveredChoiceControl,
+                                   frame.tab,index,global};
+                }
                 // Generic typed Boolean fixture: the pointer returned by
                 // recovered_widget_visible_page identifies the exact
                 // callsite, including Aim's conditional branches.
