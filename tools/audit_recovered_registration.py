@@ -10,7 +10,6 @@ The candidate blob is *not* authenticated native commercial Slinky source.
 """
 import argparse
 import collections
-import hashlib
 import json
 import pathlib
 import re
@@ -65,11 +64,11 @@ def audit(archive: pathlib.Path, catalog: pathlib.Path):
     missing = sorted(name for name in candidate if name not in observed)
     extra = sorted(name for name in observed if name not in candidate)
     wrong_tab = sorted(
-        {"name": name, "candidate_tab": TABS[cat],
-         "cpp_tab": TABS[observed[name]]}
-        for name, cat in candidate.items()
-        if name in observed and observed[name] != cat
-    , key=lambda item: item["name"])
+        [{"name": name, "candidate_tab": TABS[cat],
+          "cpp_tab": TABS[observed[name]]}
+         for name, cat in candidate.items()
+         if name in observed and observed[name] != cat],
+        key=lambda item: item["name"])
     expected = tuple(counts[i] for i in range(5))
     result = {
         "candidate_source": matching[0],
