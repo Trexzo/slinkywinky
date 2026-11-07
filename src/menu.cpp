@@ -67,6 +67,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     bind_hover_row_.reset();
     unload_confirmation_preview_=false;
     profile_action_preview_.reset();
+    profile_icon_hover_.reset();
     profile_bind_capture_index_.reset();
     profile_name_focused_=false;
     profile_name_draft_.clear();
@@ -203,6 +204,18 @@ bool MenuState::create_profile_preview() {
     profile_name_taken_=false;
     return true;
 }
+bool MenuState::set_profile_icon_hover(
+        std::optional<MenuProfileIconHover> hover) noexcept {
+    if(hover) {
+        if(selected_!=MenuTab::Profiles || dropdown_preview_ ||
+           unload_confirmation_preview_ || profile_action_preview_ ||
+           hover->profile_index>=local_profiles_.size() ||
+           hover->action>3u)return false;
+    }
+    if(profile_icon_hover_==hover)return false;
+    profile_icon_hover_=hover;
+    return true;
+}
 bool MenuState::begin_profile_bind_capture(
         std::size_t index) noexcept {
     if(selected_!=MenuTab::Profiles || unload_confirmation_preview_ ||
@@ -244,6 +257,7 @@ bool MenuState::begin_profile_action_preview(
         return false;
     profile_name_focused_=false;
     profile_bind_capture_index_.reset();
+    profile_icon_hover_.reset();
     profile_action_preview_=MenuProfileActionPreview{profile_index,action};
     return true;
 }
@@ -263,6 +277,7 @@ bool MenuState::confirm_profile_action_preview() noexcept {
     if(state.action==MenuProfileAction::Delete) {
         // A locally created, unsaved preview card is removed only after
         // confirmation. The original game/OS filesystem is untouched.
+        profile_icon_hover_.reset();
         local_profiles_.erase(local_profiles_.begin()+
                               static_cast<std::ptrdiff_t>(state.profile_index));
     }
@@ -880,6 +895,7 @@ bool MenuState::open_unload_confirmation_preview() noexcept {
     bind_capture_index_.reset();
     bind_hover_row_.reset();
     profile_action_preview_.reset();
+    profile_icon_hover_.reset();
     profile_bind_capture_index_.reset();
     profile_name_focused_=false;
     unload_confirmation_preview_=true;
