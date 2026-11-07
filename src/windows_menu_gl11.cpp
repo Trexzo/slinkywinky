@@ -608,7 +608,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 };
                 char label[90]{};
                 std::snprintf(label,sizeof(label),
-                    "READ-ONLY AIM: %s  TARGET: %s",
+                    "AIM PREVIEW: %s  TARGET: %s",
                     modes[frame.aim_preview_mode],
                     frame.target_preview_mode==0?"SINGLE":"SWITCH");
                 text(label,left+8.0f,settingY+25.0f,11.0f,
@@ -635,6 +635,19 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 }
                 RecoveredWidget display=*preview[j]; // never edits catalog
                 std::string_view selectedChoice;
+                if(item.catalog_index==0 && frame.tab==MenuTab::Combat &&
+                   display.kind==RecoveredWidgetKind::Dropdown &&
+                   std::string_view(display.label)=="Mode") {
+                    if(std::string_view(display.group)=="Aim") {
+                        static constexpr const char* modes[]{
+                            "Regular","Linear","Lock-on","Silent"
+                        };
+                        selectedChoice=modes[frame.aim_preview_mode];
+                    } else if(std::string_view(display.group)=="Target") {
+                        selectedChoice=frame.target_preview_mode==0?
+                            "Single":"Switch";
+                    }
+                }
                 if(item.catalog_index==11 &&
                    frame.tab==MenuTab::Combat) {
                     const auto control=item.settings_offset+j;
