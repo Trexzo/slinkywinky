@@ -50,6 +50,8 @@ struct MenuRenderFrame {
     // R131: local typed-choice selections are never gameplay settings.
     std::array<std::optional<float>,385> recovered_slider_overrides{};
     // R132: inert source-indexed numeric slider display values.
+    std::array<std::optional<RecoveredRangePreview>,385>
+        recovered_range_overrides{}; // R133: independent dual-handle preview
     std::size_t piercing_selected=0;
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
