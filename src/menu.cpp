@@ -3,6 +3,7 @@
 #include "slinkywinky/menu_color_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
+#include "slinkywinky/menu_slider_aliases.hpp"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -815,7 +816,17 @@ bool MenuState::set_recovered_slider_preview(
         (static_cast<double>(requested_value)-min)/step+0.5);
     const double snapped=std::clamp(min+steps*step,min,max);
     if(!std::isfinite(snapped))return false;
+    // The native candidate's Aim Assist registration contains one
+    // Horizontal speed and one Vertical speed parameter. The two
+    // conditional display branches for each are aliases, not independent
+    // values. Admit the visible widget first, then atomically mirror
+    // only into its verified opposite-branch partner.
+    const bool aliasCandidate=menu_is_aim_speed_branch(widget_index);
+    const auto peer=menu_aim_speed_alias_peer(widget_index);
+    if(aliasCandidate && !peer)return false;
     recovered_slider_overrides_[widget_index]=static_cast<float>(snapped);
+    if(peer)
+        recovered_slider_overrides_[*peer]=static_cast<float>(snapped);
     return true;
 }
 
