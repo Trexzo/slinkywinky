@@ -157,6 +157,25 @@ int main() {
         CHECK(model.set_recovered_slider_preview(
             2u,cps,*outsideValue));
         CHECK(model.recovered_slider_override(cps)==all[cps].min_value);
+        // A numeric release in the inert gap between tabs and cards
+        // must retain its press owner even when hit_test_menu is null.
+        frame=session.next(model,&profile,&nav);
+        CHECK(frame && gate.press(*frame,mode,
+             start.first,start.second,14000u,true));
+        CHECK(model.begin_numeric_drag_preview(2u,cps,0u));
+        const auto blank=xy(panel->logical_width()-20.0f,55.0f);
+        auto noTarget=session.next(model,&profile,&nav);
+        CHECK(noTarget &&
+              !hit_test_menu(*noTarget,mode,blank.first,blank.second));
+        CHECK(gate.move(*noTarget,mode,
+                        blank.first,blank.second,true));
+        const auto blankRelease=gate.release(*noTarget,mode,
+            blank.first,blank.second,15100u,true);
+        CHECK(blankRelease &&
+              blankRelease->kind==MenuHitKind::RecoveredSliderPreview &&
+              blankRelease->control_index==cps);
+        CHECK(model.cancel_numeric_drag_preview());
+        CHECK(model.recovered_slider_override(cps)==all[cps].min_value);
         CHECK(!profile.enabled(2u) && !model.preview_enabled(2u));
         CHECK(session.detach());
 
