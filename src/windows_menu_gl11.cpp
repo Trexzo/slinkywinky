@@ -7,6 +7,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
@@ -563,21 +564,36 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         rgb(0xdddddd);
         text(item.title,nameX,y+8.0f,titleFont,titleLimit);
 
-        // Source: bind chip is 20px high, five pixels after module name;
-        // "Weapons", "Friends", "Teams" have no bind chip.
-        const bool bindChip=item.title!="Weapons"&&
-            item.title!="Friends"&&item.title!="Teams";
-        const float natural=measure_menu_system_text(item.title,titleFont);
-        const float titleWidth=natural>0?natural:item.title.size()*8.5f;
-        if(bindChip) {
-            const float chipX=nameX+std::min(titleLimit,titleWidth)+5.0f;
-            const float toggleLeft=right-menu_card_inner_padding-
-                                   menu_switch_width;
-            if(chipX+41.0f<toggleLeft-5.0f) {
-                rgba(0x999999,38);
-                round_rect(chipX,y+8.0f,41.0f,20.0f,5.0f);
-                rgb(0x999999);
-                text("NONE",chipX+6.0f,y+11.0f,12.0f,33.0f);
+        // R140: source-scoped key chip and independent HOLD badge.
+        // This is the separate GL11 preview; game keybinding tables and
+        // the Java8 Attach loader do not observe these values.
+        const auto& bind=frame.bind_previews[item.catalog_index];
+        const bool capturing=frame.bind_capture_index==
+            item.catalog_index;
+        const std::string keyText=capturing?"PRESS A KEY...":
+            menu_bind_code_label(bind.code);
+        const auto chips=menu_bind_chip_geometry(
+            frame,w,h,i,item.catalog_index,keyText,capturing);
+        if(chips) {
+            rgba(capturing?0x999999:
+                (bind.code?frame.appearance.accent_rgb:0x999999),38);
+            round_rect(chips->key.x,chips->key.y,
+                       chips->key.width,chips->key.height,5.0f);
+            rgb(capturing?0x999999:
+                (bind.code?frame.appearance.accent_rgb:0x999999));
+            text(keyText,chips->key.x+6.0f,
+                 chips->key.y+3.0f,12.0f,chips->key.width-12.0f);
+            // The original chip appears on row hover or when HOLD is on.
+            // First-party preview shows a bound HOLD chip persistently
+            // until mouse-hover reporting is wired in a later visual gate.
+            if(bind.code) {
+                rgba(bind.hold?0xdddddd:0x999999,38);
+                round_rect(chips->hold.x,chips->hold.y,
+                           chips->hold.width,chips->hold.height,5.0f);
+                rgb(bind.hold?0xdddddd:0x999999);
+                text("HOLD",chips->hold.x+6.0f,
+                     chips->hold.y+3.0f,12.0f,
+                     chips->hold.width-12.0f);
             }
         }
 
