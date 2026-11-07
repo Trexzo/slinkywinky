@@ -5,6 +5,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <commdlg.h>
 #include <GL/gl.h>
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/menu_profile.hpp"
@@ -12,12 +13,14 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_color_geometry.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <cstdint>
+#include <array>
 #include <filesystem>
 #include <iomanip>
 #include <optional>
@@ -400,6 +403,43 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(hit->kind==MenuHitKind::RecoveredMultiControl)
                         menu.open_recovered_multi_preview(
                             hit->catalog_index,hit->control_index);
+                    else if(hit->kind==MenuHitKind::RecoveredColorSwatch &&
+                            frame) {
+                        // The source HTML candidate used an input type=color
+                        // control. Use the stock Windows RGB chooser only in
+                        // this separate GL11 preview; no game hook or packet.
+                        const auto initial=slinkywinky::menu_source_widget_color(
+                            hit->control_index);
+                        if(initial) {
+                            const std::uint32_t rgb=menu.recovered_color_override(
+                                hit->control_index).value_or(*initial);
+                            static std::array<COLORREF,16> customColors{};
+                            CHOOSECOLORW picker{};
+                            picker.lStructSize=sizeof(picker);
+                            picker.hwndOwner=hwnd;
+                            picker.rgbResult=RGB(
+                                (rgb>>16u)&0xffu,
+                                (rgb>>8u)&0xffu,rgb&0xffu);
+                            picker.lpCustColors=customColors.data();
+                            picker.Flags=CC_RGBINIT|CC_FULLOPEN;
+                            // Native modal dialog: Cancel leaves preview
+                            // state unchanged. Admission is checked again
+                            // after the dialog has released the input owner.
+                            if(ChooseColorW(&picker) && IsWindow(hwnd)) {
+                                const COLORREF chosen=picker.rgbResult;
+                                const std::uint32_t value=
+                                    (static_cast<std::uint32_t>(
+                                        GetRValue(chosen))<<16u) |
+                                    (static_cast<std::uint32_t>(
+                                        GetGValue(chosen))<<8u) |
+                                    static_cast<std::uint32_t>(
+                                        GetBValue(chosen));
+                                menu.set_recovered_color_preview(
+                                    hit->catalog_index,
+                                    hit->control_index,value);
+                            }
+                        }
+                    }
                     else if(hit->kind==MenuHitKind::RecoveredSliderPreview &&
                             frame) {
                         // Commit only a validated same-widget mouse-up.
