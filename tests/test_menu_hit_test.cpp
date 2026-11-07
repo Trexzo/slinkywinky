@@ -207,6 +207,43 @@ int main() {
         CHECK(!settings_page_wheel_target(*profiles,mode,insideX,insideY));
         CHECK(session.detach());
     }
+    // R121: an Auto Clicker settings page crosses Inventory -> Conditions.
+    // Its second section heading adds 20 logical pixels to the native card.
+    // Renderer, wheel paging and pointer refusal must use that same height.
+    {
+        MenuState menu;
+        MenuProfileBridge profile(menu);
+        MenuRenderSession session;
+        CHECK(session.attach(121,900,630));
+        CHECK(menu.toggle_expanded(1));  // Auto Clicker native order
+        const auto first=session.next(menu,&profile);
+        CHECK(first && first->visible[1].settings_offset==0);
+        CHECK(menu_expanded_height(*first,1)==209.0f);
+        CHECK(menu.change_settings_page(1,1));
+        const auto second=session.next(menu,&profile);
+        CHECK(second && second->visible[1].settings_offset==5);
+        CHECK(menu_expanded_height(*second,1)==202.0f);
+        const auto card=menu_module_card_rect(*second,900.0f,1);
+        CHECK(card.height==menu_row_body_height(*second)+202.0f);
+        CHECK(card.y+card.height<630.0f);
+        const auto panel=menu_panel_geometry(
+            900,630,false,MenuPanelMode::StandalonePreview);
+        CHECK(panel);
+        const int middleX=pixel_x(*panel,card.x+28.0f);
+        const auto lower=settings_page_wheel_target(*second,
+            MenuPanelMode::StandalonePreview,middleX,
+            pixel_y(*panel,card.y+card.height-10.0f));
+        CHECK(lower && *lower==1);
+        // The section heading and its content are read-only.
+        CHECK(!hit_test_menu(*second,MenuPanelMode::StandalonePreview,
+            middleX,pixel_y(*panel,card.y+card.height-48.0f)));
+        CHECK(!settings_page_wheel_target(*second,
+            MenuPanelMode::StandalonePreview,middleX,
+            pixel_y(*panel,card.y+card.height+2.0f)));
+        CHECK(menu.change_settings_page(1,-1));
+        CHECK(menu_expanded_height(*session.next(menu,&profile),1)==209.0f);
+        CHECK(session.detach());
+    }
     // Consumer never reaches another thread's UI/model.
     {
         MenuState menu;
