@@ -79,6 +79,23 @@ bool MenuState::scroll_by(int delta) noexcept {
     scroll_=next;
     return true;
 }
+bool MenuState::scroll_by_visible(
+        int delta,std::size_t visible_limit) noexcept {
+    const auto total=tab_count(selected_);
+    if(total==0u || visible_limit==0u || visible_limit>8u)
+        return false;
+    const auto maxScroll=total>visible_limit?
+        total-visible_limit:0u;
+    const auto proposed=static_cast<std::int64_t>(scroll_)+delta;
+    const auto capped=std::max<std::int64_t>(0,
+        std::min<std::int64_t>(
+            static_cast<std::int64_t>(maxScroll),proposed));
+    const auto next=static_cast<std::size_t>(capped);
+    if(next==scroll_)return false;
+    dropdown_preview_.reset();
+    scroll_=next;
+    return true;
+}
 bool MenuState::toggle_preview(std::size_t index) noexcept {
     if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
     enabled_[index]=!enabled_[index];
