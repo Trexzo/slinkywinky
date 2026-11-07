@@ -63,6 +63,8 @@ struct MenuRenderFrame {
     std::optional<std::size_t> bind_capture_index{};
     std::optional<std::size_t> bind_hover_row{}; // R141: source CSS .row:hover
     std::optional<MenuNumericHover> numeric_hover{}; // R147: 115 formatted source controls
+    std::optional<MenuNumericDragPreview> numeric_drag_preview{};
+    // R148: on-screen transient, never a committed ClientSettings value.
     // R140: display-only module binds/HOLD flags, not game bindings.
     std::array<std::optional<bool>,385> recovered_boolean_overrides{};
     // R130: changes only inert typed UI preview values.
