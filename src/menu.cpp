@@ -2,6 +2,7 @@
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
+#include "slinkywinky/menu_bind_preview.hpp"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -62,6 +63,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     if(tab==MenuTab::Count || tab==MenuTab::Unload)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     unload_confirmation_preview_=false;
     selected_=tab;
     scroll_=0;
@@ -80,6 +82,7 @@ bool MenuState::scroll_by(int delta) noexcept {
     if(next==scroll_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     scroll_=next;
     return true;
 }
@@ -98,9 +101,74 @@ bool MenuState::scroll_by_visible(
     if(next==scroll_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     scroll_=next;
     return true;
 }
+bool MenuState::begin_bind_capture(
+        std::size_t catalog_index) noexcept {
+    const auto& catalog=official_module_catalog();
+    if(bind_capture_index_ || dropdown_preview_ ||
+       unload_confirmation_preview_ || focused_text_widget_ ||
+       catalog_index>=catalog.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !menu_bind_supported_module(catalog_index))
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+       [catalog_index](const MenuItem& row) {
+           return row.catalog_index==catalog_index;
+       }))
+        return false;
+    bind_capture_index_=catalog_index;
+    return true;
+}
+bool MenuState::commit_bind_capture(std::uint16_t code) noexcept {
+    if(!bind_capture_index_ || !menu_valid_bind_code(code) ||
+       dropdown_preview_ || unload_confirmation_preview_ ||
+       focused_text_widget_)return false;
+    const std::size_t index=*bind_capture_index_;
+    const auto& catalog=official_module_catalog();
+    if(index>=catalog.size() ||
+       catalog[index].tab!=selected_ ||
+       !menu_bind_supported_module(index))return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+        [index](const MenuItem& row){
+            return row.catalog_index==index;
+        }))
+        return false;
+    bind_previews_[index].code=code;
+    if(code==0u)bind_previews_[index].hold=false;
+    bind_capture_index_.reset();
+    return true;
+}
+bool MenuState::cancel_bind_capture() noexcept {
+    if(!bind_capture_index_)return false;
+    bind_capture_index_.reset();
+    return true;
+}
+bool MenuState::toggle_bind_hold(
+        std::size_t catalog_index) noexcept {
+    const auto& catalog=official_module_catalog();
+    if(bind_capture_index_ || dropdown_preview_ ||
+       unload_confirmation_preview_ || focused_text_widget_ ||
+       catalog_index>=catalog.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !menu_bind_supported_module(catalog_index) ||
+       bind_previews_[catalog_index].code==0u)
+        return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),
+       [catalog_index](const MenuItem& row){
+           return row.catalog_index==catalog_index;
+       }))
+        return false;
+    bind_previews_[catalog_index].hold=
+        !bind_previews_[catalog_index].hold;
+    return true;
+}
+
 bool MenuState::toggle_preview(std::size_t index) noexcept {
     if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
     enabled_[index]=!enabled_[index];
@@ -110,6 +178,7 @@ bool MenuState::toggle_expanded(std::size_t index) noexcept {
     if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     expanded_[index]=!expanded_[index];
     if(!expanded_[index])settings_offsets_[index]=0;
     return true;
@@ -145,6 +214,7 @@ bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     const std::size_t previous=settings_offsets_[index];
     dropdown_preview_.reset();
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     // No arithmetic on untrusted or potentially overflowing offsets.
     if(direction<0) {
         if(previous<5)return false;
@@ -237,6 +307,7 @@ bool MenuState::open_preview_dropdown(
         std::string_view(widgets[relative]->label)!="Sort targets by"))
         return false;
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     dropdown_preview_=MenuDropdownPreview{
         kind,index,control_index,settings_offsets_[index]
     };
@@ -279,6 +350,7 @@ bool MenuState::open_recovered_choice_preview(
             std::string_view(widget.label)=="Sort targets by"))
             return false;
         focused_text_widget_.reset();
+    bind_capture_index_.reset();
     dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredChoice,catalog_index,
             settings_offsets_[catalog_index]+i,
@@ -315,6 +387,7 @@ bool MenuState::open_recovered_multi_preview(
     for(std::size_t i=0;i<pageWidgets.size();++i) {
         if(pageWidgets[i]!=&all[widget_index])continue;
         focused_text_widget_.reset();
+    bind_capture_index_.reset();
     dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredMulti,catalog_index,
             settings_offsets_[catalog_index]+i,
@@ -418,6 +491,7 @@ bool MenuState::focus_recovered_text_preview(
          [&](const RecoveredWidget* widget){
              return widget==&all[widget_index];}))
         return false;
+    bind_capture_index_.reset();
     focused_text_widget_=widget_index;
     return true;
 }
@@ -637,6 +711,7 @@ bool MenuState::open_unload_confirmation_preview() noexcept {
     if(unload_confirmation_preview_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
+    bind_capture_index_.reset();
     unload_confirmation_preview_=true;
     return true;
 }
