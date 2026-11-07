@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace slinkywinky {
@@ -177,6 +178,20 @@ public:
     recovered_color_overrides() const noexcept {
         return recovered_color_overrides_;
     }
+    // R137: inline text editing in first-party GUI preview only.
+    // No Friends list or item registry mutations.
+    bool focus_recovered_text_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept;
+    bool blur_recovered_text_preview() noexcept;
+    bool append_recovered_text_preview(std::string_view unicode_scalar);
+    bool erase_recovered_text_preview() noexcept;
+    std::optional<std::size_t> focused_text_widget() const noexcept {
+        return focused_text_widget_;
+    }
+    const std::array<std::optional<std::string>,385>&
+    recovered_text_overrides() const noexcept {
+        return recovered_text_overrides_;
+    }
     // R132: source-indexed, step-quantized preview sliders only.
     // Not copied into gameplay settings.
     bool set_recovered_slider_preview(std::size_t catalog_index,
@@ -232,6 +247,8 @@ private:
     std::array<std::optional<unsigned>,385> recovered_choice_overrides_{};
     std::array<std::optional<std::uint32_t>,385> recovered_multi_overrides_{};
     std::array<std::optional<std::uint32_t>,385> recovered_color_overrides_{};
+    std::array<std::optional<std::string>,385> recovered_text_overrides_{};
+    std::optional<std::size_t> focused_text_widget_{};
     std::array<std::optional<float>,385> recovered_slider_overrides_{};
     std::array<std::optional<RecoveredRangePreview>,385>
         recovered_range_overrides_{};
