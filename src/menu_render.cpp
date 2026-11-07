@@ -106,10 +106,18 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
         }
     }
     frame.is_placeholder=frame.tab==MenuTab::Profiles;
-    if(frame.is_placeholder)
-        frame.profile_cards.push_back({
-            "Default","Contains the default configuration.","",true
-        });
+    if(frame.is_placeholder) {
+        for(std::size_t i=0;i<menu.local_profiles().size();++i) {
+            const auto& p=menu.local_profiles()[i];
+            frame.profile_cards.push_back({
+                p.name,p.description,p.bind,i==0u
+            });
+        }
+        frame.profile_name_draft=menu.profile_name_draft();
+        frame.profile_name_focused=menu.profile_name_focused();
+        frame.profile_name_taken=menu.profile_name_taken();
+        frame.profile_action_preview=menu.profile_action_preview();
+    }
     if(frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload)
         return std::nullopt;
     sequence_++;
