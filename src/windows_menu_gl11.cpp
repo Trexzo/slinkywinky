@@ -660,6 +660,17 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         display.example_value=
                             *frame.recovered_slider_overrides[slot];
                 }
+                if(display.kind==RecoveredWidgetKind::Range) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto slot=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(slot<all.size() &&
+                       frame.recovered_range_overrides[slot]) {
+                        const auto& range=*frame.recovered_range_overrides[slot];
+                        display.example_value=range.lower;
+                        display.example_other=range.upper;
+                    }
+                }
                 std::string_view selectedChoice;
                 if(item.catalog_index==0 && frame.tab==MenuTab::Combat &&
                    display.kind==RecoveredWidgetKind::Dropdown &&
