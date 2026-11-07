@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -58,18 +59,11 @@ inline std::optional<MenuNumericTrack> menu_numeric_track_geometry(
     const auto rect=menu_module_card_rect(frame,logical_width,rowIndex);
     if(rect.y+rect.height>logical_height-menu_panel_padding)
         return std::nullopt;
-    float headings=0.0f;
-    std::string_view previous=widgets[0]?widgets[0]->group:"";
-    for(std::size_t i=1;i<=slot;++i) {
-        if(!widgets[i])return std::nullopt;
-        const std::string_view current=widgets[i]->group;
-        if(current!=previous){headings+=20.0f;previous=current;}
-    }
-    const float controlY=rect.y+menu_row_body_height(frame)+43.0f+
-        27.0f*static_cast<float>(slot)+headings+2.0f;
+    const float controlY=rect.y+menu_row_body_height(frame)+
+        menu_settings_control_offset(widgets,slot);
     MenuNumericTrack track{
-        menu_setting_column(rect.x,rect.width).x,controlY+4.0f,
-        menu_setting_column(rect.x,rect.width).width,18.0f
+        menu_setting_column(rect.x,rect.width).x,controlY,
+        menu_setting_column(rect.x,rect.width).width-2.0f,20.0f
     };
     if(track.x<rect.x || track.x+track.width>rect.x+rect.width ||
        track.y<rect.y || track.y+track.height>rect.y+rect.height ||

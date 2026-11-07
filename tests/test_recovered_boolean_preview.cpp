@@ -6,6 +6,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_setting_layout.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <array>
@@ -67,7 +68,7 @@ int main() {
         const float controlW=column.width;
         const float controlX=column.x;
         const float y=rect.y+menu_row_body_height(*frame)+
-                      43.0f+2.0f+27.0f*2.0f;
+                      menu_settings_control_offset(widgets,2u);
         const auto onSwitch=xy(controlX+controlW-17.0f,y+10.0f);
         const auto onLabel=xy(rect.x+16.0f,y+10.0f);
         const auto hit=hit_test_menu(

@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include <algorithm>
@@ -189,16 +190,8 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
         frame,logical_width,visible_index);
     if(rect.y+rect.height>logical_height-menu_panel_padding)
         return std::nullopt;
-    float headings=0.0f;
-    std::string_view last=widgets[0]?std::string_view(widgets[0]->group):
-                                     std::string_view{};
-    for(std::size_t i=1;i<=position;++i) {
-        if(!widgets[i])return std::nullopt;
-        const std::string_view group=widgets[i]->group;
-        if(group!=last){headings+=20.0f;last=group;}
-    }
     const float controlY=rect.y+menu_row_body_height(frame)+
-        43.0f+27.0f*static_cast<float>(position)+headings+2.0f;
+        menu_settings_control_offset(widgets,position);
     MenuDropdownPopupRect result;
     result.x=menu_setting_column(rect.x,rect.width).x;
     result.width=menu_setting_column(rect.x,rect.width).width;

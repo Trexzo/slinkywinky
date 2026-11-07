@@ -1,6 +1,7 @@
 #pragma once
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/recovered_settings.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <string_view>
@@ -49,25 +50,14 @@ inline float menu_expanded_height(const MenuRenderFrame& frame,
         static_cast<int>(frame.target_preview_mode));
     const std::size_t remaining=item.settings_offset<count?
         count-item.settings_offset:0;
-    const float visible=static_cast<float>(
-        std::min<std::size_t>(remaining,5u));
+    const std::size_t visible=std::min<std::size_t>(remaining,5u);
     // R121: new section headings inside one five-control page must use
     // the same vertical geometry in both the GL renderer and hit tester.
     std::array<const RecoveredWidget*,5> page{};
     recovered_widget_visible_page(item.title.c_str(),item.settings_offset,
         static_cast<int>(frame.aim_preview_mode),
         static_cast<int>(frame.target_preview_mode),page);
-    float extraHeadings=0.0f;
-    std::string_view last=page[0]?std::string_view(page[0]->group):
-                                  std::string_view{};
-    for(std::size_t j=1;j<page.size() && page[j];++j) {
-        const std::string_view group(page[j]->group);
-        if(group!=last) {
-            extraHeadings+=20.0f;
-            last=group;
-        }
-    }
-    return 52.0f+visible*27.0f+(count>5?22.0f:12.0f)+extraHeadings;
+    return menu_settings_expanded_extra(page,visible,count>5u);
 }
 // The renderer and hit tester reject forged, unaligned, off-end or stale
 // settings offsets before drawing/dispatching any native GUI action.

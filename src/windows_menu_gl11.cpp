@@ -3,6 +3,7 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_menu_gl11.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
@@ -195,12 +196,12 @@ void draw_recovered_widget(const RecoveredWidget& widget,
     const float controlW=column.width;
     const float labelW=std::max(14.0f,controlX-x-14.0f);
     rgb(0xc9c9c9);
-    // R139: source HTML renders Button as the entire row, without a
-    // duplicate left-side setting label or an OS/game action.
+    const float controlY=y+2.0f;
+    // Match the recovered 20px flex row and centered 15px label.
     if(widget.kind!=RecoveredWidgetKind::Button)
         text(widget.label,x+8.0f,
-             menu_control_center_text_y(y,20.0f,15.0f),15.0f,labelW);
-    const float controlY=y+2.0f;
+             menu_control_center_text_y(controlY,20.0f,15.0f),
+             15.0f,labelW);
     switch(widget.kind) {
         case RecoveredWidgetKind::Boolean: {
             const float bx=menu_setting_switch_x(column);
@@ -214,26 +215,27 @@ void draw_recovered_widget(const RecoveredWidget& widget,
         }
         case RecoveredWidgetKind::Slider:
         case RecoveredWidgetKind::Range: {
+            const float trackW=std::max(1.0f,controlW-2.0f);
             const float minV=widget.min_value,maxV=widget.max_value;
             const float denominator=maxV>minV?maxV-minV:1.0f;
             const float a=std::max(0.0f,std::min(1.0f,
                 (widget.example_value-minV)/denominator));
             rgb(0x404040u);
-            round_rect(controlX,controlY+8.0f,controlW,4.0f,2.0f);
+            round_rect(controlX,controlY+8.0f,trackW,4.0f,2.0f);
             rgb(accent);
             if(widget.kind==RecoveredWidgetKind::Range) {
                 const float b=std::max(0.0f,std::min(1.0f,
                     (widget.example_other-minV)/denominator));
                 const float lo=std::min(a,b),hi=std::max(a,b);
-                round_rect(controlX+controlW*lo,controlY+8.0f,
-                           std::max(0.01f,controlW*(hi-lo)),4.0f,2.0f);
+                round_rect(controlX+trackW*lo,controlY+8.0f,
+                           std::max(0.01f,trackW*(hi-lo)),4.0f,2.0f);
                 // Source NanoVG knob is r6: 12px diameter.
-                round_rect(controlX+controlW*b-6.0f,
+                round_rect(controlX+trackW*b-6.0f,
                            controlY+4.0f,12.0f,12.0f,6.0f);
             } else
                 round_rect(controlX,controlY+8.0f,
-                           std::max(0.01f,controlW*a),4.0f,2.0f);
-            round_rect(controlX+controlW*a-6.0f,
+                           std::max(0.01f,trackW*a),4.0f,2.0f);
+            round_rect(controlX+trackW*a-6.0f,
                        controlY+4.0f,12.0f,12.0f,6.0f);
             break;
         }
@@ -713,37 +715,13 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             else
                 text("No recovered settings",left+8.0f,settingY+8.0f,
                      15.0f,rect.width-16.0f);
-            rgb(0x777777);
-            if(item.catalog_index==0 && frame.tab==MenuTab::Combat) {
-                static constexpr const char* modes[]{
-                    "REGULAR","LINEAR","LOCK-ON","SILENT"
-                };
-                char label[90]{};
-                std::snprintf(label,sizeof(label),
-                    "AIM PREVIEW: %s  TARGET: %s",
-                    modes[frame.aim_preview_mode],
-                    frame.target_preview_mode==0?"SINGLE":"SWITCH");
-                text(label,left+8.0f,settingY+25.0f,11.0f,
-                     rect.width-16.0f);
-            } else if(item.catalog_index==11 &&
-                      frame.tab==MenuTab::Combat) {
-                text("LOCAL PIERCING PREVIEW ONLY  F9/F10/F11",
-                     left+8.0f,settingY+25.0f,11.0f,rect.width-16.0f);
-            } else
-                text("REFERENCE PREVIEW - READ ONLY",left+8.0f,
-                     settingY+25.0f,11.0f,rect.width-16.0f);
-            float addedHeadings=0.0f;
-            std::string_view lastGroup=preview[0]?
-                std::string_view(preview[0]->group):std::string_view{};
             for(std::size_t j=0;j<preview.size() && preview[j];++j) {
-                const std::string_view group(preview[j]->group);
-                if(j>0 && group!=lastGroup) {
-                    const float headingY=settingY+43.0f+
-                        27.0f*static_cast<float>(j)+addedHeadings;
+                if(j>0 && std::string_view(preview[j]->group)!=
+                   std::string_view(preview[j-1]->group)) {
                     rgb(0x999999u);
-                    text(group,left+8.0f,headingY,14.0f,rect.width-16.0f);
-                    addedHeadings+=20.0f;
-                    lastGroup=group;
+                    text(preview[j]->group,left+8.0f,
+                         settingY+menu_settings_section_text_offset(preview,j),
+                         15.0f,rect.width-16.0f);
                 }
                 RecoveredWidget display=*preview[j]; // never edits catalog
                 // R130: show the exact pointer-indexed Boolean sandbox
@@ -819,8 +797,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     if(control==frame.piercing_selected) {
                         rgb(frame.appearance.accent_rgb);
                         quad(left+2.0f,
-                             settingY+47.0f+
-                               27.0f*static_cast<float>(j)+addedHeadings,
+                             settingY+menu_settings_control_offset(preview,j)+4.0f,
                              3.0f,13.0f);
                     }
                 }
@@ -900,7 +877,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     frame.control_motion->hovered_boolean==visualWidgetIndex?
                     frame.control_motion->switch_hover_opacity:0.0f;
                 draw_recovered_widget(display,left,
-                    settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
+                    settingY+menu_settings_control_offset(preview,j)-2.0f,
                     rect.width,frame.appearance.accent_rgb,selectedChoice,
                     multiCaption,colorOverride,textOverride,textFocused,hover);
             }
@@ -916,8 +893,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     item.settings_offset+shown,count);
                 rgb(0x999999u);
                 text(pagination,left+8.0f,
-                     settingY+47.0f+27.0f*static_cast<float>(shown)+
-                     addedHeadings,
+                     settingY+menu_settings_next_row_offset(preview,shown)+4.0f,
                      12.0f,rect.width-16.0f);
             }
         }

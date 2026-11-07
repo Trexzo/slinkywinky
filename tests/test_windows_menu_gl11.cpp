@@ -1124,7 +1124,7 @@ int main() {
                 REQUIRE(!hit_test_menu(*snap,
                     MenuPanelMode::StandalonePreview,
                     static_cast<int>(card.x+card.width-24.0f),
-                    static_cast<int>(card.y+menu_row_body_height(*snap)+70.0f)));
+                    static_cast<int>(card.y+menu_row_body_height(*snap)+27.0f)));
                 glClear(GL_COLOR_BUFFER_BIT);
                 REQUIRE(draw_menu_gl11(*snap,sourceWide.gl,sourceWide.dc));
                 REQUIRE(glGetError()==GL_NO_ERROR);

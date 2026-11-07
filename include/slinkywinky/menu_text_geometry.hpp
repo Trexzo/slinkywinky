@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -83,15 +84,8 @@ inline std::optional<MenuTextFieldRect> menu_text_field_geometry(
     const auto rect=menu_module_card_rect(frame,logical_width,visible_index);
     if(rect.y+rect.height>logical_height-menu_panel_padding)
         return std::nullopt;
-    float headings=0.0f;
-    std::string_view previous=page[0]?page[0]->group:"";
-    for(std::size_t i=1;i<=position;++i) {
-        if(!page[i])return std::nullopt;
-        const std::string_view now=page[i]->group;
-        if(now!=previous){headings+=20.0f;previous=now;}
-    }
-    const float controlY=rect.y+menu_row_body_height(frame)+43.0f+
-        27.0f*static_cast<float>(position)+headings+2.0f;
+    const float controlY=rect.y+menu_row_body_height(frame)+
+        menu_settings_control_offset(page,position);
     const float controlX=menu_setting_column(rect.x,rect.width).x;
     const float controlW=menu_setting_column(rect.x,rect.width).width;
     MenuTextFieldRect field{controlX,controlY,controlW,20.0f};

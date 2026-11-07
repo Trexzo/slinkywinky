@@ -4,6 +4,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <cmath>
 #include <cstddef>
@@ -56,7 +57,7 @@ int main() {
             if(items[j]->kind!=RecoveredWidgetKind::Button)continue;
             CHECK(j==2u || j==3u);
             const float y=rect.y+menu_row_body_height(*frame)+
-                43.0f+27.0f*static_cast<float>(j)+2.0f;
+                menu_settings_control_offset(items,j);
             const float x=rect.x+rect.width*0.5f;
             const int px=static_cast<int>(
                 panel->left+std::lround(x*panel->scale));

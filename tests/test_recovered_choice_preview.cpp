@@ -6,6 +6,8 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_setting_layout.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cmath>
@@ -63,10 +65,10 @@ int main() {
             *frame,panel->logical_width(),2u);
         CHECK(card.y+card.height<
               panel->logical_height()-menu_panel_padding);
-        const float controlX=card.x+card.width*0.54f;
-        const float controlW=std::max(16.0f,card.width*0.46f-10.0f);
-        const auto target=xy(controlX+controlW*0.5f,card.y+
-            menu_row_body_height(*frame)+43.0f+2.0f+10.0f);
+        const auto control=menu_setting_column(card.x,card.width);
+        const auto target=xy(control.x+control.width*0.5f,card.y+
+            menu_row_body_height(*frame)+
+            menu_settings_first_control_offset+10.0f);
         const auto hit=hit_test_menu(
             *frame,mode,target.first,target.second);
         CHECK(hit && hit->kind==MenuHitKind::RecoveredChoiceControl &&

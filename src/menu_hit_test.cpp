@@ -1,3 +1,4 @@
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
@@ -212,19 +213,11 @@ std::optional<MenuHit> hit_test_menu(
             const float controlX=column.x;
             const float controlW=column.width;
             const float settingsY=rect.y+body;
-            float extraHeadings=0.0f;
-            std::string_view previousGroup=widgets[0]?
-                std::string_view(widgets[0]->group):std::string_view{};
             for(std::size_t j=0;j<widgets.size() && widgets[j];++j) {
-                const std::string_view group(widgets[j]->group);
-                if(j>0 && group!=previousGroup) {
-                    extraHeadings+=20.0f;
-                    previousGroup=group;
-                }
                 const auto& widget=*widgets[j];
                 const std::size_t control=card.settings_offset+j;
-                const float controlY=settingsY+43.0f+
-                    27.0f*static_cast<float>(j)+extraHeadings+2.0f;
+                const float controlY=settingsY+
+                    menu_settings_control_offset(widgets,j);
                 const bool dropdown=widget.kind==RecoveredWidgetKind::Dropdown &&
                     x>=controlX && x<controlX+controlW &&
                     y>=controlY && y<controlY+20.0f;

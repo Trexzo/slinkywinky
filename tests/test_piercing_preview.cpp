@@ -4,6 +4,8 @@
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_setting_layout.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
@@ -172,9 +174,10 @@ int main() {
             *frame,panel->logical_width(),2);
         CHECK(card.y+card.height<
               panel->logical_height()-menu_panel_padding);
-        const auto controlX=card.x+card.width*0.54f;
-        const auto controlW=std::max(16.0f,card.width*0.46f-10.0f);
-        const auto firstY=card.y+menu_row_body_height(*frame)+43.0f+2.0f;
+        const auto column=menu_setting_column(card.x,card.width);
+        const auto controlX=column.x,controlW=column.width;
+        const auto firstY=card.y+menu_row_body_height(*frame)+
+            menu_settings_first_control_offset;
         auto point=translate(controlX+controlW*0.5f,firstY+10.0f);
         auto sourceHit=hit_test_menu(*frame,mode,point.first,point.second);
         CHECK(sourceHit && sourceHit->kind==MenuHitKind::PiercingControl &&
@@ -219,7 +222,7 @@ int main() {
                   point.first,point.second,2020,true));
         CHECK(!clickGate.pending());
         // Boolean switch: only its 34x18 right-side pill is actionable.
-        const auto boolY=firstY+27.0f;
+        const auto boolY=firstY+menu_settings_row_pitch;
         const auto boolP=translate(controlX+controlW-17.0f,boolY+10.0f);
         const auto boolLabel=translate(card.x+35.0f,boolY+10.0f);
         const auto state=clickedFrames.next(
@@ -232,7 +235,7 @@ int main() {
               boolLabel.first,boolLabel.second));
         // Moving between separate switches must not keep the hit.
         const auto nextBool=translate(controlX+controlW-17.0f,
-                                     boolY+27.0f+10.0f);
+                                     boolY+menu_settings_row_pitch+10.0f);
         auto nextHit=hit_test_menu(*state,mode,
                                   nextBool.first,nextBool.second);
         CHECK(nextHit && nextHit->control_index==2);
@@ -252,7 +255,7 @@ int main() {
         CHECK(clicked.piercing_preview().enabled[0]);
         CHECK(!clicked.select_piercing_control(7)); // not visible page
         CHECK(!clicked.select_piercing_control(8)); // malformed index
-        // Second five-item page: condition heading inserts 20px before j1.
+        // Second page: source 19px section and 12px row gaps.
         CHECK(clicked.change_settings_page(11,1));
         const auto page2=clickedFrames.next(
             clicked,&clickedProfile,&clickedNav);
@@ -261,17 +264,25 @@ int main() {
             *page2,panel->logical_width(),2);
         CHECK(card2.y+card2.height<
               panel->logical_height()-menu_panel_padding);
+        std::array<const RecoveredWidget*,5> lastPage{};
+        CHECK(recovered_widget_visible_page("Piercing",
+            page2->visible[2].settings_offset,
+            static_cast<int>(page2->aim_preview_mode),
+            static_cast<int>(page2->target_preview_mode),lastPage)>0u);
+        CHECK(lastPage[2]);
         const float lastControlY=card2.y+
-              menu_row_body_height(*page2)+43.0f+2.0f+27.0f*2.0f+20.0f;
-        const auto lastP=translate(card2.x+
-              card2.width*0.54f+std::max(16.0f,card2.width*0.46f-10.0f)-17.0f,
+            menu_row_body_height(*page2)+
+            menu_settings_control_offset(lastPage,2);
+        const auto lastCol=menu_setting_column(card2.x,card2.width);
+        const auto lastP=translate(lastCol.x+lastCol.width-20.0f,
               lastControlY+10.0f);
         const auto lastHit=hit_test_menu(*page2,mode,
                                         lastP.first,lastP.second);
         CHECK(lastHit && lastHit->kind==MenuHitKind::PiercingControl &&
               lastHit->control_index==7);
         const auto groupTitle=translate(card2.x+35.0f,
-              card2.y+menu_row_body_height(*page2)+43.0f+27.0f);
+              card2.y+menu_row_body_height(*page2)+
+              menu_settings_section_text_offset(lastPage,1)+5.0f);
         CHECK(!hit_test_menu(*page2,mode,groupTitle.first,groupTitle.second));
         const auto outside=translate(card2.x+card2.width+3.0f,
                                     lastControlY+10.0f);
@@ -316,12 +327,12 @@ int main() {
         CHECK(rect.y+rect.height<
               panel->logical_height()-menu_panel_padding);
         const auto dropdown=[&](const MenuModuleCardRect& r,float y) {
-            const float controlX=r.x+r.width*0.54f;
-            const float controlW=std::max(16.0f,r.width*0.46f-10.0f);
-            return translate(controlX+controlW*0.5f,y+10.0f);
+            const auto c=menu_setting_column(r.x,r.width);
+            return translate(c.x+c.width*0.5f,y+10.0f);
         };
         const auto first=dropdown(rect,rect.y+
-            menu_row_body_height(*initial)+43.0f+2.0f);
+            menu_row_body_height(*initial)+
+            menu_settings_first_control_offset);
         const auto firstHit=hit_test_menu(
             *initial,mode,first.first,first.second);
         CHECK(firstHit && firstHit->kind==MenuHitKind::AimModeControl &&
@@ -363,19 +374,13 @@ int main() {
                 static_cast<int>(frame->aim_preview_mode),
                 static_cast<int>(frame->target_preview_mode),widgets);
             CHECK(count>0u && widgets[0]);
-            std::string_view previous=widgets[0]->group;
-            float headings=0.0f;
             for(std::size_t j=0;j<widgets.size() && widgets[j];++j) {
                 const std::string_view group=widgets[j]->group;
-                if(j && group!=previous) {
-                    headings+=20.0f;
-                    previous=group;
-                }
                 if(group!="Target" ||
                    std::string_view(widgets[j]->label)!="Mode")
                     continue;
                 const float y=rect.y+menu_row_body_height(*frame)+
-                    43.0f+27.0f*static_cast<float>(j)+headings+2.0f;
+                    menu_settings_control_offset(widgets,j);
                 const auto target=dropdown(rect,y);
                 auto hit=hit_test_menu(
                     *frame,mode,target.first,target.second);
