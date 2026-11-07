@@ -61,6 +61,10 @@ if(BUILD_TESTING)
   target_link_libraries(slinkywinky_menu_dropdown_popup_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_dropdown_popup_preview_safety
            COMMAND slinkywinky_menu_dropdown_popup_tests)
+  add_executable(slinkywinky_menu_unload_modal_tests tests/test_menu_unload_modal.cpp)
+  target_link_libraries(slinkywinky_menu_unload_modal_tests PRIVATE slinkywinky_core)
+  add_test(NAME native_menu_unload_confirmation_preview_safety
+           COMMAND slinkywinky_menu_unload_modal_tests)
   add_executable(slinkywinky_menu_profile_tests tests/test_menu_profile.cpp)
   target_link_libraries(slinkywinky_menu_profile_tests PRIVATE slinkywinky_core)
   add_test(NAME native_menu_profile_binding COMMAND slinkywinky_menu_profile_tests)
