@@ -56,19 +56,21 @@ bool save_piercing_preview(const std::filesystem::path& file,
 
 // R127: a preview-only popup description; never a game/injector input route.
 enum class MenuDropdownKind : std::uint8_t {
-    AimMode, TargetMode, PiercingSort
+    AimMode, TargetMode, PiercingSort, RecoveredChoice
 };
 struct MenuDropdownPreview {
     MenuDropdownKind kind=MenuDropdownKind::AimMode;
     std::size_t catalog_index=0;
     std::size_t control_index=0; // visible recovered callsite index
     std::size_t page_offset=0;   // immutable at time of opening
+    std::size_t widget_index=0; // R131: source-global recovered choice
 };
 inline bool operator==(const MenuDropdownPreview& a,
                        const MenuDropdownPreview& b) noexcept {
     return a.kind==b.kind && a.catalog_index==b.catalog_index &&
            a.control_index==b.control_index &&
-           a.page_offset==b.page_offset;
+           a.page_offset==b.page_offset &&
+           a.widget_index==b.widget_index;
 }
 inline bool operator!=(const MenuDropdownPreview& a,
                        const MenuDropdownPreview& b) noexcept {
@@ -115,6 +117,8 @@ public:
     }
     bool open_preview_dropdown(MenuDropdownKind kind,
                                std::size_t control_index) noexcept;
+    bool open_recovered_choice_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept;
     bool select_preview_dropdown_option(unsigned option) noexcept;
     bool close_preview_dropdown() noexcept;
     // R128: recovered seven-tab Unload confirmation is display-only.
@@ -132,6 +136,10 @@ public:
     const std::array<std::optional<bool>,385>&
     recovered_boolean_overrides() const noexcept {
         return recovered_boolean_overrides_;
+    }
+    const std::array<std::optional<unsigned>,385>&
+    recovered_choice_overrides() const noexcept {
+        return recovered_choice_overrides_;
     }
     // Only for explicitly preview-only persistence; never changes gameplay.
     bool adopt_piercing_preview(const PiercingPreview& prefs) noexcept;
@@ -163,6 +171,7 @@ private:
     // Each optional maps to one immutable 385-entry recovered fixture record.
     // nullopt renders the unverified reference-example state; no game writes.
     std::array<std::optional<bool>,385> recovered_boolean_overrides_{};
+    std::array<std::optional<unsigned>,385> recovered_choice_overrides_{};
 };
 
 } // namespace slinkywinky
