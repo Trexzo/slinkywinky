@@ -38,6 +38,7 @@ enum class MenuHitKind : std::uint8_t {
     RecoveredChoiceControl, // R131: source-global dropdown widget
     RecoveredMultiControl, // R134: source-global multiselect widget
     RecoveredColorSwatch, // R136: independent 24-bit RGB preview
+    RecoveredTextField, // R137: local source-indexed UTF-8 edit field
     RecoveredSliderPreview, // R132: source-indexed inert drag-on-release
     RecoveredRangePreview // R133: dual-handle guarded preview
 };
