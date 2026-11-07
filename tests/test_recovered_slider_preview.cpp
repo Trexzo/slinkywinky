@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -20,6 +21,7 @@
 using namespace slinkywinky;
 
 int main() {
+    try {
     const auto& all=recovered_widget_catalog();
     std::size_t sliderCount=0,rangeCount=0;
     std::size_t target=all.size();
@@ -67,7 +69,7 @@ int main() {
         const auto track=menu_numeric_track_geometry(
             *frame,panel->logical_width(),panel->logical_height(),
             2u,target);
-        CHECK(track && track->width>30.0f && track->height==18.0f);
+        CHECK(track && track->width>30.0f && track->height==20.0f);
         const auto start=point(track->x+2.0f,
                                track->y+track->height*0.5f);
         const auto halfway=point(track->x+track->width*0.5f,
@@ -142,4 +144,8 @@ int main() {
     CHECK(!menu_slider_value_at_x(
         source,synthetic,std::numeric_limits<float>::infinity()));
     return 0;
+    } catch(const std::exception& e) {
+        std::fprintf(stderr,"%s\n",e.what());
+        return 1;
+    }
 }

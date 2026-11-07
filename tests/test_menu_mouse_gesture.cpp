@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cmath>
 #include <stdexcept>
+#include <cstdio>
 #include <thread>
 #define CHECK(x) do {if(!(x))throw std::runtime_error("R98 mouse gate: " #x);}while(false)
 
@@ -135,12 +136,24 @@ void all_modes(MenuPanelMode mode) {
     // Unsupported rows: only inert RowBody; no settings actions may leak.
     const Point unsupported=physical(*panel,w-54.f,
         menu_row_top(*changed,3)+20.f);
-    CHECK(gate.press(*changed,mode,unsupported.x,unsupported.y,5600,true));
-    const auto noAction=gate.release(*changed,mode,unsupported.x,unsupported.y,5620,true);
-    CHECK(noAction && noAction->kind==MenuHitKind::RowBody &&
-          noAction->catalog_index==3);
-    CHECK(nav.focus_visible_row(noAction->catalog_index));
-    CHECK(!nav.apply(MenuNavAction::ToggleFocusedPreview));
+    const auto unsupportedCard=menu_module_card_rect(*changed,w,3);
+    const bool fullyVisible=unsupportedCard.y+unsupportedCard.height<=
+        panel->logical_height()-menu_panel_padding;
+    if(fullyVisible) {
+        CHECK(gate.press(*changed,mode,unsupported.x,unsupported.y,5600,true));
+        const auto noAction=gate.release(
+            *changed,mode,unsupported.x,unsupported.y,5620,true);
+        CHECK(noAction && noAction->kind==MenuHitKind::RowBody &&
+              noAction->catalog_index==3);
+        CHECK(nav.focus_visible_row(noAction->catalog_index));
+        CHECK(!nav.apply(MenuNavAction::ToggleFocusedPreview));
+    } else {
+        // R152 places this row 1px past the compact panel's safe boundary.
+        // A partially clipped card must not accept even a body click.
+        CHECK(!hit_test_menu(*changed,mode,unsupported.x,unsupported.y));
+        CHECK(!gate.press(
+            *changed,mode,unsupported.x,unsupported.y,5600,true));
+    }
     CHECK(!model.preview_enabled(3));
 
     // Wrong-thread calls cannot mutate or complete a click.
@@ -164,6 +177,7 @@ void all_modes(MenuPanelMode mode) {
 }
 }
 int main() {
+    try {
     all_modes(MenuPanelMode::StandalonePreview);
     all_modes(MenuPanelMode::BoundedOverlay);
     all_modes(MenuPanelMode::CompactOverlay);
@@ -239,4 +253,8 @@ int main() {
         MenuPanelMode::StandalonePreview,40,30,420,true));
     CHECK(modeFrames.detach());
     return 0;
+    } catch(const std::exception& e) {
+        std::fprintf(stderr,"%s\n",e.what());
+        return 1;
+    }
 }

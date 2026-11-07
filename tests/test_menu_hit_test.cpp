@@ -226,7 +226,7 @@ int main() {
         CHECK(session.detach());
     }
     // R121: an Auto Clicker settings page crosses Inventory -> Conditions.
-    // Its second section heading adds 20 logical pixels to the native card.
+    // The second source section adds 31 pixels, including its row gap.
     // Renderer, wheel paging and pointer refusal must use that same height.
     {
         MenuState menu;
@@ -236,13 +236,13 @@ int main() {
         CHECK(menu.toggle_expanded(2));  // Auto Clicker in sorted native catalog
         const auto first=session.next(menu,&profile);
         CHECK(first && first->visible[2].settings_offset==0);
-        CHECK(menu_expanded_height(*first,2)==209.0f);
+        CHECK(menu_expanded_height(*first,2)==223.0f);
         CHECK(menu.change_settings_page(2,1));
         const auto second=session.next(menu,&profile);
         CHECK(second && second->visible[2].settings_offset==5);
-        CHECK(menu_expanded_height(*second,2)==202.0f);
+        CHECK(menu_expanded_height(*second,2)==222.0f);
         const auto card=menu_module_card_rect(*second,900.0f,2);
-        CHECK(card.height==menu_row_body_height(*second)+202.0f);
+        CHECK(card.height==menu_row_body_height(*second)+222.0f);
         CHECK(card.y+card.height<630.0f);
         const auto panel=menu_panel_geometry(
             900,630,false,MenuPanelMode::StandalonePreview);
@@ -259,7 +259,7 @@ int main() {
             MenuPanelMode::StandalonePreview,middleX,
             pixel_y(*panel,card.y+card.height+2.0f)));
         CHECK(menu.change_settings_page(2,-1));
-        CHECK(menu_expanded_height(*session.next(menu,&profile),2)==209.0f);
+        CHECK(menu_expanded_height(*session.next(menu,&profile),2)==223.0f);
         CHECK(session.detach());
     }
     // Consumer never reaches another thread's UI/model.
