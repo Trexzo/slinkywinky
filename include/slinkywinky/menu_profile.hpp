@@ -32,6 +32,7 @@ public:
     explicit MenuProfileBridge(MenuState& menu);
     bool select(MenuTab tab);
     bool scroll_by(int delta);
+    bool scroll_by_visible(int delta,std::size_t visible_limit);
     bool toggle(std::size_t catalog_index);
     bool enabled(std::size_t catalog_index) const noexcept;
     std::optional<MenuPrimaryParameter> primary(std::size_t catalog_index) const noexcept;
