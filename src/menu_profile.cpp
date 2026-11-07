@@ -92,12 +92,12 @@ std::optional<MenuPrimaryParameter> MenuProfileBridge::primary(
     // module. This must remain a native profile editor, not a game action.
     const auto& c=settings_.combat;
     switch(index) {
-        case 0: return MenuPrimaryParameter{"Aim range",c.aim_range,0.f,6.f,0.25f,false};
-        case 1: return MenuPrimaryParameter{"Block range",c.block_range,0.f,6.f,0.25f,false};
-        case 2: return MenuPrimaryParameter{"Clicks/sec",c.clicks_per_second,1.f,30.f,0.5f,false};
-        case 4: return MenuPrimaryParameter{"Backtrack ms",static_cast<float>(settings_.backtrack_ms),0.f,1000.f,25.f,true};
+        case 0: return MenuPrimaryParameter{"Range",c.aim_range,0.f,6.f,0.25f,false};
+        case 1: return MenuPrimaryParameter{"Range",c.block_range,0.f,6.f,0.25f,false};
+        case 2: return MenuPrimaryParameter{"Target CPS",c.clicks_per_second,1.f,30.f,0.5f,false};
+        case 4: return MenuPrimaryParameter{"Maximum delay",static_cast<float>(settings_.backtrack_ms),0.f,1000.f,25.f,true};
         case 6: return MenuPrimaryParameter{"Min hurt",static_cast<float>(c.hit_select_min_hurt),0.f,10.f,1.f,true};
-        case 12: return MenuPrimaryParameter{"Reach",c.reach.distance,0.f,6.f,0.1f,false};
+        case 12: return MenuPrimaryParameter{"Distance",c.reach.distance,0.f,6.f,0.1f,false};
         case 15: return MenuPrimaryParameter{"Velocity H",settings_.velocity.horizontal,0.f,1.f,0.05f,false};
         default: return std::nullopt;
     }

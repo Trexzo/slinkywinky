@@ -5,50 +5,16 @@
 
 namespace slinkywinky {
 namespace {
-// Exact category membership and names are obtained from the *public* module
-// reference, not from proprietary extracted source or an executable.
-constexpr std::array<MenuModule,65> catalog{{ 
-    {"Aim Assist",MenuTab::Combat}, {"Auto Block",MenuTab::Combat},
-    {"Auto Clicker",MenuTab::Combat}, {"Auto Weapon",MenuTab::Combat},
-    {"Backtrack",MenuTab::Combat}, {"Criticals",MenuTab::Combat},
-    {"Hit Select",MenuTab::Combat}, {"Hitboxes",MenuTab::Combat},
-    {"Knockback Delay",MenuTab::Combat}, {"Knockback Displace",MenuTab::Combat},
-    {"Lag Range",MenuTab::Combat}, {"Piercing",MenuTab::Combat},
-    {"Reach",MenuTab::Combat}, {"Sprint Reset",MenuTab::Combat},
-    {"Timer Range",MenuTab::Combat}, {"Velocity",MenuTab::Combat},
-    {"Weapons",MenuTab::Combat},
-    {"Fast Accel",MenuTab::Move}, {"Instant Stop",MenuTab::Move},
-    {"Inv Walk",MenuTab::Move}, {"Keep Sprint",MenuTab::Move},
-    {"No Jump Delay",MenuTab::Move}, {"No Slow",MenuTab::Move},
-    {"Null Move",MenuTab::Move}, {"Safe Walk",MenuTab::Move},
-    {"Sprint",MenuTab::Move}, {"Strafe",MenuTab::Move},
-    {"Anti Debuff",MenuTab::Visual}, {"Block ESP",MenuTab::Visual},
-    {"Chams",MenuTab::Visual}, {"Chest ESP",MenuTab::Visual},
-    {"Free Look",MenuTab::Visual}, {"GUI",MenuTab::Visual},
-    {"Indicators",MenuTab::Visual}, {"Item ESP",MenuTab::Visual},
-    {"Mod overlay",MenuTab::Visual}, {"Name Tags",MenuTab::Visual},
-    {"No Hurt Cam",MenuTab::Visual}, {"Notifications",MenuTab::Visual},
-    {"Player ESP",MenuTab::Visual}, {"Pointers",MenuTab::Visual},
-    {"Trajectories",MenuTab::Visual},
-    {"Auto Tool",MenuTab::Block}, {"Block In",MenuTab::Block},
-    {"Bridge Assist",MenuTab::Block}, {"Clutch",MenuTab::Block},
-    {"Fast Mine",MenuTab::Block}, {"Fast Place",MenuTab::Block},
-    {"Ghost Hand",MenuTab::Block},
-    {"Anti Bot",MenuTab::Utility}, {"Auto Pot",MenuTab::Utility},
-    {"Auto Rod",MenuTab::Utility}, {"Auto Soup",MenuTab::Utility},
-    {"Blink",MenuTab::Utility}, {"Fake Lag",MenuTab::Utility},
-    {"Friends",MenuTab::Utility}, {"Inv Manager",MenuTab::Utility},
-    {"Item Use Fix",MenuTab::Utility}, {"No Hit Delay",MenuTab::Utility},
-    {"No Item Release",MenuTab::Utility}, {"No Use Delay",MenuTab::Utility},
-    {"Ping Fix",MenuTab::Utility}, {"Refill",MenuTab::Utility},
-    {"Teams",MenuTab::Utility}, {"Timer",MenuTab::Utility}
-}};
+// R115: exact category/name descriptors from the supplied candidate decrypted
+// binary archive. This does not authenticate an official Slinky build.
+#include "r115_recovered_catalog.inc"
+
 bool is_module_tab(MenuTab tab) noexcept {
     return tab <= MenuTab::Utility;
 }
 } // namespace
 
-const std::array<MenuModule,65>& official_module_catalog() noexcept {return catalog;}
+const std::array<MenuModule,67>& official_module_catalog() noexcept {return catalog;}
 
 const char* menu_tab_name(MenuTab tab) noexcept {
     switch(tab){

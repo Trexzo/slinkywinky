@@ -63,7 +63,9 @@ bool MenuMouseGesture::equivalent_frame(
     for(std::size_t i=0;i<frame.parameters.size();++i) {
         const auto& a=frame.parameters[i];
         const auto& b=original.parameters[i];
-        if(a.catalog_index!=b.catalog_index || a.caption!=b.caption)
+        if(a.catalog_index!=b.catalog_index || a.caption!=b.caption ||
+           a.numeric!=b.numeric || a.value!=b.value ||
+           a.minimum!=b.minimum || a.maximum!=b.maximum)
             return false;
     }
     // Profile card changes invalidate any held navigation click, even

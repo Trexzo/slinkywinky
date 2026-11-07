@@ -8,8 +8,8 @@
 
 namespace slinkywinky {
 
-// R62 source-verified module *names* from docs.slinky.gg (2026-11-01).
-// Catalog presence DOES NOT imply an implemented or active game feature.
+// R115 source-verified 67 module descriptors from the user-provided candidate
+// decrypted archive. Listing a module does not implement game behavior.
 enum class MenuTab : std::uint8_t {
     Combat, Move, Visual, Block, Utility, Profiles, Unload, Count
 };
@@ -19,7 +19,7 @@ struct MenuModule {
     MenuTab tab;
 };
 
-const std::array<MenuModule,65>& official_module_catalog() noexcept;
+const std::array<MenuModule,67>& official_module_catalog() noexcept;
 const char* menu_tab_name(MenuTab tab) noexcept;
 
 struct MenuAppearance {
@@ -28,7 +28,7 @@ struct MenuAppearance {
     bool compact=false;
     bool wide=false;
     bool allow_input_while_open=false;
-    std::uint32_t accent_rgb=0xFF6016u;
+    std::uint32_t accent_rgb=0xF35D12u;
     float scale=1.0f;
 };
 
@@ -73,8 +73,8 @@ private:
     MenuTab selected_=MenuTab::Combat;
     std::size_t scroll_=0;
     MenuAppearance appearance_{};
-    std::array<bool,65> enabled_{};
-    std::array<bool,65> expanded_{};
+    std::array<bool,67> enabled_{};
+    std::array<bool,67> expanded_{};
 };
 
 } // namespace slinkywinky

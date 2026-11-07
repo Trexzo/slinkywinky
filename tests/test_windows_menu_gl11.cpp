@@ -79,13 +79,18 @@ struct Context {
     HWND hwnd=nullptr;
     HDC dc=nullptr;
     HGLRC gl=nullptr;
-    Context() {
+    bool registered=false;
+    Context(unsigned width=676u,unsigned height=630u) {
         HINSTANCE inst=GetModuleHandleW(nullptr);
         WNDCLASSW wc{};wc.style=CS_OWNDC;
         wc.lpfnWndProc=proc;wc.hInstance=inst;wc.lpszClassName=klass;
-        if(!RegisterClassW(&wc))throw std::runtime_error("Window registration");
+        if(RegisterClassW(&wc))registered=true;
+        else if(GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)
+            throw std::runtime_error("Window registration");
         hwnd=CreateWindowW(klass,L"R67 isolated GL fixture",WS_POPUP,
-                           0,0,676,630,nullptr,nullptr,inst,nullptr);
+                           0,0,static_cast<int>(width),
+                           static_cast<int>(height),
+                           nullptr,nullptr,inst,nullptr);
         if(!hwnd)throw std::runtime_error("Isolated WGL window");
         dc=GetDC(hwnd);
         if(!dc)throw std::runtime_error("Isolated WGL DC");
@@ -108,7 +113,7 @@ struct Context {
         if(gl)wglDeleteContext(gl);
         if(dc && hwnd)ReleaseDC(hwnd,dc);
         if(hwnd)DestroyWindow(hwnd);
-        UnregisterClassW(klass,GetModuleHandleW(nullptr));
+        if(registered)UnregisterClassW(klass,GetModuleHandleW(nullptr));
     }
 };
 struct State {
@@ -181,21 +186,27 @@ std::array<GLubyte,4> readback(int x,int y) {
 }
 // Optional, own-frame WGL screenshot: never captures another application,
 // game window, keyboard input, or clipboard.
-bool save_gl_framebuffer_ppm(const char* output) {
-    if(!output || std::strlen(output)>=500)return false;
+bool save_gl_framebuffer_ppm(const char* output,
+                             unsigned width=676u,unsigned height=630u) {
+    if(!output || std::strlen(output)>=500 || width<320 || width>1500 ||
+       height<240 || height>8192)return false;
     GLint old=0;
     glGetIntegerv(GL_READ_BUFFER,&old);
     glReadBuffer(GL_BACK);
-    std::vector<unsigned char> pixels(676u*630u*3u);
-    glReadPixels(0,0,676,630,GL_RGB,GL_UNSIGNED_BYTE,pixels.data());
+    std::vector<unsigned char> pixels(
+        static_cast<std::size_t>(width)*height*3u);
+    glReadPixels(0,0,static_cast<GLsizei>(width),
+                 static_cast<GLsizei>(height),
+                 GL_RGB,GL_UNSIGNED_BYTE,pixels.data());
     glReadBuffer(static_cast<GLenum>(old));
     if(glGetError()!=GL_NO_ERROR)return false;
     std::ofstream out(output,std::ios::binary);
     if(!out)return false;
-    out<<"P6\n676 630\n255\n";
-    for(int y=629;y>=0;--y)
+    out<<"P6\n"<<width<<" "<<height<<"\n255\n";
+    for(int y=static_cast<int>(height)-1;y>=0;--y)
         out.write(reinterpret_cast<const char*>(
-            pixels.data()+static_cast<std::size_t>(y)*676u*3u),676u*3u);
+            pixels.data()+static_cast<std::size_t>(y)*width*3u),
+            static_cast<std::streamsize>(width*3u));
     out.close();
     return out.good();
 }
@@ -283,7 +294,7 @@ int main() {
         REQUIRE(selectedTab[0]>background[0] && selectedTab[1]>background[1]);
         const auto cardFill=readback(19,534);
         REQUIRE(cardFill[0]<55 && cardFill[1]<55 && cardFill[2]<55);
-        const auto inactiveTrack=readback(603,534);
+        const auto inactiveTrack=readback(640,549);
         REQUIRE(inactiveTrack[0]>cardFill[0]);
         REQUIRE(menu.toggle_preview(frame->visible.front().catalog_index));
         const auto changed=admitted.next(menu);
@@ -291,7 +302,7 @@ int main() {
         REQUIRE(draw_menu_gl11(*changed,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
-        const auto activeTrack=readback(603,534);
+        const auto activeTrack=readback(640,549);
         REQUIRE(activeTrack[0]>inactiveTrack[0]+40);
         // Optional source-owned evidence of the orange enabled preview.
         if(const char* enabled=std::getenv("SLINKYWINKY_GL11_ENABLED_PPM"))
@@ -304,7 +315,7 @@ int main() {
         const auto configured=admitted.next(menu,&profile);
         REQUIRE(configured && configured->parameters.size()==1);
         REQUIRE(configured->parameters[0].catalog_index==0);
-        REQUIRE(configured->parameters[0].caption=="Aim range: 4.25");
+        REQUIRE(configured->parameters[0].caption=="Range: 4.25");
         REQUIRE(draw_menu_gl11(*configured,context.gl,context.dc));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
@@ -318,6 +329,13 @@ int main() {
         REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
         wrong=*configured;
         wrong.parameters[0].caption="\x01";
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
+        wrong=*configured;
+        wrong.parameters[0].minimum=5.0f;
+        wrong.parameters[0].maximum=4.0f;
+        REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
+        wrong=*configured;
+        wrong.parameters[0].value=wrong.parameters[0].maximum+0.25f;
         REQUIRE(!draw_menu_gl11(wrong,context.gl,context.dc));
         wrong=*configured;
         wrong.parameters.push_back(wrong.parameters[0]);
@@ -624,13 +642,13 @@ int main() {
         const State focusBefore=snapshot();
         REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
                                MenuGL11Mode::StandalonePreview));
-        const auto unselected=readback(17,535);
+        const auto unselected=readback(10,535);
         same(focusBefore,snapshot());
         glClear(GL_COLOR_BUFFER_BIT);
         REQUIRE(draw_menu_gl11(*focusedFrame,context.gl,context.dc,
                                MenuGL11Mode::StandalonePreview,
                                focusNavigation.visible_focus()));
-        const auto firstSelected=readback(17,535);
+        const auto firstSelected=readback(10,535);
         REQUIRE(firstSelected!=unselected);
         REQUIRE(firstSelected[0]>unselected[0] &&
                 firstSelected[1]>unselected[1]);
@@ -643,8 +661,8 @@ int main() {
         REQUIRE(draw_menu_gl11(*nextFocusedFrame,context.gl,context.dc,
                                MenuGL11Mode::StandalonePreview,
                                focusNavigation.visible_focus()));
-        REQUIRE(readback(17,535)==unselected);
-        const auto secondSelected=readback(17,471);
+        REQUIRE(readback(10,535)==unselected);
+        const auto secondSelected=readback(10,471);
         REQUIRE(secondSelected[0]>unselected[0] &&
                 secondSelected[1]>unselected[1]);
         same(focusBefore,snapshot());
@@ -757,7 +775,7 @@ int main() {
         const int toggleX=static_cast<int>(compactPanel->left)+
             static_cast<int>(std::lround(compactPanel->scale*(logicalW-54.0f)));
         const int toggleY=static_cast<int>(compactPanel->top)+
-            static_cast<int>(std::lround(compactPanel->scale*(72.0f+20.0f)));
+            static_cast<int>(std::lround(compactPanel->scale*(62.0f+18.0f)));
         const auto compactHit=hit_test_menu(
             *focusedFrame,MenuPanelMode::CompactOverlay,toggleX,toggleY);
         REQUIRE(compactHit && compactHit->kind==MenuHitKind::Toggle &&
@@ -767,7 +785,7 @@ int main() {
         const auto compactExpand=hit_test_menu(
             *focusedFrame,MenuPanelMode::CompactOverlay,expandX,
             static_cast<int>(compactPanel->top)+
-            static_cast<int>(std::lround(compactPanel->scale*(72.0f+43.0f))));
+            static_cast<int>(std::lround(compactPanel->scale*(62.0f+44.0f))));
         REQUIRE(compactExpand && compactExpand->kind==MenuHitKind::Expand &&
                 compactExpand->catalog_index==0);
         glClearColor(0.10f,0.38f,0.69f,1.0f);
@@ -996,6 +1014,75 @@ int main() {
                 GameWindowFocus::Refused);
         REQUIRE(SetWindowTextW(context.hwnd,L"R67 isolated GL fixture"));
         same(before,snapshot());
+        // R115: second disposable WGL context at the recovered 900px width.
+        // This proves native two-column layout, pixel output and hit areas
+        // without opening Minecraft or capturing another desktop window.
+        {
+            Context sourceWide(900u,630u);
+            glViewport(0,0,900,630);
+            const State wideBefore=snapshot();
+            REQUIRE(menu_module_columns(676.0f)==1u);
+            REQUIRE(menu_module_columns(900.0f)==2u);
+            REQUIRE(menu_module_columns(1500.0f)==3u);
+            MenuState sourceMenu;
+            MenuProfileBridge sourceProfile(sourceMenu);
+            MenuRenderSession sourceFrames;
+            REQUIRE(sourceFrames.attach(901,900,630));
+            auto sourceFrame=sourceFrames.next(sourceMenu,&sourceProfile);
+            REQUIRE(sourceFrame && sourceFrame->visible.size()==8);
+            const auto firstCard=menu_module_card_rect(*sourceFrame,900.0f,0);
+            const auto secondCard=menu_module_card_rect(*sourceFrame,900.0f,1);
+            REQUIRE(firstCard.x==8.0f && secondCard.x>firstCard.x+
+                    firstCard.width);
+            REQUIRE(firstCard.y==secondCard.y);
+            const auto secondToggle=hit_test_menu(*sourceFrame,
+                MenuPanelMode::StandalonePreview,
+                static_cast<int>(secondCard.x+secondCard.width-30.0f),
+                static_cast<int>(secondCard.y+17.0f));
+            REQUIRE(secondToggle && secondToggle->kind==MenuHitKind::Toggle &&
+                    secondToggle->catalog_index==1u);
+            REQUIRE(!hit_test_menu(*sourceFrame,
+                MenuPanelMode::StandalonePreview,
+                static_cast<int>(firstCard.x+firstCard.width+6.0f),
+                static_cast<int>(firstCard.y+17.0f)));
+            glClearColor(0.0f,0.0f,0.0f,1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            REQUIRE(draw_menu_gl11(*sourceFrame,sourceWide.gl,sourceWide.dc));
+            REQUIRE(glGetError()==GL_NO_ERROR);
+            same(wideBefore,snapshot());
+            if(const char* output=std::getenv("SLINKYWINKY_R115_900_COMBAT_PPM"))
+                REQUIRE(save_gl_framebuffer_ppm(output,900,630));
+
+            REQUIRE(sourceMenu.toggle_expanded(2));
+            const auto expanded=sourceFrames.next(sourceMenu,&sourceProfile);
+            REQUIRE(expanded && expanded->parameters.size()==1 &&
+                    expanded->parameters.front().numeric);
+            const auto thirdCard=menu_module_card_rect(*expanded,900.0f,2);
+            REQUIRE(thirdCard.height>menu_row_body_height(*expanded));
+            glClear(GL_COLOR_BUFFER_BIT);
+            REQUIRE(draw_menu_gl11(*expanded,sourceWide.gl,sourceWide.dc));
+            REQUIRE(glGetError()==GL_NO_ERROR);
+            same(wideBefore,snapshot());
+            if(const char* output=std::getenv("SLINKYWINKY_R115_900_SETTINGS_PPM"))
+                REQUIRE(save_gl_framebuffer_ppm(output,900,630));
+            REQUIRE(sourceMenu.select(MenuTab::Profiles));
+            const auto profilesFrame=sourceFrames.next(sourceMenu,&sourceProfile);
+            REQUIRE(profilesFrame && profilesFrame->profile_cards.size()==1);
+            glClear(GL_COLOR_BUFFER_BIT);
+            REQUIRE(draw_menu_gl11(*profilesFrame,sourceWide.gl,sourceWide.dc));
+            REQUIRE(glGetError()==GL_NO_ERROR);
+            same(wideBefore,snapshot());
+            REQUIRE(!hit_test_menu(*profilesFrame,
+                MenuPanelMode::StandalonePreview,150,82));
+            if(const char* output=std::getenv("SLINKYWINKY_R115_900_PROFILES_PPM"))
+                REQUIRE(save_gl_framebuffer_ppm(output,900,630));
+            REQUIRE(sourceFrames.detach());
+        }
+        REQUIRE(wglMakeCurrent(context.dc,context.gl));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
+        std::cout<<"R115_ORIGINAL_RECOVERED_900PX_TWO_COLUMN_WGL_PASS\\n";
+        std::cout<<"R115_NATIVE_SOURCE_SLIDERS_AND_PROFILE_GRID_PREVIEW_PASS\\n";
         std::cout<<"R104_REAL_WGL_WINDOW_FOCUS_FENCE_NEVER_CAPTURES_GAME_INPUT_PASS\\n";
         std::cout<<"R101_READ_ONLY_WGL_BOUND_GAME_WINDOW_IDENTITY_NEGATIVE_CONTROLS_PASS\\n";
         std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";

@@ -237,7 +237,15 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     for(std::size_t i=0;i<frame.parameters.size();++i) {
         const auto& parameter=frame.parameters[i];
         if(parameter.caption.empty() || parameter.caption.size()>48 ||
-           !module_has_profile_setting(parameter.catalog_index))return false;
+           !module_has_profile_setting(parameter.catalog_index) ||
+           (parameter.numeric &&
+              (!std::isfinite(parameter.value) ||
+               !std::isfinite(parameter.minimum) ||
+               !std::isfinite(parameter.maximum) ||
+               parameter.maximum<=parameter.minimum ||
+               parameter.value<parameter.minimum ||
+               parameter.value>parameter.maximum)))
+            return false;
         for(const unsigned char c:parameter.caption)
             if(c<32 || c>126)return false; // ASCII first-party bitmap only.
         bool matched=false;
@@ -302,172 +310,211 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     if(scale!=1.0f)glScalef(scale,scale,1.0f);
     const float w=static_cast<float>(paneWidth)/scale;
     const float h=static_cast<float>(paneHeight)/scale;
-    rgba(0x222223,overlay?static_cast<GLubyte>(243):static_cast<GLubyte>(255));
+    rgba(0x303030,overlay?static_cast<GLubyte>(192):static_cast<GLubyte>(255));
     quad(0,0,w,h);
     // Real Slinky uses a slim rounded navigation bar, rather than a
     // large centered logo/title and an orange underline.
-    rgba(0x121213,255);
+    rgb(0x141414);
     round_rect(menu_nav_x,menu_nav_y,w-2*menu_nav_x,
-               menu_nav_height,20.0f);
+               menu_nav_height,menu_nav_radius);
     const float cell=menu_tab_width(w);
     const auto selected=static_cast<unsigned>(frame.tab);
     if(selected<6u) {
-        rgb(0x424244);
-        round_rect(menu_nav_x+static_cast<float>(selected)*cell+2.0f,
-                   menu_nav_y+3.0f,cell-4.0f,menu_nav_height-6.0f,16.0f);
+        rgb(0x404040);
+        round_rect(menu_nav_x+static_cast<float>(selected)*cell+
+                       menu_nav_selected_inset,
+                   menu_nav_y+menu_nav_selected_inset,
+                   cell-2.0f*menu_nav_selected_inset,
+                   menu_nav_height-2.0f*menu_nav_selected_inset,14.0f);
     }
     for(unsigned i=0;i<7;++i) {
         const auto tab=static_cast<MenuTab>(i);
         std::string_view label=menu_tab_name(tab);
-        const float fontPx=std::min(16.0f,std::max(9.0f,cell/4.0f));
+        const float fontPx=16.0f;
         const float textWidth=measure_menu_system_text(label,fontPx);
         const float fallbackWidth=label.size()*fontPx*0.62f;
         const float measured=textWidth>0?textWidth:fallbackWidth;
         const float left=menu_nav_x+static_cast<float>(i)*cell+
                          std::max(2.0f,(cell-measured)*0.5f);
-        rgb(i==6?0xee5252:(i==selected?0xffffff:0xd0d0d2));
+        rgb(i==6?0xdd4747:0xdddddd);
         text(label,left,menu_nav_y+11.0f,fontPx,cell-4.0f);
     }
 
+
     if(frame.is_placeholder) {
-        // Real Slinky uses two columns of rounded cards with a small
-        // "NONE"/keybind badge and four profile actions along the top-right.
-        // The agent never supplies file paths here; these action icons are
-        // not hit-test targets, are not bound, and perform no filesystem I/O.
+        // R115 source layout: genuine 430px-target card grid. Real session
+        // snapshots contain only the actual native Default card. No file
+        // operations, fake saved paths, or OS input are connected here.
         for(std::size_t i=0;i<frame.profile_cards.size();++i) {
             const auto& card=frame.profile_cards[i];
             const auto rect=menu_profile_card_rect(frame,w,i);
-            rgb(0x111112);
-            round_rect(rect.x,rect.y,rect.width,rect.height,16.0f);
-            const float textX=rect.x+13.0f;
-            const float iconX=rect.x+rect.width-112.0f;
-            const float fontPx=frame.appearance.compact?16.0f:18.0f;
-            const float nameWidth=std::max(40.0f,iconX-textX-49.0f);
-            rgb(0xe9e9eb);
-            text(card.name,textX,rect.y+8.0f,fontPx,nameWidth);
-            if(!card.is_default) {
-                const float measured=measure_menu_system_text(card.name,fontPx);
-                const float fallback=card.name.size()*fontPx*0.62f;
-                const float badgeX=std::min(iconX-43.0f,textX+
-                    std::min(measured>0?measured:fallback,nameWidth)+7.0f);
-                const bool bound=!card.bind.empty() && card.bind!="NONE";
-                rgb(bound?0x3e2117:0x29292b);
-                round_rect(badgeX,rect.y+8.0f,40.0f,21.0f,6.0f);
-                rgb(bound?frame.appearance.accent_rgb:0x9b9b9e);
-                const std::string_view badge=card.bind.empty()?
-                    std::string_view{"NONE"}:std::string_view{card.bind};
-                text(badge,badgeX+5.0f,rect.y+11.0f,
-                     12.0f,32.0f);
+            rgb(0x141414);
+            round_rect(rect.x,rect.y,rect.width,rect.height,
+                       menu_card_radius);
+            const float nameX=rect.x+8.0f;
+            const float iconX=rect.x+rect.width-124.0f;
+            const float titleWidth=std::max(30.0f,iconX-nameX-45.0f);
+            rgb(0xdddddd);
+            text(card.name,nameX,rect.y+8.0f,16.0f,titleWidth);
+            const float measured=measure_menu_system_text(card.name,16.0f);
+            const float titleW=measured>0?measured:
+                               card.name.size()*9.0f;
+            const float chipX=std::min(iconX-46.0f,
+                                     nameX+std::min(titleW,titleWidth)+5.0f);
+            if(chipX>=nameX+15.0f) {
+                const bool bound=!card.bind.empty()&&card.bind!="NONE";
+                rgba(bound?frame.appearance.accent_rgb:0x999999,38);
+                round_rect(chipX,rect.y+8.0f,41.0f,20.0f,5.0f);
+                rgb(bound?frame.appearance.accent_rgb:0x999999);
+                text(card.bind.empty()?"NONE":
+                     std::string_view{card.bind},chipX+6.0f,
+                     rect.y+11.0f,12.0f,34.0f);
             }
-            if(!frame.appearance.compact) {
-                rgb(0x9d9d9f);
-                text(card.description,textX,rect.y+48.0f,
-                     14.0f,rect.width-26.0f);
+            if(!card.description.empty() && !frame.appearance.compact) {
+                rgb(0x999999);
+                text(card.description,nameX,rect.y+40.0f,14.0f,
+                     rect.width-16.0f);
             }
             for(unsigned action=0;action<4;++action)
-                profile_action_glyph(action,iconX+action*26.0f,
-                                     rect.y+11.0f);
+                profile_action_glyph(action,iconX+action*32.0f,
+                                     rect.y+10.0f);
         }
-        rgb(0x77777a);
+        // Source also has a semi-transparent create-profile card. This
+        // preview presents only its appearance, not a live text input.
+        const auto add=menu_profile_card_rect(frame,w,
+                                               frame.profile_cards.size());
+        if(add.y+add.height<=h-menu_panel_padding) {
+            rgba(0x141414,128);
+            round_rect(add.x,add.y,add.width,add.height,20.0f);
+            rgb(0x404040);
+            round_rect(add.x+8,add.y+8,add.width-16,20.0f,10.0f);
+            rgb(0x202020);
+            round_rect(add.x+10,add.y+10,add.width-20,16.0f,8.0f);
+            rgb(0x999999);
+            text("Profile name",add.x+16,add.y+9,14.0f,
+                 add.width-33.0f);
+            rgb(0xdddddd);
+            const std::string_view label="CREATE NEW PROFILE";
+            const float textW=measure_menu_system_text(label,15.0f);
+            text(label,add.x+std::max(10.0f,(add.width-textW)*0.5f),
+                 add.y+39.0f,15.0f,add.width-16.0f);
+        }
+        rgb(0x999999);
         text("Profile actions unavailable in this preview",
-             menu_nav_x, h-27.0f,12.0f,w-2*menu_nav_x);
+             menu_panel_padding,h-22.0f,12.0f,w-16.0f);
     }
 
     for(std::size_t i=0;i<frame.visible.size();++i) {
         const auto& item=frame.visible[i];
-        const float y=menu_row_top(frame,i);
+        const auto rect=menu_module_card_rect(frame,w,i);
         const float body=menu_row_body_height(frame);
-        const float total=menu_row_total_height(frame,i);
-        // Never render a partly clipped module as actionable; the matching
-        // hit tester makes the identical full-body/expanded admission.
-        if(y+total>h-12.0f)continue;
-        const float left=16.0f;
-        const float right=w-16.0f;
-        rgb(0x111112);
-        round_rect(left,y,right-left,total,13.0f);
+        if(rect.y+rect.height>h-menu_panel_padding)continue;
+        const float left=rect.x,right=rect.x+rect.width,y=rect.y;
+        rgb(0x141414);
+        round_rect(left,y,rect.width,rect.height,menu_card_radius);
         if(focused_catalog_index && item.catalog_index==*focused_catalog_index) {
-            rgb(0x545456);
-            round_rect(left,y,total>body?4.0f:3.0f,total,1.5f);
+            rgb(0x404040);
+            round_rect(left,y,3.0f,rect.height,1.5f);
         }
-
         const bool supported=module_has_profile_setting(item.catalog_index);
-        const float titleFont=frame.appearance.compact?18.0f:20.0f;
-        const float titleTop=y+(frame.appearance.compact?8.0f:5.0f);
-        rgb(supported?0xf3f3f4:0xc7c7ca);
-        text(item.title,30.0f,titleTop,titleFont,
-             std::max(10.0f,w-188.0f));
-        // Authentic Slinky puts a small rounded keybind badge directly
-        // beside the module name. Here NONE is an inert preview badge.
+        const float titleFont=16.0f;
+        const float nameX=left+menu_card_inner_padding;
+        const float titleLimit=std::max(20.0f,rect.width-108.0f);
+        rgb(0xdddddd);
+        text(item.title,nameX,y+8.0f,titleFont,titleLimit);
+
+        // Source: bind chip is 20px high, five pixels after module name;
+        // "Weapons", "Friends", "Teams" have no bind chip.
+        const bool bindChip=item.title!="Weapons"&&
+            item.title!="Friends"&&item.title!="Teams";
         const float natural=measure_menu_system_text(item.title,titleFont);
-        const float titleWidth=natural>0?natural:
-                                static_cast<float>(item.title.size())*11.0f;
-        const float bindX=std::max(32.0f,
-            std::min(30.0f+titleWidth+10.0f,w-152.0f));
-        if(bindX+51.0f < w-86.0f) {
-            rgb(0x29292b);
-            round_rect(bindX,y+9.0f,49.0f,22.0f,7.0f);
-            rgb(0xb0b0b2);
-            text("NONE",bindX+7.0f,y+12.0f,13.0f,40.0f);
+        const float titleWidth=natural>0?natural:item.title.size()*8.5f;
+        if(bindChip) {
+            const float chipX=nameX+std::min(titleLimit,titleWidth)+5.0f;
+            const float toggleLeft=right-menu_card_inner_padding-
+                                   menu_switch_width;
+            if(chipX+41.0f<toggleLeft-5.0f) {
+                rgba(0x999999,38);
+                round_rect(chipX,y+8.0f,41.0f,20.0f,5.0f);
+                rgb(0x999999);
+                text("NONE",chipX+6.0f,y+11.0f,12.0f,33.0f);
+            }
         }
 
-        const float toggleX=w-80.0f;
-        const float toggleY=y+(frame.appearance.compact?8.0f:8.0f);
-        const bool previewActive=supported && item.preview_enabled;
-        rgb(previewActive?frame.appearance.accent_rgb:0x48484a);
-        round_rect(toggleX,toggleY,54.0f,27.0f,13.0f);
-        rgb(0x171719);
-        round_rect(toggleX+(previewActive?30.0f:4.0f),
-                   toggleY+3.5f,20.0f,20.0f,10.0f);
-
-        // The compact layout hides descriptions; the normal layout places
-        // expand beside the description exactly like the source screenshots.
-        const float expandX=frame.appearance.compact?w-119.0f:28.0f;
-        const float expandY=frame.appearance.compact?y+10.0f:y+33.0f;
-        rgb(supported?0x414143:0x303032);
-        round_rect(expandX,expandY,21.0f,21.0f,5.0f);
-        rgb(supported?0xdadadc:0x777779);
-        quad(expandX+5.0f,expandY+10.0f,11.0f,2.0f);
-        if(!item.expanded)quad(expandX+10.0f,expandY+5.0f,2.0f,11.0f);
+        // WGL style mirrors source even for disabled/nonimplemented
+        // modules. Mouse hit testing admits *only* native profile toggles.
+        const bool hasSwitch=item.title!="GUI" &&
+            item.title!="Weapons" && item.title!="Friends" &&
+            item.title!="Teams";
+        if(hasSwitch) {
+            const bool active=supported&&item.preview_enabled;
+            const float toggleX=right-menu_card_inner_padding-
+                                menu_switch_width;
+            const float toggleY=y+menu_card_inner_padding;
+            rgb(active?frame.appearance.accent_rgb:0x404040);
+            round_rect(toggleX,toggleY,40.0f,20.0f,10.0f);
+            rgb(0x141414);
+            round_rect(toggleX+(active?26.0f:6.0f),
+                       toggleY+6.0f,8.0f,8.0f,4.0f);
+        }
         if(!frame.appearance.compact) {
-            rgb(0x98989b);
+            const float expX=left+20.0f,expY=y+40.0f;
+            rgb(supported?0x404040:0x343434);
+            round_rect(expX,expY,20.0f,20.0f,5.0f);
+            rgb(supported?0xdddddd:0x777777);
+            quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
+            if(!item.expanded)
+                quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
+            rgb(0x999999);
             text(menu_preview_description(item.catalog_index),
-                 59.0f,y+35.0f,14.0f,std::max(0.0f,w-155.0f));
+                 left+46.0f,y+42.0f,14.0f,
+                 std::max(10.0f,rect.width-54.0f));
+        } else {
+            const float expX=left+8.0f,expY=y+8.0f;
+            rgb(supported?0x404040:0x343434);
+            round_rect(expX,expY,20.0f,20.0f,5.0f);
+            rgb(supported?0xdddddd:0x777777);
+            quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
+            if(!item.expanded)
+                quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
         }
         if(item.expanded) {
             const float settingY=y+body;
-            // The original menu groups controls under a section label, then
-            // places the setting name at left and its outlined value pill
-            // at right. The only value here is a native profile snapshot.
-            const bool inGame=item.catalog_index==2;
-            rgb(0x929295);
-            text(inGame?"In-game":"Main",31.0f,settingY+8.0f,
-                 16.0f,w-80.0f);
-            std::string_view caption="Settings preview";
-            for(const auto& parameter:frame.parameters)
-                if(parameter.catalog_index==item.catalog_index) {
-                    caption=parameter.caption;
+            rgb(0x999999);
+            text(item.catalog_index==2?"In-game":"Main",
+                 left+8.0f,settingY+11.0f,15.0f,rect.width-16.0f);
+            const MenuRenderParameter* numeric=nullptr;
+            for(const auto& p:frame.parameters)
+                if(p.catalog_index==item.catalog_index) {
+                    numeric=&p;
                     break;
                 }
-            const std::size_t colon=caption.find(':');
-            const std::string_view label=colon==std::string_view::npos?
-                std::string_view{"Setting"}:caption.substr(0,colon);
-            const std::string_view value=colon==std::string_view::npos?
-                caption:caption.substr(std::min(caption.size(),colon+2));
-            const float fieldWidth=std::min(205.0f,std::max(96.0f,w*0.43f));
-            const float fieldX=w-fieldWidth-28.0f;
-            const float fieldY=settingY+(frame.appearance.compact?31.0f:37.0f);
-            rgb(0xe5e5e7);
-            text(label,31.0f,fieldY+1.0f,17.0f,
-                 std::max(15.0f,fieldX-45.0f));
-            rgb(0x474749);
-            round_rect(fieldX,fieldY,fieldWidth,31.0f,15.0f);
-            rgb(0x151516);
-            round_rect(fieldX+3.0f,fieldY+3.0f,
-                       fieldWidth-6.0f,25.0f,12.0f);
-            const float measured=measure_menu_system_text(value,16.0f);
-            rgb(0xf1f1f2);
-            text(value,fieldX+std::max(8.0f,(fieldWidth-measured)*0.5f),
-                 fieldY+4.0f,16.0f,fieldWidth-16.0f);
+            std::string_view caption=numeric?numeric->caption:
+                                     "Settings preview";
+            const auto colon=caption.find(':');
+            const auto field=colon==std::string_view::npos?
+                             caption:caption.substr(0,colon);
+            const float fieldY=settingY+37.0f;
+            rgb(0xdddddd);
+            text(field,left+8.0f,fieldY+1.0f,15.0f,
+                 std::max(15.0f,rect.width*0.44f));
+            // Unlike the earlier mock dropdown, actual native numeric
+            // settings now render as read-only slider geometry.
+            const float trackX=left+rect.width*0.5f;
+            const float trackW=rect.width*0.5f-10.0f;
+            rgb(0x404040);
+            round_rect(trackX,fieldY+8.0f,trackW,4.0f,2.0f);
+            if(numeric && numeric->numeric &&
+               numeric->maximum>numeric->minimum) {
+                const float ratio=std::max(0.0f,std::min(1.0f,
+                    (numeric->value-numeric->minimum)/
+                    (numeric->maximum-numeric->minimum)));
+                const float knobX=trackX+trackW*ratio;
+                rgb(frame.appearance.accent_rgb);
+                round_rect(trackX,fieldY+8.0f,
+                           std::max(0.01f,knobX-trackX),4.0f,2.0f);
+                round_rect(knobX-6.0f,fieldY+4.0f,12.0f,12.0f,6.0f);
+            }
         }
     }
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture

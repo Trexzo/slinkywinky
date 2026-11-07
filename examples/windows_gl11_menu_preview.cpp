@@ -136,7 +136,7 @@ void close_context(HWND hwnd) {
     if(device){ReleaseDC(hwnd,device);device=nullptr;}
 }
 void adjust_client(HWND hwnd) {
-    const unsigned clientWidth=menu.appearance().wide?844u:676u;
+    const unsigned clientWidth=menu.appearance().wide?1500u:900u;
     RECT rectangle{0,0,static_cast<LONG>(clientWidth),630};
     const DWORD style=static_cast<DWORD>(GetWindowLongPtrW(hwnd,GWL_STYLE));
     const DWORD extended=static_cast<DWORD>(GetWindowLongPtrW(hwnd,GWL_EXSTYLE));
@@ -346,8 +346,8 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 menu.set_compact(!menu.appearance().compact);persist();
             }
             if(wp==L'G'){
-                menu.set_accent(menu.appearance().accent_rgb==0xFF6016u
-                    ?0x779ADBu:0xFF6016u);persist();
+                menu.set_accent(menu.appearance().accent_rgb==0xF35D12u
+                    ?0x779ADBu:0xF35D12u);persist();
             }
             if(wp==L'W'){
                 menu.set_wide(!menu.appearance().wide);

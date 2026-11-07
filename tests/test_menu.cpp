@@ -10,7 +10,10 @@
 using namespace slinkywinky;
 int main() {
     const auto& catalog=official_module_catalog();
-    CHECK(catalog.size()==65);
+    CHECK(catalog.size()==67);
+    CHECK(std::string(catalog[54].name)=="Chest Stealer");
+    CHECK(std::string(catalog[55].name)=="Debug");
+    CHECK(std::string(catalog[35].name)=="Mod Overlay");
     std::set<std::string> unique;
     std::size_t counts[5]{};
     for(const auto& entry:catalog){
@@ -21,7 +24,7 @@ int main() {
         ++counts[category];
     }
     CHECK(counts[0]==17 && counts[1]==10 && counts[2]==15 &&
-          counts[3]==7 && counts[4]==16);
+          counts[3]==7 && counts[4]==18);
     CHECK(std::string(menu_tab_name(MenuTab::Combat))=="Combat");
     CHECK(std::string(menu_tab_name(MenuTab::Profiles))=="Profiles");
     CHECK(std::string(menu_tab_name(MenuTab::Count))=="Unknown");
@@ -36,7 +39,7 @@ int main() {
     CHECK(state.page(2).size()==2);
     CHECK(state.page(0).empty());
     CHECK(!state.preview_enabled(0) && !state.expanded(0));
-    CHECK(!state.toggle_preview(65) && !state.toggle_expanded(65));
+    CHECK(!state.toggle_preview(67) && !state.toggle_expanded(67));
     CHECK(!state.toggle_preview(17)); // cannot mutate off-category entries
     CHECK(!state.preview_enabled(17));
     CHECK(state.toggle_preview(0) && state.preview_enabled(0));
@@ -61,7 +64,7 @@ int main() {
     CHECK(state.select(MenuTab::Combat) && state.expanded(0));
     CHECK(!state.appearance().compact && !state.appearance().wide);
     CHECK(!state.appearance().allow_input_while_open);
-    CHECK(state.appearance().accent_rgb==0xFF6016u);
+    CHECK(state.appearance().accent_rgb==0xF35D12u);
     state.set_compact(true);
     state.set_wide(true);
     state.set_allow_input(true);

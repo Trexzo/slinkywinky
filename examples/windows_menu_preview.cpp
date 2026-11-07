@@ -228,7 +228,7 @@ LRESULT CALLBACK wndproc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             }
             if(wp==L'G'){
                 alternateAccent=!alternateAccent;
-                menu.set_accent(alternateAccent?0x779ADB:0xFF6016);
+                menu.set_accent(alternateAccent?0x779ADB:0xF35D12);
                 save_prefs();
             }
             if(wp==L'W'){

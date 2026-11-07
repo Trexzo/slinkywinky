@@ -74,7 +74,8 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
                    <<parameter->value;
             const std::string value=caption.str();
             if(value.empty() || value.size()>48)return std::nullopt;
-            frame.parameters.push_back({item.catalog_index,value});
+            frame.parameters.push_back({item.catalog_index,value,
+                parameter->value,parameter->minimum,parameter->maximum,true});
         }
     }
     frame.is_placeholder=frame.tab==MenuTab::Profiles;

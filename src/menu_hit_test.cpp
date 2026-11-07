@@ -16,7 +16,7 @@ std::optional<MenuPanelGeometry> menu_panel_geometry(
     if(!standalone && !compact && mode!=MenuPanelMode::BoundedOverlay)
         return std::nullopt;
     const unsigned pane_width=standalone?viewport_width:
-        std::min<unsigned>(compact?480u:(wide?844u:676u),viewport_width-24u);
+        std::min<unsigned>(compact?480u:(wide?1500u:900u),viewport_width-24u);
     const unsigned pane_height=standalone?viewport_height:
         std::min<unsigned>(compact?420u:630u,viewport_height-24u);
     if(!pane_width || !pane_height)return std::nullopt;
@@ -78,26 +78,34 @@ std::optional<MenuHit> hit_test_menu(
         return std::nullopt;
     }
     if(frame.tab>=MenuTab::Profiles)return std::nullopt;
-    if(x<16.0f || x>=w-16.0f)return std::nullopt;
+    if(x<menu_panel_padding || x>=w-menu_panel_padding)
+        return std::nullopt;
     const float body=menu_row_body_height(frame);
     for(std::size_t i=0;i<frame.visible.size();++i) {
-        const float top=menu_row_top(frame,i);
-        const float full=menu_row_total_height(frame,i);
-        // No clipped rows or settings panes become an actionable target.
-        if(top+full>panel->logical_height()-12.0f)continue;
-        if(y<top || y>=top+body)continue;
+        const auto rect=menu_module_card_rect(frame,w,i);
+        // Match the renderer's recovered grid, including the real column
+        // gap. Never dispatch an input through a clipped or expanded pane.
+        if(rect.y+rect.height>panel->logical_height()-menu_panel_padding)
+            continue;
+        if(x<rect.x || x>=rect.x+rect.width ||
+           y<rect.y || y>=rect.y+body)continue;
         const std::size_t index=frame.visible[i].catalog_index;
         const bool implemented=
             index<catalog.size() && module_has_profile_setting(index);
+        const float toggleX=rect.x+rect.width-
+                            menu_card_inner_padding-menu_switch_width;
+        const float toggleY=rect.y+menu_card_inner_padding;
         if(implemented &&
-           x>=w-80.0f && x<w-26.0f &&
-           y>=top+8.0f && y<top+35.0f)
+           x>=toggleX && x<toggleX+menu_switch_width &&
+           y>=toggleY && y<toggleY+menu_switch_height)
             return MenuHit{MenuHitKind::Toggle,frame.tab,index};
-        const float expandX=frame.appearance.compact?w-119.0f:28.0f;
-        const float expandY=frame.appearance.compact?top+10.0f:top+33.0f;
+        const float expandX=frame.appearance.compact?
+                            rect.x+8.0f:rect.x+20.0f;
+        const float expandY=frame.appearance.compact?
+                            rect.y+8.0f:rect.y+40.0f;
         if(implemented &&
-           x>=expandX && x<expandX+21.0f &&
-           y>=expandY && y<expandY+21.0f)
+           x>=expandX && x<expandX+menu_expand_size &&
+           y>=expandY && y<expandY+menu_expand_size)
             return MenuHit{MenuHitKind::Expand,frame.tab,index};
         return MenuHit{MenuHitKind::RowBody,frame.tab,index};
     }

@@ -90,12 +90,12 @@ int main() {
     auto initial=render.next(editorMenu,&editor);
     CHECK(initial && initial->parameters.size()==1);
     CHECK(initial->parameters[0].catalog_index==0);
-    CHECK(initial->parameters[0].caption=="Aim range: 4.00");
+    CHECK(initial->parameters[0].caption=="Range: 4.00");
     CHECK(editor.adjust_primary(0,1));
     auto updated=render.next(editorMenu,&editor);
     CHECK(updated && updated->parameters.size()==1);
-    CHECK(updated->parameters[0].caption=="Aim range: 4.25");
-    CHECK(initial->parameters[0].caption=="Aim range: 4.00");
+    CHECK(updated->parameters[0].caption=="Range: 4.25");
+    CHECK(initial->parameters[0].caption=="Range: 4.00");
     MenuState foreignMenu;
     MenuProfileBridge foreign(foreignMenu);
     const auto beforeWrongOwner=render.sequence();

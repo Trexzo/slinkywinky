@@ -14,6 +14,10 @@ class MenuNavigation;
 struct MenuRenderParameter {
     std::size_t catalog_index=0;
     std::string caption; // immutable, first-party ASCII formatted primary setting
+    float value=0.0f;
+    float minimum=0.0f;
+    float maximum=0.0f;
+    bool numeric=false; // true only for existing first-party typed control
 };
 
 // R114: strictly presentation-only profile names and descriptions. These are
