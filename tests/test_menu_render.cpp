@@ -42,6 +42,10 @@ int main() {
     CHECK(menu.select(MenuTab::Profiles));
     auto profiles=render.next(menu);
     CHECK(profiles && profiles->is_placeholder && profiles->visible.empty());
+    CHECK(profiles->profile_cards.size()==1 &&
+          profiles->profile_cards[0].is_default &&
+          profiles->profile_cards[0].name=="Default");
+    CHECK(profiles->profile_cards[0].bind.empty());
     CHECK(profiles->viewport_width==844 && profiles->sequence==3);
     std::atomic<bool> wrongFrame{false},wrongResize{false},wrongDetach{false};
     std::thread wrong([&] {

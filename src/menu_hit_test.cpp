@@ -1,6 +1,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_profile_preview.hpp"
 #include <algorithm>
 
 namespace slinkywinky {
@@ -32,7 +33,9 @@ std::optional<MenuHit> hit_test_menu(
     int client_x,int client_y) noexcept {
     const auto panel=menu_panel_geometry(
         frame.viewport_width,frame.viewport_height,frame.appearance.wide,mode);
-    if(!panel || !frame.epoch || !frame.sequence ||
+    if(!panel || !menu_profile_preview_valid(
+            frame,panel->logical_width(),panel->logical_height()) ||
+       !frame.epoch || !frame.sequence ||
        frame.visible.size()>8 ||
        frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload ||
        (frame.is_placeholder!=(frame.tab==MenuTab::Profiles)))

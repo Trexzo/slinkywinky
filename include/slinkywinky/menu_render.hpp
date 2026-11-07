@@ -15,6 +15,17 @@ struct MenuRenderParameter {
     std::size_t catalog_index=0;
     std::string caption; // immutable, first-party ASCII formatted primary setting
 };
+
+// R114: strictly presentation-only profile names and descriptions. These are
+// immutable snapshot values, NOT file paths or authorization to save/load.
+// The real session supplies only the native Default card. Other cards may
+// be used by the isolated screenshot fixture, never inferred from disk.
+struct MenuProfileCard {
+    std::string name;
+    std::string description;
+    std::string bind; // Empty or short printable display-only badge.
+    bool is_default=false;
+};
 // R63: a first-party, renderer-neutral admission boundary.
 // This never calls OpenGL, Minecraft, JNI, a loader, or gameplay input.
 struct MenuRenderFrame {
@@ -26,6 +37,7 @@ struct MenuRenderFrame {
     MenuAppearance appearance{};
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
+    std::vector<MenuProfileCard> profile_cards; // inert, bounded render snapshot
     bool is_placeholder=false; // Profiles is informational; Unload not admitted.
 };
 

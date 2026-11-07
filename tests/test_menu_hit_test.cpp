@@ -81,6 +81,10 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;forged.sequence=0;
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
+    forged=*frame;
+    forged.profile_cards.push_back({"Default","Invalid non-profile card.","",true});
+    CHECK(!hit_test_menu(forged,mode,pixel_x(*p,w-54.f),
+                         pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;forged.visible[1]=forged.visible[0];
     CHECK(!hit_test_menu(forged,mode,pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
     forged=*frame;std::swap(forged.visible[0],forged.visible[1]);

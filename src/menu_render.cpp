@@ -78,6 +78,10 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
         }
     }
     frame.is_placeholder=frame.tab==MenuTab::Profiles;
+    if(frame.is_placeholder)
+        frame.profile_cards.push_back({
+            "Default","Contains the default configuration.","",true
+        });
     if(frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload)
         return std::nullopt;
     sequence_++;

@@ -133,7 +133,8 @@ void all_modes(MenuPanelMode mode) {
     CHECK(!gate.pending());
 
     // Unsupported rows: only inert RowBody; no settings actions may leak.
-    const Point unsupported=physical(*panel,w-54.f,153.f+3*49.f+23.f);
+    const Point unsupported=physical(*panel,w-54.f,
+        menu_row_top(*changed,3)+20.f);
     CHECK(gate.press(*changed,mode,unsupported.x,unsupported.y,5600,true));
     const auto noAction=gate.release(*changed,mode,unsupported.x,unsupported.y,5620,true);
     CHECK(noAction && noAction->kind==MenuHitKind::RowBody &&
@@ -166,5 +167,25 @@ int main() {
     all_modes(MenuPanelMode::StandalonePreview);
     all_modes(MenuPanelMode::BoundedOverlay);
     all_modes(MenuPanelMode::CompactOverlay);
+    // R114: a changed read-only profile list invalidates held navigation
+    // clicks. Clicking the four visual action icons is always refused.
+    MenuState profileMenu;
+    CHECK(profileMenu.select(MenuTab::Profiles));
+    MenuRenderSession profileFrames;
+    CHECK(profileFrames.attach(701,676,630));
+    const auto profiles=profileFrames.next(profileMenu);
+    CHECK(profiles && profiles->profile_cards.size()==1);
+    MenuMouseGesture gate;
+    CHECK(!gate.press(*profiles,MenuPanelMode::StandalonePreview,
+                      303,88,90,true));
+    CHECK(gate.press(*profiles,MenuPanelMode::StandalonePreview,
+                     45,35,100,true));
+    auto changed=*profiles;
+    changed.sequence++;
+    changed.profile_cards[0].description="Changed before release.";
+    CHECK(!gate.release(changed,MenuPanelMode::StandalonePreview,
+                        45,35,120,true));
+    CHECK(!gate.pending());
+    CHECK(profileFrames.detach());
     return 0;
 }

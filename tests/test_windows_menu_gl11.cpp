@@ -6,6 +6,7 @@
 #include <GL/gl.h>
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_system_font.hpp"
+#include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
@@ -659,6 +660,92 @@ int main() {
         REQUIRE(focusHost.close());
         same(focusBefore,snapshot());
         REQUIRE(focusSession.detach());
+
+        // R114: the live preview model contains only its actual first-party
+        // Default card. Additional cards below are explicitly disposable
+        // screenshot fixtures: never populated by filesystem or Minecraft.
+        MenuState profilesMenu;
+        REQUIRE(profilesMenu.select(MenuTab::Profiles));
+        MenuRenderSession profilesSession;
+        REQUIRE(profilesSession.attach(311,676,630));
+        const auto realProfiles=profilesSession.next(profilesMenu);
+        REQUIRE(realProfiles && realProfiles->is_placeholder &&
+                realProfiles->profile_cards.size()==1 &&
+                realProfiles->profile_cards[0].is_default);
+        REQUIRE(menu_profile_preview_valid(*realProfiles,676,630));
+        const State profileBefore=snapshot();
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(draw_menu_gl11(*realProfiles,context.gl,context.dc));
+        same(profileBefore,snapshot());
+        REQUIRE(!hit_test_menu(*realProfiles,
+            MenuPanelMode::StandalonePreview,32,88));
+        REQUIRE(!hit_test_menu(*realProfiles,
+            MenuPanelMode::StandalonePreview,303,89));
+        if(const char* output=std::getenv("SLINKYWINKY_GL11_PROFILES_REAL_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(output));
+
+        MenuRenderFrame profileGallery=*realProfiles;
+        profileGallery.profile_cards.push_back({
+            "Practice","Illustrative profile, not loaded.","NONE",false
+        });
+        profileGallery.profile_cards.push_back({
+            "BedWars","Illustrative profile, not loaded.","NONE",false
+        });
+        profileGallery.profile_cards.push_back({
+            "Duels","Illustrative profile, not loaded.","TAB",false
+        });
+        REQUIRE(menu_profile_preview_valid(profileGallery,676,630));
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(draw_menu_gl11(profileGallery,context.gl,context.dc));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(profileBefore,snapshot());
+        REQUIRE(!hit_test_menu(profileGallery,
+            MenuPanelMode::StandalonePreview,460,190));
+        if(const char* output=std::getenv("SLINKYWINKY_GL11_PROFILES_DEMO_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(output));
+        auto forgedProfiles=profileGallery;
+        forgedProfiles.profile_cards[1].name="../traversal";
+        REQUIRE(!menu_profile_preview_valid(forgedProfiles,676,630));
+        REQUIRE(!draw_menu_gl11(forgedProfiles,context.gl,context.dc));
+        forgedProfiles=profileGallery;
+        forgedProfiles.profile_cards[2].name="Practice";
+        REQUIRE(!draw_menu_gl11(forgedProfiles,context.gl,context.dc));
+        forgedProfiles=profileGallery;
+        forgedProfiles.profile_cards[1].description=std::string(65,'a');
+        REQUIRE(!draw_menu_gl11(forgedProfiles,context.gl,context.dc));
+        forgedProfiles=profileGallery;
+        forgedProfiles.profile_cards[0].is_default=false;
+        REQUIRE(!draw_menu_gl11(forgedProfiles,context.gl,context.dc));
+        forgedProfiles=profileGallery;
+        forgedProfiles.profile_cards.push_back({"Fifth","Example","",false});
+        forgedProfiles.profile_cards.push_back({"Sixth","Example","",false});
+        forgedProfiles.profile_cards.push_back({"Seventh","Example","",false});
+        REQUIRE(!draw_menu_gl11(forgedProfiles,context.gl,context.dc));
+        same(profileBefore,snapshot());
+        REQUIRE(profilesSession.detach());
+        std::cout<<"R114_PROFILE_GRID_ACTUAL_DEFAULT_AND_DEMO_GALLERY_PASS\\n";
+        std::cout<<"R114_PROFILE_ICONS_NONINTERACTIVE_AND_FORGED_DATA_REFUSED_PASS\\n";
+
+        // R114 screenshot of the source-style "In-game" settings heading for
+        // the existing first-party Auto Clicker rate parameter. No new
+        // click pattern enum or gameplay operation is falsely implemented.
+        MenuState clicksMenu;
+        REQUIRE(clicksMenu.toggle_expanded(2));
+        MenuProfileBridge clicksProfile(clicksMenu);
+        MenuRenderSession clicksSession;
+        REQUIRE(clicksSession.attach(312,676,630));
+        const auto clicksFrame=clicksSession.next(clicksMenu,&clicksProfile);
+        REQUIRE(clicksFrame && clicksFrame->parameters.size()==1 &&
+                clicksFrame->parameters[0].catalog_index==2);
+        glClear(GL_COLOR_BUFFER_BIT);
+        REQUIRE(draw_menu_gl11(*clicksFrame,context.gl,context.dc));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(profileBefore,snapshot());
+        if(const char* output=std::getenv("SLINKYWINKY_GL11_AUTOCLICKER_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(output));
+        REQUIRE(clicksSession.detach());
+        std::cout<<"R114_AUTO_CLICKER_GROUPED_NATIVE_RATE_CONTROL_PASS\\n";
+
         // R97: use the exact GL11 compact transform for client-space input.
         // These pixels come from the real native renderer and are sampled
         // without any keyboard/mouse message sent to Minecraft or Windows.

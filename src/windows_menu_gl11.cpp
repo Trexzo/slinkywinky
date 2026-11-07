@@ -8,6 +8,7 @@
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
+#include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/windows_menu_system_font.hpp"
 #include <GL/gl.h>
 #include <algorithm>
@@ -97,6 +98,42 @@ void text(std::string_view label,float x,float y,
         }
     }
     glEnd();
+}
+
+// Four independent, hand-drawn glyphs for the read-only profile preview.
+// Not buttons: hit testing and keyboard navigation NEVER act on these.
+void profile_action_glyph(unsigned kind,float x,float y) noexcept {
+    rgb(kind==3?0xe74a50:0x9e9ea2);
+    if(kind==0 || kind==1) {
+        // Save/upload and load/download: tray, stem and arrow head.
+        quad(x+2.0f,y+12.0f,12.0f,2.0f);
+        quad(x+2.0f,y+9.0f,2.0f,4.0f);
+        quad(x+12.0f,y+9.0f,2.0f,4.0f);
+        quad(x+7.0f,y+3.0f,2.0f,8.0f);
+        glBegin(GL_TRIANGLES);
+        if(kind==0) {
+            glVertex2f(x+3.0f,y+7.0f);
+            glVertex2f(x+13.0f,y+7.0f);
+            glVertex2f(x+8.0f,y+1.0f);
+        } else {
+            glVertex2f(x+3.0f,y+7.0f);
+            glVertex2f(x+13.0f,y+7.0f);
+            glVertex2f(x+8.0f,y+12.0f);
+        }
+        glEnd();
+    } else if(kind==2) {
+        // Folder with tab: its shape is fully first-party geometry.
+        round_rect(x+1.0f,y+5.0f,15.0f,10.0f,2.0f);
+        quad(x+2.0f,y+3.0f,7.0f,4.0f);
+    } else {
+        // Trash icon intentionally red and visually inert.
+        round_rect(x+3.0f,y+5.0f,10.0f,10.0f,2.0f);
+        quad(x+2.0f,y+3.0f,12.0f,2.0f);
+        quad(x+6.0f,y+1.0f,4.0f,2.0f);
+        rgb(0x161617);
+        quad(x+6.0f,y+7.0f,1.0f,6.0f);
+        quad(x+9.0f,y+7.0f,1.0f,6.0f);
+    }
 }
 
 /**
@@ -224,7 +261,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
          MenuPanelMode::BoundedOverlay:MenuPanelMode::CompactOverlay);
     const auto panel=menu_panel_geometry(frame.viewport_width,frame.viewport_height,
         frame.appearance.wide,geometryMode);
-    if(!panel)return false;
+    if(!panel || !menu_profile_preview_valid(
+            frame,panel->logical_width(),panel->logical_height()))
+        return false;
     ScopedFixedFunctionState state;
     if(!state.ready())return false;
     glDisable(GL_DEPTH_TEST);
@@ -291,13 +330,47 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     }
 
     if(frame.is_placeholder) {
-        rgb(0x111112);
-        round_rect(16.0f,menu_first_row_y,w-32.0f,96.0f,14.0f);
-        rgb(0xf2f2f4);
-        text("Profiles",30.0f,menu_first_row_y+11.0f,20.0f,w-65.0f);
-        rgb(0x99999b);
-        text("Profile actions are not connected in this preview.",
-             30.0f,menu_first_row_y+48.0f,15.0f,w-65.0f);
+        // Real Slinky uses two columns of rounded cards with a small
+        // "NONE"/keybind badge and four profile actions along the top-right.
+        // The agent never supplies file paths here; these action icons are
+        // not hit-test targets, are not bound, and perform no filesystem I/O.
+        for(std::size_t i=0;i<frame.profile_cards.size();++i) {
+            const auto& card=frame.profile_cards[i];
+            const auto rect=menu_profile_card_rect(frame,w,i);
+            rgb(0x111112);
+            round_rect(rect.x,rect.y,rect.width,rect.height,16.0f);
+            const float textX=rect.x+13.0f;
+            const float iconX=rect.x+rect.width-112.0f;
+            const float fontPx=frame.appearance.compact?16.0f:18.0f;
+            const float nameWidth=std::max(40.0f,iconX-textX-49.0f);
+            rgb(0xe9e9eb);
+            text(card.name,textX,rect.y+8.0f,fontPx,nameWidth);
+            if(!card.is_default) {
+                const float measured=measure_menu_system_text(card.name,fontPx);
+                const float fallback=card.name.size()*fontPx*0.62f;
+                const float badgeX=std::min(iconX-43.0f,textX+
+                    std::min(measured>0?measured:fallback,nameWidth)+7.0f);
+                const bool bound=!card.bind.empty() && card.bind!="NONE";
+                rgb(bound?0x3e2117:0x29292b);
+                round_rect(badgeX,rect.y+8.0f,40.0f,21.0f,6.0f);
+                rgb(bound?frame.appearance.accent_rgb:0x9b9b9e);
+                const std::string_view badge=card.bind.empty()?
+                    std::string_view{"NONE"}:std::string_view{card.bind};
+                text(badge,badgeX+5.0f,rect.y+11.0f,
+                     12.0f,32.0f);
+            }
+            if(!frame.appearance.compact) {
+                rgb(0x9d9d9f);
+                text(card.description,textX,rect.y+48.0f,
+                     14.0f,rect.width-26.0f);
+            }
+            for(unsigned action=0;action<4;++action)
+                profile_action_glyph(action,iconX+action*26.0f,
+                                     rect.y+11.0f);
+        }
+        rgb(0x77777a);
+        text("Profile actions unavailable in this preview",
+             menu_nav_x, h-27.0f,12.0f,w-2*menu_nav_x);
     }
 
     for(std::size_t i=0;i<frame.visible.size();++i) {
@@ -362,23 +435,39 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         }
         if(item.expanded) {
             const float settingY=y+body;
-            rgb(0x333335);
-            quad(31.0f,settingY,w-62.0f,1.0f);
-            rgb(0x9b9b9e);
-            text("Main",31.0f,settingY+8.0f,14.0f,w-80.0f);
+            // The original menu groups controls under a section label, then
+            // places the setting name at left and its outlined value pill
+            // at right. The only value here is a native profile snapshot.
+            const bool inGame=item.catalog_index==2;
+            rgb(0x929295);
+            text(inGame?"In-game":"Main",31.0f,settingY+8.0f,
+                 16.0f,w-80.0f);
             std::string_view caption="Settings preview";
             for(const auto& parameter:frame.parameters)
                 if(parameter.catalog_index==item.catalog_index) {
                     caption=parameter.caption;
                     break;
                 }
-            const float fieldWidth=std::min(205.0f,std::max(75.0f,w*0.43f));
-            rgb(0x3f3f41);
-            round_rect(w-fieldWidth-28.0f,settingY+7.0f,
-                       fieldWidth,24.0f,12.0f);
-            rgb(0xeeeeef);
-            text(caption,w-fieldWidth-19.0f,settingY+10.0f,
-                 13.0f,fieldWidth-17.0f);
+            const std::size_t colon=caption.find(':');
+            const std::string_view label=colon==std::string_view::npos?
+                std::string_view{"Setting"}:caption.substr(0,colon);
+            const std::string_view value=colon==std::string_view::npos?
+                caption:caption.substr(std::min(caption.size(),colon+2));
+            const float fieldWidth=std::min(205.0f,std::max(96.0f,w*0.43f));
+            const float fieldX=w-fieldWidth-28.0f;
+            const float fieldY=settingY+(frame.appearance.compact?31.0f:37.0f);
+            rgb(0xe5e5e7);
+            text(label,31.0f,fieldY+1.0f,17.0f,
+                 std::max(15.0f,fieldX-45.0f));
+            rgb(0x474749);
+            round_rect(fieldX,fieldY,fieldWidth,31.0f,15.0f);
+            rgb(0x151516);
+            round_rect(fieldX+3.0f,fieldY+3.0f,
+                       fieldWidth-6.0f,25.0f,12.0f);
+            const float measured=measure_menu_system_text(value,16.0f);
+            rgb(0xf1f1f2);
+            text(value,fieldX+std::max(8.0f,(fieldWidth-measured)*0.5f),
+                 fieldY+4.0f,16.0f,fieldWidth-16.0f);
         }
     }
     // We intentionally avoid altering GL_VIEWPORT, FBO, shader, texture

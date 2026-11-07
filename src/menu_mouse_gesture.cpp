@@ -50,7 +50,8 @@ bool MenuMouseGesture::equivalent_frame(
        frame.appearance.accent_rgb!=original.appearance.accent_rgb ||
        frame.appearance.scale!=original.appearance.scale ||
        frame.visible.size()!=original.visible.size() ||
-       frame.parameters.size()!=original.parameters.size())
+       frame.parameters.size()!=original.parameters.size() ||
+       frame.profile_cards.size()!=original.profile_cards.size())
         return false;
     for(std::size_t i=0;i<frame.visible.size();++i) {
         const auto& a=frame.visible[i];
@@ -63,6 +64,15 @@ bool MenuMouseGesture::equivalent_frame(
         const auto& a=frame.parameters[i];
         const auto& b=original.parameters[i];
         if(a.catalog_index!=b.catalog_index || a.caption!=b.caption)
+            return false;
+    }
+    // Profile card changes invalidate any held navigation click, even
+    // though card icons themselves cannot trigger an action in R114.
+    for(std::size_t i=0;i<frame.profile_cards.size();++i) {
+        const auto& a=frame.profile_cards[i];
+        const auto& b=original.profile_cards[i];
+        if(a.name!=b.name || a.description!=b.description ||
+           a.bind!=b.bind || a.is_default!=b.is_default)
             return false;
     }
     return true;
