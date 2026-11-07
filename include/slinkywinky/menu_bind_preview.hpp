@@ -12,6 +12,7 @@ namespace slinkywinky {
 // R140: first-party *preview* virtual key identifiers. Numeric Win32
 // VK codes 0..255 plus 0x103/0x104 for physical mouse buttons 4/5.
 // No registration of Windows hooks, Java instrumentation or gameplay binds.
+constexpr std::uint16_t menu_bind_mouse1=0x100u; // left button (DOM button=0)
 constexpr std::uint16_t menu_bind_mouse2=0x101u; // middle button (DOM button=1)
 constexpr std::uint16_t menu_bind_mouse3=0x102u; // right button (DOM button=2)
 constexpr std::uint16_t menu_bind_mouse4=0x103u;
@@ -33,7 +34,8 @@ inline bool menu_valid_bind_code(std::uint16_t code) noexcept {
         case 0xBAu:case 0xBBu:case 0xBCu:case 0xBDu:
         case 0xBEu:case 0xBFu:case 0xC0u:case 0xDBu:
         case 0xDCu:case 0xDDu:case 0xDEu:
-        case menu_bind_mouse2:case menu_bind_mouse3:
+        case menu_bind_mouse1:case menu_bind_mouse2:
+        case menu_bind_mouse3:
         case menu_bind_mouse4:case menu_bind_mouse5:
             return true;
         default:return false;
@@ -82,6 +84,7 @@ inline std::string menu_bind_code_label(std::uint16_t code) {
         case 0xDCu:return "BACKSLASH";
         case 0xDDu:return "RBRACKET";
         case 0xDEu:return "QUOTE";
+        case menu_bind_mouse1:return "MOUSE1";
         case menu_bind_mouse2:return "MOUSE2";
         case menu_bind_mouse3:return "MOUSE3";
         case menu_bind_mouse4:return "MOUSE4";
