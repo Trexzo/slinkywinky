@@ -233,6 +233,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_MOUSEWHEEL:{
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
+            if(menu.unload_confirmation_preview())return 0;
             if(menu.close_preview_dropdown()) {
                 request_paint(hwnd); // Never scroll an underlying card too.
                 return 0;
@@ -280,11 +281,13 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         case WM_KILLFOCUS:
             cancel_mouse(hwnd);
             menu.close_preview_dropdown();
+            menu.close_unload_confirmation_preview();
             return 0;
         case WM_ACTIVATEAPP:
             if(!wp) {
                 cancel_mouse(hwnd);
                 menu.close_preview_dropdown();
+                menu.close_unload_confirmation_preview();
             }
             return 0;
         case WM_CANCELMODE:
@@ -351,7 +354,12 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             cancel_mouse(hwnd);
             if(hit) {
                 using slinkywinky::MenuHitKind;
-                if(hit->kind==MenuHitKind::DropdownOption) {
+                if(hit->kind==MenuHitKind::ModalClose ||
+                   hit->kind==MenuHitKind::ModalContinue)
+                    menu.close_unload_confirmation_preview();
+                else if(hit->kind==MenuHitKind::UnloadTab)
+                    menu.open_unload_confirmation_preview();
+                else if(hit->kind==MenuHitKind::DropdownOption) {
                     // Only a verified visible popup option can mutate the
                     // inert GUI preview, and the popup closes on selection.
                     menu.select_preview_dropdown_option(
@@ -391,6 +399,13 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             // Never act on a spoofed/late key message while this demo
             // window has lost its exact focus or foreground ownership.
             if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
+            if(menu.unload_confirmation_preview()) {
+                if(wp==VK_ESCAPE || wp==VK_RETURN) {
+                    menu.close_unload_confirmation_preview();
+                    request_paint(hwnd);
+                }
+                return 0; // Modal never passes keys to other UI actions.
+            }
             if(wp==VK_ESCAPE) {
                 if(menu.close_preview_dropdown()) {
                     request_paint(hwnd);
