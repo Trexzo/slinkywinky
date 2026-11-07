@@ -223,7 +223,8 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
          frame.target_preview_mode:frame.piercing_preview.sort);
     if(popup.kind!=MenuDropdownKind::RecoveredMulti &&
        result.selected>=options)return std::nullopt;
-    const float height=result.row_height*static_cast<float>(options);
+    const float height=result.row_height*
+        static_cast<float>(result.option_count);
     result.y=controlY;
     // Open upward when the reference-style option list would be clipped.
     // If no full, safe placement exists, the popup does not receive input.
