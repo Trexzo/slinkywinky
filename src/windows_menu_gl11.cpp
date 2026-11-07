@@ -601,9 +601,21 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             rgb(0x777777);
             text("REFERENCE PREVIEW - READ ONLY",left+8.0f,
                  settingY+25.0f,11.0f,rect.width-16.0f);
+            float addedHeadings=0.0f;
+            std::string_view lastGroup=preview[0]?
+                std::string_view(preview[0]->group):std::string_view{};
             for(std::size_t j=0;j<preview.size() && preview[j];++j) {
+                const std::string_view group(preview[j]->group);
+                if(j>0 && group!=lastGroup) {
+                    const float headingY=settingY+43.0f+
+                        27.0f*static_cast<float>(j)+addedHeadings;
+                    rgb(0x999999u);
+                    text(group,left+8.0f,headingY,14.0f,rect.width-16.0f);
+                    addedHeadings+=20.0f;
+                    lastGroup=group;
+                }
                 draw_recovered_widget(*preview[j],left,
-                    settingY+43.0f+27.0f*static_cast<float>(j),
+                    settingY+43.0f+27.0f*static_cast<float>(j)+addedHeadings,
                     rect.width,frame.appearance.accent_rgb);
             }
             if(count>5) {
@@ -618,7 +630,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     item.settings_offset+shown,count);
                 rgb(0x999999u);
                 text(pagination,left+8.0f,
-                     settingY+47.0f+27.0f*static_cast<float>(shown),
+                     settingY+47.0f+27.0f*static_cast<float>(shown)+
+                     addedHeadings,
                      12.0f,rect.width-16.0f);
             }
         }

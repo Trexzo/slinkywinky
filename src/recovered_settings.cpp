@@ -24,13 +24,15 @@ constexpr std::array<RecoveredWidget,378> recovered{{
     {"Aim Assist", "Conditions", "Mouse moved", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
     {"Aim Assist", "Conditions", "Holding weapon", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Aim Assist", "Conditions", "Disable while breaking blocks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
-    {"Auto Clicker", "In-game", "Target CPS", RecoveredWidgetKind::Slider, "", "", 1.0f, 20.0f, 0.1f, 12.5f, 0.0f, false},
-    {"Auto Clicker", "In-game", "Randomize speed", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    // R121 native W_* callback order and section membership, not the
+    // older mods_block.js approximation. Example values are still estimates.
     {"Auto Clicker", "In-game", "Click pattern", RecoveredWidgetKind::Dropdown, "Jitter|Butterfly", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
+    {"Auto Clicker", "In-game", "Target CPS", RecoveredWidgetKind::Slider, "", "", 1.0f, 20.0f, 0.1f, 12.5f, 0.0f, false},
+    {"Auto Clicker", "In-game", "Randomize", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Clicker", "In-game", "Simulate exhaust", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Clicker", "In-game", "Allow breaking blocks", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Clicker", "Inventory", "Click in inventory", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, false},
-    {"Auto Clicker", "Inventory", "Randomize", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
+    {"Auto Clicker", "Inventory", "Randomize speed", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Clicker", "Conditions", "Holding weapon", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Auto Clicker", "Conditions", "Not using item", RecoveredWidgetKind::Boolean, "", "", 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true},
     {"Reach", "Main", "Distance", RecoveredWidgetKind::Slider, "", "", 3.0f, 6.0f, 0.01f, 3.1f, 0.0f, false},

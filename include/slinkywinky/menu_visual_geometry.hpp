@@ -3,6 +3,7 @@
 #include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cstddef>
+#include <string_view>
 
 namespace slinkywinky {
 // R115: dimensions extracted from the provided candidate reference's
@@ -49,7 +50,21 @@ inline float menu_expanded_height(const MenuRenderFrame& frame,
         count-item.settings_offset:0;
     const float visible=static_cast<float>(
         std::min<std::size_t>(remaining,5u));
-    return 52.0f+visible*27.0f+(count>5?22.0f:12.0f);
+    // R121: new section headings inside one five-control page must use
+    // the same vertical geometry in both the GL renderer and hit tester.
+    std::array<const RecoveredWidget*,5> page{};
+    recovered_widget_page(item.title.c_str(),item.settings_offset,page);
+    float extraHeadings=0.0f;
+    std::string_view last=page[0]?std::string_view(page[0]->group):
+                                  std::string_view{};
+    for(std::size_t j=1;j<page.size() && page[j];++j) {
+        const std::string_view group(page[j]->group);
+        if(group!=last) {
+            extraHeadings+=20.0f;
+            last=group;
+        }
+    }
+    return 52.0f+visible*27.0f+(count>5?22.0f:12.0f)+extraHeadings;
 }
 // The renderer and hit tester reject forged, unaligned, off-end or stale
 // settings offsets before drawing/dispatching any native GUI action.

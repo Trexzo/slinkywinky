@@ -136,6 +136,41 @@ int main() {
     };
     native_label("Auto Clicker","Click pattern",
         RecoveredWidgetKind::Dropdown,"Jitter|Butterfly");
+    // R121: assert every Auto Clicker W_* callback entry is in native order
+    // and its independently recovered heading, not the JS fixture order.
+    const std::array<const char*,9> nativeAutoNames{{
+        "Click pattern","Target CPS","Randomize","Simulate exhaust",
+        "Allow breaking blocks","Click in inventory","Randomize speed",
+        "Holding weapon","Not using item"
+    }};
+    const std::array<const char*,9> nativeAutoGroups{{
+        "In-game","In-game","In-game","In-game","In-game",
+        "Inventory","Inventory","Conditions","Conditions"
+    }};
+    const std::array<RecoveredWidgetKind,9> nativeAutoKinds{{
+        RecoveredWidgetKind::Dropdown,RecoveredWidgetKind::Slider,
+        RecoveredWidgetKind::Boolean,RecoveredWidgetKind::Boolean,
+        RecoveredWidgetKind::Boolean,RecoveredWidgetKind::Boolean,
+        RecoveredWidgetKind::Boolean,RecoveredWidgetKind::Boolean,
+        RecoveredWidgetKind::Boolean
+    }};
+    std::size_t autoIndex=0;
+    for(const auto& widget:items) {
+        if(std::string_view(widget.module)!="Auto Clicker")continue;
+        CHECK(autoIndex<nativeAutoNames.size());
+        CHECK(std::string_view(widget.label)==nativeAutoNames[autoIndex]);
+        CHECK(std::string_view(widget.group)==nativeAutoGroups[autoIndex]);
+        CHECK(widget.kind==nativeAutoKinds[autoIndex]);
+        ++autoIndex;
+    }
+    CHECK(autoIndex==nativeAutoNames.size());
+    std::array<const RecoveredWidget*,5> autoSecondPage{};
+    CHECK(recovered_widget_page("Auto Clicker",5,autoSecondPage)==9);
+    CHECK(autoSecondPage[0] && autoSecondPage[1] &&
+          autoSecondPage[2] && autoSecondPage[3] &&
+          autoSecondPage[4]==nullptr);
+    CHECK(std::string_view(autoSecondPage[1]->label)=="Randomize speed");
+    CHECK(std::string_view(autoSecondPage[2]->group)=="Conditions");
     native_label("Piercing","Sort targets by",
         RecoveredWidgetKind::Dropdown,"Hurt time|Health");
     native_label("Anti Bot","Invalid UUID",
