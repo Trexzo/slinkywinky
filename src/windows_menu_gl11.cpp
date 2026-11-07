@@ -648,6 +648,18 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                         display.example_enabled=
                             *frame.recovered_boolean_overrides[slot];
                 }
+                // R132: immutable typed numeric presentation override.
+                // Original fixture entries and gameplay settings stay
+                // unchanged; the GL bar/knob read a release-quantized value.
+                if(display.kind==RecoveredWidgetKind::Slider) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto slot=static_cast<std::size_t>(
+                        preview[j]-all.data());
+                    if(slot<all.size() &&
+                       frame.recovered_slider_overrides[slot])
+                        display.example_value=
+                            *frame.recovered_slider_overrides[slot];
+                }
                 std::string_view selectedChoice;
                 if(item.catalog_index==0 && frame.tab==MenuTab::Combat &&
                    display.kind==RecoveredWidgetKind::Dropdown &&
