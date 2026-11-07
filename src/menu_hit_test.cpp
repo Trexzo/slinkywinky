@@ -4,6 +4,7 @@
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
+#include "slinkywinky/menu_text_geometry.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/recovered_settings.hpp"
@@ -193,6 +194,19 @@ std::optional<MenuHit> hit_test_menu(
                     if(global>=all.size())return std::nullopt;
                     return MenuHit{MenuHitKind::RecoveredChoiceControl,
                                    frame.tab,index,global};
+                }
+                if(widget.kind==RecoveredWidgetKind::Text) {
+                    const auto& all=recovered_widget_catalog();
+                    const auto global=static_cast<std::size_t>(
+                        widgets[j]-all.data());
+                    const auto field=menu_text_field_geometry(
+                        frame,w,panel->logical_height(),index,global);
+                    if(field && x>=field->x &&
+                       x<field->x+field->width &&
+                       y>=field->y &&
+                       y<field->y+field->height)
+                        return MenuHit{MenuHitKind::RecoveredTextField,
+                                       frame.tab,index,global};
                 }
                 if(widget.kind==RecoveredWidgetKind::Color) {
                     const auto& all=recovered_widget_catalog();
