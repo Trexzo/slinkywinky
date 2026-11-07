@@ -189,6 +189,17 @@ bool MenuState::open_preview_dropdown(
     };
     return true;
 }
+bool MenuState::open_unload_confirmation_preview() noexcept {
+    if(unload_confirmation_preview_)return false;
+    dropdown_preview_.reset();
+    unload_confirmation_preview_=true;
+    return true;
+}
+bool MenuState::close_unload_confirmation_preview() noexcept {
+    if(!unload_confirmation_preview_)return false;
+    unload_confirmation_preview_=false;
+    return true;
+}
 bool MenuState::close_preview_dropdown() noexcept {
     if(!dropdown_preview_)return false;
     dropdown_preview_.reset();
