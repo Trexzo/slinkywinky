@@ -48,4 +48,11 @@ std::optional<MenuHit> hit_test_menu(
     const MenuRenderFrame& frame,MenuPanelMode mode,
     int client_x,int client_y) noexcept;
 
+// R118: identifies only a *fully visible* expanded settings pane that has
+// multiple read-only preview pages. Does NOT perform scrolling, mouse capture,
+// gameplay actions or Win32 input processing. Same source geometry as WGL.
+std::optional<std::size_t> settings_page_wheel_target(
+    const MenuRenderFrame& frame,MenuPanelMode mode,
+    int client_x,int client_y) noexcept;
+
 } // namespace slinkywinky

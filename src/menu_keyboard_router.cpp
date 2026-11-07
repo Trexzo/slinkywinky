@@ -31,6 +31,8 @@ std::optional<MenuNavAction> MenuKeyboardRouter::action_for(unsigned key) noexce
         case 203:return MenuNavAction::PreviousTab;          // Left
         case 208:return MenuNavAction::NextRow;              // Down
         case 200:return MenuNavAction::PreviousRow;          // Up
+        case 201:return MenuNavAction::PreviousSettingsPage; // LWJGL2 KEY_PRIOR / Page Up
+        case 209:return MenuNavAction::NextSettingsPage;     // LWJGL2 KEY_NEXT / Page Down
         case 28:return MenuNavAction::ExpandFocused;         // Enter
         case 57:return MenuNavAction::ToggleFocusedPreview; // Space
         case 78:return MenuNavAction::IncreaseSetting;       // Numpad +

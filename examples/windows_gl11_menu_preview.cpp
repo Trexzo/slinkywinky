@@ -12,6 +12,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <cstdint>
@@ -23,6 +24,7 @@
 
 namespace {
 using slinkywinky::MenuTab;
+using slinkywinky::recovered_widget_count;
 slinkywinky::MenuState menu;
 slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuNavigation navigation(menu,profile);
@@ -73,6 +75,14 @@ void refresh_caption(HWND hwnd) {
                 <<std::setprecision(parameter->integral?0:2)
                 <<parameter->value<<L"  (+/-)";
             label+=formatted.str();
+        }
+        const auto count=recovered_widget_count(
+            slinkywinky::official_module_catalog()[*focused].name);
+        if(count>5) {
+            std::wostringstream paging;
+            paging<<L" | Settings "<<menu.settings_offset(*focused)/5+1
+                  <<L"/"<<(count+4)/5<<L" (Page Up/Down)";
+            label+=paging.str();
         }
     }
     SetWindowTextW(hwnd,label.c_str());
@@ -197,6 +207,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_MOUSEWHEEL:{
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
+            if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
             RECT client{};GetClientRect(hwnd,&client);
             const auto mode=panel_mode();
             const auto panel=slinkywinky::menu_panel_geometry(
@@ -212,7 +223,24 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                mouse.y>=static_cast<LONG>(panel->top+panel->height))
                 return 0; // Wheel outside the painted panel is inert.
             const auto delta=GET_WHEEL_DELTA_WPARAM(wp);
-            if(delta && profile.scroll_by(delta>0?-1:1)) {
+            // R118 standalone PREVIEW ONLY: wheel over the expanded
+            // controls moves five-record pages rather than the module list.
+            // The hit rectangle comes from the exact same geometry as WGL.
+            const auto snapshot=mouse_frame(hwnd);
+            if(!snapshot)return 0; // No verified GL owner frame, no wheel input.
+            const auto expandedTarget=delta?
+                slinkywinky::settings_page_wheel_target(*snapshot,mode,
+                    mouse.x,mouse.y):std::nullopt;
+            if(expandedTarget) {
+                if(navigation.focus_visible_row(*expandedTarget))
+                    navigation.apply(delta>0?
+                        slinkywinky::MenuNavAction::PreviousSettingsPage:
+                        slinkywinky::MenuNavAction::NextSettingsPage);
+                // A wheel over a settings pane never scrolls modules,
+                // even when already at the first/last settings page.
+            }
+            if(!expandedTarget && delta &&
+               profile.scroll_by(delta>0?-1:1)) {
                 const auto page=menu.page();
                 if(!page.empty())navigation.focus_visible_row(page.front().catalog_index);
             }
@@ -295,7 +323,22 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
         }
         case WM_KEYDOWN:{
             cancel_mouse(hwnd); // Keyboard can change tab/page/appearance.
+            // Never act on a spoofed/late key message while this demo
+            // window has lost its exact focus or foreground ownership.
+            if(!preview_focused(hwnd) || GetFocus()!=hwnd)return 0;
             if(wp==VK_ESCAPE){DestroyWindow(hwnd);return 0;}
+            // Native Windows key codes, distinct from LWJGL2's 201/209.
+            // Page keys only navigate the first-party read-only preview.
+            // Autorepeat cannot race two page changes for one physical hold.
+            if(wp==VK_PRIOR || wp==VK_NEXT) {
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0)
+                    navigation.apply(wp==VK_PRIOR?
+                        slinkywinky::MenuNavAction::PreviousSettingsPage:
+                        slinkywinky::MenuNavAction::NextSettingsPage);
+                refresh_caption(hwnd);
+                request_paint(hwnd);
+                return 0;
+            }
             // Preview-only first-party keyboard navigation. This WndProc is
             // a separate Windows demo and is NEVER installed into Minecraft.
             if(wp>=L'1' && wp<=L'6')
@@ -383,7 +426,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR arguments,int show) {
     wc.hCursor=LoadCursorW(nullptr,MAKEINTRESOURCEW(32512));
     wc.lpszClassName=className;
     if(!RegisterClassExW(&wc))return 1;
-    RECT rect{0,0,menu.appearance().wide?844:676,630};
+    // R115 source-derived startup size, not the pre-reconstruction 676/844.
+    RECT rect{0,0,menu.appearance().wide?1500:900,630};
     AdjustWindowRectEx(&rect,WS_OVERLAPPEDWINDOW,FALSE,0);
     window=CreateWindowExW(0,className,title,WS_OVERLAPPEDWINDOW,
          140,100,rect.right-rect.left,rect.bottom-rect.top,

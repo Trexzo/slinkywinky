@@ -147,6 +147,66 @@ int main() {
                              pixel_x(*p,60.f),pixel_y(*p,menu_first_row_y+20.f)));
         CHECK(session.detach());
     }
+    // R118: wheel paging is admitted only over a real, fully contained
+    // expanded settings pane with more than five recovered controls. This
+    // test uses only immutable snapshots; it cannot synthesize Windows
+    // messages or touch original Minecraft input.
+    for(const auto mode:{MenuPanelMode::StandalonePreview,
+                         MenuPanelMode::BoundedOverlay,
+                         MenuPanelMode::CompactOverlay}) {
+        MenuState menu;
+        MenuProfileBridge profile(menu);
+        MenuRenderSession session;
+        const unsigned viewportW=1024,viewportH=768;
+        CHECK(session.attach(118,viewportW,viewportH));
+        CHECK(menu.toggle_expanded(0)); // Aim Assist: 21 read-only controls
+        const auto frame=session.next(menu,&profile);
+        const auto panel=menu_panel_geometry(
+            viewportW,viewportH,false,mode);
+        CHECK(frame && panel && frame->visible[0].expanded);
+        const auto card=menu_module_card_rect(
+            *frame,panel->logical_width(),0);
+        const float settingY=card.y+menu_row_body_height(*frame)+16.0f;
+        const int insideX=pixel_x(*panel,card.x+25.0f);
+        const int insideY=pixel_y(*panel,settingY);
+        const auto target=settings_page_wheel_target(
+            *frame,mode,insideX,insideY);
+        CHECK(target && *target==0);
+        CHECK(!settings_page_wheel_target(*frame,mode,insideX,
+            pixel_y(*panel,card.y+20.0f)));
+        CHECK(!settings_page_wheel_target(*frame,mode,
+            static_cast<int>(panel->left)-1,insideY));
+        CHECK(!settings_page_wheel_target(*frame,mode,
+            pixel_x(*panel,card.x+card.width+6.0f),insideY));
+        CHECK(!settings_page_wheel_target(*frame,mode,insideX,
+            pixel_y(*panel,card.y+card.height+5.0f)));
+        auto altered=*frame;
+        altered.visible[0].settings_offset=7; // forged unaligned page
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        altered=*frame;
+        altered.visible[0].title="Forged page";
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        altered=*frame;
+        altered.visible[1]=altered.visible[0]; // duplicate catalog item
+        CHECK(!settings_page_wheel_target(altered,mode,insideX,insideY));
+        CHECK(menu.toggle_expanded(0));
+        auto collapsed=session.next(menu,&profile);
+        CHECK(collapsed);
+        CHECK(!settings_page_wheel_target(*collapsed,mode,insideX,insideY));
+        CHECK(menu.toggle_expanded(3)); // two controls: no paging
+        auto shortCard=session.next(menu,&profile);
+        CHECK(shortCard);
+        const auto item=menu_module_card_rect(
+            *shortCard,panel->logical_width(),3);
+        CHECK(!settings_page_wheel_target(*shortCard,mode,
+            pixel_x(*panel,item.x+20.0f),
+            pixel_y(*panel,item.y+menu_row_body_height(*shortCard)+12.0f)));
+        CHECK(menu.select(MenuTab::Profiles));
+        auto profiles=session.next(menu,&profile);
+        CHECK(profiles);
+        CHECK(!settings_page_wheel_target(*profiles,mode,insideX,insideY));
+        CHECK(session.detach());
+    }
     // Consumer never reaches another thread's UI/model.
     {
         MenuState menu;

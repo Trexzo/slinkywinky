@@ -64,6 +64,44 @@ int main() {
     REQUIRE(deliver(203,false,true,true,true).delivery==
             MenuKeyDelivery::MenuExclusive);
 
+    // R118: actual LWJGL2 KEY_PRIOR=201 and KEY_NEXT=209 (validated
+    // against the installed original 2.9.4 Java Keyboard constants).
+    // The events are synthetic and only delivered after explicit modal
+    // admission; no original Minecraft event handler is modified here.
+    x=deliver(209,true,true,true,true);
+    REQUIRE(x.delivery==MenuKeyDelivery::MenuExclusive &&
+            !x.action_applied && menu.settings_offset(0)==0);
+    REQUIRE(deliver(209,false,true,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+    x=deliver(28,true,true,true,true);
+    REQUIRE(x.delivery==MenuKeyDelivery::MenuExclusive && x.action_applied);
+    REQUIRE(deliver(28,false,true,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+    REQUIRE(menu.expanded(0));
+    x=deliver(209,true,true,true,true);
+    REQUIRE(x.delivery==MenuKeyDelivery::MenuExclusive &&
+            x.action_applied && menu.settings_offset(0)==5);
+    x=deliver(209,true,true,true,true); // key repeat never advances twice
+    REQUIRE(x.delivery==MenuKeyDelivery::MenuExclusive &&
+            !x.action_applied && menu.settings_offset(0)==5);
+    REQUIRE(deliver(209,false,true,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+    x=deliver(201,true,true,true,true);
+    REQUIRE(x.delivery==MenuKeyDelivery::MenuExclusive &&
+            x.action_applied && menu.settings_offset(0)==0);
+    REQUIRE(deliver(201,false,true,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+    x=deliver(201,true,true,true,true); // first-page boundary
+    REQUIRE(x.delivery==MenuKeyDelivery::MenuExclusive &&
+            !x.action_applied && menu.settings_offset(0)==0);
+    REQUIRE(deliver(201,false,true,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+    x=deliver(28,true,true,true,true);
+    REQUIRE(x.action_applied && !menu.expanded(0));
+    REQUIRE(deliver(28,false,true,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+    REQUIRE(menu.settings_offset(0)==0 && game_events==1);
+
     // Unmapped gameplay keys and their releases are menu-owned. The mock
     // game's count cannot rise while the modal session is active.
     REQUIRE(deliver(17,true,true,true,true).delivery==

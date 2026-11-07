@@ -113,4 +113,54 @@ std::optional<MenuHit> hit_test_menu(
     }
     return std::nullopt;
 }
+std::optional<std::size_t> settings_page_wheel_target(
+        const MenuRenderFrame& frame,MenuPanelMode mode,
+        int client_x,int client_y) noexcept {
+    const auto panel=menu_panel_geometry(
+        frame.viewport_width,frame.viewport_height,
+        frame.appearance.wide,mode);
+    if(!panel || !frame.epoch || !frame.sequence ||
+       frame.tab>MenuTab::Utility || frame.is_placeholder ||
+       frame.visible.empty() || frame.visible.size()>8 ||
+       !menu_settings_offsets_valid(frame) ||
+       !menu_profile_preview_valid(
+           frame,panel->logical_width(),panel->logical_height()) ||
+       client_x<static_cast<int>(panel->left) ||
+       client_y<static_cast<int>(panel->top) ||
+       client_x>=static_cast<int>(panel->left+panel->width) ||
+       client_y>=static_cast<int>(panel->top+panel->height))
+        return std::nullopt;
+    const auto& catalog=official_module_catalog();
+    std::size_t previous=0;
+    bool first=true;
+    // Validate the ENTIRE snapshot before returning any wheel target.
+    // A forged late row must not be hidden by an early valid card hit.
+    for(const auto& item:frame.visible) {
+        if(item.catalog_index>=catalog.size() ||
+           catalog[item.catalog_index].tab!=frame.tab ||
+           item.title!=catalog[item.catalog_index].name ||
+           (!first && item.catalog_index<=previous))
+            return std::nullopt;
+        previous=item.catalog_index;first=false;
+    }
+    const float logicalX=static_cast<float>(
+        client_x-static_cast<int>(panel->left))/panel->scale;
+    const float logicalY=static_cast<float>(
+        client_y-static_cast<int>(panel->top))/panel->scale;
+    for(std::size_t i=0;i<frame.visible.size();++i) {
+        const auto& item=frame.visible[i];
+        if(!item.expanded || recovered_widget_count(item.title)<=5)
+            continue;
+        const auto card=menu_module_card_rect(
+            frame,panel->logical_width(),i);
+        if(card.y+card.height>
+           panel->logical_height()-menu_panel_padding)
+            continue;
+        const float settingsY=card.y+menu_row_body_height(frame);
+        if(logicalX>=card.x && logicalX<card.x+card.width &&
+           logicalY>=settingsY && logicalY<card.y+card.height)
+            return item.catalog_index;
+    }
+    return std::nullopt;
+}
 } // namespace slinkywinky

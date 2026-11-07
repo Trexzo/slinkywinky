@@ -10,6 +10,8 @@ namespace slinkywinky {
 // R108: first-party modal keyboard routing *model*. No LWJGL interception,
 // Windows hook, Minecraft event consumption or JVM attach is installed here.
 // The caller must independently prove exclusive event dispatch before begin.
+// R118 maps original LWJGL2 Page Up (201) / Page Down (209) only after
+// successful modal admission; this does not install a live game hook.
 enum class MenuKeyDelivery : unsigned char {
     GameUnchanged, MenuExclusive, Quarantined
 };

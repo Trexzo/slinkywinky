@@ -92,6 +92,21 @@ try:
         raise AssertionError("R110 Java 8 input-owner isolated regression failed: " +
                              queue_owner.stdout + queue_owner.stderr)
     print("PASS: R110 independent Java 8 modal queue owner, no live game hook")
+    # R118: key codes are routed into a strict first-party preview-only
+    # PageUp/PageDown sink using the SAME mock LWJGL2 owner. No original
+    # Minecraft callsite, OS hook, JNI page dispatch or gameplay input.
+    page_relay = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.KeyboardPageRelaySmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (page_relay.returncode != 0 or
+        "R118_MOCK_JAVA8_PAGE_UP_DOWN_TO_FIRST_PARTY_PREVIEW_SINK_PASS"
+        not in page_relay.stdout or
+        "R118_EXCLUSIVE_EPOCH_REPEAT_OWNER_CLOSE_AND_VANILLA_RESTORE_PASS"
+        not in page_relay.stdout):
+        raise AssertionError("R118 Java 8 page-relay regression failed: " +
+                             page_relay.stdout + page_relay.stderr)
+    print("PASS: R118 Java 8 source-owned page relay, dormant, no live input")
     # R112 adds a real Java 8 classloader execution test for the same
     # single-call rewrite primitive used by the R111 SHA-pinned owner.
     # Only the first-party synthetic target and fake LWJGL2 are executable.

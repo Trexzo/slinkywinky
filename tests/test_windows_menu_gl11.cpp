@@ -18,6 +18,7 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
+#include "slinkywinky/menu_keyboard_router.hpp"
 #include <array>
 #include <cstdint>
 #include <cmath>
@@ -1161,7 +1162,17 @@ int main() {
             REQUIRE(sourceMenu.select(MenuTab::Combat));
             MenuNavigation pageNav(sourceMenu,sourceProfile);
             REQUIRE(pageNav.visible_focus() && *pageNav.visible_focus()==0);
-            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            // The modal input-owner fixture uses the source-verified LWJGL2
+            // key codes. No actual Java/Minecraft hook is installed.
+            MenuKeyboardRouter pageKeys(pageNav);
+            REQUIRE(!pageKeys.begin(118,false,true));
+            REQUIRE(!pageKeys.begin(118,true,false));
+            REQUIRE(pageKeys.begin(118,true,true));
+            auto enter=pageKeys.event(28,true,true,true,true);
+            REQUIRE(enter.delivery==MenuKeyDelivery::MenuExclusive &&
+                    enter.action_applied);
+            REQUIRE(pageKeys.event(28,false,true,true,true).delivery==
+                    MenuKeyDelivery::MenuExclusive);
             const auto pageCount=recovered_widget_count("Aim Assist");
             REQUIRE(pageCount>10);
             const auto capturePage=[&](const char* env)->MenuRenderFrame {
@@ -1184,7 +1195,12 @@ int main() {
             MenuMouseGesture heldClick;
             REQUIRE(heldClick.press(pageFirst,
                 MenuPanelMode::StandalonePreview,40,30,100,true));
-            REQUIRE(pageNav.apply(MenuNavAction::NextSettingsPage));
+            const auto pageDown=pageKeys.event(209,true,true,true,true);
+            REQUIRE(pageDown.delivery==MenuKeyDelivery::MenuExclusive &&
+                    pageDown.action_applied && !pageDown.request_close);
+            REQUIRE(!pageKeys.event(209,true,true,true,true).action_applied);
+            REQUIRE(pageKeys.event(209,false,true,true,true).delivery==
+                    MenuKeyDelivery::MenuExclusive);
             const auto pageSecond=capturePage(
                 "SLINKYWINKY_R117_SECOND_PAGE_PPM");
             REQUIRE(pageSecond.visible[0].settings_offset==5);
@@ -1192,7 +1208,12 @@ int main() {
                 MenuPanelMode::StandalonePreview,40,30,120,true));
             REQUIRE(!heldClick.pending());
             std::size_t visitedPages=2;
-            while(pageNav.apply(MenuNavAction::NextSettingsPage)) {
+            while(true) {
+                const auto pressed=pageKeys.event(209,true,true,true,true);
+                REQUIRE(pressed.delivery==MenuKeyDelivery::MenuExclusive);
+                REQUIRE(pageKeys.event(209,false,true,true,true).delivery==
+                        MenuKeyDelivery::MenuExclusive);
+                if(!pressed.action_applied)break;
                 ++visitedPages;
                 REQUIRE(visitedPages<=100);
             }
@@ -1201,7 +1222,9 @@ int main() {
                 "SLINKYWINKY_R117_LAST_PAGE_PPM");
             REQUIRE(pageLast.visible[0].settings_offset==
                     ((pageCount-1)/5)*5);
-            REQUIRE(!pageNav.apply(MenuNavAction::NextSettingsPage));
+            REQUIRE(!pageKeys.event(209,true,true,true,true).action_applied);
+            REQUIRE(pageKeys.event(209,false,true,true,true).delivery==
+                    MenuKeyDelivery::MenuExclusive);
             auto tampered=pageLast;
             tampered.visible[0].settings_offset=pageCount+500;
             REQUIRE(!draw_menu_gl11(tampered,sourceWide.gl,sourceWide.dc));
@@ -1212,12 +1235,28 @@ int main() {
             REQUIRE(!draw_menu_gl11(tampered,sourceWide.gl,sourceWide.dc));
             REQUIRE(!hit_test_menu(tampered,
                 MenuPanelMode::StandalonePreview,40,30));
-            REQUIRE(pageNav.apply(MenuNavAction::PreviousSettingsPage));
+            const auto up=pageKeys.event(201,true,true,true,true);
+            REQUIRE(up.delivery==MenuKeyDelivery::MenuExclusive &&
+                    up.action_applied);
+            REQUIRE(pageKeys.event(201,false,true,true,true).delivery==
+                    MenuKeyDelivery::MenuExclusive);
             REQUIRE(sourceMenu.settings_offset(0)==
                     pageLast.visible[0].settings_offset-5);
-            REQUIRE(pageNav.apply(MenuNavAction::ExpandFocused));
+            REQUIRE(pageKeys.event(28,true,true,true,true).action_applied);
+            REQUIRE(pageKeys.event(28,false,true,true,true).delivery==
+                    MenuKeyDelivery::MenuExclusive);
             REQUIRE(sourceMenu.settings_offset(0)==0);
-            REQUIRE(!pageNav.apply(MenuNavAction::NextSettingsPage));
+            REQUIRE(!pageKeys.event(209,true,true,true,true).action_applied);
+            REQUIRE(pageKeys.event(209,false,true,true,true).delivery==
+                    MenuKeyDelivery::MenuExclusive);
+            const auto close=pageKeys.event(1,true,true,true,true);
+            REQUIRE(close.delivery==MenuKeyDelivery::MenuExclusive &&
+                    close.request_close && !close.action_applied);
+            REQUIRE(pageKeys.end());
+            REQUIRE(pageKeys.event(1,false,true,true,false).delivery==
+                    MenuKeyDelivery::Quarantined);
+            REQUIRE(!pageKeys.active() && !pageKeys.revoked());
+            std::cout<<"R118_SYNTHETIC_LWJGL2_PAGE_KEYS_TO_REAL_WGL_PAGES_PASS\n";
             std::cout<<"R117_ALL_RECOVERED_AIM_SETTINGS_PAGED_AND_WGL_RESTORED_PASS\n";
             std::cout<<"R117_STALE_MOUSE_AND_FORGED_PAGE_REFUSAL_PASS\n";
             REQUIRE(sourceFrames.detach());
