@@ -173,7 +173,10 @@ void draw_recovered_widget(const RecoveredWidget& widget,
     const float controlW=std::max(16.0f,cardWidth*0.46f-10.0f);
     const float labelW=std::max(14.0f,controlX-x-14.0f);
     rgb(0xc9c9c9);
-    text(widget.label,x+8.0f,y+3.0f,13.0f,labelW);
+    // R139: source HTML renders Button as the entire row, without a
+    // duplicate left-side setting label or an OS/game action.
+    if(widget.kind!=RecoveredWidgetKind::Button)
+        text(widget.label,x+8.0f,y+3.0f,13.0f,labelW);
     const float controlY=y+2.0f;
     switch(widget.kind) {
         case RecoveredWidgetKind::Boolean: {
@@ -251,11 +254,21 @@ void draw_recovered_widget(const RecoveredWidget& widget,
             break;
         }
         case RecoveredWidgetKind::Button: {
+            // Recovered clickgui.tpl.html: row with a single full-width
+            // .btn, 20px tall, radius 8, #404040, centered 15px label.
+            // No source onclick exists for either Friends button.
+            const float bx=x+8.0f;
+            const float bw=std::max(16.0f,cardWidth-16.0f);
             rgb(0x404040u);
-            round_rect(controlX,controlY,controlW,22.0f,8.0f);
+            round_rect(bx,controlY,bw,20.0f,8.0f);
             rgb(0xdddddd);
-            text("Preview action",controlX+8.0f,
-                 controlY+3.0f,12.0f,controlW-16.0f);
+            const std::string_view label(widget.label);
+            const float measured=measure_menu_system_text(label,15.0f);
+            const float estimated=measured>0.0f?measured:
+                static_cast<float>(label.size())*7.5f;
+            const float tx=bx+std::max(8.0f,(bw-estimated)*0.5f);
+            text(label,tx,controlY+2.0f,15.0f,
+                 std::max(2.0f,bx+bw-tx-8.0f));
             break;
         }
     }
