@@ -44,6 +44,8 @@ struct MenuRenderFrame {
     PiercingPreview piercing_preview{}; // local GUI sandbox, no game
     std::optional<MenuDropdownPreview> dropdown_preview{}; // R127 snapshot
     bool unload_confirmation_preview=false; // R128 modal, no runtime unload
+    std::array<std::optional<bool>,385> recovered_boolean_overrides{};
+    // R130: changes only inert typed UI preview values.
     std::size_t piercing_selected=0;
     std::vector<MenuItem> visible;
     std::vector<MenuRenderParameter> parameters; // expanded visible rows only
