@@ -221,8 +221,8 @@ bool MenuState::open_preview_dropdown(
     const auto relative=control_index-settings_offsets_[index];
     if(count==0 || relative>=widgets.size() || !widgets[relative] ||
        widgets[relative]->kind!=RecoveredWidgetKind::Dropdown ||
-       std::string_view(widgets[relative]->label)!="Mode" &&
-       kind!=MenuDropdownKind::PiercingSort)
+       (std::string_view(widgets[relative]->label)!="Mode" &&
+        kind!=MenuDropdownKind::PiercingSort))
         return false;
     const auto group=std::string_view(widgets[relative]->group);
     if(kind==MenuDropdownKind::AimMode &&
