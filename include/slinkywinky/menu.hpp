@@ -56,7 +56,7 @@ bool save_piercing_preview(const std::filesystem::path& file,
 
 // R127: a preview-only popup description; never a game/injector input route.
 enum class MenuDropdownKind : std::uint8_t {
-    AimMode, TargetMode, PiercingSort, RecoveredChoice
+    AimMode, TargetMode, PiercingSort, RecoveredChoice, RecoveredMulti
 };
 struct MenuDropdownPreview {
     MenuDropdownKind kind=MenuDropdownKind::AimMode;
@@ -64,13 +64,15 @@ struct MenuDropdownPreview {
     std::size_t control_index=0; // visible recovered callsite index
     std::size_t page_offset=0;   // immutable at time of opening
     std::size_t widget_index=0; // R131: source-global recovered choice
+    unsigned option_offset=0; // R134: bounded option viewport
 };
 inline bool operator==(const MenuDropdownPreview& a,
                        const MenuDropdownPreview& b) noexcept {
     return a.kind==b.kind && a.catalog_index==b.catalog_index &&
            a.control_index==b.control_index &&
            a.page_offset==b.page_offset &&
-           a.widget_index==b.widget_index;
+           a.widget_index==b.widget_index &&
+           a.option_offset==b.option_offset;
 }
 inline bool operator!=(const MenuDropdownPreview& a,
                        const MenuDropdownPreview& b) noexcept {
@@ -133,6 +135,9 @@ public:
                                std::size_t control_index) noexcept;
     bool open_recovered_choice_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept;
+    bool open_recovered_multi_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept;
+    bool scroll_preview_popup(int direction) noexcept;
     bool select_preview_dropdown_option(unsigned option) noexcept;
     bool close_preview_dropdown() noexcept;
     // R128: recovered seven-tab Unload confirmation is display-only.
@@ -154,6 +159,10 @@ public:
     const std::array<std::optional<unsigned>,385>&
     recovered_choice_overrides() const noexcept {
         return recovered_choice_overrides_;
+    }
+    const std::array<std::optional<std::uint32_t>,385>&
+    recovered_multi_overrides() const noexcept {
+        return recovered_multi_overrides_;
     }
     // R132: source-indexed, step-quantized preview sliders only.
     // Not copied into gameplay settings.
@@ -208,6 +217,7 @@ private:
     // nullopt renders the unverified reference-example state; no game writes.
     std::array<std::optional<bool>,385> recovered_boolean_overrides_{};
     std::array<std::optional<unsigned>,385> recovered_choice_overrides_{};
+    std::array<std::optional<std::uint32_t>,385> recovered_multi_overrides_{};
     std::array<std::optional<float>,385> recovered_slider_overrides_{};
     std::array<std::optional<RecoveredRangePreview>,385>
         recovered_range_overrides_{};
