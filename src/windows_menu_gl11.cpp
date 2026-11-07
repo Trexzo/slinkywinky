@@ -13,6 +13,7 @@
 #include "slinkywinky/menu_visual_copy.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/menu_profile_interaction_geometry.hpp"
+#include "slinkywinky/menu_numeric_tooltip.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_system_font.hpp"
 #include <GL/gl.h>
@@ -915,6 +916,19 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     }
     // R128: the source-backed seventh tab displays only an inert modal.
     // The commercial client's unload operation is deliberately NOT wired.
+    // R147: display candidate-source numeric tooltip above the active
+    // visible knob (range uses endpoint midpoint). The reference's global
+    // tooltip is pointer-events:none and drawn above cards. No game state.
+    if(frame.numeric_hover && !frame.dropdown_preview) {
+        const auto tip=menu_numeric_tooltip_geometry(frame,w,h);
+        if(tip) {
+            rgb(0x404040u);
+            round_rect(tip->x,tip->y,tip->width,tip->height,5.0f);
+            rgb(0xdddddd);
+            text(tip->label,tip->x+5.0f,tip->y+2.0f,14.0f,
+                 tip->width-10.0f);
+        }
+    }
     // R145: source tooltip: 20px, radius 5, #404040, 5px padding,
     // 14px text, 28px above the hovered profile icon. The same geometry
     // validates hover ownership for both enabled and protected Default icons.
