@@ -308,6 +308,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             pendingTextHigh=0;
             menu.blur_recovered_text_preview();
             menu.cancel_bind_capture();
+            menu.set_bind_hover_row(std::nullopt);
             cancel_mouse(hwnd);
             menu.close_preview_dropdown();
             menu.close_unload_confirmation_preview();
@@ -317,6 +318,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                 pendingTextHigh=0;
                 menu.blur_recovered_text_preview();
                 menu.cancel_bind_capture();
+                menu.set_bind_hover_row(std::nullopt);
                 cancel_mouse(hwnd);
                 menu.close_preview_dropdown();
                 menu.close_unload_confirmation_preview();
@@ -410,7 +412,45 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEMOVE:{
-            if(!mouseGesture.pending())return 0;
+            if(!mouseGesture.pending()) {
+                std::optional<std::size_t> row;
+                const auto frame=mouse_frame(hwnd);
+                if(frame && preview_focused(hwnd)) {
+                    const auto panel=slinkywinky::menu_panel_geometry(
+                        frame->viewport_width,frame->viewport_height,
+                        frame->appearance.wide,panel_mode());
+                    if(panel) {
+                        const float x=(static_cast<float>(
+                            static_cast<short>(LOWORD(lp)))-
+                            static_cast<float>(panel->left))/panel->scale;
+                        const float y=(static_cast<float>(
+                            static_cast<short>(HIWORD(lp)))-
+                            static_cast<float>(panel->top))/panel->scale;
+                        for(std::size_t i=0;i<frame->visible.size();++i) {
+                            const auto rect=slinkywinky::menu_module_card_rect(
+                                *frame,panel->logical_width(),i);
+                            if(rect.y+rect.height>
+                               panel->logical_height()-
+                               slinkywinky::menu_panel_padding)
+                                continue;
+                            const auto index=frame->visible[i].catalog_index;
+                            if(slinkywinky::menu_bind_supported_module(index) &&
+                               x>=rect.x && x<rect.x+rect.width &&
+                               y>=rect.y+8.0f && y<rect.y+28.0f) {
+                                row=index;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if(menu.set_bind_hover_row(row))request_paint(hwnd);
+                TRACKMOUSEEVENT tracking{};
+                tracking.cbSize=sizeof(tracking);
+                tracking.dwFlags=TME_LEAVE;
+                tracking.hwndTrack=hwnd;
+                TrackMouseEvent(&tracking);
+                return 0;
+            }
             const auto frame=mouse_frame(hwnd);
             if(!frame || GetCapture()!=hwnd ||
                !mouseGesture.move(*frame,panel_mode(),
@@ -421,6 +461,10 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             }
             return 0;
         }
+        case WM_MOUSELEAVE:
+            if(menu.set_bind_hover_row(std::nullopt))
+                request_paint(hwnd);
+            return 0;
         case WM_LBUTTONUP:{
             const auto frame=mouse_frame(hwnd);
             std::optional<slinkywinky::MenuHit> hit;
