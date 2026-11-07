@@ -52,6 +52,9 @@ struct MenuRenderFrame {
     // R134: each bit represents one selected option, never game state.
     std::array<std::optional<std::uint32_t>,385> recovered_color_overrides{};
     // R136: independent RGB swatch values for native GL11 preview.
+    std::array<std::optional<std::string>,385> recovered_text_overrides{};
+    std::optional<std::size_t> focused_text_widget{};
+    // R137: local editable UTF-8 text, never a gameplay action.
     std::array<std::optional<float>,385> recovered_slider_overrides{};
     // R132: inert source-indexed numeric slider display values.
     std::array<std::optional<RecoveredRangePreview>,385>
