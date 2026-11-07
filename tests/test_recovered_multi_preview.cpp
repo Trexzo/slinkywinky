@@ -182,5 +182,57 @@ int main() {
         CHECK(menu.close_unload_confirmation_preview());
         CHECK(frames.detach());
     }
+    // R131 regression: a ten-option *single-choice* dropdown also uses
+    // the bounded popup viewport. The last option must stay reachable.
+    {
+        std::size_t slot1=all.size();
+        for(std::size_t i=0;i<all.size();++i)
+            if(std::string_view(all[i].module)=="Inv Manager" &&
+               std::string_view(all[i].label)=="Slot 1" &&
+               all[i].kind==RecoveredWidgetKind::Dropdown)
+                slot1=i;
+        CHECK(slot1<all.size() && menu_source_choice_count(slot1)==10u);
+        MenuState menu;
+        MenuProfileBridge profile(menu);
+        MenuNavigation nav(menu,profile);
+        CHECK(nav.select_tab(MenuTab::Utility));
+        CHECK(profile.scroll_by(9));
+        CHECK(nav.focus_visible_row(58u));
+        CHECK(nav.apply(MenuNavAction::ExpandFocused));
+        CHECK(menu.change_settings_page(58u,1));
+        MenuRenderSession frames;
+        CHECK(frames.attach(1349,900,630));
+        CHECK(menu.open_recovered_choice_preview(58u,slot1));
+        const auto frame=frames.next(menu,&profile,&nav);
+        const auto panel=menu_panel_geometry(
+            900,630,false,MenuPanelMode::StandalonePreview);
+        CHECK(frame && panel);
+        auto popup=menu_dropdown_popup_geometry(
+            *frame,panel->logical_width(),panel->logical_height());
+        CHECK(popup && popup->total_options==10u &&
+              popup->option_count==6u && popup->first_option==0u);
+        CHECK(!menu.select_preview_dropdown_option(9u));
+        for(unsigned i=0;i<4u;++i)CHECK(menu.scroll_preview_popup(1));
+        CHECK(!menu.scroll_preview_popup(1));
+        const auto shifted=frames.next(menu,&profile,&nav);
+        popup=menu_dropdown_popup_geometry(
+            *shifted,panel->logical_width(),panel->logical_height());
+        CHECK(popup && popup->first_option==4u);
+        const auto coord=std::pair<int,int>{
+            static_cast<int>(std::lround(popup->x+popup->width*0.5f)),
+            static_cast<int>(std::lround(
+                popup->y+popup->row_height*5.5f))
+        };
+        const auto hit=hit_test_menu(
+            *shifted,MenuPanelMode::StandalonePreview,
+            coord.first,coord.second);
+        CHECK(hit && hit->kind==MenuHitKind::DropdownOption &&
+              hit->control_index==9u);
+        CHECK(menu.select_preview_dropdown_option(9u));
+        CHECK(!menu.dropdown_preview());
+        CHECK(menu.recovered_choice_overrides()[slot1].value_or(99u)==9u);
+        CHECK(!profile.enabled(58u));
+        CHECK(frames.detach());
+    }
     return 0;
 }
