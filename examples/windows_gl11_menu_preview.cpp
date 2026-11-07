@@ -19,9 +19,12 @@
 #include "slinkywinky/menu_profile_interaction_geometry.hpp"
 #include "slinkywinky/menu_numeric_tooltip.hpp"
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/menu_visual_motion.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include <cmath>
+#include <algorithm>
 #include <cstdint>
 #include <array>
 #include <filesystem>
@@ -37,6 +40,11 @@ slinkywinky::MenuState menu;
 slinkywinky::MenuProfileBridge profile(menu);
 slinkywinky::MenuNavigation navigation(menu,profile);
 slinkywinky::MenuMouseGesture mouseGesture;
+// R149 standalone-window visual clock only; no Minecraft/WGL host hook.
+slinkywinky::MenuVisualMotionClock visualMotion;
+constexpr UINT_PTR kVisualTimer=149u;
+ULONGLONG visualLastTick=0u;
+bool visualTimerEnabled=false;
 std::uint16_t pendingTextHigh=0; // R137 UTF-16 surrogate pairing
 slinkywinky::MenuRenderSession session;
 slinkywinky::WglMenuOverlayHost overlayHost;
@@ -129,6 +137,26 @@ slinkywinky::MenuPanelMode panel_mode() noexcept {
             slinkywinky::MenuPanelMode::CompactOverlay:
             slinkywinky::MenuPanelMode::BoundedOverlay);
 }
+bool visual_motion_busy() noexcept {
+    if(!visualTimerEnabled || overlayDemo)return false;
+    return !visualMotion.settled() ||
+       std::fabs(visualMotion.value().tab_position-
+                 static_cast<float>(menu.tab()))>=0.001f;
+}
+bool advance_visual_motion(HWND hwnd,float seconds) {
+    if(!visualTimerEnabled || !hwnd)return false;
+    RECT viewport{};
+    if(!GetClientRect(hwnd,&viewport) ||
+       viewport.right<320 || viewport.bottom<240)return false;
+    const auto panel=slinkywinky::menu_panel_geometry(
+        static_cast<unsigned>(viewport.right),
+        static_cast<unsigned>(viewport.bottom),
+        menu.appearance().wide,panel_mode());
+    if(!panel)return false;
+    const bool before=visual_motion_busy();
+    visualMotion.advance(menu.tab(),seconds,panel->logical_height());
+    return before || visual_motion_busy();
+}
 bool preview_focused(HWND hwnd) {
     return hwnd && GetForegroundWindow()==hwnd &&
            IsWindowVisible(hwnd) && !IsIconic(hwnd);
@@ -217,10 +245,31 @@ void adjust_client(HWND hwnd) {
 }
 LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     switch(message) {
-        case WM_CREATE:
+        case WM_CREATE: {
             // Match Windows actual double-click timeout for this preview.
             mouseGesture.set_double_click_window(GetDoubleClickTime());
-            return create_context(hwnd)?0:-1;
+            if(!create_context(hwnd))return -1;
+            visualMotion.reset();
+            visualLastTick=GetTickCount64();
+            visualTimerEnabled=SetTimer(
+                hwnd,kVisualTimer,16u,nullptr)!=0u;
+            if(visualTimerEnabled)
+                advance_visual_motion(hwnd,0.0f);
+            return 0;
+        }
+        case WM_TIMER:
+            if(wp==kVisualTimer && visualTimerEnabled) {
+                const ULONGLONG now=GetTickCount64();
+                const ULONGLONG elapsed=now>=visualLastTick?
+                    now-visualLastTick:0u;
+                visualLastTick=now;
+                if(advance_visual_motion(hwnd,
+                    static_cast<float>(std::min<ULONGLONG>(
+                        elapsed,100u))/1000.0f))
+                    request_paint(hwnd);
+                return 0;
+            }
+            break;
         case WM_SIZE: {
             cancel_mouse(hwnd); // Resize invalidates pressed coordinates.
             if(!graphics || !device)return 0;
@@ -255,7 +304,11 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     if(overlayHost.draw(menu,&profile,
                             overlayMode,&navigation))SwapBuffers(device);
                 } else {
-                    const auto frame=session.next(menu,&profile,&navigation);
+                    auto frame=session.next(menu,&profile,&navigation);
+                    if(frame && visualTimerEnabled) {
+                        advance_visual_motion(hwnd,0.0f);
+                        frame->visual_motion=visualMotion.value();
+                    }
                     if(frame && slinkywinky::draw_menu_gl11(
                         *frame,graphics,device,
                         slinkywinky::MenuGL11Mode::StandalonePreview,
@@ -267,6 +320,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEWHEEL:{
+            if(visual_motion_busy())return 0;
             if(menu.bind_capture_index() ||
                menu.profile_bind_capture_index())return 0;
             cancel_mouse(hwnd); // Scrolling invalidates pressed row.
@@ -420,6 +474,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             break;
         }
         case WM_LBUTTONDOWN:{
+            // Animated card geometry is presentation-only. Do not admit
+            // coordinates while the current source page is displaced.
+            if(visual_motion_busy())return 0;
             if(menu.profile_bind_capture_index()) {
                 if(preview_focused(hwnd) && GetFocus()==hwnd)
                     menu.commit_profile_bind_capture(
@@ -504,6 +561,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             return 0;
         }
         case WM_MOUSEMOVE:{
+            if(visual_motion_busy())return 0;
             if(!mouseGesture.pending()) {
                 std::optional<std::size_t> row;
                 std::optional<slinkywinky::MenuProfileIconHover> iconHover;
@@ -1117,6 +1175,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
             request_paint(hwnd);return 0;
         }
         case WM_DESTROY:
+            if(visualTimerEnabled)KillTimer(hwnd,kVisualTimer);
+            visualTimerEnabled=false;
+            visualMotion.reset();
             close_context(hwnd);
             PostQuitMessage(0);
             return 0;
