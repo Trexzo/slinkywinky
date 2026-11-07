@@ -119,15 +119,16 @@ int main() {
         CHECK(menu.close_preview_dropdown());
         CHECK(!menu.select_preview_dropdown_option(0u));
 
-        // The 900x630 compact/bounded one-column panel clips the
-        // seventh visible Utility card. Test the full sixteen-option
-        // Teams popup in the original two-column 900px standalone panel;
-        // all three modes were tested above on first-row Auto Tool.
-        if(mode==MenuPanelMode::StandalonePreview) {
+        // R135 scrolls narrow one-column overlays far enough to show
+        // a late category card near the top before its settings expand.
+        // The 16-option Teams control is now exercised in all modes.
+        {
             // Teams has sixteen independently selectable colors. Only six
             // rows appear at a time, but wheel exposes the full option set.
             CHECK(nav.select_tab(MenuTab::Utility));
-            CHECK(profile.scroll_by(10)); // 18 utility modules -> last 8
+            CHECK(profile.scroll_by_visible(
+                mode==MenuPanelMode::StandalonePreview?10:15,
+                mode==MenuPanelMode::StandalonePreview?8u:3u));
             CHECK(nav.focus_visible_row(65u)); // Teams
             CHECK(nav.apply(MenuNavAction::ExpandFocused));
             CHECK(!menu.open_recovered_multi_preview(42u,large));
