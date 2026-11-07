@@ -72,6 +72,11 @@ bool MenuMouseGesture::equivalent_frame(
        frame.recovered_range_overrides!=original.recovered_range_overrides ||
        !(frame.piercing_preview==original.piercing_preview) ||
        frame.is_placeholder!=original.is_placeholder ||
+       frame.profile_cards.size()!=original.profile_cards.size() ||
+       frame.profile_name_draft!=original.profile_name_draft ||
+       frame.profile_name_focused!=original.profile_name_focused ||
+       frame.profile_name_taken!=original.profile_name_taken ||
+       frame.profile_action_preview!=original.profile_action_preview ||
        frame.appearance.wide!=original.appearance.wide ||
        frame.appearance.compact!=original.appearance.compact ||
        frame.appearance.allow_input_while_open!=
