@@ -170,6 +170,14 @@ public:
     bool append_profile_name_preview(std::string_view codepoint);
     bool erase_profile_name_preview() noexcept;
     bool create_profile_preview();
+    // R144: profile row binding is a local display value, never an
+    // active keyboard shortcut or persisted gameplay profile selection.
+    bool begin_profile_bind_capture(std::size_t profile_index) noexcept;
+    bool commit_profile_bind_capture(std::uint16_t code);
+    bool cancel_profile_bind_capture() noexcept;
+    std::optional<std::size_t> profile_bind_capture_index() const noexcept {
+        return profile_bind_capture_index_;
+    }
     std::optional<MenuProfileActionPreview> profile_action_preview()
         const noexcept { return profile_action_preview_; }
     bool begin_profile_action_preview(std::size_t profile_index,
@@ -318,6 +326,7 @@ private:
     bool profile_name_focused_=false;
     bool profile_name_taken_=false;
     std::optional<MenuProfileActionPreview> profile_action_preview_{};
+    std::optional<std::size_t> profile_bind_capture_index_{};
     std::array<bool,67> enabled_{};
     // Default examples mirror the supplied HTML transcription's st.binds,
     // not an authenticated native Slinky configuration.
