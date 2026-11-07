@@ -5,6 +5,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_profile_interaction_geometry.hpp"
+#include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
 #include <array>
 #include <cmath>
@@ -100,6 +101,42 @@ int main() {
         CHECK(updated && updated->profile_cards.size()==2u);
         CHECK(menu_profile_preview_valid(*updated,
               panel->logical_width(),panel->logical_height()));
+        const auto profileChip=menu_profile_bind_rect(*updated,
+            panel->logical_width(),panel->logical_height(),1u);
+        CHECK(profileChip && profileChip->width>=41.0f);
+        const auto chipXY=pixel(profileChip->x+profileChip->width*0.5f,
+                                profileChip->y+10.0f);
+        const auto chipHit=hit_test_menu(
+            *updated,mode,chipXY.first,chipXY.second);
+        CHECK(chipHit && chipHit->kind==MenuHitKind::ProfileBindChip &&
+              chipHit->catalog_index==1u);
+        MenuMouseGesture gesture;
+        CHECK(gesture.press(*updated,mode,chipXY.first,chipXY.second,
+                            400,true));
+        const auto held=gesture.release(
+            *updated,mode,chipXY.first,chipXY.second,420,true);
+        CHECK(held && held->kind==MenuHitKind::ProfileBindChip);
+        CHECK(menu.begin_profile_bind_capture(held->catalog_index));
+        CHECK(!menu.begin_profile_bind_capture(0u));
+        CHECK(!menu.focus_profile_name_preview());
+        CHECK(!menu.commit_profile_bind_capture(0xFFFFu));
+        CHECK(!menu.commit_profile_bind_capture(0x08u)); // long label
+        auto bindFrame=frames.next(menu,&bridge,&nav);
+        CHECK(bindFrame && bindFrame->profile_bind_capture_index==1u);
+        CHECK(menu.commit_profile_bind_capture(0x75u)); // F6
+        CHECK(menu.local_profiles()[1].bind=="F6");
+        CHECK(!menu.profile_bind_capture_index());
+        CHECK(menu.begin_profile_bind_capture(1u));
+        CHECK(menu.commit_profile_bind_capture(menu_bind_mouse1));
+        CHECK(menu.local_profiles()[1].bind=="MOUSE1");
+        CHECK(menu.begin_profile_bind_capture(1u));
+        CHECK(menu.cancel_profile_bind_capture());
+        CHECK(menu.local_profiles()[1].bind=="MOUSE1");
+        CHECK(menu.begin_profile_bind_capture(1u));
+        CHECK(menu.commit_profile_bind_capture(0u)); // ESC clears
+        CHECK(menu.local_profiles()[1].bind.empty());
+        updated=frames.next(menu,&bridge,&nav);
+        CHECK(updated && !updated->profile_bind_capture_index);
         CHECK(menu_profile_action_rect(*updated,
               panel->logical_width(),panel->logical_height(),1u,1u));
         // A repeated Default cannot be overwritten or deleted.
