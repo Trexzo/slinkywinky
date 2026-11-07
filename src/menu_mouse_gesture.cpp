@@ -63,6 +63,8 @@ bool MenuMouseGesture::equivalent_frame(
        frame.recovered_choice_overrides!=original.recovered_choice_overrides ||
        frame.recovered_multi_overrides!=original.recovered_multi_overrides ||
        frame.recovered_color_overrides!=original.recovered_color_overrides ||
+       frame.recovered_text_overrides!=original.recovered_text_overrides ||
+       frame.focused_text_widget!=original.focused_text_widget ||
        frame.recovered_slider_overrides!=original.recovered_slider_overrides ||
        frame.recovered_range_overrides!=original.recovered_range_overrides ||
        !(frame.piercing_preview==original.piercing_preview) ||
