@@ -117,6 +117,7 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
         frame.profile_name_focused=menu.profile_name_focused();
         frame.profile_name_taken=menu.profile_name_taken();
         frame.profile_action_preview=menu.profile_action_preview();
+        frame.profile_icon_hover=menu.profile_icon_hover();
         frame.profile_bind_capture_index=menu.profile_bind_capture_index();
     }
     if(frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload)
