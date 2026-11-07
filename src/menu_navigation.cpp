@@ -49,7 +49,8 @@ bool MenuNavigation::focused_visible(std::size_t* index) const {
     return true;
 }
 bool MenuNavigation::select_tab(MenuTab tab) {
-    if(!owner_thread() || !profile_.owns(menu_) ||
+    if(menu_.unload_confirmation_preview() ||
+       !owner_thread() || !profile_.owns(menu_) ||
        tab==MenuTab::Count || tab==MenuTab::Unload)return false;
     if(!profile_.select(tab))return false;
     const auto visible=menu_.page();
