@@ -96,6 +96,29 @@ inline bool operator!=(const RecoveredRangePreview& a,
 
 // R140: recovered binding chips are an inert, per-module GUI preview.
 // codes are source-normalized Win32 VKs (or 0x103/0x104 for mouse 4/5).
+// R142–R143: local reconstructed Profiles cards and modal state.
+// No settings file, launcher, Minecraft or native profile mutation.
+struct MenuLocalProfile {
+    std::string name;
+    std::string description;
+    std::string bind;
+};
+enum class MenuProfileAction : std::uint8_t {
+    Load, Save, OpenFolder, Delete
+};
+struct MenuProfileActionPreview {
+    std::size_t profile_index=0u;
+    MenuProfileAction action=MenuProfileAction::Load;
+};
+inline bool operator==(const MenuProfileActionPreview& a,
+                       const MenuProfileActionPreview& b) noexcept {
+    return a.profile_index==b.profile_index && a.action==b.action;
+}
+inline bool operator!=(const MenuProfileActionPreview& a,
+                       const MenuProfileActionPreview& b) noexcept {
+    return !(a==b);
+}
+
 struct MenuBindPreview {
     std::uint16_t code=0u;
     bool hold=false;
@@ -129,6 +152,31 @@ public:
     // R135: the bounded one-column preview can admit a smaller visible
     // window; this never changes enabled flags or gameplay state.
     bool scroll_by_visible(int delta,std::size_t visible_limit) noexcept;
+    // Source-shaped Profiles tab, strictly a local GUI sandbox.
+    const std::vector<MenuLocalProfile>& local_profiles() const noexcept {
+        return local_profiles_;
+    }
+    const std::string& profile_name_draft() const noexcept {
+        return profile_name_draft_;
+    }
+    bool profile_name_focused() const noexcept {
+        return profile_name_focused_;
+    }
+    bool profile_name_taken() const noexcept {
+        return profile_name_taken_;
+    }
+    bool focus_profile_name_preview() noexcept;
+    bool blur_profile_name_preview() noexcept;
+    bool append_profile_name_preview(std::string_view codepoint);
+    bool erase_profile_name_preview() noexcept;
+    bool create_profile_preview();
+    std::optional<MenuProfileActionPreview> profile_action_preview()
+        const noexcept { return profile_action_preview_; }
+    bool begin_profile_action_preview(std::size_t profile_index,
+                                      MenuProfileAction action) noexcept;
+    bool cancel_profile_action_preview() noexcept;
+    bool confirm_profile_action_preview() noexcept;
+
     bool toggle_preview(std::size_t catalog_index) noexcept;
     // R140: no global hooks, Java keybindings or client settings writes.
     bool begin_bind_capture(std::size_t catalog_index) noexcept;
@@ -263,6 +311,13 @@ private:
     MenuTab selected_=MenuTab::Combat;
     std::size_t scroll_=0;
     MenuAppearance appearance_{};
+    std::vector<MenuLocalProfile> local_profiles_{{
+        "Default","Contains the default configuration.",""
+    }};
+    std::string profile_name_draft_{};
+    bool profile_name_focused_=false;
+    bool profile_name_taken_=false;
+    std::optional<MenuProfileActionPreview> profile_action_preview_{};
     std::array<bool,67> enabled_{};
     // Default examples mirror the supplied HTML transcription's st.binds,
     // not an authenticated native Slinky configuration.
