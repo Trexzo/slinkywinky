@@ -64,6 +64,7 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.piercing_preview=menu.piercing_preview();
     frame.dropdown_preview=menu.dropdown_preview();
     frame.unload_confirmation_preview=menu.unload_confirmation_preview();
+    frame.recovered_boolean_overrides=menu.recovered_boolean_overrides();
     frame.piercing_selected=menu.piercing_selected();
     frame.visible=menu.page();
     if(frame.visible.size()>8)return std::nullopt;
