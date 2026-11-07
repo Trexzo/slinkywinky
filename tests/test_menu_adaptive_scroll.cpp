@@ -81,8 +81,8 @@ int main() {
         // A panel scroll cannot silently retain a stale popup.
         CHECK(profile.scroll_by_visible(-1,limit));
         CHECK(!menu.dropdown_preview());
-        CHECK(!menu.open_recovered_multi_preview(65u,teams) ||
-              !menu.unload_confirmation_preview());
+        CHECK(menu.open_recovered_multi_preview(65u,teams));
+        CHECK(menu.close_preview_dropdown());
         CHECK(session.detach());
     }
     return 0;
