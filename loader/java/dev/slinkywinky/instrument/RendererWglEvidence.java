@@ -117,6 +117,38 @@ public final class RendererWglEvidence {
         return true;
     }
 
+    // R178: for the finite R99 diagnostic, hold the expanded, recovered
+    // Auto Block slider on screen for 60 draw frames (3..62). The original
+    // four local-only navigation actions and final state are unchanged.
+    // No original mouse or keyboard event is intercepted or synthesized.
+    static int retainedHoverAction(int drawFrame) {
+        if(drawFrame==1)return 2; // Focus source Auto Block card
+        if(drawFrame==2)return 4; // Expand source settings pane
+        if(drawFrame==61)return 5; // Preview-only setting, unchanged input
+        if(drawFrame==62)return 0; // Switch to original final tab
+        return -1;
+    }
+    static int retainedHoverActionCount(int drawFrame) {
+        if(drawFrame<1 || drawFrame>64)return -1;
+        return Math.min(drawFrame,2)+(drawFrame>=61?1:0)+
+            (drawFrame>=62?1:0);
+    }
+    static boolean sourceSliderVisibleDuringDraw(int drawFrame) {
+        return drawFrame>=3 && drawFrame<=62;
+    }
+    static boolean expectedRetainedHoverState(int drawFrame,int[] state) {
+        if(drawFrame<1 || drawFrame>64 || state==null ||
+           state.length!=6)return false;
+        final int expectedTab=drawFrame>=62?1:0;
+        final int expectedFocus=drawFrame>=62?17:1;
+        final int expectedPreview=drawFrame>=61?1:0;
+        return state[0]==drawFrame &&
+            state[3]==retainedHoverActionCount(drawFrame) &&
+            state[4]==0 && state[1]==expectedTab &&
+            state[2]==expectedFocus &&
+            state[5]==expectedPreview;
+    }
+
     // R158: narrow receipt schema. Do not parse arbitrary profile strings
     // into Java module actions or trust an unpinned render callback.
     private static boolean validProfileReceipt(String receipt,
@@ -404,18 +436,15 @@ public final class RendererWglEvidence {
                 }
                 overlayDrawn=true;
                 overlayFrames++;
-                final int nextAction=overlayFrames==1?2:
-                    (overlayFrames==2?4:(overlayFrames==3?5:
-                     (overlayFrames==4?0:-1)));
+                // R178: 60 source-slider render frames; unlike R99's
+                // original four-frame rapid tab switch, this permits
+                // a physical foreground hover to be observed externally.
+                final int nextAction=retainedHoverAction(overlayFrames);
                 if(nextAction>=0 && !nativeRetainedPreviewAction(nextAction)) {
                     poisoned=true;overlayFailed=true;invalid++;return;
                 }
                 final int[] state=nativeRetainedPreviewSnapshot();
-                if(state==null || state.length!=6 || state[0]!=overlayFrames ||
-                   state[3]!=Math.min(overlayFrames,4) || state[4]!=0 ||
-                   state[1]!=(overlayFrames>=4?1:0) ||
-                   state[2]!=(overlayFrames>=4?17:(overlayFrames>=1?1:0)) ||
-                   state[5]!=(overlayFrames>=3?1:0)) {
+                if(!expectedRetainedHoverState(overlayFrames,state)) {
                     poisoned=true;overlayFailed=true;invalid++;return;
                 }
                 if(nextAction>=0 || overlayFrames==5) {

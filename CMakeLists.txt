@@ -399,6 +399,17 @@ if(WIN32)
             set_tests_properties(
               r176_java8_original_retained_hover_receipt
               PROPERTIES TIMEOUT 40)
+            add_test(NAME r178_java8_original_slider_hover_dwell_schedule
+              COMMAND ${CMAKE_COMMAND}
+                -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+                -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+                -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+                -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+                -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r178_hover_schedule.cmake)
+            set_tests_properties(
+              r178_java8_original_slider_hover_dwell_schedule
+              PROPERTIES TIMEOUT 40)
           endif()
       endif()
     set_tests_properties(native_retained_menu_source_mouse_transactions
@@ -732,6 +743,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r176_original_hover_receipt.py")
       set_tests_properties(r176_original_client_hover_marker_negatives
         PROPERTIES TIMEOUT 25)
+        # R178: original-game hover dwell must be exactly 60 source frames
+        # and consistent with separately verified R176 foreground counts.
+        add_test(NAME r178_original_client_slider_window_marker_negatives
+          COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r178_original_slider_window.py")
+        set_tests_properties(r178_original_client_slider_window_marker_negatives
+          PROPERTIES TIMEOUT 25)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}

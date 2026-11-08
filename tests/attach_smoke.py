@@ -139,6 +139,13 @@ try:
         if r177_fixture in set(audit.namelist()):
             raise AssertionError("R177 disposable source tooltip pixel smoke leaked to audit")
     print("PASS: R177 pixel fixture stays out of production and audit Java JARs")
+    r178_fixture="dev/slinkywinky/instrument/R178RetainedHoverScheduleSmoke.class"
+    if r178_fixture in entries:
+        raise AssertionError("R178 source-hover fixture leaked into agent")
+    with zipfile.ZipFile(render_audit_jar,"r") as audit:
+        if r178_fixture in set(audit.namelist()):
+            raise AssertionError("R178 source-hover fixture leaked into audit")
+    print("PASS: R178 schedule fixture excluded from distribution")
     r171_source_classes = {
         "dev/slinkywinky/attach/R171VanillaJarInputSurface.class",
         "dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.class",

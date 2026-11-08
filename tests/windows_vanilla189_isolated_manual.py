@@ -36,6 +36,26 @@ def verify_r176_original_hover_marker(stdout):
         raise RuntimeError("R176 impossible original-JVM hover counters")
     return fg,numeric,bind
 
+R178_SLIDER_MARKER="R178_ORIGINAL_SOURCE_SLIDER_HOVER_WINDOW_PASS"
+R178_SLIDER_REGEX=re.compile(
+    r"^R178_ORIGINAL_SOURCE_SLIDER_HOVER_WINDOW_PASS "
+    r"eligible_draws=60 frames=64 actions=4 "
+    r"foreground=([0-9]{1,3}) native_click_delivery=disabled\r?$",
+    re.MULTILINE)
+
+def verify_r178_original_slider_window(stdout,original_foreground):
+    """Source-visible 60 frames, NOT actual foreground mouse interaction."""
+    if not isinstance(stdout,str) or stdout.count(R178_SLIDER_MARKER)!=1:
+        raise RuntimeError("R178 missing or duplicate original-JVM slider window")
+    matched=list(R178_SLIDER_REGEX.finditer(stdout))
+    if len(matched)!=1:
+        raise RuntimeError("R178 invalid original-JVM slider window shape")
+    foreground=int(matched[0].group(1))
+    if (not isinstance(original_foreground,int) or
+        foreground!=original_foreground or foreground<0 or foreground>63):
+        raise RuntimeError("R178 contradicted original R176 foreground evidence")
+    return 60
+
 MARKERS = (
     "CALLBACK_CLASSLOADER_VALIDATED",
     "OBSERVATION_MAPPING_ADMITTED",
@@ -491,6 +511,13 @@ def main():
                     # exact-JAR, source-restored original client JVM log.
                     # It proves only counter-only WGL passive hover samples.
                     fg,num,bind=verify_r176_original_hover_marker(read_log())
+                    eligible=verify_r178_original_slider_window(
+                        read_log(),fg)
+                    print("R178_ORIGINAL_VANILLA_189_SLIDER_WINDOW_SOURCE_PASS "+
+                          "eligible_draws="+str(eligible)+
+                          " foreground="+str(fg),flush=True)
+                    print("R178_SOURCE_VISIBLE_WINDOW_NOT_PHYSICAL_TOOLTIP_PROOF",
+                          flush=True)
                     print("R176_ORIGINAL_VANILLA_189_HOVER_COUNTERS_PASS "
                           "samples=63 foreground="+str(fg)+
                           " numeric="+str(num)+" bind="+str(bind),flush=True)

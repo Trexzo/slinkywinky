@@ -483,6 +483,15 @@ public final class RendererFrameDiagnostic {
                                 " foreground="+hover[2]+
                                 " numeric="+hover[3]+" bind="+hover[4]+
                                 " native_click_delivery=disabled");
+                        // R178 is a source-validated opportunity, not an
+                        // assertion that a physical cursor actually hovered.
+                        // Exact R176 counters retain that separate meaning.
+                        if(hover!=null && hover.length==5)
+                            System.out.println(
+                                "R178_ORIGINAL_SOURCE_SLIDER_HOVER_WINDOW_PASS "+
+                                "eligible_draws=60 frames=64 actions=4 "+
+                                "foreground="+hover[2]+
+                                " native_click_delivery=disabled");
                     }
                     if(evidence.overlayRequested()) {
                         if(stable && evidence.overlayDrawn())
