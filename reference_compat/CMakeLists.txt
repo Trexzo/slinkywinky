@@ -29,4 +29,17 @@ if(BUILD_TESTING)
   add_test(NAME r176_reject_duplicate_subscription COMMAND slinkywinky_event_lifecycle_test
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/duplicate_subscription.tsv")
   set_tests_properties(r176_reject_duplicate_subscription PROPERTIES WILL_FAIL TRUE)
+  # R177: compile the existing first-party ReachController itself, not a copy
+  # of upstream C++ or a mock. No game/JNI/Java runtime is linked.
+  add_library(slinkywinky_reference_firstparty_core STATIC ../src/core.cpp)
+  target_include_directories(slinkywinky_reference_firstparty_core PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_compile_features(slinkywinky_reference_firstparty_core PUBLIC cxx_std_17)
+  add_executable(slinkywinky_module_execution_bridge_test
+    tests/test_module_execution_bridge.cpp)
+  target_link_libraries(slinkywinky_module_execution_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r177_reach_callback_bridge
+    COMMAND slinkywinky_module_execution_bridge_test)
 endif()
