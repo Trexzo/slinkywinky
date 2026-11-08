@@ -16,6 +16,8 @@ on:
       - 'tools/audit_openslinky_data.py'
       - 'tests/test_openslinky_data_audit.py'
       - 'reference_compat/**'
+      - 'tools/export_candidate_event_manifest.py'
+      - 'tests/test_candidate_event_fixture_export.py'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -29,6 +31,8 @@ jobs:
           persist-credentials: false
       - name: Candidate-verifier unit tests (synthetic PE only)
         run: python3 -m unittest discover -s tests -p 'test_candidate_binary_verifier.py' -v
+      - name: Candidate event fixture exporter tests (synthetic native tables only)
+        run: python3 -m unittest discover -s tests -p 'test_candidate_event_fixture_export.py' -v
       - name: Event dispatcher audit tests (synthetic data only)
         run: python3 -m unittest discover -s tests -p 'test_openslinky_dispatch_audit.py' -v
       - name: Pinned C++ event dispatcher inventory
