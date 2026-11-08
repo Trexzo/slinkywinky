@@ -39,6 +39,12 @@ public:
                  unsigned width,unsigned height,int x,int y,
                  std::uint64_t monotonic_ms,bool exclusive_dispatch_attested,
                  bool foreground_verified);
+    // R175: actual original-foreground window passive physical cursor to
+    // source-validated *visual* hover. NEVER presses, releases or gameplay.
+    bool observe_hover(HGLRC context,HDC dc,unsigned width,unsigned height,
+                       int x,int y,bool foreground_verified);
+    std::optional<MenuNumericHover> observed_numeric_hover() const noexcept;
+    std::optional<std::size_t> observed_bind_hover() const noexcept;
     bool close() noexcept;
     bool owner_thread() const noexcept;
     bool active() const noexcept {return active_;}

@@ -491,3 +491,41 @@ Java_dev_slinkywinky_attach_R169DropdownJniSmoke_aimOptionTarget(
         return result;
     }catch(...) {return nullptr;}
 }
+
+// R175: disposable JNI entry points exercising the SAME production C++
+// owner-bound passive hover model; no original game mouse interception.
+// The source-recovered coordinates are provided by R167 sliderTarget.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R175RetainedHoverJniSmoke_observeHover(
+        JNIEnv*,jclass,jint x,jint y,jboolean foreground,
+        jint width,jint height) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() ||
+       width<320 || height<240 || width>8192 || height>8192)
+        return JNI_FALSE;
+    try {
+        return session->ui->observe_hover(
+            session->gl,session->dc,
+            static_cast<unsigned>(width),static_cast<unsigned>(height),
+            x,y,foreground==JNI_TRUE)?JNI_TRUE:JNI_FALSE;
+    }catch(...) {return JNI_FALSE;}
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R175RetainedHoverJniSmoke_hoverReceipt(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    try {
+        const auto hit=session->ui->observed_numeric_hover();
+        if(!hit || hit->catalog_index>67u ||
+           hit->widget_index>=slinkywinky::recovered_widget_catalog().size())
+            return nullptr;
+        const jint record[2]={
+            static_cast<jint>(hit->catalog_index),
+            static_cast<jint>(hit->widget_index)
+        };
+        jintArray result=env->NewIntArray(2);
+        if(result)env->SetIntArrayRegion(result,0,2,record);
+        return result;
+    }catch(...) {return nullptr;}
+}

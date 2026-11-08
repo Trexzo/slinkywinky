@@ -159,6 +159,53 @@ bool WglRetainedMenuPreview::pointer(
         default:return false;
     }
 }
+bool WglRetainedMenuPreview::observe_hover(
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        int x,int y,bool foreground_verified) {
+    // A read-only visual hint, not input ownership. A pending synthetic
+    // gesture cannot have its immutable input frame altered by hover.
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       pointer_gesture_.pending())return false;
+    std::optional<MenuNumericHover> numeric;
+    std::optional<std::size_t> bind;
+    if(foreground_verified && x>=0 && y>=0 &&
+       static_cast<unsigned>(x)<width &&
+       static_cast<unsigned>(y)<height) {
+        const auto frame=pointer_frames_.next(menu_,&profile_,&navigation_);
+        if(!frame)return false;
+        const auto hit=hit_test_menu(
+            *frame,MenuPanelMode::CompactOverlay,x,y);
+        if(hit) {
+            if(hit->kind==MenuHitKind::RecoveredSliderPreview ||
+               hit->kind==MenuHitKind::RecoveredRangePreview)
+                numeric=MenuNumericHover{
+                    hit->catalog_index,hit->control_index};
+            else if(hit->kind==MenuHitKind::BindChip ||
+                    hit->kind==MenuHitKind::BindHold)
+                bind=hit->catalog_index;
+        }
+    }
+    // The source-typed MenuState validates even these ephemeral hints.
+    // Unchanged empty hover is valid observation, not a failed mutation.
+    if(numeric && menu_.numeric_hover()!=numeric &&
+       !menu_.set_numeric_hover(numeric))return false;
+    if(!numeric)menu_.set_numeric_hover(std::nullopt);
+    if(bind && menu_.bind_hover_row()!=bind &&
+       !menu_.set_bind_hover_row(bind))return false;
+    if(!bind)menu_.set_bind_hover_row(std::nullopt);
+    return true;
+}
+std::optional<MenuNumericHover>
+WglRetainedMenuPreview::observed_numeric_hover() const noexcept {
+    return owner_thread() && active_?menu_.numeric_hover():std::nullopt;
+}
+std::optional<std::size_t>
+WglRetainedMenuPreview::observed_bind_hover() const noexcept {
+    return owner_thread() && active_?menu_.bind_hover_row():std::nullopt;
+}
 std::optional<std::string> WglRetainedMenuPreview::profile_snapshot(
         HGLRC context,HDC dc,unsigned width,unsigned height) const {
     if(!active_ || !owner_thread() || drawn_frames_==0 ||

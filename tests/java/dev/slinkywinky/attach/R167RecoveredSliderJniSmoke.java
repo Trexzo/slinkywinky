@@ -9,7 +9,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class R167RecoveredSliderJniSmoke {
     // R168 uses the same disposable native menu owner for source paging.
     static native boolean navigate(int action);
-    private static native int[] sliderTarget(int permille);
+    // R175 tests the same source-verified numeric track for passive hover.
+    static native int[] sliderTarget(int permille);
     private static void require(boolean pass,String reason) {
         if(!pass)throw new AssertionError("R167 "+reason);
     }

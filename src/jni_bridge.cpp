@@ -739,6 +739,24 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
     try {
         if(!retained_preview)
             retained_preview=std::make_unique<slinkywinky::WglRetainedMenuPreview>();
+        // R175: only the exact admitted original Minecraft foreground
+        // HWND/WGL owner can supply an untrusted physical hover hint.
+        // Click delivery remains entirely disabled. The *first* frame
+        // builds the original menu before any hover can be observed.
+        if(retained_preview->active()) {
+            const auto gl=reinterpret_cast<HGLRC>(
+                static_cast<std::uintptr_t>(context));
+            const auto hdc=reinterpret_cast<HDC>(
+                static_cast<std::uintptr_t>(dc));
+            const auto point=slinkywinky::audit_original_render_pointer(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height));
+            if(!retained_preview->observe_hover(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height),
+                point?point->client_x:0,point?point->client_y:0,
+                point.has_value()))return JNI_FALSE;
+        }
         return drawValidatedMenuOverlay(context,dc,width,height,
             slinkywinky::MenuGL11Mode::CompactOverlay,retained_preview.get());
     } catch(...) {

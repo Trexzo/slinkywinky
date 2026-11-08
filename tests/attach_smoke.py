@@ -118,6 +118,13 @@ try:
         if r169_fixture in set(audit.namelist()):
             raise AssertionError("R169 popup pointer smoke leaked into audit JAR")
     print("PASS: R169 source popup JNI smoke excluded from runtime JARs")
+    r175_fixture="dev/slinkywinky/attach/R175RetainedHoverJniSmoke.class"
+    if r175_fixture in entries:
+        raise AssertionError("R175 disposable Java8 hover smoke leaked into agent")
+    with zipfile.ZipFile(render_audit_jar,"r") as audit:
+        if r175_fixture in set(audit.namelist()):
+            raise AssertionError("R175 disposable hover test leaked into source audit")
+    print("PASS: R175 native-passive hover test excluded from runtime and audit JARs")
     r171_source_classes = {
         "dev/slinkywinky/attach/R171VanillaJarInputSurface.class",
         "dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.class",
