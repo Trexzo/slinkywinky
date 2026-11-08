@@ -8,14 +8,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * into the injectable agent distribution.
  */
 public final class R166RetainedPointerJniSmoke {
-    private static native boolean begin();
-    private static native int[] toggleTarget();
-    private static native boolean pointer(int phase,int x,int y,long monotonic,
+    static native boolean begin();
+    static native int[] toggleTarget();
+    static native boolean pointer(int phase,int x,int y,long monotonic,
                                           boolean exclusive,boolean foreground,
                                           int viewportWidth,int viewportHeight);
-    private static native String profile();
-    private static native boolean redraw();
-    private static native boolean end();
+    static native String profile();
+    static native boolean redraw();
+    static native boolean end();
     private static void check(boolean valid,String reason) {
         if(!valid)throw new AssertionError("R166 "+reason);
     }

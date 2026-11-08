@@ -18,6 +18,7 @@ FORBIDDEN = (
     re.compile(r"\bR164OfflineModalGate\b"),
     re.compile(r"\bR165ModalInputSession\b"),
     re.compile(r"\bR166RetainedPointerJniSmoke\b"),
+    re.compile(r"\bR167RecoveredSliderJniSmoke\b"),
 )
 
 

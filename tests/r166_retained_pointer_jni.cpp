@@ -10,6 +10,9 @@
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/recovered_settings.hpp"
+#include <string_view>
 #include <utility>
 #include "slinkywinky/menu_profile.hpp"
 #include <cmath>
@@ -188,4 +191,73 @@ Java_dev_slinkywinky_attach_R166RetainedPointerJniSmoke_end(
         session.reset();
         return closed?JNI_TRUE:JNI_FALSE;
     }catch(...) {return JNI_FALSE;}
+}
+
+// R167: the *same* disposable WGL JNI library now exercises an actual
+// recovered slider -> validated C++ profile path. No real game input owner,
+// live Java entry point, Minecraft package, or gameplay action is involved.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R167RecoveredSliderJniSmoke_navigate(
+        JNIEnv*,jclass,jint action) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() || (action!=2 && action!=4))
+        return JNI_FALSE;
+    try {
+        return session->ui->apply(
+            static_cast<slinkywinky::MenuNavAction>(action))?
+            JNI_TRUE:JNI_FALSE;
+    }catch(...) {return JNI_FALSE;}
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R167RecoveredSliderJniSmoke_sliderTarget(
+        JNIEnv* env,jclass,jint fractionPermille) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid() ||
+       fractionPermille<0 || fractionPermille>=1000 ||
+       session->ui->focused_row()!=std::optional<std::size_t>(1u))
+        return nullptr;
+    try {
+        // Recreate ONLY the reference hit-test geometry. The input release
+        // is handled by session->ui's real R159 source-indexed pointer().
+        slinkywinky::MenuState mirror;
+        if(!mirror.toggle_expanded(1u))return nullptr;
+        slinkywinky::MenuProfileBridge mirrorProfile(mirror);
+        slinkywinky::MenuRenderSession frames;
+        if(!frames.attach(167u,kWidth,kHeight))return nullptr;
+        const auto frame=frames.next(mirror,&mirrorProfile);
+        const auto panel=slinkywinky::menu_panel_geometry(
+            kWidth,kHeight,false,slinkywinky::MenuPanelMode::CompactOverlay);
+        if(!frame || !panel || panel->scale<=0.0f)return nullptr;
+        const auto& source=slinkywinky::recovered_widget_catalog();
+        std::size_t index=source.size();
+        for(std::size_t i=0;i<source.size();++i) {
+            const auto& w=source[i];
+            if(std::string_view(w.module)=="Auto Block" &&
+               std::string_view(w.group)=="Main" &&
+               std::string_view(w.label)=="Range" &&
+               w.kind==slinkywinky::RecoveredWidgetKind::Slider) {
+                index=i;break;
+            }
+        }
+        if(index==source.size())return nullptr;
+        const auto track=slinkywinky::menu_numeric_track_geometry(
+            *frame,panel->logical_width(),panel->logical_height(),
+            1u,index);
+        if(!track)return nullptr;
+        const float fraction=static_cast<float>(fractionPermille)/1000.0f;
+        const int x=static_cast<int>(panel->left)+static_cast<int>(
+            std::lround((track->x+track->width*fraction)*panel->scale));
+        const int y=static_cast<int>(panel->top)+static_cast<int>(
+            std::lround((track->y+track->height*0.5f)*panel->scale));
+        const auto hit=slinkywinky::hit_test_menu(
+            *frame,slinkywinky::MenuPanelMode::CompactOverlay,x,y);
+        if(!hit || hit->kind!=slinkywinky::MenuHitKind::RecoveredSliderPreview ||
+           hit->catalog_index!=1u || hit->control_index!=index ||
+           x<0 || x>=static_cast<int>(kWidth) || y<0 ||
+           y>=static_cast<int>(kHeight))return nullptr;
+        const jint coords[2]={x,y};
+        jintArray result=env->NewIntArray(2);
+        if(result)env->SetIntArrayRegion(result,0,2,coords);
+        return result;
+    }catch(...) {return nullptr;}
 }
