@@ -765,10 +765,10 @@ std::optional<bool> MenuState::recovered_boolean_override(
     if(widget_index>=recovered_boolean_overrides_.size())return std::nullopt;
     return recovered_boolean_overrides_[widget_index];
 }
-bool MenuState::toggle_recovered_boolean_preview(
-        std::size_t catalog_index,std::size_t widget_index) noexcept {
-    // This is an independent, inert UI sandbox. Piercing's seven Boolean
-    // controls already have their separate, source-indexed editor.
+bool MenuState::set_recovered_boolean_preview(
+        std::size_t catalog_index,std::size_t widget_index,
+        bool desired) noexcept {
+    // This setter is local GUI state only. Piercing has its own editor.
     const auto& catalog=official_module_catalog();
     const auto& widgets=recovered_widget_catalog();
     if(unload_confirmation_preview_ || dropdown_preview_ ||
@@ -797,10 +797,16 @@ bool MenuState::toggle_recovered_boolean_preview(
         if(ptr==&widgets[widget_index])on_page=true;
     }
     if(!on_page)return false;
-    const bool previous=recovered_boolean_overrides_[widget_index].value_or(
-        widgets[widget_index].example_enabled);
-    recovered_boolean_overrides_[widget_index]=!previous;
+    recovered_boolean_overrides_[widget_index]=desired;
     return true;
+}
+bool MenuState::toggle_recovered_boolean_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept {
+    const auto& source=recovered_widget_catalog();
+    if(widget_index>=source.size())return false;
+    const bool previous=recovered_boolean_overrides_[widget_index].value_or(
+        source[widget_index].example_enabled);
+    return set_recovered_boolean_preview(catalog_index,widget_index,!previous);
 }
 
 bool MenuState::focus_recovered_text_preview(

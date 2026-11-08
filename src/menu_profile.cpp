@@ -43,6 +43,23 @@ NativeSlider bound_slider(std::size_t index) noexcept {
        label=="Range")return NativeSlider::BlockRange;
     return NativeSlider::None;
 }
+enum class NativeBoolean : unsigned char {
+    None,AimMousePressed,BlockDamaged,ReachSprinting
+};
+NativeBoolean bound_boolean(std::size_t index) noexcept {
+    const auto& all=recovered_widget_catalog();
+    if(index>=all.size())return NativeBoolean::None;
+    const auto& w=all[index];
+    if(w.kind!=RecoveredWidgetKind::Boolean)return NativeBoolean::None;
+    const std::string_view module=w.module,group=w.group,label=w.label;
+    if(module=="Aim Assist" && group=="Conditions" &&
+       label=="Mouse pressed")return NativeBoolean::AimMousePressed;
+    if(module=="Auto Block" && group=="Conditions" &&
+       label=="Damaged")return NativeBoolean::BlockDamaged;
+    if(module=="Reach" && group=="Conditions" &&
+       label=="Sprinting")return NativeBoolean::ReachSprinting;
+    return NativeBoolean::None;
+}
 const bool* setting(const ClientSettings& settings, std::size_t index) noexcept {
     switch(index) {
         case 0: return &settings.combat.aim_enabled;
@@ -114,6 +131,51 @@ bool MenuProfileBridge::toggle(std::size_t index) {
     if(menu_.preview_enabled(index)!=next && !menu_.toggle_preview(index))
         return false;
     *stored=next;
+    return true;
+}
+std::optional<bool> MenuProfileBridge::recovered_boolean_setting(
+        std::size_t index) const noexcept {
+    switch(bound_boolean(index)) {
+        case NativeBoolean::AimMousePressed:
+            return settings_.combat.aim_requires_mouse;
+        case NativeBoolean::BlockDamaged:
+            return settings_.combat.block_requires_damage;
+        case NativeBoolean::ReachSprinting:
+            return settings_.combat.reach.require_sprint;
+        default:return std::nullopt;
+    }
+}
+bool MenuProfileBridge::toggle_recovered_boolean(
+        std::size_t catalog_index,std::size_t index) {
+    const auto field=bound_boolean(index);
+    if(field==NativeBoolean::None)
+        return menu_.toggle_recovered_boolean_preview(catalog_index,index);
+    const auto& catalog=official_module_catalog();
+    const auto& source=recovered_widget_catalog();
+    if(catalog_index>=catalog.size() || index>=source.size() ||
+       std::string_view(source[index].module)!=catalog[catalog_index].name)
+        return false;
+    ClientSettings updated=settings_;
+    bool desired=false;
+    switch(field) {
+        case NativeBoolean::AimMousePressed:
+            desired=!settings_.combat.aim_requires_mouse;
+            updated.combat.aim_requires_mouse=desired;break;
+        case NativeBoolean::BlockDamaged:
+            desired=!settings_.combat.block_requires_damage;
+            updated.combat.block_requires_damage=desired;break;
+        case NativeBoolean::ReachSprinting:
+            desired=!settings_.combat.reach.require_sprint;
+            updated.combat.reach.require_sprint=desired;break;
+        default:return false;
+    }
+    const auto checked=parse_settings(serialize_settings(updated));
+    if(!checked.valid)return false;
+    // Visible page and source widget checks are owned by MenuState.
+    if(!menu_.set_recovered_boolean_preview(catalog_index,index,desired))
+        return false;
+    settings_=checked.settings;
+    synchronize_visible();
     return true;
 }
 std::optional<float> MenuProfileBridge::recovered_slider_setting(

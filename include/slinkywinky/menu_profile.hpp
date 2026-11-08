@@ -42,6 +42,11 @@ public:
                               std::size_t widget_index,float value);
     std::optional<float> recovered_slider_setting(
                               std::size_t widget_index) const noexcept;
+    // R156: source-matched Boolean controls with native settings owners.
+    bool toggle_recovered_boolean(std::size_t catalog_index,
+                                  std::size_t widget_index);
+    std::optional<bool> recovered_boolean_setting(
+                              std::size_t widget_index) const noexcept;
     std::optional<MenuPrimaryParameter> primary(std::size_t catalog_index) const noexcept;
     // Only the currently visible, expanded module may be adjusted by one step.
     bool adjust_primary(std::size_t catalog_index, int direction);

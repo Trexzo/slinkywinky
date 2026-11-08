@@ -70,6 +70,14 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     frame.numeric_hover=menu.numeric_hover();
     frame.numeric_drag_preview=menu.numeric_drag_preview();
     frame.recovered_boolean_overrides=menu.recovered_boolean_overrides();
+    // Source-matched native Boolean state wins after a profile load.
+    if(profile) {
+        for(std::size_t widget=0;
+            widget<frame.recovered_boolean_overrides.size();++widget) {
+            if(const auto mapped=profile->recovered_boolean_setting(widget))
+                frame.recovered_boolean_overrides[widget]=*mapped;
+        }
+    }
     frame.recovered_choice_overrides=menu.recovered_choice_overrides();
     frame.recovered_multi_overrides=menu.recovered_multi_overrides();
     frame.recovered_color_overrides=menu.recovered_color_overrides();

@@ -308,6 +308,11 @@ public:
     // Never toggles the gameplay module nor changes ClientSettings.
     bool toggle_recovered_boolean_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept;
+    // Explicit-value owner-thread source widget setter; admission matches
+    // toggle_recovered_boolean_preview and cannot bypass page guards.
+    bool set_recovered_boolean_preview(
+        std::size_t catalog_index,std::size_t widget_index,
+        bool desired) noexcept;
     std::optional<bool> recovered_boolean_override(
         std::size_t widget_index) const noexcept;
     const std::array<std::optional<bool>,385>&

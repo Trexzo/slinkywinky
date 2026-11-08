@@ -798,7 +798,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                     else if(hit->kind==MenuHitKind::Toggle)
                         navigation.apply(slinkywinky::MenuNavAction::ToggleFocusedPreview);
                     else if(hit->kind==MenuHitKind::RecoveredBooleanPreview)
-                        menu.toggle_recovered_boolean_preview(
+                        profile.toggle_recovered_boolean(
                             hit->catalog_index,hit->control_index);
                     else if(hit->kind==MenuHitKind::RecoveredChoiceControl)
                         menu.open_recovered_choice_preview(

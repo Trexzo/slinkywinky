@@ -188,6 +188,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_gui_tab_open_motion
     COMMAND slinkywinky_visual_motion_tests)
+  add_executable(slinkywinky_menu_source_boolean_tests
+    tests/test_menu_source_boolean_binding.cpp)
+  target_link_libraries(slinkywinky_menu_source_boolean_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_recovered_gui_boolean_to_profile
+    COMMAND slinkywinky_menu_source_boolean_tests)
   add_executable(slinkywinky_menu_source_binding_tests
     tests/test_menu_source_profile_binding.cpp)
   target_link_libraries(slinkywinky_menu_source_binding_tests
