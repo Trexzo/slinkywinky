@@ -44,7 +44,7 @@ int main() {
     CHECK(controller.last_held_tick()[2] == 101);
     d = controller.evaluate(input(102,false,false,true,false,
                                   true,false,true,false));
-    CHECK(d.overrides[2] == true || !d.overrides[2]);
+    CHECK(d.overrides[2] == true); // forward release restores held back
     CHECK(d.resulting_game_pressed[2]);
     d = controller.evaluate(input(103,false,false,false,false,
                                   true,false,false,false));
