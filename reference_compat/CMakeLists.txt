@@ -42,4 +42,21 @@ if(BUILD_TESTING)
     slinkywinky_reference_firstparty_core)
   add_test(NAME r177_reach_callback_bridge
     COMMAND slinkywinky_module_execution_bridge_test)
+  # R178: full 66-module metadata -> bridge coverage with a synthetic fixture.
+  # Private candidate metadata is supplied only on the user's local machine.
+  add_executable(slinkywinky_implementation_coverage_audit
+    tools/audit_implementation_coverage.cpp)
+  target_link_libraries(slinkywinky_implementation_coverage_audit PRIVATE
+    slinkywinky_reference_event_model slinkywinky_reference_firstparty_core)
+  add_test(NAME r178_synthetic_implementation_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules_with_reach.tsv")
+  add_test(NAME r178_reject_duplicate_catalog_entry
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/duplicate_subscription.tsv")
+  add_test(NAME r178_reject_wrong_reach_slot
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/reach_wrong_slot.tsv")
+  set_tests_properties(r178_reject_duplicate_catalog_entry
+    r178_reject_wrong_reach_slot PROPERTIES WILL_FAIL TRUE)
 endif()
