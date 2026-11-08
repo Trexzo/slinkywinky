@@ -54,6 +54,33 @@ static ExecutionFrame null_move_frame(int tick, bool forward, bool back) {
     return frame;
 }
 
+static ExecutionFrame combined_movement_frame(int tick, bool forward, double x, double z,
+                                              bool include_null_move) {
+    ExecutionFrame frame;
+    frame.event = kMovementTickEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    InstantStopTickPayload payload;
+    payload.input.in_game = true;
+    payload.input.forward_pressed = forward;
+    payload.input.on_ground = true;
+    payload.input.motion_x = x;
+    payload.input.motion_z = z;
+    payload.input.yaw_degrees = 0.0f;
+    payload.input.land_movement_factor = 0.1f;
+    payload.input.physically_held = {forward, false, false, false};
+    frame.instant_stop = payload;
+    if (include_null_move) {
+        NullMoveTickPayload null_tick;
+        null_tick.input.in_game = true;
+        null_tick.input.ticks_existed = tick;
+        null_tick.input.game_pressed = {forward, false, false, false};
+        null_tick.input.physically_held = payload.input.physically_held;
+        frame.null_move = null_tick;
+    }
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -118,8 +145,16 @@ int main(int argc, char** argv) {
         if (has_null_move)
             require(bridge.bind_null_move_from_catalog(),
                     "Null Move exists but original event 16/movement binding failed");
+        std::size_t instant_stop_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Instant Stop") instant_stop_id = i;
+        const bool has_instant_stop = instant_stop_id < manifest.modules.size();
+        if (has_instant_stop)
+            require(bridge.bind_instant_stop_from_catalog(),
+                    "Instant Stop exists but event 16/priority 200/movement binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
-                                               (has_null_move ? 1u : 0u);
+                                               (has_null_move ? 1u : 0u) +
+                                               (has_instant_stop ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -133,8 +168,9 @@ int main(int argc, char** argv) {
                 "Reach callback not routed through event 8");
         require(c.implemented_per_event[kPlayerUpdateEvent] == (has_jump ? 1u : 0u),
                 "No Jump Delay callback not routed through event 17");
-        require(c.implemented_per_event[kMovementTickEvent] == (has_null_move ? 1u : 0u),
-                "Null Move callback not routed through event 16");
+        require(c.implemented_per_event[kMovementTickEvent] ==
+                    (has_null_move ? 1u : 0u) + (has_instant_stop ? 1u : 0u),
+                "Movement callbacks not routed through event 16");
         for (unsigned event = 0; event < kEventSlots; ++event)
             if (event != kReachQueryEvent && event != kPlayerUpdateEvent &&
                 event != kMovementTickEvent)
@@ -222,13 +258,67 @@ int main(int argc, char** argv) {
                     "disabled Null Move still executed");
         }
 
+        if (has_instant_stop) {
+            if (has_null_move) {
+                bridge.reset_null_move_world_state();
+                require(bridge.request(null_move_id, true),
+                        "Null Move could not be readmitted for shared movement event");
+            }
+            bridge.reset_instant_stop_world_state();
+            require(bridge.request(instant_stop_id, true),
+                    "Instant Stop enable rejected");
+            require(bridge.apply(true, true), "Instant Stop enable not applied");
+            auto movement = combined_movement_frame(200, true, 0.0, 0.10,
+                                                   has_null_move);
+            require(bridge.dispatch(movement) && movement.instant_stop &&
+                    movement.instant_stop->executions == 1 &&
+                    movement.instant_stop->decision.phase ==
+                        InstantStopPhase::watching_forward,
+                    "Instant Stop failed to observe held forward key");
+            movement = combined_movement_frame(201, false, 0.0, 0.10,
+                                               has_null_move);
+            require(bridge.dispatch(movement) && movement.instant_stop &&
+                    movement.instant_stop->executions == 1 &&
+                    movement.instant_stop->decision.choice ==
+                        InstantStopChoice::back_only,
+                    "Instant Stop failed to minimize forward slide");
+            require(movement.executed_modules.size() ==
+                    (has_null_move ? 2u : 1u) &&
+                    movement.executed_modules.front() == instant_stop_id,
+                    "Instant Stop priority was not first");
+            if (has_null_move)
+                require(movement.executed_modules.back() == null_move_id &&
+                        movement.null_move &&
+                        movement.null_move->input.game_pressed[
+                            static_cast<unsigned>(MoveKey::back)] &&
+                        movement.null_move->executions == 1,
+                        "Null Move did not see high-priority counter input");
+            movement = combined_movement_frame(202, false, 0.0, 0.0,
+                                               has_null_move);
+            require(bridge.dispatch(movement) &&
+                    movement.instant_stop->decision.phase == InstantStopPhase::idle &&
+                    movement.instant_stop->decision.overrides[
+                        static_cast<unsigned>(MoveKey::back)] == false,
+                    "Instant Stop failed to restore physical key state");
+            require(bridge.request(instant_stop_id, false),
+                    "Instant Stop disable rejected");
+            require(bridge.apply(true, true), "Instant Stop disable not applied");
+            movement = combined_movement_frame(203, false, 0.0, 0.10,
+                                               has_null_move);
+            require(bridge.dispatch(movement) &&
+                    movement.instant_stop->executions == 0 &&
+                    movement.executed_modules.size() == (has_null_move ? 1u : 0u),
+                    "disabled Instant Stop still executed");
+        }
+
         if (expect_candidate)
-            require(has_jump && has_null_move && c.registered_modules == 66 &&
+            require(has_jump && has_null_move && has_instant_stop &&
+                    c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 3 &&
-                    c.executable_callback_bindings == 3 &&
-                    c.unimplemented_callback_subscriptions == 168,
+                    c.modules_with_executable_bindings == 4 &&
+                    c.executable_callback_bindings == 4 &&
+                    c.unimplemented_callback_subscriptions == 167,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -244,7 +334,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R180 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R181 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }
