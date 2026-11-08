@@ -166,6 +166,11 @@ public:
             definitions_[id].name != "Instant Stop" ||
             definitions_[id].category != 1)
             return false;
+        bool has_original_priority = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kMovementTickEvent && sub.priority == 200)
+                has_original_priority = true;
+        if (!has_original_priority) return false;
         return bind(id, kMovementTickEvent,
                     [this](const Delivery&, ExecutionFrame& frame) {
                         if (!frame.instant_stop) return;
