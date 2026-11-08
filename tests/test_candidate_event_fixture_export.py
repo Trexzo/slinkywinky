@@ -50,6 +50,9 @@ class TestCandidateManifestExporter(unittest.TestCase):
     def test_verified_module_event_bindings(self):
         data, rdata = synthetic_catalog()
         rows = fixture.read_catalog(data, rdata)
+        rows[31]["name"] = "Instant Stop"
+        rows[31]["category"] = 1
+        rows[31]["subscriptions"] = [(16, 200)]
         rows[45]["name"] = "No Jump Delay"
         rows[45]["category"] = 1
         rows[45]["subscriptions"] = [(17, 100)]
@@ -69,6 +72,10 @@ class TestCandidateManifestExporter(unittest.TestCase):
             fixture.verify_known_original_bindings(rows)
         rows[54]["name"] = "Reach"
         rows[49]["subscriptions"] = [(17, 100)]
+        with self.assertRaisesRegex(ValueError, "binding drift"):
+            fixture.verify_known_original_bindings(rows)
+        rows[49]["subscriptions"] = [(16, 100)]
+        rows[31]["subscriptions"] = [(16, 100)]
         with self.assertRaisesRegex(ValueError, "binding drift"):
             fixture.verify_known_original_bindings(rows)
 
