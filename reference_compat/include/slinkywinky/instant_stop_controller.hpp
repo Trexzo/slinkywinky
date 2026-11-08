@@ -3,7 +3,10 @@
 // Uses a verified candidate movement comparison, never touches game keys,
 // JNI, native hooks, player memory, or upstream proprietary code.
 #include "slinkywinky/null_move_controller.hpp"
+#include <algorithm>
 #include <array>
+#include <initializer_list>
+#include <utility>
 #include <cmath>
 #include <cstdint>
 #include <limits>
