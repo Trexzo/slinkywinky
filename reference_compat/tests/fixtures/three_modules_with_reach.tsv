@@ -1,0 +1,4 @@
+id	name	category	initially_enabled	event_priorities
+0	Reach	0	0	8:7
+1	Synthetic Probe	2	1	8:12,5:10
+2	No Hurt Cam	2	0	
