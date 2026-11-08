@@ -59,3 +59,39 @@ CMake builds remain unchanged. The workflow checks out the external source but
 4. Build fixed-state decision/event traces without invoking live gameplay.
 5. Run isolated original-client render/input tests and safe teardown checks.
 6. Keep any remaining differences recorded as deviations, not as 1:1 claims.
+
+
+## R171: optional read-only candidate binary verification
+
+The new `tools/verify_candidate_binary.py` independently checks the user's
+**local** candidate archive, without unpacking it onto disk or running any
+embedded executable or script. From the ZIP, it checks the SHA-256 of the
+decrypted `.text` and `.rdata`, compares both against the embedded DLL's
+raw PE sections, hashes the mapped 176-byte Reach instruction segment,
+and reads the manager allocation/count/copy/loop values from pinned instruction
+locations. The whole `.text` section must match its pinned hash before
+those instruction offsets are interpreted. It then parses the pinned C++
+manager's descriptor count, table capacity and copied byte count.
+
+Run on a private machine that already has the user's decrypted reference:
+
+```sh
+python3 tools/verify_candidate_binary.py \
+  --candidate-zip "/private/decrypted files.zip" \
+  --source references/OpenSlinky \
+  --json-out build/private_candidate_audit.json
+```
+
+This records only numerical results and hashes, never raw bytes. **Do not
+upload the private ZIP or any other commercial image to GitHub Actions.**
+The CI suite uses synthetic generated PE fixtures for verifier unit tests and
+does not possess the private decrypted archive.
+
+Locally verified on the supplied candidate: section consistency passes,
+the manager shows **66** entries and **528** copied bytes, while the source
+shows **67** entries and **536** copied bytes. The default command reports
+this known discrepancy with exit 0, allowing inspection of its JSON; append
+`--strict` to return exit **2** for non-parity. Exit 1 indicates input or
+verification failure. Nothing in this check proves official provenance,
+completed native injection or real gameplay equivalence.
+
