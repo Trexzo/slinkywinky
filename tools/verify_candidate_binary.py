@@ -116,10 +116,72 @@ def inspect_source(root):
     }
 
 
+
+def mapped_descriptor_table(root):
+    """Convert the pinned C++ .quad table to original-image addresses."""
+    rdata_asm = (root / "src/data/rdata.s").read_text(encoding="utf-8")
+    marker = "ptr_to_aim_assist_module_descriptor:\n"
+    if rdata_asm.count(marker) != 1:
+        raise ValueError("Source descriptor table label is missing or ambiguous")
+    tail = rdata_asm.split(marker, 1)[1]
+    names = []
+    for line in tail.splitlines():
+        if line.startswith(".quad "):
+            names.append(line.split()[1])
+        elif names:
+            break
+    if not names:
+        raise ValueError("C++ descriptor table is empty")
+    symbols = json.loads((root / "docs/global-symbol-map.json").read_text(encoding="utf-8"))
+    lookup = {value: int(key.split("_", 1)[1], 16) for key, value in symbols.items()
+              if re.fullmatch(r"(?:data|rdata)_[0-9a-fA-F]+", key)}
+    unknown = [name for name in names if name not in lookup]
+    if unknown:
+        raise ValueError(f"Descriptor pointers cannot be resolved in the original-address map: {unknown}")
+    return [(name, 0x180000000 + lookup[name]) for name in names]
+
+
+def descriptor_insertion_indices(candidate, proposed):
+    """Find an unambiguous extra C++ table entry without modifying the reference."""
+    if proposed == candidate:
+        return []
+    if len(proposed) != len(candidate) + 1:
+        raise ValueError("C++ descriptor table is not the reference or a single-entry insertion")
+    positions = [i for i in range(len(proposed))
+                 if proposed[:i] + proposed[i + 1:] == candidate]
+    if len(positions) != 1:
+        raise ValueError(f"Expected one uniquely identifiable extra descriptor; candidates={positions}")
+    return positions
+
+
+def compare_descriptor_table(archive, root):
+    with zipfile.ZipFile(archive) as zf:
+        rdata = member(zf, "/slinky2.decrypted/rdata.bin")
+    # Always authenticate the exact candidate section before reading fixed RVAs.
+    if sha(rdata) != RDATA_SHA256:
+        raise ValueError("Descriptor table reference section hash differs")
+    original_table_rva = 0x14F810
+    original_rdata_rva = 0x13E000
+    original = list(struct.unpack_from("<66Q", rdata, original_table_rva - original_rdata_rva))
+    source = mapped_descriptor_table(root)
+    positions = descriptor_insertion_indices(original, [address for _, address in source])
+    return {
+        "candidate_descriptor_table_entries": len(original),
+        "source_descriptor_table_entries": len(source),
+        "candidate_descriptors_matched_in_order": len(original),
+        "source_extra_descriptor_positions": positions,
+        "source_extra_descriptor_names": [source[i][0] for i in positions],
+        "descriptor_table_matches_after_removing_extra": True,
+    }
+
+
+
 def audit(archive, source):
     record = read_reference(archive)
     cpp = inspect_source(source)
+    table = compare_descriptor_table(archive, source)
     record.update(cpp)
+    record.update(table)
     record["registration_delta"] = cpp["source_manager_registered"] - record["candidate_manager_registered"]
     record["descriptor_copy_delta_bytes"] = cpp["source_manager_descriptor_copy_bytes"] - record["candidate_manager_descriptor_copy_bytes"]
     record["source_descriptor_table_consistent"] = (
