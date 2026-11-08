@@ -9,6 +9,8 @@
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <thread>
 
 namespace slinkywinky {
@@ -31,6 +33,12 @@ public:
     std::size_t scroll() const noexcept {return menu_.scroll();}
     std::optional<std::size_t> focused_row() const;
     bool preview_enabled(std::size_t index) const noexcept;
+    // R158: only an active, source-pinned WGL/render owner may inspect the
+    // actual typed native profile retained by the in-game GUI.
+    // Returns a validated version-1 settings document, never gameplay
+    // actions, key states, engine pointers, or user account information.
+    std::optional<std::string> profile_snapshot(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const;
     WglRetainedMenuPreview(const WglRetainedMenuPreview&)=delete;
     WglRetainedMenuPreview& operator=(const WglRetainedMenuPreview&)=delete;
 private:

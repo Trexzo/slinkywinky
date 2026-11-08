@@ -823,6 +823,17 @@ int main() {
         const State r99Before=snapshot();
         REQUIRE(retained.draw(context.gl,context.dc,676,630));
         REQUIRE(retained.active() && retained.drawn_frames()==1);
+        // R158 owner-only retained native profile readback.
+        const auto initialProfile=retained.profile_snapshot(
+            context.gl,context.dc,676,630);
+        REQUIRE(initialProfile && initialProfile->find(
+            "sprint_enabled=false\n")!=std::string::npos);
+        REQUIRE(initialProfile->find(
+            "auto_block_enabled=false\n")!=std::string::npos);
+        REQUIRE(parse_settings(*initialProfile).valid);
+        REQUIRE(!retained.profile_snapshot(context.gl,context.dc,677,630));
+        REQUIRE(!retained.profile_snapshot(nullptr,context.dc,676,630));
+        REQUIRE(!retained.profile_snapshot(context.gl,nullptr,676,630));
         REQUIRE(retained.focused_row() && *retained.focused_row()==0);
         same(r99Before,snapshot());
         REQUIRE(retained.apply(MenuNavAction::NextRow));
@@ -831,6 +842,13 @@ int main() {
         REQUIRE(retained.apply(MenuNavAction::ToggleFocusedPreview));
         REQUIRE(retained.preview_enabled(1));
         REQUIRE(retained.apply(MenuNavAction::IncreaseSetting));
+        const auto modifiedProfile=retained.profile_snapshot(
+            context.gl,context.dc,676,630);
+        REQUIRE(modifiedProfile && parse_settings(*modifiedProfile).valid);
+        const auto nativeModified=parse_settings(*modifiedProfile);
+        REQUIRE(nativeModified.settings.combat.auto_block_enabled);
+        REQUIRE(std::fabs(nativeModified.settings.combat.block_range-
+                          3.35f)<0.001f);
         REQUIRE(!retained.preview_enabled(3));
         REQUIRE(retained.draw(context.gl,context.dc,676,630));
         REQUIRE(retained.drawn_frames()==2 && retained.preview_enabled(1));
@@ -850,18 +868,23 @@ int main() {
         REQUIRE(retained.focused_row() && *retained.focused_row()==17);
         REQUIRE(retained.drawn_frames()==3);
         bool r99ForeignDraw=false,r99ForeignAction=false,r99ForeignClose=false;
+        bool r158ForeignRead=false;
         std::thread r99Foreign([&] {
+            r158ForeignRead=retained.profile_snapshot(
+                context.gl,context.dc,676,630).has_value();
             r99ForeignDraw=retained.draw(context.gl,context.dc,676,630);
             r99ForeignAction=retained.apply(MenuNavAction::NextTab);
             r99ForeignClose=retained.close();
         });
         r99Foreign.join();
         REQUIRE(!r99ForeignDraw && !r99ForeignAction && !r99ForeignClose);
+        REQUIRE(!r158ForeignRead);
         REQUIRE(retained.drawn_frames()==3);
         REQUIRE(!retained.draw(context.gl,context.dc,650,610));
         REQUIRE(retained.drawn_frames()==3);
         REQUIRE(retained.close());
         REQUIRE(!retained.active());
+        REQUIRE(!retained.profile_snapshot(context.gl,context.dc,676,630));
         REQUIRE(!retained.apply(MenuNavAction::NextRow));
         REQUIRE(!retained.close());
         same(r99Before,snapshot());

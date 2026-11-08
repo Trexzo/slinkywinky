@@ -240,6 +240,12 @@ if(SLINKYWINKY_BUILD_JNI)
       -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
       -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_java_smoke.cmake)
+    add_test(NAME r158_java8_retained_profile_receipt COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r158_receipt.cmake)
   endif()
 endif()
 

@@ -722,6 +722,26 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
         return JNI_FALSE;
     }
 }
+// R158: read-only JNI transfer of the exact profile held by the original
+// render-owned retained menu. No movement/attack permission or settings
+// mutation. Rejected unless it is this session's WGL context and viewport.
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadRetainedProfile(
+    JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || context==0 || dc==0 ||
+       width<320 || width>8192 || height<240 || height>8192)
+        return nullptr;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !retained_preview->active())return nullptr;
+    try {
+        const auto data=retained_preview->profile_snapshot(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+            static_cast<unsigned>(width),static_cast<unsigned>(height));
+        return data?env->NewStringUTF(data->c_str()):nullptr;
+    } catch(...) {return nullptr;}
+}
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeRetainedPreviewAction(
     JNIEnv*,jclass,jint action) {

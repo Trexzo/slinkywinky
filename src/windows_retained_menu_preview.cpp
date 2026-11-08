@@ -54,6 +54,22 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
     accepted_actions_++;
     return true;
 }
+std::optional<std::string> WglRetainedMenuPreview::profile_snapshot(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const {
+    if(!active_ || !owner_thread() || drawn_frames_==0 ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context ||
+       wglGetCurrentDC()!=dc)
+        return std::nullopt;
+    const std::string data=serialize_settings(profile_.settings());
+    // This strict roundtrip ensures no invalid settings can cross the
+    // JNI evidence boundary; no runtime receives or executes this data.
+    const auto validated=parse_settings(data);
+    if(!validated.valid || data.empty() || data.size()>4096u)
+        return std::nullopt;
+    return data;
+}
 bool WglRetainedMenuPreview::close() noexcept {
     if(!owner_thread() || !active_)return false;
     // Every frame uses a stack-local WGL host that is already closed.

@@ -24,6 +24,10 @@ public final class RendererWglEvidence {
         long context,long dc,int width,int height);
     private static native boolean nativeRetainedPreviewAction(int action);
     private static native int[] nativeRetainedPreviewSnapshot();
+    // Owner-thread, pinned-WGL, read-only actual native configuration.
+    // Never used to execute or enable any Minecraft gameplay action.
+    private static native String nativeReadRetainedProfile(
+        long context,long dc,int width,int height);
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
     private static native int nativePollOperatorMenu(long context,long dc);
@@ -81,6 +85,22 @@ public final class RendererWglEvidence {
         windowAudit=audit;
         maxSamples=(manual || operator)?2048:
                    ((multi || scripted || retained)?72:8);
+    }
+
+    // R158: narrow receipt schema. Do not parse arbitrary profile strings
+    // into Java module actions or trust an unpinned render callback.
+    private static boolean validProfileReceipt(String receipt,
+                                               boolean autoBlock) {
+        return receipt!=null && receipt.length()>80 &&
+            receipt.length()<=4096 &&
+            receipt.startsWith(
+                "# SlinkyWinky standalone profile; no secrets or account data\nversion=1\n") &&
+            receipt.contains("\nauto_clicker_enabled=") &&
+            receipt.contains("\nsprint_enabled=") &&
+            receipt.contains("\nbacktrack_ms=") &&
+            receipt.contains("\nauto_block_enabled="+
+                (autoBlock?"true":"false")+"\n") &&
+            receipt.endsWith("\n");
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -271,6 +291,13 @@ public final class RendererWglEvidence {
                    acceptedOperatorEvents>15 || rejectedOperatorEvents>15) {
                     poisoned=true;invalid++;return;
                 }
+                if(action!=0 || overlayFrames==1) {
+                    final String receipt=nativeReadRetainedProfile(
+                        context,dc,width,height);
+                    if(!validProfileReceipt(receipt,state[5]==1)) {
+                        poisoned=true;invalid++;return;
+                    }
+                }
                 lastOperatorTab=state[1];
                 lastOperatorFocus=state[2];
                 lastOperatorPreview=state[5];
@@ -298,6 +325,13 @@ public final class RendererWglEvidence {
                    state[2]!=(overlayFrames>=4?17:(overlayFrames>=1?1:0)) ||
                    state[5]!=(overlayFrames>=3?1:0)) {
                     poisoned=true;overlayFailed=true;invalid++;return;
+                }
+                if(nextAction>=0 || overlayFrames==5) {
+                    final String receipt=nativeReadRetainedProfile(
+                        context,dc,width,height);
+                    if(!validProfileReceipt(receipt,state[5]==1)) {
+                        poisoned=true;invalid++;return;
+                    }
                 }
                 if(overlayFrames>=5)retainedVerified=true;
                 return;
