@@ -4,6 +4,7 @@
 // NO JNI, Java hooks, input injection, game packets, or live player state.
 #include "slinkywinky/core.hpp"
 #include "slinkywinky/reference_event_model.hpp"
+#include "slinkywinky/no_jump_delay_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -19,6 +20,7 @@ namespace slinkywinky::reference_compat {
 // Candidate slot +0xC8 is event 8: reach query.
 // This mapping is a reference hypothesis, not commercial parity evidence.
 inline constexpr unsigned kReachQueryEvent = 8;
+inline constexpr unsigned kPlayerUpdateEvent = 17;
 
 struct ReachQueryPayload {
     slinkywinky::ReachInput input{};
@@ -27,11 +29,18 @@ struct ReachQueryPayload {
     unsigned executions = 0;
 };
 
+struct JumpDelayTickPayload {
+    JumpDelayInput input{};
+    std::optional<int> proposed_jump_ticks{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
     bool player_present = false;
     std::optional<ReachQueryPayload> reach{};
+    std::optional<JumpDelayTickPayload> jump_delay{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -106,6 +115,32 @@ public:
                     });
     }
 
+    // Second independent offline decision implementation. Native candidate:
+    // "No Jump Delay" is a movement module subscribed to event 17.
+    bool bind_no_jump_delay(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "No Jump Delay" ||
+            definitions_[id].category != 1)
+            return false;
+        return bind(id, kPlayerUpdateEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.jump_delay) return;
+                        auto& tick = *frame.jump_delay;
+                        ++tick.executions;
+                        const JumpDelayDecision decision =
+                            no_jump_delay_.evaluate(tick.input);
+                        if (decision.override_jump_ticks)
+                            tick.proposed_jump_ticks = decision.proposed_jump_ticks;
+                    });
+    }
+
+    bool bind_no_jump_delay_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "No Jump Delay")
+                return bind_no_jump_delay(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -146,10 +181,16 @@ public:
         // Fail closed: only the recognized typed payload for event 8 is
         // allowed; other event slots may be observed with an empty payload.
         if (frame.reach && frame.event != kReachQueryEvent) return false;
+        if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
+        if (frame.reach && frame.jump_delay) return false;
         frame.executed_modules.clear();
         if (frame.reach) {
             frame.reach->proposed_distance.reset();
             frame.reach->executions = 0;
+        }
+        if (frame.jump_delay) {
+            frame.jump_delay->proposed_jump_ticks.reset();
+            frame.jump_delay->executions = 0;
         }
         struct ClearFrame {
             ModuleExecutionBridge& self;
@@ -187,6 +228,7 @@ public:
 private:
     EventReplay replay_;
     slinkywinky::ReachController controller_;
+    NoJumpDelayController no_jump_delay_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
