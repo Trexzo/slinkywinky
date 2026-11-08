@@ -90,6 +90,13 @@ try:
         if set(audit.namelist()).intersection(r165_fixture_classes):
             raise AssertionError("R165 coordinated input fixture leaked into audit package")
     print("PASS: R165 synthetic two-queue session excluded from both runtime JARs")
+    r166_fixture = "dev/slinkywinky/attach/R166RetainedPointerJniSmoke.class"
+    if r166_fixture in entries:
+        raise AssertionError("R166 disposable JNI test Java class leaked into agent")
+    with zipfile.ZipFile(render_audit_jar, "r") as audit:
+        if r166_fixture in set(audit.namelist()):
+            raise AssertionError("R166 disposable JNI class leaked into audit JAR")
+    print("PASS: R166 JNI test class excluded from both runtime JARs")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],

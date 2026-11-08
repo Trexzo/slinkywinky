@@ -17,6 +17,7 @@ FORBIDDEN = (
     # original-game ownership, foreground or bytecode-restore receipts.
     re.compile(r"\bR164OfflineModalGate\b"),
     re.compile(r"\bR165ModalInputSession\b"),
+    re.compile(r"\bR166RetainedPointerJniSmoke\b"),
 )
 
 

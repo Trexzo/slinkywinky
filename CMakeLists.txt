@@ -305,6 +305,29 @@ if(WIN32)
       slinkywinky_menu_gl11 opengl32 user32 gdi32)
     add_test(NAME native_retained_menu_source_mouse_transactions
       COMMAND slinkywinky_retained_pointer_tests)
+      # R166: isolated Java8 JNI -> actual retained C++ WGL pointer
+      # transaction. Separate DLL; never link it to production JNI/agent.
+      if(SLINKYWINKY_BUILD_JNI)
+        add_library(slinkywinky_r166_pointer_test_jni SHARED
+          tests/r166_retained_pointer_jni.cpp)
+        target_include_directories(slinkywinky_r166_pointer_test_jni
+          PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${JNI_INCLUDE_DIRS})
+        target_link_libraries(slinkywinky_r166_pointer_test_jni PRIVATE
+          slinkywinky_menu_gl11 opengl32 gdi32 user32)
+        set_target_properties(slinkywinky_r166_pointer_test_jni PROPERTIES
+          RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/r166_disposable_only")
+        add_test(NAME r166_java8_jni_to_retained_wgl_pointer_profile
+          COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+            -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+            -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+            -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+            -DLIBRARY_PATH=$<TARGET_FILE:slinkywinky_r166_pointer_test_jni>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r166_pointer_jni.cmake)
+        set_tests_properties(
+          r166_java8_jni_to_retained_wgl_pointer_profile
+          PROPERTIES TIMEOUT 40)
+      endif()
     set_tests_properties(native_retained_menu_source_mouse_transactions
       PROPERTIES TIMEOUT 30)
     set_tests_properties(isolated_wgl_menu_state_restore PROPERTIES TIMEOUT 30)
