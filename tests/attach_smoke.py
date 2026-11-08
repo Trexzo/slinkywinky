@@ -118,6 +118,16 @@ try:
         if r169_fixture in set(audit.namelist()):
             raise AssertionError("R169 popup pointer smoke leaked into audit JAR")
     print("PASS: R169 source popup JNI smoke excluded from runtime JARs")
+    r171_source_classes = {
+        "dev/slinkywinky/attach/R171VanillaJarInputSurface.class",
+        "dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.class",
+    }
+    with zipfile.ZipFile(render_audit_jar, "r") as inspected:
+        if not r171_source_classes.issubset(set(inspected.namelist())):
+            raise AssertionError("R171 read-only game-wide input audit absent")
+    if entries.intersection(r171_source_classes):
+        raise AssertionError("R171 test-only global input audit leaked into agent")
+    print("PASS: R171 game-wide input source audit only in offline audit JAR")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],

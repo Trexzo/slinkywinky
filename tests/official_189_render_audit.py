@@ -245,6 +245,27 @@ def main():
             raise RuntimeError("R164 original Minecraft input-cut probe failed: " +
                                cut.stdout[-1700:] + cut.stderr[-1700:])
         print(cut.stdout.rstrip(), flush=True)
+        # R171: independently scan *every* exact original class for LWJGL2
+        # and keybind consumers OUTSIDE ave.s()V. Source-only; no Attach.
+        global_input = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R171VanillaJarInputSurfaceSmoke",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=70)
+        if (global_input.returncode != 0 or
+                "R171_PINNED_VANILLA_189_GLOBAL_2507_CLASSES_PASS"
+                not in global_input.stdout or
+                "R171_PINNED_VANILLA_189_GLOBAL_SURFACE_SHA256 "
+                "b029538b90e0e23947c9224779028679f0faced032f5a469b07f69b8859dd11e"
+                not in global_input.stdout or
+                "R171_ORIGINAL_RENDERER_EXTERNAL_INPUT_MUTATION_DETECTED"
+                not in global_input.stdout or
+                "R171_AVE_METHOD_STATIC_AUDIT_UNCHANGED_BUT_UNSAFE"
+                not in global_input.stdout):
+            raise RuntimeError("R171 original Minecraft global input audit failed: " +
+                               global_input.stdout[-1900:] +
+                               global_input.stderr[-1900:])
+        print(global_input.stdout.rstrip(), flush=True)
 
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.
