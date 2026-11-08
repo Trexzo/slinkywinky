@@ -99,6 +99,24 @@ static ExecutionFrame no_slow_frame(int item_id, bool using_item = true,
     return frame;
 }
 
+static ExecutionFrame no_hit_delay_frame(unsigned mode = 0, bool target_present = false,
+                                              int target_type = 0, bool using_item = false) {
+    ExecutionFrame frame;
+    frame.event = kNoHitDelayEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    NoHitDelayTickPayload payload;
+    payload.input.attack_click = true;
+    payload.input.jvm_ready = true;
+    payload.input.left_click_counter = 10;
+    payload.input.mode = mode;
+    payload.input.target_present = target_present;
+    payload.input.target_type_ordinal = target_type;
+    payload.input.player_using_item = using_item;
+    frame.no_hit_delay = payload;
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -177,10 +195,18 @@ int main(int argc, char** argv) {
         if (has_no_slow)
             require(bridge.bind_no_slow_from_catalog(),
                     "No Slow exists but native event 21/priority 200/movement binding failed");
+        std::size_t no_hit_delay_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "No Hit Delay") no_hit_delay_id = i;
+        const bool has_no_hit_delay = no_hit_delay_id < manifest.modules.size();
+        if (has_no_hit_delay)
+            require(bridge.bind_no_hit_delay_from_catalog(),
+                    "No Hit Delay exists but event 14/priority 0/utility binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
-                                               (has_no_slow ? 1u : 0u);
+                                               (has_no_slow ? 1u : 0u) +
+                                               (has_no_hit_delay ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -199,9 +225,12 @@ int main(int argc, char** argv) {
                 "Movement callbacks not routed through event 16");
         require(c.implemented_per_event[kNoSlowEvent] == (has_no_slow ? 1u : 0u),
                 "No Slow callback not routed through event 21");
+        require(c.implemented_per_event[kNoHitDelayEvent] == (has_no_hit_delay ? 1u : 0u),
+                "No Hit Delay callback not routed through event 14");
         for (unsigned event = 0; event < kEventSlots; ++event)
             if (event != kReachQueryEvent && event != kPlayerUpdateEvent &&
-                event != kMovementTickEvent && event != kNoSlowEvent)
+                event != kMovementTickEvent && event != kNoSlowEvent &&
+                event != kNoHitDelayEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -375,14 +404,51 @@ int main(int argc, char** argv) {
                     "disabled No Slow still executed");
         }
 
+        if (has_no_hit_delay) {
+            require(bridge.request(no_hit_delay_id, true), "No Hit Delay enable rejected");
+            require(!bridge.apply(false, false), "No Hit Delay bypassed world gate");
+            require(bridge.apply(true, true), "No Hit Delay enable not applied");
+            auto hit = no_hit_delay_frame();
+            require(bridge.dispatch(hit) && hit.no_hit_delay &&
+                    hit.no_hit_delay->executions == 1 &&
+                    hit.no_hit_delay->decision.clear_click_counter &&
+                    !hit.no_hit_delay->decision.swing_arm,
+                    "No Hit Delay mode 0 did not clear counter");
+            require(hit.executed_modules.size() == 1 &&
+                    hit.executed_modules.front() == no_hit_delay_id,
+                    "unimplemented event 14 module executed");
+            hit = no_hit_delay_frame(1, false);
+            require(bridge.dispatch(hit) && hit.no_hit_delay &&
+                    !hit.no_hit_delay->decision.clear_click_counter &&
+                    hit.no_hit_delay->decision.swing_arm,
+                    "No Hit Delay selective-miss did not propose swing");
+            hit = no_hit_delay_frame(1, false, 0, true);
+            require(bridge.dispatch(hit) && hit.no_hit_delay &&
+                    !hit.no_hit_delay->decision.clear_click_counter &&
+                    !hit.no_hit_delay->decision.swing_arm,
+                    "No Hit Delay swung while using item");
+            hit = no_hit_delay_frame(1, true, 1);
+            require(bridge.dispatch(hit) && hit.no_hit_delay &&
+                    hit.no_hit_delay->decision.clear_click_counter,
+                    "No Hit Delay selective-hit did not clear counter");
+            require(bridge.request(no_hit_delay_id, false), "No Hit Delay disable rejected");
+            require(bridge.apply(true, true), "No Hit Delay disable not applied");
+            hit = no_hit_delay_frame();
+            require(bridge.dispatch(hit) && hit.no_hit_delay &&
+                    hit.no_hit_delay->executions == 0 &&
+                    hit.executed_modules.empty(),
+                    "disabled No Hit Delay still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
-                    has_no_slow && c.registered_modules == 66 &&
+                    has_no_slow && has_no_hit_delay &&
+                    c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 5 &&
-                    c.executable_callback_bindings == 5 &&
-                    c.unimplemented_callback_subscriptions == 166,
+                    c.modules_with_executable_bindings == 6 &&
+                    c.executable_callback_bindings == 6 &&
+                    c.unimplemented_callback_subscriptions == 165,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -398,7 +464,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R182 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R183 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }

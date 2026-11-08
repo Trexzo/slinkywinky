@@ -8,6 +8,7 @@
 #include "slinkywinky/null_move_controller.hpp"
 #include "slinkywinky/instant_stop_controller.hpp"
 #include "slinkywinky/no_slow_controller.hpp"
+#include "slinkywinky/no_hit_delay_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -57,6 +58,12 @@ struct NoSlowTickPayload {
     unsigned executions = 0;
 };
 
+struct NoHitDelayTickPayload {
+    NoHitDelayInput input{};
+    NoHitDelayDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -66,6 +73,7 @@ struct ExecutionFrame {
     std::optional<NullMoveTickPayload> null_move{};
     std::optional<InstantStopTickPayload> instant_stop{};
     std::optional<NoSlowTickPayload> no_slow{};
+    std::optional<NoHitDelayTickPayload> no_hit_delay{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -252,6 +260,35 @@ public:
         return false;
     }
 
+    // Original reference: utility "No Hit Delay", event 14, priority 0.
+    // The callback proposes a zero left-click counter or arm swing only;
+    // no Minecraft field write or input action is possible here.
+    bool bind_no_hit_delay(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "No Hit Delay" ||
+            definitions_[id].category != 4)
+            return false;
+        bool correct_subscription = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kNoHitDelayEvent && sub.priority == 0)
+                correct_subscription = true;
+        if (!correct_subscription) return false;
+        return bind(id, kNoHitDelayEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.no_hit_delay) return;
+                        auto& payload = *frame.no_hit_delay;
+                        ++payload.executions;
+                        payload.decision = no_hit_delay_.evaluate(payload.input);
+                    });
+    }
+
+    bool bind_no_hit_delay_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "No Hit Delay")
+                return bind_no_hit_delay(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -296,6 +333,7 @@ public:
         if (frame.null_move && frame.event != kMovementTickEvent) return false;
         if (frame.instant_stop && frame.event != kMovementTickEvent) return false;
         if (frame.no_slow && frame.event != kNoSlowEvent) return false;
+        if (frame.no_hit_delay && frame.event != kNoHitDelayEvent) return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -304,7 +342,8 @@ public:
             static_cast<unsigned>(frame.jump_delay.has_value()) +
             static_cast<unsigned>(frame.null_move.has_value()) +
             static_cast<unsigned>(frame.instant_stop.has_value()) +
-            static_cast<unsigned>(frame.no_slow.has_value());
+            static_cast<unsigned>(frame.no_slow.has_value()) +
+            static_cast<unsigned>(frame.no_hit_delay.has_value());
         if (typed_count > 1 &&
             !(typed_count == 2 && frame.event == kMovementTickEvent &&
               frame.null_move && frame.instant_stop)) return false;
@@ -336,6 +375,10 @@ public:
         if (frame.no_slow) {
             frame.no_slow->decision = {};
             frame.no_slow->executions = 0;
+        }
+        if (frame.no_hit_delay) {
+            frame.no_hit_delay->decision = {};
+            frame.no_hit_delay->executions = 0;
         }
         struct ClearFrame {
             ModuleExecutionBridge& self;
@@ -381,6 +424,7 @@ private:
     NullMoveController null_move_;
     InstantStopController instant_stop_;
     NoSlowController no_slow_;
+    NoHitDelayController no_hit_delay_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

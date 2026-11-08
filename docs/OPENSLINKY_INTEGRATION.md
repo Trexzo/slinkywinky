@@ -726,3 +726,35 @@ and event-21 enable/disable and shutdown. It is run as part of the
 isolated Windows/Ubuntu Debug/Release reference audit. The user's private
 original-derived TSV, reference binary and upstream implementation are
 never committed. PR #2 remains draft and separate from PR #1.
+
+## R183: No Hit Delay — sixth independent offline module decision
+
+The original private candidate descriptor identifies **No Hit Delay**
+at index **42**, category **utility (4)**, event **14** and priority **0**.
+The corresponding reference callback is a pre-attack check. When the
+attack click is active, JVM handle ready, and left-click cooldown
+counter is greater than zero, its normal mode proposes clearing that
+counter to zero. In selective mode (1), a missing target or a target
+whose type ordinal is 0 produces an arm-swing-only proposal instead.
+If the player is already using an item, even that swing is suppressed.
+Target hits still propose clearing the cooldown in selective mode.
+
+These decisions are independently implemented in the pure
+`no_hit_delay_controller.hpp`. It has no JVM access, gameplay event
+injection, attack modification, counter writes, or packet effects.
+Typed `NoHitDelayTickPayload` is only accepted on event 14, requires
+the registered module's utility category and native priority 0,
+obeys world/player and module state gates, and is cleared on teardown.
+
+R183's synthetic C++ test covers the normal/conditional modes, misses,
+target hits, item-use swing suppression, click-counter guards, invalid
+typed event, wrong category/event/priority, enable/disable, and shutdown.
+The complete private-catalog metadata audit now accounts for **six**
+independent first-party offline callback bindings out of **171**
+recovered native subscriptions, leaving **165 without implementations**.
+Windows and Ubuntu Debug/Release CTest runs only invented synthetic
+metadata; the decrypted candidate and extracted binary assets stay local.
+
+Native execution, module algorithm parity and in-game combat behavior
+are **not yet established**. This integration PR remains draft and
+does not modify the other chat's live Minecraft runtime branch.

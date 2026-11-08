@@ -142,4 +142,27 @@ if(BUILD_TESTING)
     r182_reject_wrong_no_slow_category
     r182_reject_wrong_no_slow_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R183: two-mode No Hit Delay attack callback and six-policy catalog.
+  add_executable(slinkywinky_no_hit_delay_bridge_test
+    tests/test_no_hit_delay_bridge.cpp)
+  target_link_libraries(slinkywinky_no_hit_delay_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r183_no_hit_delay_bridge COMMAND slinkywinky_no_hit_delay_bridge_test)
+  add_test(NAME r183_six_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/eight_modules_with_six_decisions.tsv")
+  add_test(NAME r183_reject_wrong_no_hit_delay_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_hit_delay_event.tsv")
+  add_test(NAME r183_reject_wrong_no_hit_delay_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_hit_delay_category.tsv")
+  add_test(NAME r183_reject_wrong_no_hit_delay_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_hit_delay_priority.tsv")
+  set_tests_properties(r183_reject_wrong_no_hit_delay_event
+    r183_reject_wrong_no_hit_delay_category
+    r183_reject_wrong_no_hit_delay_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()
