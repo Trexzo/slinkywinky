@@ -10,6 +10,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 FORBIDDEN = (
     re.compile(r"OriginalKeyboardBridgeWeaver\s*\.\s*weavePinnedOriginal\s*\("),
     re.compile(r"KeyboardQueueOwner\s*\.\s*(?:arm|bind)\s*\("),
+    # R160 mouse queue is dormant. A callsite needs independently verified
+    # full-input suppression and original-bytecode restoration.
+    re.compile(r"MouseQueueOwner\s*\.\s*(?:arm|bind|next)\s*\("),
 )
 
 
