@@ -9,6 +9,8 @@ on:
       - 'references/OpenSlinky'
       - 'docs/OPENSLINKY_INTEGRATION.md'
       - 'tools/audit_openslinky_reference.py'
+      - 'tools/verify_candidate_binary.py'
+      - 'tests/test_candidate_binary_verifier.py'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -20,6 +22,8 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
+      - name: Candidate-verifier unit tests (synthetic PE only)
+        run: python3 -m unittest discover -s tests -p 'test_candidate_binary_verifier.py' -v
       - name: Static inventory (never run untrusted native code)
         run: python3 tools/audit_openslinky_reference.py --json-out reference_audit.json
       - uses: actions/upload-artifact@v4
