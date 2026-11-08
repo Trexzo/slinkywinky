@@ -455,6 +455,12 @@ public final class RendererFrameDiagnostic {
                                     evidence.observedOriginalGuiPresent()+
                                     " closed="+evidence.observedOriginalGuiAbsent()+
                                     " refused="+evidence.refusedOriginalGuiObservations());
+                            if(evidence.inputRiskAuditVerified())
+                                System.out.println(
+                                    "R174_ORIGINAL_INPUT_OVERLAP_RISK_AUDIT_PASS candidates="+
+                                    evidence.possibleVanillaDoubleDispatchPresses()+
+                                    " cancelled="+evidence.cancelledInputRiskCandidates()+
+                                    " native_click_delivery=disabled");
                         }
                         else
                             System.err.println("R101_GAME_WINDOW_IDENTITY_UNVERIFIED");

@@ -64,6 +64,10 @@ public final class RendererWglEvidence {
     // R173: source-pinned read-only reflection of ave.A().m from the
     // original game's admitted render thread; never sends GUI input.
     private OriginalGuiScreenProbe guiScreenProbe;
+    // R174: every exact original-game window audit frame is classified
+    // without delivering a single input event to the retained native GUI.
+    private final OriginalPointerArbitrationAudit inputRisk=
+        new OriginalPointerArbitrationAudit();
     private int auditGuiPresent,auditGuiAbsent,auditGuiRefused;
     private final int maxSamples;
     private boolean overlayDrawn;
@@ -261,12 +265,13 @@ public final class RendererWglEvidence {
                 // The window is identified from THIS original renderer's
                 // WGL HDC; no global hook, focus change or gameplay input.
                 final int identity=nativeAuditRenderWindow(context,dc,width,height);
+                int screen=OriginalGuiScreenProbe.REFUSED;
                 if(identity>=0 && identity<=1) {
-                    final int observed=guiScreenProbe==null?
+                    screen=guiScreenProbe==null?
                         OriginalGuiScreenProbe.REFUSED:guiScreenProbe.observe();
-                    if(observed==OriginalGuiScreenProbe.SCREEN_PRESENT)
+                    if(screen==OriginalGuiScreenProbe.SCREEN_PRESENT)
                         auditGuiPresent++;
-                    else if(observed==OriginalGuiScreenProbe.NO_SCREEN)
+                    else if(screen==OriginalGuiScreenProbe.NO_SCREEN)
                         auditGuiAbsent++;
                     else {
                         auditGuiRefused++;poisoned=true;invalid++;return;
@@ -285,8 +290,20 @@ public final class RendererWglEvidence {
                     if(point[2]==1)auditPointerInside++;
                     else auditPointerOutside++;
                     if(point[3]!=0)auditPointerPressed++;
-                } else if(identity==0)auditBackground++;
-                else {auditRefused++;poisoned=true;invalid++;}
+                    if(inputRisk.observe(screen,true,point,width,height)==
+                            OriginalPointerArbitrationAudit.REFUSED){
+                        auditPointerRefused++;poisoned=true;invalid++;return;
+                    }
+                } else if(identity==0) {
+                    auditBackground++;
+                    // No physical pointer is observed while backgrounded.
+                    // This cancels a held audit-only candidate until a
+                    // new all-buttons-up foreground observation.
+                    if(inputRisk.observe(screen,false,null,width,height)==
+                            OriginalPointerArbitrationAudit.REFUSED){
+                        auditPointerRefused++;poisoned=true;invalid++;return;
+                    }
+                } else {auditRefused++;poisoned=true;invalid++;}
                 return;
             }
             if(manualVisibility) {
@@ -445,6 +462,7 @@ public final class RendererWglEvidence {
                auditPointerRefused==0 &&
                auditPointerInside+auditPointerOutside==auditForeground &&
                auditGuiPresent+auditGuiAbsent==8 && auditGuiRefused==0 &&
+               inputRisk.validSummary(8) &&
                !poisoned && fullyStable();
     }
     // No raw coordinates or button codes enter logs or public GUI state.
@@ -458,6 +476,18 @@ public final class RendererWglEvidence {
     public synchronized boolean originalGuiReadOnlyVerified(){
         return windowIdentityVerified() &&
                auditGuiPresent+auditGuiAbsent==8 && auditGuiRefused==0;
+    }
+    // A candidate indicates possible vanilla double dispatch, not a click
+    // permission. There is deliberately NO JNI pointer action here.
+    public synchronized int possibleVanillaDoubleDispatchPresses(){
+        return windowAudit?inputRisk.possibleVanillaOverlapPresses():0;
+    }
+    public synchronized int cancelledInputRiskCandidates(){
+        return windowAudit?inputRisk.cancelledGestures():0;
+    }
+    public synchronized boolean inputRiskAuditVerified(){
+        return windowIdentityVerified() && inputRisk.validSummary(8) &&
+               !inputRisk.mayDeliverMenuClick();
     }
     public synchronized int observedOriginalGuiPresent(){
         return windowAudit?auditGuiPresent:0;

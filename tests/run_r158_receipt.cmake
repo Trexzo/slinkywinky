@@ -3,6 +3,7 @@ execute_process(COMMAND "${JAVA_COMPILER}" -source 8 -target 8
   -d "${BUILD_ROOT}/r158_profile_receipt_classes"
   "${PROJECT_ROOT}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
   "${PROJECT_ROOT}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
+  "${PROJECT_ROOT}/loader/java/dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/attach/R158ProfileReceiptSmoke.java"
   RESULT_VARIABLE compiled)
 if(NOT compiled EQUAL 0)

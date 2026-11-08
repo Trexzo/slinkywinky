@@ -450,6 +450,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/KeyboardQueueOwner.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/MouseQueueOwner.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/KeyboardPageRelay.java"
@@ -559,6 +560,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/KeyboardQueueOwner.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/MouseQueueOwner.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/KeyboardPageRelay.java"
@@ -733,6 +735,16 @@ if(SLINKYWINKY_BUILD_ATTACH)
             -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r173_gui_presence.cmake")
         set_tests_properties(r173_java8_original_gui_presence_observer
+          PROPERTIES TIMEOUT 30)
+        add_test(NAME r174_java8_original_input_overlap_risk
+          COMMAND "${CMAKE_COMMAND}"
+            -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+            -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+            -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+            -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+            -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r174_input_overlap.cmake")
+        set_tests_properties(r174_java8_original_input_overlap_risk
           PROPERTIES TIMEOUT 30)
       add_test(NAME native_render_fixture_attach
         COMMAND "${Python3_EXECUTABLE}" -u

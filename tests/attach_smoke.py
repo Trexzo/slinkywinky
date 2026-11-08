@@ -147,6 +147,14 @@ try:
     if "ave.class" in entries or "axu.class" in entries:
         raise AssertionError("R173 fake test-only original class names leaked")
     print("PASS: R173 runtime read-only game GUI probe isolated from audit/test fixtures")
+    r174_audit="dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.class"
+    r174_fixture="dev/slinkywinky/instrument/R174OriginalInputOverlapSmoke.class"
+    if r174_audit not in entries or r174_fixture in entries:
+        raise AssertionError("R174 read-only input risk classifier package boundary failed")
+    with zipfile.ZipFile(render_audit_jar,"r") as audit:
+        if r174_fixture in set(audit.namelist()):
+            raise AssertionError("R174 runtime-only audit smoke leaked to offline source")
+    print("PASS: R174 risk classifier in agent; test-only fixture excluded")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],
