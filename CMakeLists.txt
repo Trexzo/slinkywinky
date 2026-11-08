@@ -278,6 +278,14 @@ if(WIN32)
       target_compile_definitions(slinkywinky_gl11_state_tests PRIVATE SW_R91_TEST_JNI_OVERLAY=1)
     endif()
     add_test(NAME isolated_wgl_menu_state_restore COMMAND slinkywinky_gl11_state_tests)
+    add_executable(slinkywinky_retained_pointer_tests
+      tests/test_windows_retained_pointer.cpp)
+    target_link_libraries(slinkywinky_retained_pointer_tests PRIVATE
+      slinkywinky_menu_gl11 opengl32 user32 gdi32)
+    add_test(NAME native_retained_menu_source_mouse_transactions
+      COMMAND slinkywinky_retained_pointer_tests)
+    set_tests_properties(native_retained_menu_source_mouse_transactions
+      PROPERTIES TIMEOUT 30)
     set_tests_properties(isolated_wgl_menu_state_restore PROPERTIES TIMEOUT 30)
   endif()
   add_library(slinkywinky_hud_ipc STATIC src/windows_hud_ipc.cpp)

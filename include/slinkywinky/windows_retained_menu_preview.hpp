@@ -6,6 +6,8 @@
 #include <windows.h>
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_mouse_gesture.hpp"
+#include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -14,15 +16,29 @@
 #include <thread>
 
 namespace slinkywinky {
-// R99: in-game-render-thread-capable, but INERT menu-state retention.
-// No keyboard hook, mouse handler, JNI calls, gameplay actions, packets or
-// source-code patching. It retains a first-party model across native frames,
-// unlike R91-R94's fresh per-frame diagnostic menu.
+// R99: in-game-render-thread-capable, inert menu-state retention.
+// R159: the opt-in pointer transaction is a first-party MODEL only;
+// there is still NO original Minecraft mouse hook, game input consumption,
+// movement, combat, packets, or source-class modification. The model is
+// retained across native WGL frames instead of reset each draw.
+// First-party pointer events may only be delivered by a separately
+// proven, exclusive GUI-input owner. No live original-game hook invokes
+// this interface. Cancellation is always allowed for an active owner.
+enum class RetainedPointerPhase : unsigned char {
+    Down, Move, Up, Cancel
+};
 class WglRetainedMenuPreview final {
 public:
     WglRetainedMenuPreview();
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
     bool apply(MenuNavAction action);
+    // R159: admitted WGL owner + exact viewport, physical client pixels,
+    // monotonic timestamp, explicitly attested event exclusivity and
+    // foreground. This is NOT yet connected to LWJGL/Windows game input.
+    bool pointer(RetainedPointerPhase phase,HGLRC context,HDC dc,
+                 unsigned width,unsigned height,int x,int y,
+                 std::uint64_t monotonic_ms,bool exclusive_dispatch_attested,
+                 bool foreground_verified);
     bool close() noexcept;
     bool owner_thread() const noexcept;
     bool active() const noexcept {return active_;}
@@ -45,6 +61,8 @@ private:
     MenuState menu_;
     MenuProfileBridge profile_;
     MenuNavigation navigation_;
+    MenuMouseGesture pointer_gesture_;
+    MenuRenderSession pointer_frames_;
     std::thread::id owner_;
     HGLRC context_=nullptr;
     HDC dc_=nullptr;

@@ -1,0 +1,9 @@
+# R159 — retained WGL menu pointer transaction and native settings
+
+A genuine WGL-retained native GUI was already rendered through the admitted original-owner callback, but its only supported real host inputs were externally acknowledged keyboard-like menu commands. R159 adds a first-party C++ pointer receiver for a separately attested exclusive GUI-input owner. It is not yet called by an original Minecraft keyboard/mouse interception site.
+
+The receiver pins HGLRC, HDC, viewport, thread, input-exclusive acknowledgement and foreground validity. A separate immutable MenuRenderSession produces exact catalog-indexed hit-test snapshots. The existing MenuMouseGesture controls same-target down/up, numeric pointer capture, stale layout rejection, double-click suppression and cancellation on lost focus or ownership. Any navigation command invalidates a held mouse gesture.
+
+On a source-admitted release it can select a tab, focus or expand a row, change an implemented native module toggle, toggle a source-matched Boolean setting, or commit a validated source slider into the existing ClientSettings bridge. Every unsupported hit and unmapped gameplay module remains refused or limited to local UI preview. Pointer actions never emit Minecraft keys, packets, movement or attack commands, and no production hook invokes this receiver.
+
+An isolated original-WGL-compatible disposable-window fixture checks wrong viewport/context, missing input exclusivity, lost foreground, owner-thread refusal, cancel, drag-out, double-click suppression, native configuration receipt and stable GL state. It is an initial functional native interaction layer, not original-client click-through certification; Minecraft input interception still requires independent exclusive event dispatch and reversible vanilla input restoration.
