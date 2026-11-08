@@ -11,6 +11,10 @@ import java.io.File;
 public final class RendererWglEvidence {
     private static native long[] nativeCurrentWglSnapshot();
     private static native int nativeAuditRenderWindow(long context,long dc,int width,int height);
+    // R172: passive physical cursor evidence only in original-only window
+    // audit; NEVER forwarded to native retained GUI or original game keys.
+    private static native int[] nativeObservePhysicalPointer(
+        long context,long dc,int width,int height);
     private static native boolean nativeDrawReadOnlyOverlay(
         long context,long dc,int width,int height);
     private static native boolean nativeDrawCompactOverlay(
@@ -55,6 +59,8 @@ public final class RendererWglEvidence {
     private int auditForeground;
     private int auditBackground;
     private int auditRefused;
+    private int auditPointerInside,auditPointerOutside,auditPointerPressed;
+    private int auditPointerRefused;
     private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
@@ -101,6 +107,20 @@ public final class RendererWglEvidence {
             receipt.contains("\nauto_block_enabled="+
                 (autoBlock?"true":"false")+"\n") &&
             receipt.endsWith("\n");
+    }
+
+    // R172: Java8 pure format validator for read-only OS evidence.
+    // A true result MUST NOT authorize click capture or GUI dispatch.
+    static boolean validOriginalPointerReceipt(int[] point,int width,int height) {
+        if(point==null || point.length!=4 ||
+           width<320 || width>8192 || height<240 || height>8192 ||
+           point[3]<0 || point[3]>31 || (point[2]!=0 && point[2]!=1) ||
+           point[0]<-32768 || point[0]>32767 ||
+           point[1]<-32768 || point[1]>32767)
+            return false;
+        final boolean inside=point[0]>=0 && point[1]>=0 &&
+            point[0]<width && point[1]<height;
+        return (point[2]==1)==inside;
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -226,8 +246,20 @@ public final class RendererWglEvidence {
                 // The window is identified from THIS original renderer's
                 // WGL HDC; no global hook, focus change or gameplay input.
                 final int identity=nativeAuditRenderWindow(context,dc,width,height);
-                if(identity==1)auditForeground++;
-                else if(identity==0)auditBackground++;
+                if(identity==1) {
+                    auditForeground++;
+                    // Read ONLY the foreground original HWND and actual WGL
+                    // render owner. Do not synthesize mouse down/up, hook
+                    // LWJGL, or pass these coordinates to a menu dispatcher.
+                    final int[] point=nativeObservePhysicalPointer(
+                        context,dc,width,height);
+                    if(!validOriginalPointerReceipt(point,width,height)) {
+                        auditPointerRefused++;poisoned=true;invalid++;return;
+                    }
+                    if(point[2]==1)auditPointerInside++;
+                    else auditPointerOutside++;
+                    if(point[3]!=0)auditPointerPressed++;
+                } else if(identity==0)auditBackground++;
                 else {auditRefused++;poisoned=true;invalid++;}
                 return;
             }
@@ -384,7 +416,17 @@ public final class RendererWglEvidence {
     public synchronized boolean windowIdentityVerified(){
         return windowAudit && attempts==8 && current==8 &&
                auditForeground+auditBackground==8 && auditRefused==0 &&
+               auditPointerRefused==0 &&
+               auditPointerInside+auditPointerOutside==auditForeground &&
                !poisoned && fullyStable();
+    }
+    // No raw coordinates or button codes enter logs or public GUI state.
+    // These counters cannot establish exclusive Minecraft input ownership.
+    public synchronized int observedForegroundPointerSamples(){
+        return windowAudit?auditPointerInside+auditPointerOutside:0;
+    }
+    public synchronized int refusedForegroundPointerSamples(){
+        return windowAudit?auditPointerRefused:0;
     }
     public synchronized boolean operatorStopped(){return operatorMenu && operatorStop;}
     public synchronized boolean operatorFailed(){return operatorMenu &&

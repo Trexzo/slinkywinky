@@ -707,6 +707,18 @@ if(SLINKYWINKY_BUILD_ATTACH)
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r171_input_surface.cmake")
         set_tests_properties(r171_java8_whole_jar_input_surface_fixture
           PROPERTIES TIMEOUT 30)
+        # R172: Java 8 synthetic receipt test, no original process and
+        # no GUI/mouse or input owner hook. Production JNI stays read-only.
+        add_test(NAME r172_java8_original_window_pointer_receipt
+          COMMAND "${CMAKE_COMMAND}"
+            -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+            -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+            -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+            -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+            -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r172_window_pointer.cmake")
+        set_tests_properties(r172_java8_original_window_pointer_receipt
+          PROPERTIES TIMEOUT 30)
       add_test(NAME native_render_fixture_attach
         COMMAND "${Python3_EXECUTABLE}" -u
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/render_attach_live_smoke.py"

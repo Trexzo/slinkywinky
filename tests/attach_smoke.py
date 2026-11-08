@@ -128,6 +128,13 @@ try:
     if entries.intersection(r171_source_classes):
         raise AssertionError("R171 test-only global input audit leaked into agent")
     print("PASS: R171 game-wide input source audit only in offline audit JAR")
+    r172_fixture="dev/slinkywinky/instrument/R172OriginalPointerReceiptSmoke.class"
+    if r172_fixture in entries:
+        raise AssertionError("R172 Java8 pointer receipt smoke leaked into agent")
+    with zipfile.ZipFile(render_audit_jar, "r") as audit:
+        if r172_fixture in set(audit.namelist()):
+            raise AssertionError("R172 Java8 pointer receipt smoke leaked into audit JAR")
+    print("PASS: R172 Java8 pointer fixture absent from runtime and audit JARs")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],

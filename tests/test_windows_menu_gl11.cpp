@@ -14,6 +14,7 @@
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/windows_game_window_gate.hpp"
+#include "slinkywinky/windows_original_pointer_audit.hpp"
 #include "slinkywinky/windows_menu_focus_fence.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
@@ -68,6 +69,9 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(JNIEnv*,jclass);
 extern "C" JNIEXPORT jint JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeAuditRenderWindow(
+    JNIEnv*,jclass,jlong,jlong,jint,jint);
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeObservePhysicalPointer(
     JNIEnv*,jclass,jlong,jlong,jint,jint);
 #endif
 #define REQUIRE(x) do {if(!(x))throw std::runtime_error("R67 check failed: " #x);}while(false)
@@ -972,6 +976,15 @@ int main() {
         REQUIRE(!host.draw(menu));
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
+        // R172: strict physical-client bounds and a default-denied
+        // original-window pointer observer. No cursor is moved here.
+        REQUIRE(point_inside_original_client(0,0,676,630));
+        REQUIRE(point_inside_original_client(675,629,676,630));
+        REQUIRE(!point_inside_original_client(676,629,676,630));
+        REQUIRE(!point_inside_original_client(675,630,676,630));
+        REQUIRE(!point_inside_original_client(-1,0,676,630));
+        REQUIRE(!point_inside_original_client(0,-1,676,630));
+        REQUIRE(!audit_original_render_pointer(context.gl,context.dc,676,630));
         // R101: spoofing a title alone must not grant input admission.
         // The HDC must be the actual current WGL renderer window, owned by
         // the exact current thread and source-pinned original process.
@@ -991,6 +1004,25 @@ int main() {
 #endif
         REQUIRE(localWindow==GameWindowFocus::ValidBackground ||
                 localWindow==GameWindowFocus::ValidForeground);
+        const auto physical=audit_original_render_pointer(
+            context.gl,context.dc,676,630);
+        if(localWindow==GameWindowFocus::ValidForeground) {
+            REQUIRE(physical.has_value());
+            REQUIRE(physical->button_down_mask<=31u);
+            REQUIRE(physical->inside_client==
+                point_inside_original_client(
+                    physical->client_x,physical->client_y,676,630));
+        } else REQUIRE(!physical.has_value());
+#ifdef SW_R91_TEST_JNI_OVERLAY
+        // Invalid JNI environment cannot expose cursor data.
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeObservePhysicalPointer(
+            nullptr,nullptr,static_cast<jlong>(
+                reinterpret_cast<std::uintptr_t>(context.gl)),
+            static_cast<jlong>(reinterpret_cast<std::uintptr_t>(context.dc)),
+            676,630)==nullptr);
+#endif
+        REQUIRE(!audit_original_render_pointer(context.gl,context.dc,677,630));
+        REQUIRE(!audit_original_render_pointer(nullptr,context.dc,676,630));
         // R104 connects its read-only focus lifetime contract to the actual
         // WGL owner/window evidence, without synthesizing a single key.
         MenuFocusFence focusFence;
@@ -1019,6 +1051,8 @@ int main() {
         ShowWindow(duplicate,SW_SHOWNOACTIVATE);
         REQUIRE(audit_game_render_window(context.gl,context.dc,676,630)==
                 GameWindowFocus::Refused);
+        REQUIRE(!audit_original_render_pointer(
+            context.gl,context.dc,676,630));
         REQUIRE(focusFence.observe(audit_game_render_window(
             context.gl,context.dc,676,630))==FocusFenceState::Refused);
         REQUIRE(!focusFence.foreground_candidate());
@@ -1036,7 +1070,8 @@ int main() {
         bool otherWindowRefused=false;
         std::thread otherWindow([&] {
             otherWindowRefused=audit_game_render_window(
-                context.gl,context.dc,676,630)==GameWindowFocus::Refused;
+                context.gl,context.dc,676,630)==GameWindowFocus::Refused &&
+                !audit_original_render_pointer(context.gl,context.dc,676,630);
         });
         otherWindow.join();
         REQUIRE(otherWindowRefused);
@@ -1386,6 +1421,7 @@ int main() {
         std::cout<<"R115_NATIVE_SOURCE_SLIDERS_AND_PROFILE_GRID_PREVIEW_PASS\\n";
         std::cout<<"R104_REAL_WGL_WINDOW_FOCUS_FENCE_NEVER_CAPTURES_GAME_INPUT_PASS\\n";
         std::cout<<"R101_READ_ONLY_WGL_BOUND_GAME_WINDOW_IDENTITY_NEGATIVE_CONTROLS_PASS\\n";
+        std::cout<<"R172_ORIGINAL_WINDOW_PASSIVE_POINTER_ONLY_PASS"<<std::endl;
         std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";
         std::cout<<"R70_WGL_CONTEXT_LOSS_FAIL_CLOSED_PASS\n";
         std::cout<<"R67_ISOLATED_WGL_CONTEXT_PASS\n";

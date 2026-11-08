@@ -13,6 +13,7 @@
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/windows_game_window_gate.hpp"
+#include "slinkywinky/windows_original_pointer_audit.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
 #include <GL/gl.h>
@@ -668,6 +669,28 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeAuditRenderWindow(
         reinterpret_cast<HDC>(static_cast<std::uintptr_t>(expectedDc)),
         static_cast<unsigned>(width),static_cast<unsigned>(height));
     return static_cast<jint>(result);
+}
+// R172: exact original renderer's HWND + WGL + foreground read-only
+// pointer sample. This is NOT a click delivery or a gameplay input owner.
+// Do not log position, intercept buttons, or invoke retained->pointer().
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeObservePhysicalPointer(
+    JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || context==0 || dc==0 || width<320 || height<240 ||
+       width>8192 || height>8192)return nullptr;
+    const auto sample=slinkywinky::audit_original_render_pointer(
+        reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+        reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+        static_cast<unsigned>(width),static_cast<unsigned>(height));
+    if(!sample)return nullptr;
+    const jint receipt[4]={
+        static_cast<jint>(sample->client_x),
+        static_cast<jint>(sample->client_y),
+        sample->inside_client?1:0,
+        static_cast<jint>(sample->button_down_mask)};
+    jintArray result=env->NewIntArray(4);
+    if(result)env->SetIntArrayRegion(result,0,4,receipt);
+    return result;
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawReadOnlyOverlay(
