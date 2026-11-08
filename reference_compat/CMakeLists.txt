@@ -10,28 +10,6 @@ if(MSVC)
   target_compile_options(slinkywinky_reference_event_model INTERFACE /W4 /WX)
 else()
   target_compile_options(slinkywinky_reference_event_model INTERFACE -Wall -Wextra -Wpedantic -Werror)
-  # R182: independent No Slow scaling, and complete five-policy catalog audit.
-  add_executable(slinkywinky_no_slow_bridge_test
-    tests/test_no_slow_bridge.cpp)
-  target_link_libraries(slinkywinky_no_slow_bridge_test PRIVATE
-    slinkywinky_reference_event_model
-    slinkywinky_reference_firstparty_core)
-  add_test(NAME r182_no_slow_bridge COMMAND slinkywinky_no_slow_bridge_test)
-  add_test(NAME r182_five_decision_coverage
-    COMMAND slinkywinky_implementation_coverage_audit
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/seven_modules_with_five_decisions.tsv")
-  add_test(NAME r182_reject_wrong_no_slow_event
-    COMMAND slinkywinky_implementation_coverage_audit
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_event.tsv")
-  add_test(NAME r182_reject_wrong_no_slow_category
-    COMMAND slinkywinky_implementation_coverage_audit
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_category.tsv")
-  add_test(NAME r182_reject_wrong_no_slow_priority
-    COMMAND slinkywinky_implementation_coverage_audit
-      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_priority.tsv")
-  set_tests_properties(r182_reject_wrong_no_slow_event
-    r182_reject_wrong_no_slow_category
-    r182_reject_wrong_no_slow_priority PROPERTIES WILL_FAIL TRUE)
 endif()
 include(CTest)
 if(BUILD_TESTING)
@@ -141,4 +119,27 @@ if(BUILD_TESTING)
   set_tests_properties(r181_reject_wrong_instant_stop_event
     r181_reject_wrong_instant_stop_category
     r181_reject_wrong_instant_stop_priority PROPERTIES WILL_FAIL TRUE)
+  # R182: independent No Slow scaling, and complete five-policy catalog audit.
+  add_executable(slinkywinky_no_slow_bridge_test
+    tests/test_no_slow_bridge.cpp)
+  target_link_libraries(slinkywinky_no_slow_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r182_no_slow_bridge COMMAND slinkywinky_no_slow_bridge_test)
+  add_test(NAME r182_five_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/seven_modules_with_five_decisions.tsv")
+  add_test(NAME r182_reject_wrong_no_slow_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_event.tsv")
+  add_test(NAME r182_reject_wrong_no_slow_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_category.tsv")
+  add_test(NAME r182_reject_wrong_no_slow_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_priority.tsv")
+  set_tests_properties(r182_reject_wrong_no_slow_event
+    r182_reject_wrong_no_slow_category
+    r182_reject_wrong_no_slow_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()
