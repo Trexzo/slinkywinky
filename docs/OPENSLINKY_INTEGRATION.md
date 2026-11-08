@@ -411,3 +411,53 @@ fidelity, Minecraft gameplay behavior, pixel-perfect GUI, or official
 commercial provenance. The event-5 ordering is derived from the
 candidate C++ reconstruction and remains a candidate until equivalent
 traces from an authenticated original are available.
+
+
+## R177: execute one first-party module callback through the recovered event path
+
+The first concrete **module-execution bridge**, `reference_compat/include/slinkywinky/module_execution_bridge.hpp`,
+uses R174's bounded `EventReplay` to route a candidate event to real
+first-party SlinkyWinky code. The current binding is **Reach**:
+
+- Candidate native descriptor offset `+0xc8` corresponds to **event slot 8**.
+- A `Reach` metadata record with combat category and event-8 subscription
+  can explicitly bind to `slinkywinky::ReachController::evaluate` from the
+  existing `src/core.cpp`, compiled into the standalone R177 test target.
+- The adapter only runs explicitly bound implementations, even when other
+  metadata entries claim subscriptions. It reports the exact count of
+  implemented event bindings instead of treating registrations as working
+  modules.
+- The event envelope contains an **offline** typed Reach input/settings and
+  optional distance result; it cannot access a game process, JNI, rendering,
+  packets, or physical inputs.
+- World and player availability, valid event number, payload type, active
+  callback reentrancy, duplicate binding, and stop state all fail closed.
+  A thrown callback clears the active dispatch frame.
+- The test executes and checks the first-party 9-tick cooldown, output
+  distance, callback priority order, Reach disable/re-enable, world-state
+  reset, malformed input and safe teardown. It also verifies that the
+  same event's other registered, unimplemented modules are **not**
+  automatically interpreted as functional.
+
+The tests build through `reference_compat/CMakeLists.txt`, where the existing
+`../src/core.cpp` is linked directly (not copied, forked or substituted
+with the third-party code):
+
+```sh
+cmake -S reference_compat -B build-reference -DCMAKE_BUILD_TYPE=Release
+cmake --build build-reference --config Release
+ctest --test-dir build-reference -C Release --output-on-failure
+```
+
+**Acceptance claim:** One first-party offline decision model is invoked
+through a metadata-backed event slot and lifecycle gate. This is the
+beginning of an execution interface, *not* the original 66 module
+implementations, original DLL code, JNI/JVMTI callbacks, working gameplay
+modification, or 1:1 Slinky equivalence. Slot mappings are based on
+the pinned candidate, whose commercial provenance is not authenticated.
+
+**Next measurable gate:** Register the full private 66-module TSV into this
+bridge and count explicit, tested executable bindings separately from the
+171 native callback subscriptions. Then add a second independently authored
+offline module adapter and differential event fixtures without taking over
+the other chat's runtime branch.
