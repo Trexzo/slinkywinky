@@ -7,6 +7,7 @@
 #include "slinkywinky/no_jump_delay_controller.hpp"
 #include "slinkywinky/null_move_controller.hpp"
 #include "slinkywinky/instant_stop_controller.hpp"
+#include "slinkywinky/no_slow_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -50,6 +51,12 @@ struct InstantStopTickPayload {
     unsigned executions = 0;
 };
 
+struct NoSlowTickPayload {
+    NoSlowInput input{};
+    NoSlowDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -58,6 +65,7 @@ struct ExecutionFrame {
     std::optional<JumpDelayTickPayload> jump_delay{};
     std::optional<NullMoveTickPayload> null_move{};
     std::optional<InstantStopTickPayload> instant_stop{};
+    std::optional<NoSlowTickPayload> no_slow{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -217,6 +225,33 @@ public:
         return false;
     }
 
+    // Candidate No Slow: category move, event slot 21, priority 200.
+    bool bind_no_slow(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "No Slow" ||
+            definitions_[id].category != 1)
+            return false;
+        bool original_priority = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kNoSlowEvent && sub.priority == 200)
+                original_priority = true;
+        if (!original_priority) return false;
+        return bind(id, kNoSlowEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.no_slow) return;
+                        auto& payload = *frame.no_slow;
+                        ++payload.executions;
+                        payload.decision = no_slow_.evaluate(payload.input);
+                    });
+    }
+
+    bool bind_no_slow_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "No Slow")
+                return bind_no_slow(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -260,6 +295,7 @@ public:
         if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
         if (frame.null_move && frame.event != kMovementTickEvent) return false;
         if (frame.instant_stop && frame.event != kMovementTickEvent) return false;
+        if (frame.no_slow && frame.event != kNoSlowEvent) return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -267,7 +303,8 @@ public:
             static_cast<unsigned>(frame.reach.has_value()) +
             static_cast<unsigned>(frame.jump_delay.has_value()) +
             static_cast<unsigned>(frame.null_move.has_value()) +
-            static_cast<unsigned>(frame.instant_stop.has_value());
+            static_cast<unsigned>(frame.instant_stop.has_value()) +
+            static_cast<unsigned>(frame.no_slow.has_value());
         if (typed_count > 1 &&
             !(typed_count == 2 && frame.event == kMovementTickEvent &&
               frame.null_move && frame.instant_stop)) return false;
@@ -295,6 +332,10 @@ public:
         if (frame.instant_stop) {
             frame.instant_stop->decision = {};
             frame.instant_stop->executions = 0;
+        }
+        if (frame.no_slow) {
+            frame.no_slow->decision = {};
+            frame.no_slow->executions = 0;
         }
         struct ClearFrame {
             ModuleExecutionBridge& self;
@@ -339,6 +380,7 @@ private:
     NoJumpDelayController no_jump_delay_;
     NullMoveController null_move_;
     InstantStopController instant_stop_;
+    NoSlowController no_slow_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

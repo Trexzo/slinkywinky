@@ -56,6 +56,9 @@ class TestCandidateManifestExporter(unittest.TestCase):
         rows[45]["name"] = "No Jump Delay"
         rows[45]["category"] = 1
         rows[45]["subscriptions"] = [(17, 100)]
+        rows[46]["name"] = "No Slow"
+        rows[46]["category"] = 1
+        rows[46]["subscriptions"] = [(21, 200)]
         rows[49]["name"] = "Null Move"
         rows[49]["category"] = 1
         rows[49]["subscriptions"] = [(16, 100)]
@@ -76,6 +79,10 @@ class TestCandidateManifestExporter(unittest.TestCase):
             fixture.verify_known_original_bindings(rows)
         rows[49]["subscriptions"] = [(16, 100)]
         rows[31]["subscriptions"] = [(16, 100)]
+        with self.assertRaisesRegex(ValueError, "binding drift"):
+            fixture.verify_known_original_bindings(rows)
+        rows[31]["subscriptions"] = [(16, 200)]
+        rows[46]["subscriptions"] = [(21, 199)]
         with self.assertRaisesRegex(ValueError, "binding drift"):
             fixture.verify_known_original_bindings(rows)
 

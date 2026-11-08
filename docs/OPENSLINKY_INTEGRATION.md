@@ -689,3 +689,40 @@ executable assets remain outside GitHub. None of this creates a live
 injectable module or establishes real in-game movement behavior.
 PR #2 remains separate, draft and unmerged; the other chat's runtime
 code has not been modified.
+
+## R182: No Slow — fifth independently authored offline module decision
+
+The locally held decrypted candidate identifies **No Slow** at descriptor
+index **46**, movement category **1**, event slot **21**, priority **200**.
+The registered callback operates after Minecraft has applied the vanilla
+0.2 movement slowdown. Its item-specific multiplier selects bow (ID 261),
+one of five Minecraft 1.8 swords (267/268/272/276/283), or other usable
+items (consumables). The original .data/.rdata hashes and event metadata
+are validated locally by the private candidate fixture exporter.
+
+The new first-party pure controller `no_slow_controller.hpp` computes a
+proposed replacement for already-slowed strafe/forward input, multiplying
+both by the selected setting divided by 0.2. It issues no proposal when
+the player is not using an item or no held item is present. Rejecting
+nonfinite, negative and overflowing values is **deliberate hardening**,
+not an assertion of exact parity with the original unguarded arithmetic.
+
+`ModuleExecutionBridge` now routes typed No Slow inputs on native event 21,
+validates name, movement category and priority 200, prevents conflicting
+typed payloads, and respects world/player gating, enabled state and teardown.
+All outputs remain pure offline proposals. No Java/JNI, packets, input
+hooks, injected code or Minecraft field writes were introduced.
+
+The full 66-module, 171-callback original-derived catalog audit now has
+five *independently implemented offline* module bindings: Reach, No Jump
+Delay, Null Move, Instant Stop and No Slow. **166 native callback
+registrations still have no executable first-party binding.** These
+counts track descriptor subscriptions rather than complete gameplay
+functionality, so they are not a client-completion percentage.
+
+The synthetic fixture CTest covers a five-policy catalog, category and
+event/priority negative controls, item categories, invalid input handling,
+and event-21 enable/disable and shutdown. It is run as part of the
+isolated Windows/Ubuntu Debug/Release reference audit. The user's private
+original-derived TSV, reference binary and upstream implementation are
+never committed. PR #2 remains draft and separate from PR #1.

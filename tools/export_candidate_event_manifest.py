@@ -91,6 +91,7 @@ def verify_known_original_bindings(rows):
     expected = (
         (31, "Instant Stop", 1, [(16, 200)]),
         (45, "No Jump Delay", 1, [(17, 100)]),
+        (46, "No Slow", 1, [(21, 200)]),
         (49, "Null Move", 1, [(16, 100)]),
         (54, "Reach", 0, [(8, 0)]),
     )
