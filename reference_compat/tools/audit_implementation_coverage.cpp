@@ -40,6 +40,20 @@ static ExecutionFrame jump_frame(bool in_game = true, int current_ticks = 10) {
     return frame;
 }
 
+static ExecutionFrame null_move_frame(int tick, bool forward, bool back) {
+    ExecutionFrame frame;
+    frame.event = kMovementTickEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    NullMoveTickPayload payload;
+    payload.input.in_game = true;
+    payload.input.ticks_existed = tick;
+    payload.input.game_pressed = {forward, false, back, false};
+    payload.input.physically_held = {true, false, back, false};
+    frame.null_move = payload;
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -97,7 +111,15 @@ int main(int argc, char** argv) {
         if (has_jump)
             require(bridge.bind_no_jump_delay_from_catalog(),
                     "No Jump Delay is present but native event 17/movement binding failed");
-        const std::size_t expected_bindings = has_jump ? 2 : 1;
+        std::size_t null_move_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Null Move") null_move_id = i;
+        const bool has_null_move = null_move_id < manifest.modules.size();
+        if (has_null_move)
+            require(bridge.bind_null_move_from_catalog(),
+                    "Null Move exists but original event 16/movement binding failed");
+        const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
+                                               (has_null_move ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -111,8 +133,11 @@ int main(int argc, char** argv) {
                 "Reach callback not routed through event 8");
         require(c.implemented_per_event[kPlayerUpdateEvent] == (has_jump ? 1u : 0u),
                 "No Jump Delay callback not routed through event 17");
+        require(c.implemented_per_event[kMovementTickEvent] == (has_null_move ? 1u : 0u),
+                "Null Move callback not routed through event 16");
         for (unsigned event = 0; event < kEventSlots; ++event)
-            if (event != kReachQueryEvent && event != kPlayerUpdateEvent)
+            if (event != kReachQueryEvent && event != kPlayerUpdateEvent &&
+                event != kMovementTickEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -172,13 +197,38 @@ int main(int argc, char** argv) {
                     "disabled No Jump Delay callback still executed");
         }
 
+        if (has_null_move) {
+            require(bridge.request(null_move_id, true), "Null Move enable rejected");
+            require(bridge.apply(true, true), "Null Move enable not applied");
+            auto movement = null_move_frame(100, true, false);
+            require(bridge.dispatch(movement) && movement.null_move &&
+                    movement.null_move->executions == 1,
+                    "Null Move first movement tick not executed");
+            movement = null_move_frame(101, true, true);
+            require(bridge.dispatch(movement) && movement.null_move &&
+                    movement.null_move->executions == 1 &&
+                    movement.null_move->decision.overrides[0] == false &&
+                    !movement.null_move->decision.resulting_game_pressed[0],
+                    "Null Move failed to prioritize newly pressed back key");
+            require(movement.executed_modules.size() == 1 &&
+                    movement.executed_modules.front() == null_move_id,
+                    "unimplemented event-16 module executed");
+            require(bridge.request(null_move_id, false), "Null Move disable rejected");
+            require(bridge.apply(true, true), "Null Move disable not applied");
+            movement = null_move_frame(102, false, false);
+            require(bridge.dispatch(movement) && movement.null_move &&
+                    movement.null_move->executions == 0 &&
+                    movement.executed_modules.empty(),
+                    "disabled Null Move still executed");
+        }
+
         if (expect_candidate)
-            require(has_jump && c.registered_modules == 66 &&
+            require(has_jump && has_null_move && c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 2 &&
-                    c.executable_callback_bindings == 2 &&
-                    c.unimplemented_callback_subscriptions == 169,
+                    c.modules_with_executable_bindings == 3 &&
+                    c.executable_callback_bindings == 3 &&
+                    c.unimplemented_callback_subscriptions == 168,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -194,7 +244,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R179 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R180 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }
