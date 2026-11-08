@@ -86,6 +86,20 @@ def read_catalog(data, rdata):
     return rows
 
 
+def verify_known_original_bindings(rows):
+    """Pinned private-candidate descriptor contracts; no original code copied."""
+    expected = (
+        (45, "No Jump Delay", 1, [(17, 100)]),
+        (54, "Reach", 0, [(8, 0)]),
+    )
+    for index, name, category, subscriptions in expected:
+        if (len(rows) <= index or rows[index]["index"] != index or
+                rows[index]["name"] != name or
+                rows[index]["category"] != category or
+                rows[index]["subscriptions"] != subscriptions):
+            raise ValueError(f"Original candidate binding drift at module index {index}: {name}")
+
+
 def export(archive, tsv_path, report_path=None):
     with zipfile.ZipFile(archive) as zf:
         data = get_member(zf, "/slinky2.decrypted/data.bin", 512 * 1024)
@@ -95,6 +109,7 @@ def export(archive, tsv_path, report_path=None):
     if hashlib.sha256(rdata).hexdigest() != RDATA_SHA256:
         raise ValueError("Decrypted .rdata differs from pinned candidate")
     rows = read_catalog(data, rdata)
+    verify_known_original_bindings(rows)
     histogram = collections.Counter(event for row in rows for event, _ in row["subscriptions"])
     tsv_path.parent.mkdir(parents=True, exist_ok=True)
     with tsv_path.open("w", encoding="utf-8", newline="") as out:
