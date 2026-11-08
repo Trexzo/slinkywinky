@@ -5,6 +5,7 @@
 #include "slinkywinky/core.hpp"
 #include "slinkywinky/reference_event_model.hpp"
 #include "slinkywinky/no_jump_delay_controller.hpp"
+#include "slinkywinky/null_move_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -21,6 +22,7 @@ namespace slinkywinky::reference_compat {
 // This mapping is a reference hypothesis, not commercial parity evidence.
 inline constexpr unsigned kReachQueryEvent = 8;
 inline constexpr unsigned kPlayerUpdateEvent = 17;
+inline constexpr unsigned kMovementTickEvent = 16;
 
 struct ReachQueryPayload {
     slinkywinky::ReachInput input{};
@@ -35,12 +37,19 @@ struct JumpDelayTickPayload {
     unsigned executions = 0;
 };
 
+struct NullMoveTickPayload {
+    NullMoveInput input{};
+    NullMoveDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
     bool player_present = false;
     std::optional<ReachQueryPayload> reach{};
     std::optional<JumpDelayTickPayload> jump_delay{};
+    std::optional<NullMoveTickPayload> null_move{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -141,6 +150,28 @@ public:
         return false;
     }
 
+    // Offline Null Move runs on original candidate movement event 16.
+    bool bind_null_move(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "Null Move" ||
+            definitions_[id].category != 1)
+            return false;
+        return bind(id, kMovementTickEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.null_move) return;
+                        auto& tick = *frame.null_move;
+                        ++tick.executions;
+                        tick.decision = null_move_.evaluate(tick.input);
+                    });
+    }
+
+    bool bind_null_move_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Null Move")
+                return bind_null_move(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -182,7 +213,10 @@ public:
         // allowed; other event slots may be observed with an empty payload.
         if (frame.reach && frame.event != kReachQueryEvent) return false;
         if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
-        if (frame.reach && frame.jump_delay) return false;
+        if (frame.null_move && frame.event != kMovementTickEvent) return false;
+        if (static_cast<unsigned>(frame.reach.has_value()) +
+                static_cast<unsigned>(frame.jump_delay.has_value()) +
+                static_cast<unsigned>(frame.null_move.has_value()) > 1) return false;
         frame.executed_modules.clear();
         if (frame.reach) {
             frame.reach->proposed_distance.reset();
@@ -191,6 +225,10 @@ public:
         if (frame.jump_delay) {
             frame.jump_delay->proposed_jump_ticks.reset();
             frame.jump_delay->executions = 0;
+        }
+        if (frame.null_move) {
+            frame.null_move->decision = {};
+            frame.null_move->executions = 0;
         }
         struct ClearFrame {
             ModuleExecutionBridge& self;
@@ -209,12 +247,14 @@ public:
     }
 
     void reset_reach_world_state() noexcept { controller_.reset(); }
+    void reset_null_move_world_state() noexcept { null_move_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
         stopped_ = true;
         replay_.stop();
         controller_.reset();
+        null_move_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -229,6 +269,7 @@ private:
     EventReplay replay_;
     slinkywinky::ReachController controller_;
     NoJumpDelayController no_jump_delay_;
+    NullMoveController null_move_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
