@@ -226,6 +226,25 @@ def main():
             raise RuntimeError("R163 Mojang original input CFG mismatch: " +
                                graph.stdout[-1800:] + graph.stderr[-1800:])
         print(graph.stdout.rstrip(), flush=True)
+        # R164: test-only whole-input-method entry gate. Original Mojang
+        # bytes remain unchanged, no live game/class is transformed.
+        cut = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R164OfflineInputCutSmoke",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=45)
+        if (cut.returncode != 0 or
+                "R164_ORIGINAL_AVE_ENTRY_ONLY_MODAL_CUT_SHAPE_PASS"
+                not in cut.stdout or
+                "R164_ORIGINAL_58_INPUT_PATHS_UNCHANGED_VANILLA_BRANCH_PASS"
+                not in cut.stdout or
+                "R164_ORIGINAL_REVERSED_GATE_AND_MISSING_RETURN_REFUSED_PASS"
+                not in cut.stdout or
+                "R164_SOURCE_IN_MEMORY_COPY_RESTORED_OFFLINE_ONLY_PASS"
+                not in cut.stdout):
+            raise RuntimeError("R164 original Minecraft input-cut probe failed: " +
+                               cut.stdout[-1700:] + cut.stderr[-1700:])
+        print(cut.stdout.rstrip(), flush=True)
 
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.

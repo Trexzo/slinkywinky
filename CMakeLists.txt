@@ -409,6 +409,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedgerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R163InputControlGraph.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R163InputControlGraphSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineModalGate.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCut.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCutSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardQueueOwnerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardPageRelaySmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R112KeyboardTarget.java"
@@ -518,6 +521,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedgerSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R163InputControlGraph.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R163InputControlGraphSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineModalGate.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCut.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCutSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalKeyboardLoopWeaveAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalKeyboardBridgeWeaveAudit.java"
@@ -545,6 +551,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedgerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R163InputControlGraph.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R163InputControlGraphSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineModalGate.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCut.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCutSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardQueueOwnerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardPageRelaySmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R112KeyboardTarget.java"
@@ -615,6 +624,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
           -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
           -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r163_input_graph.cmake")
       set_tests_properties(r163_java8_original_input_control_flow_fixture
+        PROPERTIES TIMEOUT 30)
+      add_test(NAME r164_java8_whole_input_method_cut_fixture
+        COMMAND "${CMAKE_COMMAND}"
+          -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+          -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+          -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r164_input_cut.cmake")
+      set_tests_properties(r164_java8_whole_input_method_cut_fixture
         PROPERTIES TIMEOUT 30)
       add_test(NAME native_render_fixture_attach
         COMMAND "${Python3_EXECUTABLE}" -u

@@ -67,6 +67,17 @@ try:
         if entries.intersection(required_r163):
             raise AssertionError("R163 test-only control-flow code leaked into agent")
     print("PASS: R163 original-game input CFG tests excluded from runtime agent")
+    r164_source_only = {
+        "dev/slinkywinky/attach/R164OfflineModalGate.class",
+        "dev/slinkywinky/attach/R164OfflineInputCut.class",
+        "dev/slinkywinky/attach/R164OfflineInputCutSmoke.class",
+    }
+    with zipfile.ZipFile(render_audit_jar, "r") as read_only_audit:
+        if not r164_source_only.issubset(set(read_only_audit.namelist())):
+            raise AssertionError("R164 offline gate tests missing from audit JAR")
+    if entries.intersection(r164_source_only):
+        raise AssertionError("R164 offline input gate leaked into injected agent")
+    print("PASS: R164 method-isolation gate is confined to offline audit JAR")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],
