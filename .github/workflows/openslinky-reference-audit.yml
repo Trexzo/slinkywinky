@@ -15,6 +15,7 @@ on:
       - 'tests/test_openslinky_dispatch_audit.py'
       - 'tools/audit_openslinky_data.py'
       - 'tests/test_openslinky_data_audit.py'
+      - 'reference_compat/**'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -47,3 +48,27 @@ jobs:
             reference_audit.json
             dispatch_audit.json
             data_audit.json
+
+  native-event-replay:
+    name: Offline C++ reference event replay
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure C++ reference replay (Debug)
+        run: cmake -S reference_compat -B build-reference-debug -DCMAKE_BUILD_TYPE=Debug
+      - name: Build and test C++ reference replay (Debug)
+        run: |
+          cmake --build build-reference-debug --config Debug --parallel
+          ctest --test-dir build-reference-debug -C Debug --output-on-failure
+      - name: Configure C++ reference replay (Release)
+        run: cmake -S reference_compat -B build-reference-release -DCMAKE_BUILD_TYPE=Release
+      - name: Build and test C++ reference replay (Release)
+        run: |
+          cmake --build build-reference-release --config Release --parallel
+          ctest --test-dir build-reference-release -C Release --output-on-failure
