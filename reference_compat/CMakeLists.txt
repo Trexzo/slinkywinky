@@ -77,4 +77,22 @@ if(BUILD_TESTING)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_jump_category.tsv")
   set_tests_properties(r179_reject_wrong_jump_event
     r179_reject_wrong_jump_category PROPERTIES WILL_FAIL TRUE)
+  # R180: independent opposite-key policy and three-binding manifest.
+  add_executable(slinkywinky_null_move_bridge_test
+    tests/test_null_move_bridge.cpp)
+  target_link_libraries(slinkywinky_null_move_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r180_null_move_bridge COMMAND slinkywinky_null_move_bridge_test)
+  add_test(NAME r180_three_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/five_modules_with_three_decisions.tsv")
+  add_test(NAME r180_reject_wrong_null_move_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_null_move_event.tsv")
+  add_test(NAME r180_reject_wrong_null_move_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_null_move_category.tsv")
+  set_tests_properties(r180_reject_wrong_null_move_event
+    r180_reject_wrong_null_move_category PROPERTIES WILL_FAIL TRUE)
 endif()
