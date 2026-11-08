@@ -127,3 +127,51 @@ CI tests the source parser and comparison logic with generated fixtures;
 archive and is intentionally not reproducible by public CI without that
 private input.
 
+
+
+## R172: native event-dispatch and module-toggle safety audit
+
+A second independent offline verifier, `tools/audit_openslinky_dispatch.py`,
+examines the pinned C++ manager and optionally reads the user's private
+candidate `decrypted files.zip`. It **never executes the original DLL**.
+The optional private path validates the full extracted native `.text` SHA-256
+and five specific disassembled function windows at RVAs `0x28480`–`0x28600`
+before accepting any instruction-level observation.
+
+To reproduce privately:
+
+```sh
+python3 tools/audit_openslinky_dispatch.py \
+  --source references/OpenSlinky \
+  --candidate-zip "/private/decrypted files.zip" \
+  --json-out build/private_dispatch_audit.json
+```
+
+`python3 tools/audit_openslinky_dispatch.py` without the private ZIP is a
+**source-only** audit, which is what public CI runs. CI also exercises
+`tests/test_openslinky_dispatch_audit.py` with synthetic fixtures and does
+not receive original code bytes, the private ZIP, or a runnable native image.
+
+### Independently observed event-manager differences
+
+| Boundary | Candidate decrypted original instruction window | Pinned C++ source | Classification |
+|---|---|---|---|
+| Event dispatcher (`0x28480`) | Reads event type directly, immediately indexes handler table at manager + `0x210` with type × 8 | Checks `type >= 27` before indexing | **Safety hardening** (retain; native would risk out-of-bounds access) |
+| No-handler query (`0x284d0`) | Directly indexes the same handler table, without a range check | Treats `type >= 27` as handled | **Safety hardening** (retain, though out-of-range behavior differs) |
+| Toggle queue (`0x284f0`) | Queues entries without checking the allocated list capacity | Rejects `*n >= 0x43` | **Safety hardening** (retain; preventing overflow is important) |
+| Toggle application entry (`0x285d0`) | Begins by retrieving the manager and pending enable count | Returns early if world/player is missing | **Lifecycle hardening**; potentially changes when queued toggles apply |
+| Registered module count | Original constructor uses 66 | Current constructor uses 67 | **Fidelity discrepancy** (see R171 table proof) |
+
+The source contains **27** possible event slots and a null-terminated
+handler-dispatch loop. Existing guards are not to be removed just to
+imitate an unsafe original failure case. To get closer to legitimate
+behavioral parity, compare valid event traces (`0..26`), module toggle
+ordering and initial-world lifecycle in an isolated harness. Invalid
+event types and excessive queue counts should remain fail-closed.
+
+**Verification scope:** This checks the identities of five disassembled
+native function windows and matching source-level constructs. It does
+not establish cycle-level equivalence, all instruction semantics, native
+injection success, safe unload, game-world packet ordering, or provenance
+of an authenticated commercial original.
+
