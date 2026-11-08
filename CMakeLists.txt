@@ -405,6 +405,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardInputCallsiteAuditSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalInputOwnershipAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalInputOwnershipSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedger.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedgerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardQueueOwnerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardPageRelaySmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R112KeyboardTarget.java"
@@ -509,6 +511,9 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/render-audit-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardInputCallsiteAudit.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalInputOwnershipAudit.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedger.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedgerSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalKeyboardLoopWeaveAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalKeyboardBridgeWeaveAudit.java"
@@ -532,6 +537,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardInputCallsiteAuditSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalInputOwnershipAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalInputOwnershipSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedger.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R162InputOrderLedgerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardQueueOwnerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardPageRelaySmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R112KeyboardTarget.java"
@@ -589,6 +596,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
         COMMAND "${Python3_EXECUTABLE}" -u "${CMAKE_CURRENT_SOURCE_DIR}/tests/attach_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(native_agent_attach PROPERTIES TIMEOUT 120)
+      add_test(NAME r162_java8_original_input_instruction_order_fixture
+        COMMAND "${CMAKE_COMMAND}"
+          -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+          -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+          -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r162_input_ledger.cmake")
+      set_tests_properties(r162_java8_original_input_instruction_order_fixture
+        PROPERTIES TIMEOUT 30)
       add_test(NAME native_render_fixture_attach
         COMMAND "${Python3_EXECUTABLE}" -u
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/render_attach_live_smoke.py"

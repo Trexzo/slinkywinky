@@ -189,6 +189,26 @@ def main():
             raise RuntimeError("R111 pinned original keyboard bridge failed: " +
                                bridge.stdout[-1600:] + bridge.stderr[-1600:])
         print(bridge.stdout.rstrip(), flush=True)
+        # R162: SHA-pinned original ave.s()V source-order audit.
+        # The pre-existing JAR has already passed the official SHA-1 check;
+        # this invokes the separate test-only ASM inspector without game attach.
+        ordered = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R162InputOrderLedgerSmoke",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40)
+        if (ordered.returncode != 0 or
+                "R162_ORIGINAL_COUNT_PRESERVING_MUTATION_DETECTED_PASS"
+                not in ordered.stdout or
+                "R162_QUEUE_ONLY_IN_MEMORY_WEAVE_ORDER_UNCHANGED_PASS"
+                not in ordered.stdout or
+                "R162_ORIGINAL_AVE_INPUT_CALLSITE_SEQUENCE_SHA256 "
+                "6b58cf399b237ce7a84a84f1a62a8f5b56dc10e457f6217ea35aaadf99403e7f"
+                not in ordered.stdout):
+            raise RuntimeError("Original 1.8.9 R162 input-order audit failed: " +
+                               ordered.stdout[-1600:] + ordered.stderr[-1600:])
+        print(ordered.stdout.rstrip(), flush=True)
+
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.
         weave = subprocess.run(

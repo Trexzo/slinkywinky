@@ -44,6 +44,18 @@ try:
         if not required.issubset(entries) or entries.intersection(forbidden):
             raise AssertionError("R119 runtime JAR input-owner/fixture separation broken")
     print("PASS: R119 test-only keyboard fixtures absent from instrument JAR")
+    render_audit_jar = loader.parent / "slinkywinky_render_audit.jar"
+    with zipfile.ZipFile(render_audit_jar, "r") as source_audit:
+        audit_entries = set(source_audit.namelist())
+        if not {
+            "dev/slinkywinky/attach/R162InputOrderLedger.class",
+            "dev/slinkywinky/attach/R162InputOrderLedgerSmoke.class",
+        }.issubset(audit_entries):
+            raise AssertionError("R162 offline source audit missing from audit JAR")
+    if ("dev/slinkywinky/attach/R162InputOrderLedger.class" in entries or
+        "dev/slinkywinky/attach/R162InputOrderLedgerSmoke.class" in entries):
+        raise AssertionError("R162 test-only source inspector leaked into agent")
+    print("PASS: R162 source ledger belongs only to the read-only audit JAR")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],
