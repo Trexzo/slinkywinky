@@ -255,6 +255,12 @@ if(SLINKYWINKY_BUILD_JNI)
       -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
       -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r160_mouse_owner.cmake)
+    add_test(NAME r161_java8_paired_input_rollback_no_game_hook COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r161_paired_input.cmake)
   endif()
 endif()
 

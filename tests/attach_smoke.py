@@ -29,9 +29,14 @@ try:
         required = {
             "dev/slinkywinky/instrument/KeyboardQueueOwner.class",
             "dev/slinkywinky/instrument/KeyboardPageRelay.class",
+            "dev/slinkywinky/instrument/MouseQueueOwner.class",
         }
         forbidden = {
             "org/lwjgl/input/Keyboard.class",
+            "org/lwjgl/input/Mouse.class",
+            "dev/slinkywinky/attach/MouseQueueOwnerSmoke.class",
+            "dev/slinkywinky/attach/R161InputCoverageLedger.class",
+            "dev/slinkywinky/attach/R161PairedInputRollbackSmoke.class",
             "dev/slinkywinky/attach/OriginalInputOwnershipAudit.class",
             "dev/slinkywinky/attach/OriginalInputOwnershipSmoke.class",
             "dev/slinkywinky/attach/R112KeyboardTarget.class",
