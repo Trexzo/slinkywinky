@@ -47,6 +47,24 @@ class TestCandidateManifestExporter(unittest.TestCase):
         self.assertEqual(rows[65]["name"], "No Hurt Cam")
         self.assertEqual(rows[0]["subscriptions"][0], (0, -100))
 
+    def test_verified_module_event_bindings(self):
+        data, rdata = synthetic_catalog()
+        rows = fixture.read_catalog(data, rdata)
+        rows[45]["name"] = "No Jump Delay"
+        rows[45]["category"] = 1
+        rows[45]["subscriptions"] = [(17, 100)]
+        rows[54]["name"] = "Reach"
+        rows[54]["category"] = 0
+        rows[54]["subscriptions"] = [(8, 0)]
+        fixture.verify_known_original_bindings(rows)
+        rows[45]["subscriptions"] = [(16, 100)]
+        with self.assertRaisesRegex(ValueError, "binding drift"):
+            fixture.verify_known_original_bindings(rows)
+        rows[45]["subscriptions"] = [(17, 100)]
+        rows[54]["name"] = "Different"
+        with self.assertRaisesRegex(ValueError, "binding drift"):
+            fixture.verify_known_original_bindings(rows)
+
     def test_duplicate_pointer_rejected(self):
         data, rdata = synthetic_catalog()
         offset = fixture.DESCRIPTOR_TABLE_RVA - fixture.RDATA_RVA
