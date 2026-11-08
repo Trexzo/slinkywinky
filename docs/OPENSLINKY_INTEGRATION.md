@@ -236,3 +236,49 @@ The proof is strictly **static data parity** for one candidate, not proof of
 in-game GUI, packet, module logic or lifecycle equivalence, or of verified
 official Slinky source provenance.
 
+
+
+## R174: independent native event-replay model (first executable integration component)
+
+`reference_compat/` introduces an **originally authored standalone C++17
+event-replay component**, separate from the R-series runtime and from the
+third-party DLL. It models the most concrete, verified dispatcher behavior:
+
+- 27 indexed event types and an upper bound of **66 candidate-original modules**;
+- five categories, event subscription and descending per-slot priority;
+- event **4** as a cancellable pre-disable notification;
+- event **5** as a toggle notification (enable batch then disable batch);
+- handler-list rebuild before enable notifications and **after** disable
+  notifications, so a module can receive its last disable event;
+- world-and-player availability gate, queueing while the game is at its menu;
+- rejecting duplicate queued toggles, out-of-range event types and
+  invalid module descriptors, plus terminal stop/queue drain.
+
+Build without Minecraft, Java, the upstream DLL, native data, or Windows SDK:
+
+```sh
+cmake -S reference_compat -B build-reference -DCMAKE_BUILD_TYPE=Release
+cmake --build build-reference --config Release
+ctest --test-dir build-reference -C Release --output-on-failure
+```
+
+The existing `CMakeLists.txt` and R-series source are unchanged. The
+OpenSlinky audit workflow now runs this independent C++ target on both
+Windows and Ubuntu, in Debug and Release, using checked failures instead
+of compile-disabled `assert` expressions.
+
+**Important differences from a 1:1 native engine:** The original callback
+sort uses `qsort`, so **tie ordering is not proven**. This replay model
+uses a deterministic descriptor-order tie-breaker, which is a test
+convention rather than evidence of native behavior. It deliberately
+rejects duplicate/contradictory pending requests and stops delivering
+events on teardown; neither is asserted to match every native edge case.
+The model carries no JNI/JVMTI hooks, packet transformations, native
+module implementations or gameplay actions. Passing its tests validates
+only the explicit event and lifecycle contracts, not 1:1 gameplay.
+
+Next: derive a 66-module callback subscription/priority fixture from the
+private candidate DLL *locally* and use this model to replay a complete
+catalog without uploading the decrypted program or importing unlicensed
+third-party source.
+
