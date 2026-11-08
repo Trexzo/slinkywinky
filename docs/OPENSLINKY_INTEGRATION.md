@@ -461,3 +461,53 @@ bridge and count explicit, tested executable bindings separately from the
 171 native callback subscriptions. Then add a second independently authored
 offline module adapter and differential event fixtures without taking over
 the other chat's runtime branch.
+
+## R178: full original catalog to first-party execution coverage
+
+R178 adds a strict metadata-only TSV loader at `reference_compat/include/slinkywinky/candidate_catalog.hpp`.
+It validates module identity and order, categories, signed priorities, 27 event slots and duplicate subscriptions.
+In original-candidate mode it requires exactly 66 module records, 171 native descriptor callback subscriptions,
+2 descriptor modules without event callbacks, and the 27-slot reference histogram.
+
+The independently written `ModuleExecutionBridge::coverage()` exposes native registrations separately from
+actually installed first-party offline callback bindings. `bind_reach_from_catalog()` locates the module by
+its validated name, combat category and event slot, never by an assumed numeric position.
+
+The executable `reference_compat/tools/audit_implementation_coverage.cpp` loads the complete catalog,
+binds the existing first-party Reach decision function, runs its offline event 8 callback, validates
+world admission, cooldown, disable behavior and per-event registration coverage, and emits numbers-only JSON.
+CI uses a synthetic three-module fixture and two negative fixtures for duplicate subscriptions and an
+incorrect Reach slot. Windows and Ubuntu, Debug and Release, are exercised through existing reference CI.
+
+Independent local inspection of the private candidate confirms Reach at descriptor index 54,
+combat category 0, exactly one callback at event slot 8, priority 0. The fixture loader does not
+hardcode that descriptor index.
+
+To reproduce on a private machine after generating the TSV with the R175 exporter:
+
+```sh
+cmake -S reference_compat -B build-reference -DCMAKE_BUILD_TYPE=Release
+cmake --build build-reference --config Release
+./build-reference/slinkywinky_implementation_coverage_audit \
+  build/private_candidate_modules.tsv --expect-candidate \
+  --json-out build/private_implementation_coverage.json
+```
+
+Visual Studio multi-config builds use `build-reference/Release/slinkywinky_implementation_coverage_audit.exe`.
+
+### Implementation accounting
+
+| Measure | Status |
+|---|---|
+| Declared modules | 66 |
+| Modules with native descriptor callbacks | 64 |
+| Registered native event subscriptions | 171 |
+| Actually bound first-party offline callback implementations | 1 (Reach) |
+| Native event subscriptions without an implementation binding | 170 |
+| Original algorithms executing in an injected Minecraft client | Not demonstrated |
+| Pixel-perfect GUI, native hooks, packet callbacks and teardown parity | Not demonstrated |
+
+These counts measure registration coverage, not an equal-weight percentage of client functionality.
+The Reach decision runs in an offline simulated event envelope only. The private reference ZIP and
+generated metadata fixture remain local. Unlicensed upstream code and proprietary assets are not
+copied to this repository. PR #1's independent Minecraft runtime is untouched.
