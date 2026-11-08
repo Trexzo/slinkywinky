@@ -39,8 +39,22 @@ public final class R179ExactSourceTargetJniSmoke {
             check(R167RecoveredSliderJniSmoke.navigate(4),
                   "Original source numeric settings did not expand");
 
-            int[] rect=target();
+            // R180 negative: model geometry exists but no GL11 frame
+            // containing the newly opened source slider has been painted.
+            check(target()==null,
+                  "Unpainted source settings exposed hit geometry");
             int[] ref=R167RecoveredSliderJniSmoke.sliderTarget(500);
+            check(ref!=null && ref.length==2,
+                  "Prepared source geometry missing in isolated model");
+            check(R175RetainedHoverJniSmoke.observeHover(
+                      ref[0],ref[1],true,676,630),
+                  "Unpainted source must allow an empty passive sample");
+            check(target()==null,
+                  "Empty passive sample exposed unpainted source target");
+            expectEvidence(1,0,0);
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "Source page first paint failed");
+            int[] rect=target();
             check(rect!=null && rect.length==6 &&
                   rect[0]>=0 && rect[1]>=0 &&
                   rect[2]<=676 && rect[3]<=630 &&
@@ -51,8 +65,6 @@ public final class R179ExactSourceTargetJniSmoke {
                   ref[0]>=rect[0] && ref[0]<rect[2] &&
                   ref[1]>=rect[1] && ref[1]<rect[3],
                   "Legacy independent reference source hit disagrees with actual native rectangle");
-            check(R166RetainedPointerJniSmoke.redraw(),
-                  "Source-visible native GL11 frame refused");
             expectEvidence(2,1,0);
             final String profile=R166RetainedPointerJniSmoke.profile();
             check(profile!=null,"Native retained profile missing");
@@ -106,6 +118,7 @@ public final class R179ExactSourceTargetJniSmoke {
             System.out.println("R179_NATIVE_WGL_SOURCE_ELIGIBLE_AND_EXACT_HIT_COUNTERS_PASS");
             System.out.println("R179_FOREGROUND_REFUSAL_OWNER_AND_PROFILE_ISOLATION_PASS");
             System.out.println("R179_NO_ORIGINAL_GAME_CLICK_DISPATCH");
+            System.out.println("R180_UNPAINTED_NAVIGATION_CANNOT_EXPOSE_HOVER_TARGET_PASS");
         } finally {
             check(R166RetainedPointerJniSmoke.end(),
                   "Disposable WGL context release failed");

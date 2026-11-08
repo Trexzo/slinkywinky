@@ -46,6 +46,12 @@ public final class R175RetainedHoverJniSmoke {
                   start[1]==0 && start[2]==0 && start[3]==0 && start[4]==0,
                   "Initial native hover audit counters not zeroed");
 
+            // R180: navigation only prepares settings. It must not create
+            // a hover target until the actual native GL11 redraw.
+            check(observeHover(x,y,true,676,630) && hoverReceipt()==null,
+                  "Unpainted source must count only an empty passive sample");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "First source settings GL11 paint failed");
             check(!observeHover(x,y,true,677,630) && hoverReceipt()==null,
                   "A wrong viewport reached native retained hover");
             final AtomicBoolean foreignDenied=new AtomicBoolean(false);
@@ -65,13 +71,13 @@ public final class R175RetainedHoverJniSmoke {
             check(seen!=null && seen.length==2 && seen[0]==1 &&
                   seen[1]>=0,"Native source numeric hover not retained");
             int[] first=hoverEvidence();
-            check(first!=null && first.length==5 && first[0]==1 &&
-                  first[1]==1 && first[2]==1 && first[3]==1 && first[4]==0,
+            check(first!=null && first.length==5 && first[0]==2 &&
+                  first[1]==2 && first[2]==2 && first[3]==1 && first[4]==0,
                   "Source numeric hover did not increment exact WGL counters");
             check(observeHover(x,y,true,676,630),
                   "Repeated identical source hover should be idempotent");
             int[] repeat=hoverEvidence();
-            check(repeat!=null && repeat[1]==2 && repeat[2]==2 &&
+            check(repeat!=null && repeat[1]==3 && repeat[2]==3 &&
                   repeat[3]==2 && repeat[4]==0,
                   "Repeat source hover audit did not count accepted samples");
             check(R166RetainedPointerJniSmoke.redraw(),

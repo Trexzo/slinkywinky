@@ -6,6 +6,7 @@
 #include <GL/gl.h>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace slinkywinky {
 WglRetainedMenuPreview::WglRetainedMenuPreview()
@@ -23,6 +24,9 @@ bool WglRetainedMenuPreview::draw(
         return false;
     if(active_ && (context_!=context || dc_!=dc ||
                    width_!=width || height_!=height))return false;
+    const bool was_active=active_;
+    // Failed paint attempts must not retain previously certified input geometry.
+    last_drawn_frame_.reset();
     // First observed frame pins a single original OpenGL render epoch.
     // A changed GL context/viewport requires an explicit new session.
     WglMenuOverlayHost host;
@@ -34,18 +38,6 @@ bool WglRetainedMenuPreview::draw(
     } catch(...) {rendered=false;}
     const bool closed=host.close(); // same admitted graphics owner
     if(!rendered || !closed)return false;
-    // R179: prove the exact source-backed physical-pixel target was
-    // hittable in the frame JUST DRAWN, before inert navigation is applied.
-    // Do not use the Java schedule as a substitute for GL11 source geometry.
-    if(active_) {
-        if(source_visible_draws_==
-           std::numeric_limits<std::uint64_t>::max())return false;
-        const auto renderedFrame=pointer_frames_.next(
-            menu_,&profile_,&navigation_);
-        if(!renderedFrame)return false;
-        if(menu_original_auto_block_range_target(
-            *renderedFrame,width,height))++source_visible_draws_;
-    }
     if(!active_) {
         // Separate source-identified pointer snapshots from WGL paint
         // frames. Both are owner-thread local and pinned to one viewport.
@@ -56,6 +48,18 @@ bool WglRetainedMenuPreview::draw(
         height_=height;
         active_=true;
     }
+    // R180: snapshot ONLY after a successful real GL11 frame. A newly
+    // navigated (but not yet drawn) menu cannot expose a source hover target.
+    const auto rendered_frame=pointer_frames_.next(
+        menu_,&profile_,&navigation_);
+    if(!rendered_frame)return false;
+    if(was_active) {
+        if(source_visible_draws_==
+           std::numeric_limits<std::uint64_t>::max())return false;
+        if(menu_original_auto_block_range_target(
+            *rendered_frame,width,height))++source_visible_draws_;
+    }
+    last_drawn_frame_=std::move(*rendered_frame);
     drawn_frames_++;
     return true;
 }
@@ -64,8 +68,9 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
        accepted_actions_==std::numeric_limits<std::uint64_t>::max() ||
        refused_actions_==std::numeric_limits<std::uint64_t>::max())
         return false;
-    // Navigation invalidates any partially held pointer transaction.
+    // Navigation invalidates held gestures AND the last-painted hit surface.
     pointer_gesture_.cancel();
+    last_drawn_frame_.reset();
     if(!navigation_.apply(action)) {
         refused_actions_++;
         return false;
@@ -113,6 +118,8 @@ bool WglRetainedMenuPreview::pointer(
     const auto hit=pointer_gesture_.release(
         *frame,mode,x,y,monotonic_ms,true);
     if(!hit)return false;
+    // A preview gesture may change presentation; require repaint before hover.
+    last_drawn_frame_.reset();
     // The precise source hit was certified at mouse-down and mouse-up.
     // No arbitrary module values or gameplay input are dispatched.
     switch(hit->kind) {
@@ -185,16 +192,25 @@ bool WglRetainedMenuPreview::observe_hover(
        hover_foreground_==std::numeric_limits<std::uint64_t>::max() ||
        hover_numeric_==std::numeric_limits<std::uint64_t>::max() ||
        hover_bind_==std::numeric_limits<std::uint64_t>::max())return false;
+    if(!last_drawn_frame_) {
+        // R180: the old image is invalidated by navigation. Count this
+        // original WGL observation as EMPTY (preserves 63-frame telemetry)
+        // but never hit-test a control that has not yet been painted.
+        menu_.set_numeric_hover(std::nullopt);
+        menu_.set_bind_hover_row(std::nullopt);
+        ++hover_samples_;
+        if(foreground_verified)++hover_foreground_;
+        return true;
+    }
     std::optional<MenuNumericHover> numeric;
     std::optional<std::size_t> bind;
     bool exactSourceHit=false;
     if(foreground_verified && x>=0 && y>=0 &&
        static_cast<unsigned>(x)<width &&
        static_cast<unsigned>(y)<height) {
-        const auto frame=pointer_frames_.next(menu_,&profile_,&navigation_);
-        if(!frame)return false;
+        const auto& frame=*last_drawn_frame_;
         const auto hit=hit_test_menu(
-            *frame,MenuPanelMode::CompactOverlay,x,y);
+            frame,MenuPanelMode::CompactOverlay,x,y);
         if(hit) {
             if(hit->kind==MenuHitKind::RecoveredSliderPreview ||
                hit->kind==MenuHitKind::RecoveredRangePreview)
@@ -205,7 +221,7 @@ bool WglRetainedMenuPreview::observe_hover(
                 bind=hit->catalog_index;
             if(numeric) {
                 const auto source=menu_original_auto_block_range_target(
-                    *frame,width,height);
+                    frame,width,height);
                 exactSourceHit=source &&
                     source->catalog_index==numeric->catalog_index &&
                     source->widget_index==numeric->widget_index &&
@@ -242,9 +258,9 @@ WglRetainedMenuPreview::source_hover_target(
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc)
         return std::nullopt;
-    const auto frame=pointer_frames_.next(menu_,&profile_,&navigation_);
-    return frame?menu_original_auto_block_range_target(*frame,width,height):
-           std::nullopt;
+    return last_drawn_frame_?
+        menu_original_auto_block_range_target(
+            *last_drawn_frame_,width,height):std::nullopt;
 }
 std::optional<std::array<std::uint64_t,3>>
 WglRetainedMenuPreview::source_hover_evidence(
@@ -308,6 +324,7 @@ bool WglRetainedMenuPreview::close() noexcept {
     // Every frame uses a stack-local WGL host that is already closed.
     // Drop all held input and the owner-bound snapshot epoch.
     pointer_gesture_.cancel();
+    last_drawn_frame_.reset();
     if(!pointer_frames_.detach())return false;
     context_=nullptr;
     dc_=nullptr;

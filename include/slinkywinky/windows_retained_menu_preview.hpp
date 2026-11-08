@@ -92,6 +92,9 @@ private:
     MenuNavigation navigation_;
     MenuMouseGesture pointer_gesture_;
     MenuRenderSession pointer_frames_;
+    // R180: immutable snapshot of the WGL frame actually painted.
+    // Never expose hover geometry from navigation that has not been drawn.
+    std::optional<MenuRenderFrame> last_drawn_frame_;
     std::thread::id owner_;
     HGLRC context_=nullptr;
     HDC dc_=nullptr;
