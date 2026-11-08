@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -20,6 +21,7 @@
 using namespace slinkywinky;
 
 int main() {
+    try {
     const auto& all=recovered_widget_catalog();
     std::size_t cps=all.size(),targetRange=all.size();
     for(std::size_t i=0;i<all.size();++i) {
@@ -83,7 +85,9 @@ int main() {
         CHECK(during && during->numeric_drag_preview);
         CHECK(during->numeric_drag_preview->widget_index==cps);
         CHECK(during->numeric_drag_preview->handle==0u);
-        CHECK(!during->recovered_slider_overrides[cps]);
+        CHECK(during->recovered_slider_overrides[cps] &&
+              *during->recovered_slider_overrides[cps]==
+                  profile.settings().combat.clicks_per_second);
         const auto tip=menu_numeric_tooltip_geometry(
             *during,panel->logical_width(),panel->logical_height());
         CHECK(tip && tip->label.find("CPS")!=std::string::npos);
@@ -100,7 +104,7 @@ int main() {
         const auto releaseValue=menu_slider_value_at_x(
             all[cps],*track,physicalX);
         CHECK(releaseValue);
-        CHECK(model.set_recovered_slider_preview(
+        CHECK(profile.set_recovered_slider(
             committed->catalog_index,committed->control_index,
             *releaseValue));
         const auto stored=model.recovered_slider_override(cps);
@@ -154,7 +158,7 @@ int main() {
               releaseOutside->control_index==cps);
         CHECK(model.cancel_numeric_drag_preview());
         CHECK(model.recovered_slider_override(cps)==stored);
-        CHECK(model.set_recovered_slider_preview(
+        CHECK(profile.set_recovered_slider(
             2u,cps,*outsideValue));
         CHECK(model.recovered_slider_override(cps)==all[cps].min_value);
         // A numeric release in the inert gap between tabs and cards
@@ -252,4 +256,8 @@ int main() {
         CHECK(rangeSession.detach());
     }
     return 0;
+    } catch(const std::exception& error) {
+        std::fprintf(stderr,"%s\n",error.what());
+        return 1;
+    }
 }

@@ -13,6 +13,7 @@
 #include <limits>
 #include <stdexcept>
 #include <cstdio>
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -110,7 +111,7 @@ int main() {
             source,*track,logicalReleaseX);
         CHECK(selected && *selected>=source.min_value &&
               *selected<=source.max_value);
-        CHECK(menu.set_recovered_slider_preview(2u,target,*selected));
+        CHECK(profile.set_recovered_slider(2u,target,*selected));
         const auto updated=session.next(menu,&profile,&navigation);
         CHECK(updated && updated->recovered_slider_overrides[target]);
         const auto current=*updated->recovered_slider_overrides[target];
@@ -121,7 +122,7 @@ int main() {
         // Input ownership revokes a held slider after an independent edit.
         CHECK(gesture.press(*updated,mode,start.first,start.second,
                             1000,true));
-        CHECK(menu.set_recovered_slider_preview(2u,target,12.34f));
+        CHECK(profile.set_recovered_slider(2u,target,12.34f));
         CHECK(menu.recovered_slider_override(target) &&
               std::fabs(*menu.recovered_slider_override(target)-12.3f)<0.0001f);
         const auto changed=session.next(menu,&profile,&navigation);

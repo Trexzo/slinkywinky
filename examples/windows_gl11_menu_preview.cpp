@@ -874,7 +874,7 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                                     menu_slider_value_at_x(
                                         all[hit->control_index],*track,logicalX);
                                 if(value)
-                                    menu.set_recovered_slider_preview(
+                                    profile.set_recovered_slider(
                                         hit->catalog_index,
                                         hit->control_index,*value);
                             }

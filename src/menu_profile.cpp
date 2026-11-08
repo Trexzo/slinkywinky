@@ -1,4 +1,5 @@
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -18,6 +19,29 @@ bool* setting(ClientSettings& settings, std::size_t index) noexcept {
         case 15: return &settings.velocity.enabled;
         default: return nullptr;
     }
+}
+// Numeric binding is intentionally based on source module+group+label+kind,
+ // never only on a user-editable caption or a position on a filtered page.
+enum class NativeSlider : unsigned char {
+    None,ClickerCps,BacktrackDelay,ReachDistance,VelocityChance,BlockRange
+};
+NativeSlider bound_slider(std::size_t index) noexcept {
+    const auto& all=recovered_widget_catalog();
+    if(index>=all.size())return NativeSlider::None;
+    const auto& w=all[index];
+    if(w.kind!=RecoveredWidgetKind::Slider)return NativeSlider::None;
+    const std::string_view module=w.module,group=w.group,label=w.label;
+    if(module=="Auto Clicker" && group=="In-game" &&
+       label=="Target CPS")return NativeSlider::ClickerCps;
+    if(module=="Backtrack" && group=="Main" &&
+       label=="Maximum delay")return NativeSlider::BacktrackDelay;
+    if(module=="Reach" && group=="Main" &&
+       label=="Distance")return NativeSlider::ReachDistance;
+    if(module=="Velocity" && group=="Main" &&
+       label=="Chance")return NativeSlider::VelocityChance;
+    if(module=="Auto Block" && group=="Main" &&
+       label=="Range")return NativeSlider::BlockRange;
+    return NativeSlider::None;
 }
 const bool* setting(const ClientSettings& settings, std::size_t index) noexcept {
     switch(index) {
@@ -90,6 +114,65 @@ bool MenuProfileBridge::toggle(std::size_t index) {
     if(menu_.preview_enabled(index)!=next && !menu_.toggle_preview(index))
         return false;
     *stored=next;
+    return true;
+}
+std::optional<float> MenuProfileBridge::recovered_slider_setting(
+        std::size_t index) const noexcept {
+    switch(bound_slider(index)) {
+        case NativeSlider::ClickerCps: return settings_.combat.clicks_per_second;
+        case NativeSlider::BacktrackDelay: return static_cast<float>(settings_.backtrack_ms);
+        case NativeSlider::ReachDistance: return settings_.combat.reach.distance;
+        case NativeSlider::VelocityChance: return settings_.velocity.chance_percent;
+        case NativeSlider::BlockRange: return settings_.combat.block_range;
+        default: return std::nullopt;
+    }
+}
+bool MenuProfileBridge::set_recovered_slider(
+        std::size_t catalog_index,std::size_t index,float value) {
+    // All unsupported sliders preserve the existing read-only local
+    // preview semantics and never touch the native settings.
+    const auto field=bound_slider(index);
+    if(field==NativeSlider::None)
+        return menu_.set_recovered_slider_preview(catalog_index,index,value);
+    const auto& catalog=official_module_catalog();
+    const auto& source=recovered_widget_catalog();
+    if(catalog_index>=catalog.size() || index>=source.size() ||
+       !std::isfinite(value) ||
+       std::string_view(source[index].module)!=catalog[catalog_index].name)
+        return false;
+    // Use exactly the same half-up quantization as MenuState's
+    // source-indexed slider setter before validating the engine profile.
+    const auto& widget=source[index];
+    const double lo=widget.min_value,hi=widget.max_value,step=widget.step;
+    if(!std::isfinite(lo) || !std::isfinite(hi) || !std::isfinite(step) ||
+       step<=0 || hi<=lo || value<lo || value>hi)return false;
+    const double steps=std::floor((static_cast<double>(value)-lo)/step+0.5);
+    const auto snapped=static_cast<float>(std::clamp(lo+steps*step,lo,hi));
+    if(!std::isfinite(snapped))return false;
+    ClientSettings updated=settings_;
+    switch(field) {
+        case NativeSlider::ClickerCps:
+            updated.combat.clicks_per_second=snapped; break;
+        case NativeSlider::BacktrackDelay:
+            updated.backtrack_ms=static_cast<unsigned>(snapped); break;
+        case NativeSlider::ReachDistance:
+            updated.combat.reach.distance=snapped; break;
+        case NativeSlider::VelocityChance:
+            updated.velocity.chance_percent=snapped; break;
+        case NativeSlider::BlockRange:
+            updated.combat.block_range=snapped; break;
+        default:return false;
+    }
+    // Validate before changing either profile or GUI. A fixture value
+    // beyond an admitted engine range (e.g. Block Range 7) is rejected.
+    const auto checked=parse_settings(serialize_settings(updated));
+    if(!checked.valid)return false;
+    // This also verifies current tab, visible expanded row, exact
+    // source callsite, and current five-widget page.
+    if(!menu_.set_recovered_slider_preview(catalog_index,index,snapped))
+        return false;
+    settings_=checked.settings;
+    synchronize_visible();
     return true;
 }
 std::optional<MenuPrimaryParameter> MenuProfileBridge::primary(

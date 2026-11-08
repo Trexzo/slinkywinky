@@ -86,6 +86,15 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
     }
     frame.focused_text_widget=menu.focused_text_widget();
     frame.recovered_slider_overrides=menu.recovered_slider_overrides();
+    // R155: native profile is authoritative over five supported source
+    // controls even after a profile load or an independent primary edit.
+    if(profile) {
+        for(std::size_t widget=0;
+            widget<frame.recovered_slider_overrides.size();++widget) {
+            if(const auto mapped=profile->recovered_slider_setting(widget))
+                frame.recovered_slider_overrides[widget]=*mapped;
+        }
+    }
     frame.recovered_range_overrides=menu.recovered_range_overrides();
     frame.piercing_selected=menu.piercing_selected();
     frame.visible=menu.page();

@@ -35,6 +35,13 @@ public:
     bool scroll_by_visible(int delta,std::size_t visible_limit);
     bool toggle(std::size_t catalog_index);
     bool enabled(std::size_t catalog_index) const noexcept;
+    // R155: exactly five source-matched slider controls now persist to
+    // existing native ClientSettings. Unmapped controls remain GUI-only.
+    // These settings do NOT execute in Minecraft until runtime admission.
+    bool set_recovered_slider(std::size_t catalog_index,
+                              std::size_t widget_index,float value);
+    std::optional<float> recovered_slider_setting(
+                              std::size_t widget_index) const noexcept;
     std::optional<MenuPrimaryParameter> primary(std::size_t catalog_index) const noexcept;
     // Only the currently visible, expanded module may be adjusted by one step.
     bool adjust_primary(std::size_t catalog_index, int direction);

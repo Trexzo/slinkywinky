@@ -12,6 +12,7 @@
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -21,6 +22,7 @@
 using namespace slinkywinky;
 
 int main() {
+    try {
     CHECK(menu_numeric_formats.size()==115u);
     const auto a=menu_format_numeric_values("%.1f CPS",12.5f);
     CHECK(a && *a=="12.5 CPS");
@@ -120,7 +122,7 @@ int main() {
               frame->numeric_hover->widget_index==cpsIndex);
         const auto tip=menu_numeric_tooltip_geometry(
             *frame,panel->logical_width(),panel->logical_height());
-        CHECK(tip && tip->label=="12.5 CPS");
+        CHECK(tip && tip->label=="12.0 CPS");
         CHECK(tip->height==20.0f && tip->width>35.0f);
         CHECK(tip->x>=8.0f && tip->x+tip->width<=
               panel->logical_width()-8.0f);
@@ -132,7 +134,7 @@ int main() {
         CHECK(hoverHit &&
               hoverHit->kind==MenuHitKind::RecoveredSliderPreview &&
               hoverHit->control_index==cpsIndex);
-        CHECK(menu.set_recovered_slider_preview(2u,cpsIndex,14.0f));
+        CHECK(profile.set_recovered_slider(2u,cpsIndex,14.0f));
         const auto changed=frames.next(menu,&profile,&nav);
         const auto changedTip=menu_numeric_tooltip_geometry(
             *changed,panel->logical_width(),panel->logical_height());
@@ -155,4 +157,8 @@ int main() {
         CHECK(frames.detach());
     }
     return 0;
+    } catch(const std::exception& error) {
+        std::fprintf(stderr,"%s\n",error.what());
+        return 1;
+    }
 }
