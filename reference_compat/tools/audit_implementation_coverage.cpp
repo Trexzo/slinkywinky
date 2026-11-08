@@ -1,4 +1,4 @@
-// R178: read-only 66-module catalog to independently written execution bridge.
+// R178-R179: read-only 66-module catalog to independently written execution bridge.
 // No original client executable, Minecraft process, native hooks or game I/O.
 #include "slinkywinky/candidate_catalog.hpp"
 #include "slinkywinky/module_execution_bridge.hpp"
@@ -26,6 +26,17 @@ static ExecutionFrame reach_frame(int last_attack = 0) {
     value.settings.distance = 3.2f;
     value.settings.activation_ticks = 4.0f;
     frame.reach = value;
+    return frame;
+}
+
+static ExecutionFrame jump_frame(bool in_game = true, int current_ticks = 10) {
+    ExecutionFrame frame;
+    frame.event = kPlayerUpdateEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    JumpDelayTickPayload payload;
+    payload.input = {in_game, current_ticks};
+    frame.jump_delay = payload;
     return frame;
 }
 
@@ -79,19 +90,29 @@ int main(int argc, char** argv) {
                     "declared per-event callback histogram differs");
         require(bridge.bind_reach_from_catalog(),
                 "no independently implemented Reach event-8 binding available");
+        std::size_t jump_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "No Jump Delay") jump_id = i;
+        const bool has_jump = jump_id < manifest.modules.size();
+        if (has_jump)
+            require(bridge.bind_no_jump_delay_from_catalog(),
+                    "No Jump Delay is present but native event 17/movement binding failed");
+        const std::size_t expected_bindings = has_jump ? 2 : 1;
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
                 "callback coverage drift");
-        require(c.modules_with_executable_bindings == 1 &&
-                c.executable_callback_bindings == 1,
+        require(c.modules_with_executable_bindings == expected_bindings &&
+                c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
                 c.native_callback_subscriptions, "callback coverage does not reconcile");
         require(c.implemented_per_event[kReachQueryEvent] == 1,
                 "Reach callback not routed through event 8");
+        require(c.implemented_per_event[kPlayerUpdateEvent] == (has_jump ? 1u : 0u),
+                "No Jump Delay callback not routed through event 17");
         for (unsigned event = 0; event < kEventSlots; ++event)
-            if (event != kReachQueryEvent)
+            if (event != kReachQueryEvent && event != kPlayerUpdateEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -126,11 +147,38 @@ int main(int argc, char** argv) {
                 frame.reach->executions == 0 && frame.executed_modules.empty(),
                 "disabled Reach callback still executable");
 
+        if (has_jump) {
+            require(bridge.request(jump_id, true), "No Jump Delay enable rejected");
+            require(bridge.apply(true, true), "No Jump Delay enable not applied");
+            auto tick = jump_frame(true);
+            require(bridge.dispatch(tick), "No Jump Delay tick rejected");
+            require(tick.jump_delay && tick.jump_delay->executions == 1 &&
+                    tick.jump_delay->proposed_jump_ticks == 0,
+                    "first-party No Jump Delay did not reset the cooldown");
+            require(tick.executed_modules.size() == 1 &&
+                    tick.executed_modules.front() == jump_id,
+                    "unimplemented event-17 module executed");
+            tick = jump_frame(false);
+            require(bridge.dispatch(tick) && tick.jump_delay &&
+                    tick.jump_delay->executions == 1 &&
+                    !tick.jump_delay->proposed_jump_ticks,
+                    "No Jump Delay wrote to an out-of-game input");
+            require(bridge.request(jump_id, false), "No Jump Delay disable rejected");
+            require(bridge.apply(true, true), "No Jump Delay disable not applied");
+            tick = jump_frame(true);
+            require(bridge.dispatch(tick) && tick.jump_delay &&
+                    tick.jump_delay->executions == 0 &&
+                    !tick.jump_delay->proposed_jump_ticks,
+                    "disabled No Jump Delay callback still executed");
+        }
+
         if (expect_candidate)
-            require(c.registered_modules == 66 &&
+            require(has_jump && c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.unimplemented_callback_subscriptions == 170,
+                    c.modules_with_executable_bindings == 2 &&
+                    c.executable_callback_bindings == 2 &&
+                    c.unimplemented_callback_subscriptions == 169,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -146,7 +194,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R178 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R179 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }
