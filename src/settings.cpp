@@ -83,6 +83,11 @@ SettingsResult parse_settings(const std::string& text) {
             else if(name=="velocity_horizontal") parsed.velocity.horizontal=parse_float(value,0,1);
             else if(name=="velocity_vertical") parsed.velocity.vertical=parse_float(value,0,1);
             else if(name=="velocity_chance_percent") parsed.velocity.chance_percent=parse_float(value,0,100);
+            else if(name=="sprint_enabled") parsed.sprint.enabled=parse_bool(value);
+            else if(name=="sprint_inventory") parsed.sprint.allow_inventory=parse_bool(value);
+            else if(name=="sprint_using_item") parsed.sprint.allow_using_item=parse_bool(value);
+            else if(name=="sprint_backwards") parsed.sprint.allow_backwards=parse_bool(value);
+            else if(name=="sprint_sideways") parsed.sprint.allow_sideways=parse_bool(value);
             else if(name=="backtrack_enabled") parsed.backtrack_enabled=parse_bool(value);
             else if(name=="backtrack_ms") parsed.backtrack_ms=parse_uint(value,0,1000);
             // Unknown keys deliberately ignored and never silently materialized.
@@ -122,6 +127,11 @@ std::string serialize_settings(const ClientSettings& s) {
     put_float(out,"velocity_horizontal",s.velocity.horizontal);
     put_float(out,"velocity_vertical",s.velocity.vertical);
     put_float(out,"velocity_chance_percent",s.velocity.chance_percent);
+    put_bool(out,"sprint_enabled",s.sprint.enabled);
+    put_bool(out,"sprint_inventory",s.sprint.allow_inventory);
+    put_bool(out,"sprint_using_item",s.sprint.allow_using_item);
+    put_bool(out,"sprint_backwards",s.sprint.allow_backwards);
+    put_bool(out,"sprint_sideways",s.sprint.allow_sideways);
     put_bool(out,"backtrack_enabled",s.backtrack_enabled);
     out<<"backtrack_ms="<<s.backtrack_ms<<'\n';
     return out.str();

@@ -12,7 +12,7 @@ int main() {
     MenuState menu;
     MenuProfileBridge profile(menu);
     for(std::size_t i=0;i<official_module_catalog().size();++i) {
-        const bool expected=(i==0||i==1||i==2||i==4||i==6||i==12||i==15);
+        const bool expected=(i==0||i==1||i==2||i==4||i==6||i==12||i==15||i==25);
         CHECK(module_has_profile_setting(i)==expected);
         CHECK(!profile.enabled(i));
     }

@@ -7,7 +7,7 @@
 namespace slinkywinky {
 namespace {
 // Public module-catalog index, not an original Slinky implementation ID.
-// These seven flags map 1:1 to existing native C++ settings fields.
+// Eight first-party model flags, not eight live Minecraft modules.
 bool* setting(ClientSettings& settings, std::size_t index) noexcept {
     switch(index) {
         case 0: return &settings.combat.aim_enabled;
@@ -17,6 +17,7 @@ bool* setting(ClientSettings& settings, std::size_t index) noexcept {
         case 6: return &settings.combat.hit_select_enabled;
         case 12: return &settings.combat.reach_enabled;
         case 15: return &settings.velocity.enabled;
+        case 25: return &settings.sprint.enabled;
         default: return nullptr;
     }
 }
@@ -44,7 +45,8 @@ NativeSlider bound_slider(std::size_t index) noexcept {
     return NativeSlider::None;
 }
 enum class NativeBoolean : unsigned char {
-    None,AimMousePressed,BlockDamaged,ReachSprinting
+    None,AimMousePressed,BlockDamaged,ReachSprinting,
+    SprintInventory,SprintUsingItem,SprintBackwards,SprintSideways
 };
 NativeBoolean bound_boolean(std::size_t index) noexcept {
     const auto& all=recovered_widget_catalog();
@@ -58,6 +60,12 @@ NativeBoolean bound_boolean(std::size_t index) noexcept {
        label=="Damaged")return NativeBoolean::BlockDamaged;
     if(module=="Reach" && group=="Conditions" &&
        label=="Sprinting")return NativeBoolean::ReachSprinting;
+    if(module=="Sprint" && group=="Allow while") {
+        if(label=="In inventory")return NativeBoolean::SprintInventory;
+        if(label=="Using item")return NativeBoolean::SprintUsingItem;
+        if(label=="Backwards")return NativeBoolean::SprintBackwards;
+        if(label=="Sideways")return NativeBoolean::SprintSideways;
+    }
     return NativeBoolean::None;
 }
 const bool* setting(const ClientSettings& settings, std::size_t index) noexcept {
@@ -69,6 +77,7 @@ const bool* setting(const ClientSettings& settings, std::size_t index) noexcept 
         case 6: return &settings.combat.hit_select_enabled;
         case 12: return &settings.combat.reach_enabled;
         case 15: return &settings.velocity.enabled;
+        case 25: return &settings.sprint.enabled;
         default: return nullptr;
     }
 }
@@ -76,7 +85,7 @@ const bool* setting(const ClientSettings& settings, std::size_t index) noexcept 
 
 bool module_has_profile_setting(std::size_t index) noexcept {
     return index==0 || index==1 || index==2 || index==4 ||
-           index==6 || index==12 || index==15;
+           index==6 || index==12 || index==15 || index==25;
 }
 
 MenuProfileBridge::MenuProfileBridge(MenuState& menu) : menu_(menu) {
@@ -142,6 +151,14 @@ std::optional<bool> MenuProfileBridge::recovered_boolean_setting(
             return settings_.combat.block_requires_damage;
         case NativeBoolean::ReachSprinting:
             return settings_.combat.reach.require_sprint;
+        case NativeBoolean::SprintInventory:
+            return settings_.sprint.allow_inventory;
+        case NativeBoolean::SprintUsingItem:
+            return settings_.sprint.allow_using_item;
+        case NativeBoolean::SprintBackwards:
+            return settings_.sprint.allow_backwards;
+        case NativeBoolean::SprintSideways:
+            return settings_.sprint.allow_sideways;
         default:return std::nullopt;
     }
 }
@@ -167,6 +184,18 @@ bool MenuProfileBridge::toggle_recovered_boolean(
         case NativeBoolean::ReachSprinting:
             desired=!settings_.combat.reach.require_sprint;
             updated.combat.reach.require_sprint=desired;break;
+        case NativeBoolean::SprintInventory:
+            desired=!settings_.sprint.allow_inventory;
+            updated.sprint.allow_inventory=desired;break;
+        case NativeBoolean::SprintUsingItem:
+            desired=!settings_.sprint.allow_using_item;
+            updated.sprint.allow_using_item=desired;break;
+        case NativeBoolean::SprintBackwards:
+            desired=!settings_.sprint.allow_backwards;
+            updated.sprint.allow_backwards=desired;break;
+        case NativeBoolean::SprintSideways:
+            desired=!settings_.sprint.allow_sideways;
+            updated.sprint.allow_sideways=desired;break;
         default:return false;
     }
     const auto checked=parse_settings(serialize_settings(updated));

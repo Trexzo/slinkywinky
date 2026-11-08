@@ -1,5 +1,6 @@
 #pragma once
 #include "slinkywinky/combat.hpp"
+#include "slinkywinky/movement.hpp"
 #include <filesystem>
 #include <string>
 
@@ -8,6 +9,7 @@ struct ClientSettings {
     unsigned version = 1;
     CombatSettings combat;
     VelocitySettings velocity;
+    SprintSettings sprint;
     bool backtrack_enabled = false;
     unsigned backtrack_ms = 100;
 };
