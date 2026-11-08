@@ -16,3 +16,5 @@ out/
 *.bak
 .idea/
 .vscode/
+__pycache__/
+vanilla189-isolated/

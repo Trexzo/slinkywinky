@@ -9,6 +9,7 @@
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -45,6 +46,11 @@ public:
                        int x,int y,bool foreground_verified);
     std::optional<MenuNumericHover> observed_numeric_hover() const noexcept;
     std::optional<std::size_t> observed_bind_hover() const noexcept;
+    // R176: counters ONLY. Exact WGL/owner/viewport receipt is the sole
+    // source of original-game runtime hover evidence; no raw coordinates,
+    // input buttons, game entities, profile data or click permissions.
+    std::optional<std::array<std::uint64_t,5>> hover_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
     bool close() noexcept;
     bool owner_thread() const noexcept;
     bool active() const noexcept {return active_;}
@@ -81,6 +87,8 @@ private:
     HDC dc_=nullptr;
     unsigned width_=0,height_=0;
     std::uint64_t drawn_frames_=0,accepted_actions_=0,refused_actions_=0;
+    std::uint64_t hover_samples_=0,hover_foreground_=0,
+                  hover_numeric_=0,hover_bind_=0;
     bool active_=false;
 };
 } // namespace slinkywinky

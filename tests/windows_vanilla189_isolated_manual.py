@@ -17,6 +17,25 @@ import time
 import zipfile
 
 PINNED_CLIENT_SHA256 = "14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298"
+R176_HOVER_MARKER="R176_ORIGINAL_WINDOW_PASSIVE_HOVER_RECEIPT_PASS"
+R176_HOVER_REGEX=re.compile(
+    r"^R176_ORIGINAL_WINDOW_PASSIVE_HOVER_RECEIPT_PASS "
+    r"frames=64 samples=63 foreground=([0-9]{1,3}) "
+    r"numeric=([0-9]{1,3}) bind=([0-9]{1,3}) "
+    r"native_click_delivery=disabled\r?$",re.MULTILINE)
+
+def verify_r176_original_hover_marker(stdout):
+    """Strict original-process counter-only proof, NOT visual tooltip proof."""
+    if not isinstance(stdout,str) or stdout.count(R176_HOVER_MARKER)!=1:
+        raise RuntimeError("R176 missing/ambiguous original-JVM hover marker")
+    hit=list(R176_HOVER_REGEX.finditer(stdout))
+    if len(hit)!=1:
+        raise RuntimeError("R176 unexpected exact original-JVM hover receipt shape")
+    fg,numeric,bind=map(int,hit[0].groups())
+    if fg>63 or numeric>fg or bind>fg or numeric+bind>fg:
+        raise RuntimeError("R176 impossible original-JVM hover counters")
+    return fg,numeric,bind
+
 MARKERS = (
     "CALLBACK_CLASSLOADER_VALIDATED",
     "OBSERVATION_MAPPING_ADMITTED",
@@ -468,6 +487,15 @@ def main():
                     print("R100_EXTERNAL_OPERATOR_COMMANDS_NOT_GAME_KEYBOARD_OR_MOUSE",flush=True)
                     return
                 if args.render_retained_acceptance:
+                    # R176: the new marker MUST originate from this one
+                    # exact-JAR, source-restored original client JVM log.
+                    # It proves only counter-only WGL passive hover samples.
+                    fg,num,bind=verify_r176_original_hover_marker(read_log())
+                    print("R176_ORIGINAL_VANILLA_189_HOVER_COUNTERS_PASS "
+                          "samples=63 foreground="+str(fg)+
+                          " numeric="+str(num)+" bind="+str(bind),flush=True)
+                    print("R176_HOVER_COUNTERS_NOT_PHYSICAL_TOOLTIP_OR_EXCLUSIVE_CLICK_PROOF",
+                          flush=True)
                     print("R99_ORIGINAL_189_RETAINED_MENU_RECEIPTS_PASS",
                           "pid=" + str(game.pid), "report=" + str(report),flush=True)
                     print("R99_IN_GAME_RETAINED_RENDER_NOT_INTERACTIVE_OR_GAMEPLAY",flush=True)

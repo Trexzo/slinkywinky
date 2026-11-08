@@ -12,6 +12,9 @@ public final class R175RetainedHoverJniSmoke {
     private static native boolean observeHover(int x,int y,
                          boolean foreground,int width,int height);
     private static native int[] hoverReceipt();
+    // Returns aggregate counters ONLY, backed by the real first-party
+    // C++ retained WGL model in the disposable JNI test DLL.
+    private static native int[] hoverEvidence();
     private static void check(boolean value,String reason) {
         if(!value)throw new AssertionError("R175 "+reason);
     }
@@ -20,7 +23,8 @@ public final class R175RetainedHoverJniSmoke {
               args[0].endsWith("slinkywinky_r166_pointer_test_jni.dll"),
               "Only disposable, separate JNI WGL test DLL permitted");
         System.load(args[0]);
-        check(!observeHover(10,10,true,676,630) && hoverReceipt()==null,
+        check(!observeHover(10,10,true,676,630) && hoverReceipt()==null &&
+              hoverEvidence()==null,
               "Hover was admitted without an actual retained native UI");
         check(R166RetainedPointerJniSmoke.begin(),
               "Disposable WGL owner creation failed");
@@ -37,6 +41,10 @@ public final class R175RetainedHoverJniSmoke {
             check(before!=null && before.contains("\nblock_range="),
                   "Native profile snapshot missing");
             check(hoverReceipt()==null,"Default numeric hover was not empty");
+            int[] start=hoverEvidence();
+            check(start!=null && start.length==5 && start[0]==1 &&
+                  start[1]==0 && start[2]==0 && start[3]==0 && start[4]==0,
+                  "Initial native hover audit counters not zeroed");
 
             check(!observeHover(x,y,true,677,630) && hoverReceipt()==null,
                   "A wrong viewport reached native retained hover");
@@ -56,8 +64,16 @@ public final class R175RetainedHoverJniSmoke {
             int[] seen=hoverReceipt();
             check(seen!=null && seen.length==2 && seen[0]==1 &&
                   seen[1]>=0,"Native source numeric hover not retained");
+            int[] first=hoverEvidence();
+            check(first!=null && first.length==5 && first[0]==1 &&
+                  first[1]==1 && first[2]==1 && first[3]==1 && first[4]==0,
+                  "Source numeric hover did not increment exact WGL counters");
             check(observeHover(x,y,true,676,630),
                   "Repeated identical source hover should be idempotent");
+            int[] repeat=hoverEvidence();
+            check(repeat!=null && repeat[1]==2 && repeat[2]==2 &&
+                  repeat[3]==2 && repeat[4]==0,
+                  "Repeat source hover audit did not count accepted samples");
             check(R166RetainedPointerJniSmoke.redraw(),
                   "Native GL redraw failed with numeric tooltip present");
             seen=hoverReceipt();
@@ -106,7 +122,8 @@ public final class R175RetainedHoverJniSmoke {
             check(R166RetainedPointerJniSmoke.end(),
                   "Disposable native WGL session close failed");
         }
-        check(!observeHover(0,0,true,676,630) && hoverReceipt()==null,
+        check(!observeHover(0,0,true,676,630) &&
+              hoverReceipt()==null && hoverEvidence()==null,
               "Disposed native WGL owner leaked passive hover");
     }
 }

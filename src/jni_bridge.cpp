@@ -763,6 +763,33 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
         return JNI_FALSE;
     }
 }
+// R176: exact original WGL owner counter-only hover evidence. The return
+// value cannot be used as a click input token and is never a profile write.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadRetainedHoverEvidence(
+        JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || !context || !dc || width<320 || height<240 ||
+       width>8192 || height>8192)return nullptr;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !retained_preview->active())return nullptr;
+    try {
+        const auto evidence=retained_preview->hover_evidence(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+            static_cast<unsigned>(width),static_cast<unsigned>(height));
+        if(!evidence)return nullptr;
+        jint counts[5]={};
+        for(std::size_t i=0;i<5u;i++) {
+            if((*evidence)[i]>static_cast<std::uint64_t>(
+                    std::numeric_limits<jint>::max()))return nullptr;
+            counts[i]=static_cast<jint>((*evidence)[i]);
+        }
+        jintArray result=env->NewIntArray(5);
+        if(result)env->SetIntArrayRegion(result,0,5,counts);
+        return result;
+    }catch(...) {return nullptr;}
+}
 // R158: read-only JNI transfer of the exact profile held by the original
 // render-owned retained menu. No movement/attack permission or settings
 // mutation. Rejected unless it is this session's WGL context and viewport.

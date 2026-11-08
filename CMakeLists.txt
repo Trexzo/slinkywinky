@@ -371,6 +371,17 @@ if(WIN32)
           set_tests_properties(
             r175_java8_original_retained_passive_hover
             PROPERTIES TIMEOUT 40)
+          add_test(NAME r176_java8_original_retained_hover_receipt
+            COMMAND ${CMAKE_COMMAND}
+              -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+              -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+              -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+              -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+              -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r176_hover_receipt.cmake)
+          set_tests_properties(
+            r176_java8_original_retained_hover_receipt
+            PROPERTIES TIMEOUT 40)
       endif()
     set_tests_properties(native_retained_menu_source_mouse_transactions
       PROPERTIES TIMEOUT 30)
@@ -697,6 +708,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
         COMMAND "${Python3_EXECUTABLE}" -u "${CMAKE_CURRENT_SOURCE_DIR}/tests/attach_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(native_agent_attach PROPERTIES TIMEOUT 120)
+      # R176: reject forged/duplicated source-JVM hover receipts.
+      add_test(NAME r176_original_client_hover_marker_negatives
+        COMMAND "${Python3_EXECUTABLE}" -B
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r176_original_hover_receipt.py")
+      set_tests_properties(r176_original_client_hover_marker_negatives
+        PROPERTIES TIMEOUT 25)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}

@@ -32,6 +32,10 @@ public final class RendererWglEvidence {
     // Never used to execute or enable any Minecraft gameplay action.
     private static native String nativeReadRetainedProfile(
         long context,long dc,int width,int height);
+    // R176: five aggregate numeric counters only, never a native pointer
+    // or an original-game mouse action.
+    private static native int[] nativeReadRetainedHoverEvidence(
+        long context,long dc,int width,int height);
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
     private static native int nativePollOperatorMenu(long context,long dc);
@@ -81,6 +85,7 @@ public final class RendererWglEvidence {
     private boolean operatorStop;
     private boolean manualClosed;
     private boolean retainedVerified;
+    private int[] retainedHoverCounters;
     private int acceptedOperatorEvents;
     private int rejectedOperatorEvents;
     private int lastOperatorTab=-1;
@@ -140,6 +145,18 @@ public final class RendererWglEvidence {
         final boolean inside=point[0]>=0 && point[1]>=0 &&
             point[0]<width && point[1]<height;
         return (point[2]==1)==inside;
+    }
+
+    // R176: exact read-only hover counter shape. No coordinate or input
+    // information crosses this boundary, even for original client logs.
+    static boolean validRetainedHoverEvidence(int[] data,int drawn) {
+        if(data==null || data.length!=5 ||
+           drawn<1 || drawn>2048 || data[0]!=drawn ||
+           data[1]!=drawn-1 || data[2]<0 || data[2]>data[1] ||
+           data[3]<0 || data[3]>data[2] ||
+           data[4]<0 || data[4]>data[2])
+            return false;
+        return (long)data[3]+data[4]<=data[2];
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -408,6 +425,16 @@ public final class RendererWglEvidence {
                         poisoned=true;invalid++;return;
                     }
                 }
+                if(overlayFrames==64) {
+                    // Read on the exact original WGL render owner before
+                    // R99's source-class restoration and menu teardown.
+                    final int[] hover=nativeReadRetainedHoverEvidence(
+                        context,dc,width,height);
+                    if(!validRetainedHoverEvidence(hover,64)) {
+                        poisoned=true;overlayFailed=true;invalid++;return;
+                    }
+                    retainedHoverCounters=hover.clone();
+                }
                 if(overlayFrames>=5)retainedVerified=true;
                 return;
             }
@@ -509,7 +536,17 @@ public final class RendererWglEvidence {
     }
     public synchronized boolean retainedVerified(){
         return retainedPreview && retainedVerified && overlayFrames==64 &&
+               validRetainedHoverEvidence(retainedHoverCounters,64) &&
                !poisoned && !overlayFailed;
+    }
+    public synchronized boolean passiveHoverVerified(){
+        return retainedVerified() &&
+               !nativeClickDeliveryEnabled();
+    }
+    // Permanent denial until separate, reversible source-wide input owner.
+    private static boolean nativeClickDeliveryEnabled(){return false;}
+    public synchronized int[] passiveHoverCounters(){
+        return passiveHoverVerified()?retainedHoverCounters.clone():null;
     }
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}

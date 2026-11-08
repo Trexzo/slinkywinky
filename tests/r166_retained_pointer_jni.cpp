@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -526,6 +527,29 @@ Java_dev_slinkywinky_attach_R175RetainedHoverJniSmoke_hoverReceipt(
         };
         jintArray result=env->NewIntArray(2);
         if(result)env->SetIntArrayRegion(result,0,2,record);
+        return result;
+    }catch(...) {return nullptr;}
+}
+
+// R176: read-only evidence from the same source-retained WGL hover owner.
+// Test DLL only. No original game or game input can enter this endpoint.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R175RetainedHoverJniSmoke_hoverEvidence(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    try {
+        const auto data=session->ui->hover_evidence(
+            session->gl,session->dc,kWidth,kHeight);
+        if(!data)return nullptr;
+        jint value[5]={};
+        for(std::size_t i=0;i<5;i++) {
+            if((*data)[i]>static_cast<std::uint64_t>(
+                    std::numeric_limits<jint>::max()))return nullptr;
+            value[i]=static_cast<jint>((*data)[i]);
+        }
+        jintArray result=env->NewIntArray(5);
+        if(result)env->SetIntArrayRegion(result,0,5,value);
         return result;
     }catch(...) {return nullptr;}
 }

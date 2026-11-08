@@ -168,7 +168,11 @@ bool WglRetainedMenuPreview::observe_hover(
        !context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
-       pointer_gesture_.pending())return false;
+       pointer_gesture_.pending() ||
+       hover_samples_==std::numeric_limits<std::uint64_t>::max() ||
+       hover_foreground_==std::numeric_limits<std::uint64_t>::max() ||
+       hover_numeric_==std::numeric_limits<std::uint64_t>::max() ||
+       hover_bind_==std::numeric_limits<std::uint64_t>::max())return false;
     std::optional<MenuNumericHover> numeric;
     std::optional<std::size_t> bind;
     if(foreground_verified && x>=0 && y>=0 &&
@@ -196,7 +200,31 @@ bool WglRetainedMenuPreview::observe_hover(
     if(bind && menu_.bind_hover_row()!=bind &&
        !menu_.set_bind_hover_row(bind))return false;
     if(!bind)menu_.set_bind_hover_row(std::nullopt);
+    ++hover_samples_;
+    // A foreground observation may be outside the original game client.
+    // Only actual source hit-tests can set numeric/bind hover counters.
+    if(foreground_verified)++hover_foreground_;
+    if(numeric)++hover_numeric_;
+    if(bind)++hover_bind_;
     return true;
+}
+std::optional<std::array<std::uint64_t,5>>
+WglRetainedMenuPreview::hover_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       hover_foreground_>hover_samples_ ||
+       hover_numeric_>hover_foreground_ ||
+       hover_bind_>hover_foreground_ ||
+       hover_numeric_+hover_bind_<hover_numeric_ ||
+       hover_numeric_+hover_bind_>hover_foreground_)
+        return std::nullopt;
+    return std::array<std::uint64_t,5>{
+        drawn_frames_,hover_samples_,hover_foreground_,
+        hover_numeric_,hover_bind_
+    };
 }
 std::optional<MenuNumericHover>
 WglRetainedMenuPreview::observed_numeric_hover() const noexcept {

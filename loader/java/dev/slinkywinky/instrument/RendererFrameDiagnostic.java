@@ -473,6 +473,17 @@ public final class RendererFrameDiagnostic {
                                            evidence.keyToggles()+" events="+
                                            evidence.eventToggles());
                     }
+                    if(retainedPreview && stable &&
+                       evidence.passiveHoverVerified()) {
+                        final int[] hover=evidence.passiveHoverCounters();
+                        if(hover!=null && hover.length==5)
+                            System.out.println(
+                                "R176_ORIGINAL_WINDOW_PASSIVE_HOVER_RECEIPT_PASS "+
+                                "frames="+hover[0]+" samples="+hover[1]+
+                                " foreground="+hover[2]+
+                                " numeric="+hover[3]+" bind="+hover[4]+
+                                " native_click_delivery=disabled");
+                    }
                     if(evidence.overlayRequested()) {
                         if(stable && evidence.overlayDrawn())
                             System.out.println(operatorMenu?
