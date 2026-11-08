@@ -75,5 +75,24 @@ class TestLocalCandidateVerifier(unittest.TestCase):
             self.assertEqual(parsed["source_manager_table_entries"], 67)
 
 
+    def test_single_extra_descriptor_found(self):
+        candidate = [11, 22, 33, 44]
+        candidate_with_chest = [11, 22, 99, 33, 44]
+        self.assertEqual(verifier.descriptor_insertion_indices(candidate, candidate_with_chest), [2])
+
+    def test_descriptor_reordering_rejected(self):
+        with self.assertRaises(ValueError):
+            verifier.descriptor_insertion_indices([11, 22, 33], [33, 22, 11])
+
+    def test_pinned_source_descriptor_table(self):
+        root = Path(__file__).resolve().parents[1] / "references/OpenSlinky"
+        if not (root / "src/data/rdata.s").is_file():
+            self.skipTest("Pinned submodule not available in standalone fixture")
+        entries = verifier.mapped_descriptor_table(root)
+        self.assertEqual(len(entries), 67)
+        self.assertEqual(entries[17][0], "chest_stealer_module_descriptor")
+        self.assertEqual(entries[17][1], 0x1802F5288)
+
+
 if __name__ == "__main__":
     unittest.main()
