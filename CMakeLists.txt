@@ -261,6 +261,12 @@ if(SLINKYWINKY_BUILD_JNI)
       -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
       -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r161_paired_input.cmake)
+    add_test(NAME r165_java8_atomic_modal_and_rollback_fixture COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r165_modal_pair.cmake)
   endif()
 endif()
 

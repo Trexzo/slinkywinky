@@ -78,6 +78,18 @@ try:
     if entries.intersection(r164_source_only):
         raise AssertionError("R164 offline input gate leaked into injected agent")
     print("PASS: R164 method-isolation gate is confined to offline audit JAR")
+    # R165's coordinator is intentionally built ONLY by CTest. It is not
+    # even part of the read-only Mojang audit JAR, much less the agent.
+    r165_fixture_classes = {
+        "dev/slinkywinky/attach/R165ModalInputSession.class",
+        "dev/slinkywinky/attach/R165ModalInputSessionSmoke.class",
+    }
+    if entries.intersection(r165_fixture_classes):
+        raise AssertionError("R165 synthetic modal session leaked into agent")
+    with zipfile.ZipFile(render_audit_jar, "r") as audit:
+        if set(audit.namelist()).intersection(r165_fixture_classes):
+            raise AssertionError("R165 coordinated input fixture leaked into audit package")
+    print("PASS: R165 synthetic two-queue session excluded from both runtime JARs")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],

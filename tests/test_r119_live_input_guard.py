@@ -13,6 +13,10 @@ FORBIDDEN = (
     # R160 mouse queue is dormant. A callsite needs independently verified
     # full-input suppression and original-bytecode restoration.
     re.compile(r"MouseQueueOwner\s*\.\s*(?:arm|bind|next)\s*\("),
+    # R164/R165 remain test-only. Their synthetic flags are NOT real
+    # original-game ownership, foreground or bytecode-restore receipts.
+    re.compile(r"\bR164OfflineModalGate\b"),
+    re.compile(r"\bR165ModalInputSession\b"),
 )
 
 
