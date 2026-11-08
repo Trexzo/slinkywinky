@@ -623,3 +623,69 @@ or source assets are committed. R180 is an isolated offline policy
 addition, not a pixel-fidelity, injector, networking or live-game
 acceptance result. This PR stays draft and does not modify the other
 chat's R-series runtime branch.
+
+## R181: Instant Stop movement optimization and priority-ordered composition
+
+The private decrypted candidate has a fourth verified native descriptor:
+`Instant Stop` index **31**, movement category **1**, event **16**,
+signed priority **200**. Its event runs before `Null Move` (index 49,
+event 16, priority 100), which matters when both request changes to
+the same effective movement-key state.
+
+A new first-party, **offline-only** C++ `InstantStopController` models
+three internal phases: idle, watching forward, and one tick of
+counter-keys. When the forward input is released on the ground, it
+computes the predicted remaining horizontal motion for no counter
+input, back-right, back-only, and back-left, and chooses the strictly
+smallest speed squared. Its independent math uses the recovered candidate
+friction and normalization constants as numerical references but is
+**not** claimed instruction- or float-rounding-identical to the
+commercial original. The policy returns only proposed key overrides.
+
+After the counter-input tick, the controller proposes restoring back,
+left, and right to their physical held states. On loss of the game
+world, it fails closed and clears its state; this cleanup differs from
+some original read-only out-of-game paths and is intentional safety
+hardening. It never presses a real key or mutates Minecraft memory.
+
+`ModuleExecutionBridge` now supports typed `InstantStopTickPayload`
+on event 16. Unlike disjoint Reach and No Jump Delay events, a movement
+frame may contain both Instant Stop and Null Move payloads. The bridge
+requires their in-game state, forward state, and physical key snapshot
+to agree before dispatch. The higher-priority Instant Stop proposal is
+applied to the **lower-priority offline Null Move input** before
+Null Move evaluates it; the resulting requested key-state changes are
+kept in memory and never applied to an actual client. Contradictory
+typed payloads, bad event slots and missing world/player state are
+rejected.
+
+The original-candidate metadata exporter now pins four contracts:
+
+| Candidate module | Original index | Category | Event | Priority |
+|---|---:|---:|---:|---:|
+| Instant Stop | 31 | Move (1) | 16 | 200 |
+| No Jump Delay | 45 | Move (1) | 17 | 100 |
+| Null Move | 49 | Move (1) | 16 | 100 |
+| Reach | 54 | Combat (0) | 8 | 0 |
+
+R181's first-party native test covers all three counter choices,
+one-tick restoration, ground/forward gates, invalid numeric values,
+shared event priority, typed snapshot consistency, lifecycle and
+shutdown. The full 66-module catalog audit now registers and runs
+four first-party *offline* decisions; a synthetic six-module fixture
+and three negative fixtures are added to public CTest on Windows and
+Ubuntu in Debug and Release.
+
+| Coverage metric | R180 | R181 |
+|---|---:|---:|
+| Candidate module descriptors | 66 | 66 |
+| Recovered native callback subscriptions | 171 | 171 |
+| Independently implemented offline decision bindings | 3 | **4** |
+| Native subscriptions without first-party implementation binding | 168 | **167** |
+| Verified native Minecraft implementation | No | No |
+
+The private original-derived TSV, decrypted DLL, licensed code and
+executable assets remain outside GitHub. None of this creates a live
+injectable module or establishes real in-game movement behavior.
+PR #2 remains separate, draft and unmerged; the other chat's runtime
+code has not been modified.
