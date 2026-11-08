@@ -565,3 +565,61 @@ cmake --build build-reference --config Release
 The Windows Visual Studio multi-config executable resides under
 `build-reference/Release/`. The integration PR stays draft and no
 changes are made to the parallel R-series runtime branch.
+
+## R180: third independent offline module decision — Null Move
+
+The **private original candidate's native descriptor table** identifies
+`Null Move` at registration index **49**, category **move (1)**, event
+slot **16**, priority **100**. Another movement feature, `Instant Stop`,
+also uses event 16 but has priority **200** at original index **31**;
+this establishes a future priority-order integration test target.
+
+The first-party `reference_compat/include/slinkywinky/null_move_controller.hpp`
+contains an independently authored pure four-key state machine. It
+observes effective game-pressed states, original physical key-held flags,
+and tick identifiers for forward, left, back and right. When an effective
+key is newly pressed while its opposite remains pressed, it proposes
+releasing the opposite. On release, it can propose restoring an opposite
+key if physically held. It processes keys in the candidate's forward,
+left, back, right order. It does not change real game keys or attach
+to a Minecraft process. With both keys first pressed simultaneously,
+this deterministic processing order is a test convention and does not
+establish a true hardware timestamp winner.
+
+`ModuleExecutionBridge` now supports a typed `NullMoveTickPayload` at event
+**16**, validates exact module name, category and subscription, denies
+world/player-unavailable dispatch, rejects mismatched or multiple typed
+event payloads, and isolates the pure controller's state. Disable and
+shutdown stop invoking the callback. The controller can be reset when
+world state changes without losing other modules' decision state.
+
+The original private candidate exporter now pins all three verified
+module descriptor contracts:
+
+| Module | Index | Category | Event slot | Priority |
+|---|---:|---:|---:|---:|
+| Reach | 54 | Combat (0) | 8 | 0 |
+| No Jump Delay | 45 | Move (1) | 17 | 100 |
+| Null Move | 49 | Move (1) | 16 | 100 |
+
+The full original 66-module catalog coverage checker binds all three
+first-party offline policies, executes events 8, 17 and 16, validates
+their typed output and disable behavior, and reconciles registration
+counts. Synthetic positive and wrong-category/event fixtures are
+integrated into Windows/Ubuntu CTest in Debug and Release.
+
+| Native registration coverage | R179 | R180 |
+|---|---:|---:|
+| Original candidate modules | 66 | 66 |
+| Original declared callback subscriptions | 171 | 171 |
+| Explicit first-party offline module decision bindings | 2 | **3** |
+| Original registrations without implementation binding | 169 | **168** |
+| Original native algorithms verified running in Minecraft | No | No |
+
+Running the private 66-module TSV test requires the local R175 metadata
+export and is intentionally excluded from public CI. Public source
+tests use invented synthetic fixtures; no proprietary candidate bytes
+or source assets are committed. R180 is an isolated offline policy
+addition, not a pixel-fidelity, injector, networking or live-game
+acceptance result. This PR stays draft and does not modify the other
+chat's R-series runtime branch.
