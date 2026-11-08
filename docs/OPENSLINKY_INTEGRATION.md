@@ -511,3 +511,57 @@ These counts measure registration coverage, not an equal-weight percentage of cl
 The Reach decision runs in an offline simulated event envelope only. The private reference ZIP and
 generated metadata fixture remain local. Unlicensed upstream code and proprietary assets are not
 copied to this repository. PR #1's independent Minecraft runtime is untouched.
+
+## R179: second independent offline module decision — No Jump Delay
+
+Independent review of the user's locally held decrypted candidate confirms
+**No Jump Delay** at original descriptor index **45**, movement category **1**,
+event slot **17**, signed event priority **100**. Its native handler is
+a per-player-update operation that asks the game to clear the jump delay
+when the in-game flag is set.
+
+The new first-party `reference_compat/include/slinkywinky/no_jump_delay_controller.hpp`
+contains a pure policy: do nothing out of game; while in game, propose
+`jump_ticks = 0`. It never accesses the JVM or modifies Minecraft.
+
+`ModuleExecutionBridge` now has typed event-17 `JumpDelayTickPayload`
+and explicit `bind_no_jump_delay_from_catalog()` registration. Only an
+actually bound offline callback can write the proposed result. World
+and player admission, event-slot validation, category/identity validation,
+callback priority, per-module enable/disable and shutdown still apply.
+
+R179 also expands the existing full-catalog coverage audit: the private
+66-module, 171-callback manifest now validates the presence of No Jump Delay,
+binds both Reach and No Jump Delay by name/category/slot, runs both
+independent policies and verifies their disable paths. A synthetic
+four-module fixture and negative wrong-category/wrong-event fixtures
+are exercised by CTest on Windows and Linux, Debug and Release.
+
+| Coverage metric | R178 | R179 |
+|---|---:|---:|
+| Original candidate module descriptors | 66 | 66 |
+| Recovered native callback subscriptions | 171 | 171 |
+| Explicitly bound first-party offline module decisions | 1 (Reach) | **2 (Reach, No Jump Delay)** |
+| Remaining native subscriptions without offline implementations | 170 | **169** |
+| Live original native algorithms executed in Minecraft | Not verified | Not verified |
+
+This is not an equal-weight percentage of gameplay features. The newly
+implemented policy uses high-confidence candidate behavior but does not
+establish byte-level or real-game equality of the original engine-side
+Java field update. No decrypted DLL, original executable bytes, external
+source files or game hooks have been committed.
+
+Offline full-candidate repro (after separately exporting your private
+R175 TSV):
+
+```sh
+cmake -S reference_compat -B build-reference -DCMAKE_BUILD_TYPE=Release
+cmake --build build-reference --config Release
+./build-reference/slinkywinky_implementation_coverage_audit \
+  build/private_candidate_modules.tsv --expect-candidate \
+  --json-out build/private_implementation_coverage.json
+```
+
+The Windows Visual Studio multi-config executable resides under
+`build-reference/Release/`. The integration PR stays draft and no
+changes are made to the parallel R-series runtime branch.
