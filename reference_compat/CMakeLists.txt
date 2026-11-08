@@ -59,4 +59,22 @@ if(BUILD_TESTING)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/reach_wrong_slot.tsv")
   set_tests_properties(r178_reject_duplicate_catalog_entry
     r178_reject_wrong_reach_slot PROPERTIES WILL_FAIL TRUE)
+  # R179: two independent module decisions through one metadata-backed router.
+  add_executable(slinkywinky_no_jump_delay_bridge_test
+    tests/test_no_jump_delay_bridge.cpp)
+  target_link_libraries(slinkywinky_no_jump_delay_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r179_no_jump_delay_bridge COMMAND slinkywinky_no_jump_delay_bridge_test)
+  add_test(NAME r179_two_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/four_modules_with_two_decisions.tsv")
+  add_test(NAME r179_reject_wrong_jump_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_jump_event.tsv")
+  add_test(NAME r179_reject_wrong_jump_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_jump_category.tsv")
+  set_tests_properties(r179_reject_wrong_jump_event
+    r179_reject_wrong_jump_category PROPERTIES WILL_FAIL TRUE)
 endif()
