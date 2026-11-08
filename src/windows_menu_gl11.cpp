@@ -9,6 +9,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
@@ -682,27 +683,20 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             round_rect(toggleX+(active?26.0f:6.0f),
                        toggleY+6.0f,8.0f,8.0f,4.0f);
         }
+        // Candidate .exp is a flex row: text, 8px gap, then 20px icon.
+        // No card-height transition exists in the recovered reference.
+        const auto exp=menu_expander_geometry(frame,w,i);
         if(!frame.appearance.compact) {
-            const float expX=left+20.0f,expY=y+40.0f;
-            rgb(expandHovered?0x505050u:
-                ((supported||hasReferenceSettings)?0x404040u:0x343434u));
-            round_rect(expX,expY,20.0f,20.0f,5.0f);
-            rgb(expandHovered?0xffffffu:
-                ((supported||hasReferenceSettings)?0xdddddd:0x777777));
-            quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
-            if(!item.expanded)
-                quad(expX+9.0f,expY+6.0f,2.0f,8.0f);
             rgb(expandHovered?0xbbbbbbu:0x999999u);
-            text(menu_preview_description(item.catalog_index),
-                 left+46.0f,y+42.0f,14.0f,
-                 std::max(10.0f,rect.width-54.0f));
-        } else {
-            const float expX=left+8.0f,expY=y+8.0f;
-            rgb(expandHovered?0x505050u:
-                ((supported||hasReferenceSettings)?0x404040u:0x343434u));
+            text(menu_preview_description(item.catalog_index),left+8.0f,
+                 y+42.0f,14.0f,
+                 exp?exp->text_width:std::max(10.0f,rect.width-16.0f));
+        }
+        if(exp) {
+            const float expX=exp->plus_x,expY=exp->y;
+            rgb(expandHovered?0x505050u:0x404040u);
             round_rect(expX,expY,20.0f,20.0f,5.0f);
-            rgb(expandHovered?0xffffffu:
-                ((supported||hasReferenceSettings)?0xdddddd:0x777777));
+            rgb(expandHovered?0xffffffu:0xdddddd);
             quad(expX+6.0f,expY+9.0f,8.0f,2.0f);
             if(!item.expanded)
                 quad(expX+9.0f,expY+6.0f,2.0f,8.0f);

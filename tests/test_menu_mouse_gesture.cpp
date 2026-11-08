@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_expander_geometry.hpp"
 #include <atomic>
 #include <cmath>
 #include <stdexcept>
@@ -29,8 +30,10 @@ void all_modes(MenuPanelMode mode) {
     CHECK(frame && panel);
     const float w=panel->logical_width();
     const Point toggle=physical(*panel,w-54.f,menu_first_row_y+21.f);
-    const Point expand=physical(*panel,frame->appearance.compact?
-        w-108.f:39.f,menu_first_row_y+(frame->appearance.compact?20.f:43.f));
+    const auto expRect=menu_expander_geometry(*frame,w,0);
+    CHECK(expRect);
+    const Point expand=physical(*panel,
+        expRect->plus_x+10.0f,expRect->y+10.0f);
     const Point body=physical(*panel,60.f,menu_first_row_y+20.f);
     const Point nextrow=physical(*panel,60.f,menu_row_top(*frame,1)+20.f);
     const Point outside={static_cast<int>(panel->left)-1,toggle.y};

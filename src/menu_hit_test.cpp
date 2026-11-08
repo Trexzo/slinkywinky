@@ -3,6 +3,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
@@ -368,13 +369,9 @@ std::optional<MenuHit> hit_test_menu(
            x>=toggleX && x<toggleX+menu_switch_width &&
            y>=toggleY && y<toggleY+menu_switch_height)
             return MenuHit{MenuHitKind::Toggle,frame.tab,index};
-        const float expandX=frame.appearance.compact?
-                            rect.x+8.0f:rect.x+20.0f;
-        const float expandY=frame.appearance.compact?
-                            rect.y+8.0f:rect.y+40.0f;
-        if(recovered_widget_count(frame.visible[i].title)>0 &&
-           x>=expandX && x<expandX+menu_expand_size &&
-           y>=expandY && y<expandY+menu_expand_size)
+        // Recovered .exp owns its text and plus icon, not just the icon.
+        const auto exp=menu_expander_geometry(frame,w,i);
+        if(exp && menu_expander_contains(*exp,x,y))
             return MenuHit{MenuHitKind::Expand,frame.tab,index};
         return MenuHit{MenuHitKind::RowBody,frame.tab,index};
     }

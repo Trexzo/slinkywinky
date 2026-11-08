@@ -17,6 +17,7 @@
 #include "slinkywinky/windows_menu_focus_fence.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_keyboard_router.hpp"
 #include <array>
@@ -782,12 +783,17 @@ int main() {
             *focusedFrame,MenuPanelMode::CompactOverlay,toggleX,toggleY);
         REQUIRE(compactHit && compactHit->kind==MenuHitKind::Toggle &&
                 compactHit->catalog_index==0);
+        const auto expRect=menu_expander_geometry(
+            *focusedFrame,logicalW,0u);
+        REQUIRE(expRect);
         const int expandX=static_cast<int>(compactPanel->left)+
-            static_cast<int>(std::lround(compactPanel->scale*39.0f));
+            static_cast<int>(std::lround(compactPanel->scale*
+                (expRect->plus_x+10.0f)));
         const auto compactExpand=hit_test_menu(
             *focusedFrame,MenuPanelMode::CompactOverlay,expandX,
             static_cast<int>(compactPanel->top)+
-            static_cast<int>(std::lround(compactPanel->scale*(62.0f+44.0f))));
+            static_cast<int>(std::lround(compactPanel->scale*
+                (expRect->y+10.0f))));
         REQUIRE(compactExpand && compactExpand->kind==MenuHitKind::Expand &&
                 compactExpand->catalog_index==0);
         glClearColor(0.10f,0.38f,0.69f,1.0f);

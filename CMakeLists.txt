@@ -160,6 +160,12 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_numeric_drag_transaction
     COMMAND slinkywinky_recovered_numeric_drag_tests)
+  add_executable(slinkywinky_expander_geometry_tests
+    tests/test_menu_expander_geometry.cpp)
+  target_link_libraries(slinkywinky_expander_geometry_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME native_source_expander_full_text_hit
+    COMMAND slinkywinky_expander_geometry_tests)
   add_executable(slinkywinky_vertical_settings_tests
     tests/test_menu_settings_vertical.cpp)
   target_link_libraries(slinkywinky_vertical_settings_tests

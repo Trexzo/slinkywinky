@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_expander_geometry.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -58,9 +59,10 @@ void panel_roundtrip(MenuPanelMode mode,unsigned width,unsigned height,
                          static_cast<int>(p->top)-1));
     CHECK(!hit_test_menu(*frame,mode,pixel_x(*p,50.f),
                          static_cast<int>(p->top+p->height)));
-    const auto expand=exact_hit(*frame,mode,*p,(frame->appearance.compact?w-108.f:39.f),
-                                menu_first_row_y+(frame->appearance.compact?20.f:43.f),
-                                MenuHitKind::Expand);
+    const auto expRect=menu_expander_geometry(*frame,w,0);
+    CHECK(expRect);
+    const auto expand=exact_hit(*frame,mode,*p,
+        expRect->plus_x+10.0f,expRect->y+10.0f,MenuHitKind::Expand);
     CHECK(expand.catalog_index==0 && expand.tab==MenuTab::Combat);
     const auto toggle=exact_hit(*frame,mode,*p,w-54.f,menu_first_row_y+20.f,
                                 MenuHitKind::Toggle);

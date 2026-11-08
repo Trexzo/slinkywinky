@@ -1,5 +1,6 @@
 #pragma once
 #include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/menu_expander_geometry.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -127,7 +128,11 @@ inline std::optional<MenuBindChipLayout> menu_bind_chip_geometry(
     const float titleLimit=std::max(20.0f,rect.width-108.0f);
     const float estimated=std::min(titleLimit,
         static_cast<float>(frame.visible[row_index].title.size())*8.5f);
-    const float x=rect.x+menu_card_inner_padding+estimated+5.0f;
+    float x=rect.x+menu_card_inner_padding+estimated+5.0f;
+    if(frame.appearance.compact)
+        if(const auto exp=menu_expander_geometry(
+                frame,logical_width,row_index))
+            x=std::max(x,exp->x+exp->width+5.0f);
     const float y=rect.y+menu_card_inner_padding;
     const float keyW=capturing?108.0f:
         std::max(41.0f,static_cast<float>(label.size())*7.0f+12.0f);
