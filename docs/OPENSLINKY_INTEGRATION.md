@@ -95,3 +95,35 @@ this known discrepancy with exit 0, allowing inspection of its JSON; append
 verification failure. Nothing in this check proves official provenance,
 completed native injection or real gameplay equivalence.
 
+
+
+### Exact descriptor-table reconciliation (R171)
+
+Reading the candidate decrypted DLL's `.rdata` at RVA `0x14f810`
+produces 66 native descriptor pointers. Resolving every consecutive `.quad`
+in the C++ `ptr_to_aim_assist_module_descriptor` array through its
+`docs/global-symbol-map.json` produces 67 pointers. The 66 original
+pointers match in exact order **after removing one new C++ pointer**:
+
+- **C++ index 17:** `chest_stealer_module_descriptor`, RVA `0x2f5288`.
+- All 66 remaining pointer values are identical to the candidate decrypted
+  table at their respective positions (66/66; 0 mismatches).
+- This confirms a specific insertion, not a wholesale table reconstruction
+  failure. It does **not** imply all 66 module handlers or GUI settings execute
+  identically to the original.
+
+The original manager code at `0x28000` allocates/counts 66 descriptors and
+copies 528 bytes. The present upstream manager allocates/counts 67 and
+copies 536 bytes, with matching 67-entry queue capacities. A parity patch
+would have to update the C++ pointer table and *all corresponding* manager
+count, copy-size, loop, and queue-capacity expressions together, followed by
+new link/runtime tests. Merely changing `manager->count` to 66 or dropping
+the last entry is **not** sufficient: Chest Stealer was inserted at index 17.
+
+The optional private binary verifier now detects this insertion mechanically
+and rejects any unexpected table reordering or more-than-one-entry drift.
+CI tests the source parser and comparison logic with generated fixtures;
+**the actual 66/66 comparison ran locally** with the user-supplied candidate
+archive and is intentionally not reproducible by public CI without that
+private input.
+
