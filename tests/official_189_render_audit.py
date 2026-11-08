@@ -208,6 +208,24 @@ def main():
             raise RuntimeError("Original 1.8.9 R162 input-order audit failed: " +
                                ordered.stdout[-1600:] + ordered.stderr[-1600:])
         print(ordered.stdout.rstrip(), flush=True)
+        # R163: independent branch/exception graph, original SHA pin and
+        # original-call-order-preserving branch mutation negative control.
+        graph = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R163InputControlGraphSmoke",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40)
+        if (graph.returncode != 0 or
+                "R163_ORIGINAL_COUNT_AND_ORDER_PRESERVING_BRANCH_MUTATION_DETECTED"
+                not in graph.stdout or
+                "R163_QUEUE_ONLY_MEMORY_WEAVE_CFG_IDENTICAL"
+                not in graph.stdout or
+                "R163_ORIGINAL_VANILLA_INPUT_CFG_SHA256 "
+                "2b9173842b6b507e45190da633e9c83d5f9d0e5d2969ff181995b8970fd97256"
+                not in graph.stdout):
+            raise RuntimeError("R163 Mojang original input CFG mismatch: " +
+                               graph.stdout[-1800:] + graph.stderr[-1800:])
+        print(graph.stdout.rstrip(), flush=True)
 
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.

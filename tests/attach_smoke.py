@@ -56,6 +56,17 @@ try:
         "dev/slinkywinky/attach/R162InputOrderLedgerSmoke.class" in entries):
         raise AssertionError("R162 test-only source inspector leaked into agent")
     print("PASS: R162 source ledger belongs only to the read-only audit JAR")
+    with zipfile.ZipFile(render_audit_jar, "r") as source_audit:
+        contents = set(source_audit.namelist())
+        required_r163 = {
+            "dev/slinkywinky/attach/R163InputControlGraph.class",
+            "dev/slinkywinky/attach/R163InputControlGraphSmoke.class",
+        }
+        if not required_r163.issubset(contents):
+            raise AssertionError("R163 CFG analyzer missing from audit JAR")
+        if entries.intersection(required_r163):
+            raise AssertionError("R163 test-only control-flow code leaked into agent")
+    print("PASS: R163 original-game input CFG tests excluded from runtime agent")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],
