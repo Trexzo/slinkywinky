@@ -13,6 +13,8 @@ on:
       - 'tests/test_candidate_binary_verifier.py'
       - 'tools/audit_openslinky_dispatch.py'
       - 'tests/test_openslinky_dispatch_audit.py'
+      - 'tools/audit_openslinky_data.py'
+      - 'tests/test_openslinky_data_audit.py'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -30,6 +32,12 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_openslinky_dispatch_audit.py' -v
       - name: Pinned C++ event dispatcher inventory
         run: python3 tools/audit_openslinky_dispatch.py --json-out dispatch_audit.json
+      - name: Assemble public reference data only (no DLL or injector)
+        run: clang --target=x86_64-pc-windows-msvc -c references/OpenSlinky/src/data/data.s -o reference_data.obj
+      - name: Data object and relocation regression tests
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_data_audit.py' -v
+      - name: Inspect COFF data layout (source-only metadata)
+        run: python3 tools/audit_openslinky_data.py --object reference_data.obj --json-out data_audit.json
       - name: Static inventory (never run untrusted native code)
         run: python3 tools/audit_openslinky_reference.py --json-out reference_audit.json
       - uses: actions/upload-artifact@v4
@@ -38,3 +46,4 @@ jobs:
           path: |
             reference_audit.json
             dispatch_audit.json
+            data_audit.json
