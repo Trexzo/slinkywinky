@@ -282,3 +282,73 @@ private candidate DLL *locally* and use this model to replay a complete
 catalog without uploading the decrypted program or importing unlicensed
 third-party source.
 
+
+
+## R175: real 66-module event fixture and executable replay
+
+The local-only exporter `tools/export_candidate_event_manifest.py` reads the
+user-supplied candidate DLL's **verified** decrypted `.rdata` and `.data`
+sections. It reads the 66 native module descriptors at the original
+`.rdata` table (RVA `0x14f810`), identifies their names, categories, initial
+enabled flags and every indexed callback pointer at descriptor slots
+`+0x48, +0x58, ..., +0x1e8` (27 event slots), including signed
+per-event priority from each slot's companion `+8` field.
+
+It emits a **local** TSV metadata fixture and a JSON summary, not the
+DLL, native instructions, data tables, executable module callbacks,
+pointer addresses or assets. The candidate ZIP is hash-checked before
+extraction.
+
+```sh
+python3 tools/export_candidate_event_manifest.py \
+  --candidate-zip "/private/decrypted files.zip" \
+  --tsv-out build/private_candidate_modules.tsv \
+  --json-out build/private_candidate_modules_audit.json
+
+cmake -S reference_compat -B build-reference -DCMAKE_BUILD_TYPE=Release
+cmake --build build-reference --config Release
+
+# On Linux:
+./build-reference/slinkywinky_event_fixture_runner \
+  build/private_candidate_modules.tsv --expect-candidate
+
+# On Windows, use build-reference/Release/slinkywinky_event_fixture_runner.exe
+# when using the Visual Studio multi-config generator.
+```
+
+**Never commit the generated private TSV or decrypted ZIP.** GitHub CI
+contains only a separate, synthetic three-module TSV and regression tests
+for malformed original addresses, duplicated pointers, invalid categories,
+and the fixed private SHA-256 gates.
+
+### Candidate-derived and locally replayed counts
+
+| Module category | Original candidates |
+|---|---:|
+| Combat (`0`) | 17 |
+| Move (`1`) | 10 |
+| Visual (`2`) | 15 |
+| Block (`3`) | 7 |
+| Utility (`4`) | 17 |
+| **Total** | **66** |
+
+The original candidate declares **171 non-null handler subscriptions**
+across **27 events**. The C++ event fixture runner registered all 66
+modules, applied their enable requests only after world admission and
+verified the resulting **per-event callback histogram** matched:
+`[24,5,6,10,3,25,7,4,4,3,3,2,1,5,10,6,3,9,20,1,1,3,2,1,1,5,7]`.
+
+**Chams** and **No Hurt Cam** appear in the original descriptor catalog
+but have no native event callback in the 27-slot descriptor range.
+This does **not** establish that their effects are missing; their behavior
+might be implemented via engine/Java hooks outside the per-module dispatch
+table and needs separate analysis.
+
+**What this proves:** The independently authored replay engine can
+load and schedule exactly the original candidate's module registration
+and event subscription metadata, including priority integers. What it
+**does not prove:** That any of the 66 module algorithms, JNI/JVMTI
+hooks, packet processing, GUI rendering, and native teardown work
+inside Minecraft. The candidate original's official commercial
+provenance is not authenticated.
+
