@@ -493,6 +493,16 @@ public final class RendererFrameDiagnostic {
                                 "foreground="+hover[2]+
                                 " native_click_delivery=disabled");
                     }
+                    if(retainedPreview && stable &&
+                       evidence.passiveHoverVerified()) {
+                        final int[] target=evidence.originalSourceTargetCounters();
+                        if(target!=null && target.length==3)
+                            System.out.println(
+                                "R179_ORIGINAL_NATIVE_SOURCE_TARGET_PASS "+
+                                "frames="+target[0]+" source_draws="+target[1]+
+                                " exact_hits="+target[2]+
+                                " native_click_delivery=disabled");
+                    }
                     if(evidence.overlayRequested()) {
                         if(stable && evidence.overlayDrawn())
                             System.out.println(operatorMenu?

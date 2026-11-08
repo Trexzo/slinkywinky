@@ -23,6 +23,7 @@ FORBIDDEN = (
     re.compile(r"\bR169DropdownJniSmoke\b"),
     re.compile(r"\bR175RetainedHoverJniSmoke\b"),
     re.compile(r"\bR177RetainedTooltipPixelsSmoke\b"),
+    re.compile(r"\bR179ExactSourceTargetJniSmoke\b"),
 )
 
 

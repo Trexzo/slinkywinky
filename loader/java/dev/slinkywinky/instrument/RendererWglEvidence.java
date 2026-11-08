@@ -36,6 +36,10 @@ public final class RendererWglEvidence {
     // or an original-game mouse action.
     private static native int[] nativeReadRetainedHoverEvidence(
         long context,long dc,int width,int height);
+    // R179: exact recovered source slider visible GL11 draws and matched
+    // foreground hover hits; no raw cursor, OS inputs, or Minecraft actions.
+    private static native int[] nativeReadOriginalSourceTargetEvidence(
+        long context,long dc,int width,int height);
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
     private static native int nativePollOperatorMenu(long context,long dc);
@@ -86,6 +90,7 @@ public final class RendererWglEvidence {
     private boolean manualClosed;
     private boolean retainedVerified;
     private int[] retainedHoverCounters;
+    private int[] originalSourceTargetCounters;
     private int acceptedOperatorEvents;
     private int rejectedOperatorEvents;
     private int lastOperatorTab=-1;
@@ -189,6 +194,21 @@ public final class RendererWglEvidence {
            data[4]<0 || data[4]>data[2])
             return false;
         return (long)data[3]+data[4]<=data[2];
+    }
+
+    // R179: one source-exact native slider, not just the Java navigation
+    // schedule. 60 native GL11 draws must have its actual geometry admitted.
+    // The paired R176 physical-hover counters cap genuine source hits.
+    static boolean validOriginalSourceTargetEvidence(
+            int[] source,int[] physicalHover,int drawn) {
+        if(source==null || source.length!=3 ||
+           !validRetainedHoverEvidence(physicalHover,drawn) ||
+           drawn!=64 || source[0]!=drawn ||
+           source[1]!=60 || source[2]<0)
+            return false;
+        return source[2]<=physicalHover[2] &&
+               source[2]<=physicalHover[3] &&
+               source[2]<=source[1];
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -463,6 +483,12 @@ public final class RendererWglEvidence {
                         poisoned=true;overlayFailed=true;invalid++;return;
                     }
                     retainedHoverCounters=hover.clone();
+                    final int[] source=nativeReadOriginalSourceTargetEvidence(
+                        context,dc,width,height);
+                    if(!validOriginalSourceTargetEvidence(source,hover,64)) {
+                        poisoned=true;overlayFailed=true;invalid++;return;
+                    }
+                    originalSourceTargetCounters=source.clone();
                 }
                 if(overlayFrames>=5)retainedVerified=true;
                 return;
@@ -566,6 +592,8 @@ public final class RendererWglEvidence {
     public synchronized boolean retainedVerified(){
         return retainedPreview && retainedVerified && overlayFrames==64 &&
                validRetainedHoverEvidence(retainedHoverCounters,64) &&
+               validOriginalSourceTargetEvidence(
+                   originalSourceTargetCounters,retainedHoverCounters,64) &&
                !poisoned && !overlayFailed;
     }
     public synchronized boolean passiveHoverVerified(){
@@ -576,6 +604,10 @@ public final class RendererWglEvidence {
     private static boolean nativeClickDeliveryEnabled(){return false;}
     public synchronized int[] passiveHoverCounters(){
         return passiveHoverVerified()?retainedHoverCounters.clone():null;
+    }
+    public synchronized int[] originalSourceTargetCounters(){
+        return passiveHoverVerified()?
+            originalSourceTargetCounters.clone():null;
     }
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}

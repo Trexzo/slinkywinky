@@ -636,3 +636,49 @@ Java_dev_slinkywinky_attach_R177RetainedTooltipPixelsSmoke_pixelDigest(
         return static_cast<jlong>(hash);
     }catch(...){return static_cast<jlong>(-1);}
 }
+
+// R179: test-only JNI evidence from the actual first-party retained native
+// source target. No desktop cursor movement, game attach, or click action.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R179ExactSourceTargetJniSmoke_target(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    const auto target=session->ui->source_hover_target(
+        session->gl,session->dc,kWidth,kHeight);
+    if(!target)return nullptr;
+    const jint data[6]={target->left,target->top,target->right,
+                        target->bottom,target->center_x,target->center_y};
+    jintArray out=env->NewIntArray(6);
+    if(out)env->SetIntArrayRegion(out,0,6,data);
+    return out;
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R179ExactSourceTargetJniSmoke_evidence(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    const auto e=session->ui->source_hover_evidence(
+        session->gl,session->dc,kWidth,kHeight);
+    if(!e)return nullptr;
+    for(const auto count:*e)
+        if(count>static_cast<std::uint64_t>(
+                     std::numeric_limits<jint>::max()))return nullptr;
+    const jint data[3]={
+        static_cast<jint>((*e)[0]),static_cast<jint>((*e)[1]),
+        static_cast<jint>((*e)[2])};
+    jintArray out=env->NewIntArray(3);
+    if(out)env->SetIntArrayRegion(out,0,3,data);
+    return out;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R179ExactSourceTargetJniSmoke_nextTab(
+        JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() ||
+       session->ui->focused_row()!=std::optional<std::size_t>(1u) ||
+       !session->ui->settings_page(1u))return JNI_FALSE;
+    return session->ui->apply(slinkywinky::MenuNavAction::NextTab)?
+           JNI_TRUE:JNI_FALSE;
+}

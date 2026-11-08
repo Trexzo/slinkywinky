@@ -146,6 +146,16 @@ try:
         if r178_fixture in set(audit.namelist()):
             raise AssertionError("R178 source-hover fixture leaked into audit")
     print("PASS: R178 schedule fixture excluded from distribution")
+    r179_test_classes={
+        "dev/slinkywinky/attach/R179ExactSourceTargetJniSmoke.class",
+        "dev/slinkywinky/instrument/R179OriginalSourceTargetReceiptSmoke.class",
+    }
+    if entries.intersection(r179_test_classes):
+        raise AssertionError("R179 disposable source target test leaked into agent")
+    with zipfile.ZipFile(render_audit_jar,"r") as audit:
+        if set(audit.namelist()).intersection(r179_test_classes):
+            raise AssertionError("R179 source target test leaked to audit JAR")
+    print("PASS: R179 native slider geometry/test receipts excluded from JARs")
     r171_source_classes = {
         "dev/slinkywinky/attach/R171VanillaJarInputSurface.class",
         "dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.class",

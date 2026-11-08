@@ -56,6 +56,26 @@ def verify_r178_original_slider_window(stdout,original_foreground):
         raise RuntimeError("R178 contradicted original R176 foreground evidence")
     return 60
 
+R179_SOURCE_MARKER="R179_ORIGINAL_NATIVE_SOURCE_TARGET_PASS"
+R179_SOURCE_REGEX=re.compile(
+    r"^R179_ORIGINAL_NATIVE_SOURCE_TARGET_PASS "
+    r"frames=64 source_draws=60 exact_hits=([0-9]{1,3}) "
+    r"native_click_delivery=disabled\r?$",re.MULTILINE)
+
+def verify_r179_original_native_target(stdout,foreground,numeric):
+    """Actual first-party C++ source geometry, not physical visual proof."""
+    if not isinstance(stdout,str) or stdout.count(R179_SOURCE_MARKER)!=1:
+        raise RuntimeError("R179 missing or duplicate original native target receipt")
+    matches=list(R179_SOURCE_REGEX.finditer(stdout))
+    if len(matches)!=1:
+        raise RuntimeError("R179 forged original native source geometry receipt")
+    hits=int(matches[0].group(1))
+    if not isinstance(foreground,int) or not isinstance(numeric,int) or (
+        hits<0 or hits>60 or hits>foreground or hits>numeric or
+        foreground>63 or numeric>foreground):
+        raise RuntimeError("R179 native source hit contradicts R176 original window")
+    return hits
+
 MARKERS = (
     "CALLBACK_CLASSLOADER_VALIDATED",
     "OBSERVATION_MAPPING_ADMITTED",
@@ -513,6 +533,12 @@ def main():
                     fg,num,bind=verify_r176_original_hover_marker(read_log())
                     eligible=verify_r178_original_slider_window(
                         read_log(),fg)
+                    exact=verify_r179_original_native_target(read_log(),fg,num)
+                    print("R179_ORIGINAL_VANILLA_NATIVE_SOURCE_TARGET_PASS "+
+                          "source_draws=60 exact_hits="+str(exact)+
+                          " foreground="+str(fg),flush=True)
+                    print("R179_SOURCE_RECT_EXISTS_NOT_FOREGROUND_VISUAL_PROOF",
+                          flush=True)
                     print("R178_ORIGINAL_VANILLA_189_SLIDER_WINDOW_SOURCE_PASS "+
                           "eligible_draws="+str(eligible)+
                           " foreground="+str(fg),flush=True)

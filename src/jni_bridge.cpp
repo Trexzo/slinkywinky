@@ -790,6 +790,34 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadRetainedHoverEvide
         return result;
     }catch(...) {return nullptr;}
 }
+// R179: exact first-party source slider visibility + hit counters on the
+// admitted original WGL render owner. No physical cursor coordinates cross
+// JNI; samples never authorize Minecraft click interception or routing.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadOriginalSourceTargetEvidence(
+        JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || !context || !dc || width<320 || height<240 ||
+       width>8192 || height>8192)return nullptr;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !retained_preview->active())return nullptr;
+    try {
+        const auto evidence=retained_preview->source_hover_evidence(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+            static_cast<unsigned>(width),static_cast<unsigned>(height));
+        if(!evidence)return nullptr;
+        jint counts[3]={};
+        for(std::size_t i=0;i<3u;i++) {
+            if((*evidence)[i]>static_cast<std::uint64_t>(
+                    std::numeric_limits<jint>::max()))return nullptr;
+            counts[i]=static_cast<jint>((*evidence)[i]);
+        }
+        jintArray result=env->NewIntArray(3);
+        if(result)env->SetIntArrayRegion(result,0,3,counts);
+        return result;
+    }catch(...) {return nullptr;}
+}
 // R158: read-only JNI transfer of the exact profile held by the original
 // render-owned retained menu. No movement/attack permission or settings
 // mutation. Rejected unless it is this session's WGL context and viewport.

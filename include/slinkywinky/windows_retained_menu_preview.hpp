@@ -8,6 +8,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/menu_source_hover_target.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include <array>
 #include <cstddef>
@@ -51,6 +52,15 @@ public:
     // input buttons, game entities, profile data or click permissions.
     std::optional<std::array<std::uint64_t,5>> hover_evidence(
         HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
+    // R179: one narrowly source-named target, verified against the same
+    // native hit_test_menu as the retained GL11 UI. Geometry is read-only,
+    // never an event/click input or arbitrary gameplay target.
+    std::optional<MenuSourceHoverTarget> source_hover_target(
+        HGLRC context,HDC dc,unsigned width,unsigned height);
+    // [actual_draws, exact_source_slider_visible_draws,
+    //  foreground samples whose cursor hit that exact source slider].
+    std::optional<std::array<std::uint64_t,3>> source_hover_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
     bool close() noexcept;
     bool owner_thread() const noexcept;
     bool active() const noexcept {return active_;}
@@ -89,6 +99,7 @@ private:
     std::uint64_t drawn_frames_=0,accepted_actions_=0,refused_actions_=0;
     std::uint64_t hover_samples_=0,hover_foreground_=0,
                   hover_numeric_=0,hover_bind_=0;
+    std::uint64_t source_visible_draws_=0,source_exact_hover_hits_=0;
     bool active_=false;
 };
 } // namespace slinkywinky

@@ -34,6 +34,18 @@ bool WglRetainedMenuPreview::draw(
     } catch(...) {rendered=false;}
     const bool closed=host.close(); // same admitted graphics owner
     if(!rendered || !closed)return false;
+    // R179: prove the exact source-backed physical-pixel target was
+    // hittable in the frame JUST DRAWN, before inert navigation is applied.
+    // Do not use the Java schedule as a substitute for GL11 source geometry.
+    if(active_) {
+        if(source_visible_draws_==
+           std::numeric_limits<std::uint64_t>::max())return false;
+        const auto renderedFrame=pointer_frames_.next(
+            menu_,&profile_,&navigation_);
+        if(!renderedFrame)return false;
+        if(menu_original_auto_block_range_target(
+            *renderedFrame,width,height))++source_visible_draws_;
+    }
     if(!active_) {
         // Separate source-identified pointer snapshots from WGL paint
         // frames. Both are owner-thread local and pinned to one viewport.
@@ -175,6 +187,7 @@ bool WglRetainedMenuPreview::observe_hover(
        hover_bind_==std::numeric_limits<std::uint64_t>::max())return false;
     std::optional<MenuNumericHover> numeric;
     std::optional<std::size_t> bind;
+    bool exactSourceHit=false;
     if(foreground_verified && x>=0 && y>=0 &&
        static_cast<unsigned>(x)<width &&
        static_cast<unsigned>(y)<height) {
@@ -190,6 +203,14 @@ bool WglRetainedMenuPreview::observe_hover(
             else if(hit->kind==MenuHitKind::BindChip ||
                     hit->kind==MenuHitKind::BindHold)
                 bind=hit->catalog_index;
+            if(numeric) {
+                const auto source=menu_original_auto_block_range_target(
+                    *frame,width,height);
+                exactSourceHit=source &&
+                    source->catalog_index==numeric->catalog_index &&
+                    source->widget_index==numeric->widget_index &&
+                    source->contains(x,y);
+            }
         }
     }
     // The source-typed MenuState validates even these ephemeral hints.
@@ -206,7 +227,39 @@ bool WglRetainedMenuPreview::observe_hover(
     if(foreground_verified)++hover_foreground_;
     if(numeric)++hover_numeric_;
     if(bind)++hover_bind_;
+    if(exactSourceHit) {
+        if(source_exact_hover_hits_==
+           std::numeric_limits<std::uint64_t>::max())return false;
+        ++source_exact_hover_hits_;
+    }
     return true;
+}
+std::optional<MenuSourceHoverTarget>
+WglRetainedMenuPreview::source_hover_target(
+        HGLRC context,HDC dc,unsigned width,unsigned height) {
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc)
+        return std::nullopt;
+    const auto frame=pointer_frames_.next(menu_,&profile_,&navigation_);
+    return frame?menu_original_auto_block_range_target(*frame,width,height):
+           std::nullopt;
+}
+std::optional<std::array<std::uint64_t,3>>
+WglRetainedMenuPreview::source_hover_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       source_visible_draws_>drawn_frames_ ||
+       source_exact_hover_hits_>hover_foreground_ ||
+       source_exact_hover_hits_>hover_numeric_)
+        return std::nullopt;
+    return std::array<std::uint64_t,3>{
+        drawn_frames_,source_visible_draws_,source_exact_hover_hits_
+    };
 }
 std::optional<std::array<std::uint64_t,5>>
 WglRetainedMenuPreview::hover_evidence(
