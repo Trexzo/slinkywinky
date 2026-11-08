@@ -114,6 +114,26 @@ bool WglRetainedMenuPreview::pointer(
         case MenuHitKind::Toggle:
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    profile_.toggle(hit->catalog_index);
+        // R169: restore already source-validated dropdown hit dispatch.
+        // This edits LOCAL preview selection only, never an in-game module.
+        case MenuHitKind::AimModeControl:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.open_preview_dropdown(
+                       MenuDropdownKind::AimMode,hit->control_index);
+        case MenuHitKind::TargetModeControl:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.open_preview_dropdown(
+                       MenuDropdownKind::TargetMode,hit->control_index);
+        case MenuHitKind::RecoveredChoiceControl:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.open_recovered_choice_preview(
+                       hit->catalog_index,hit->control_index);
+        case MenuHitKind::DropdownOption:
+            if(hit->control_index>
+               static_cast<std::size_t>(
+                   std::numeric_limits<unsigned>::max()))return false;
+            return menu_.select_preview_dropdown_option(
+                static_cast<unsigned>(hit->control_index));
         case MenuHitKind::RecoveredBooleanPreview:
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    profile_.toggle_recovered_boolean(
@@ -176,6 +196,14 @@ std::optional<std::size_t> WglRetainedMenuPreview::settings_page(
        official_module_catalog()[index].tab!=menu_.tab() ||
        !menu_.expanded(index))return std::nullopt;
     return menu_.settings_offset(index);
+}
+std::optional<unsigned> WglRetainedMenuPreview::aim_preview_mode() const noexcept {
+    if(!owner_thread() || !active_)return std::nullopt;
+    return menu_.aim_preview_mode();
+}
+bool WglRetainedMenuPreview::preview_dropdown_open() const noexcept {
+    return owner_thread() && active_ &&
+           menu_.dropdown_preview().has_value();
 }
 bool WglRetainedMenuPreview::preview_enabled(std::size_t index) const noexcept {
     return owner_thread() && active_ && profile_.enabled(index);

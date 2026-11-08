@@ -11,6 +11,9 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_dropdown_geometry.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
+#include <array>
 #include "slinkywinky/recovered_settings.hpp"
 #include <string_view>
 #include <utility>
@@ -365,6 +368,126 @@ Java_dev_slinkywinky_attach_R168RecoveredBooleanJniSmoke_booleanTarget(
         const jint coords[2]={x,y};
         jintArray result=env->NewIntArray(2);
         if(result)env->SetIntArrayRegion(result,0,2,coords);
+        return result;
+    }catch(...) {return nullptr;}
+}
+
+// R169: DISPOSABLE Java 8 -> first-party retained GUI dropdown endpoints.
+// All input still comes from Java test fixtures, not a game or OS hook.
+// The real C++ menu owns dropdown state and validates every click/option.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R169DropdownJniSmoke_modeReceipt(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    const auto selected=session->ui->aim_preview_mode();
+    if(!selected || *selected>3u)return nullptr;
+    const jint items[2]={
+        static_cast<jint>(*selected),
+        session->ui->preview_dropdown_open()?1:0
+    };
+    jintArray result=env->NewIntArray(2);
+    if(result)env->SetIntArrayRegion(result,0,2,items);
+    return result;
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R169DropdownJniSmoke_aimControlTarget(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid() ||
+       session->ui->focused_row()!=std::optional<std::size_t>(0u) ||
+       session->ui->settings_page(0u)!=std::optional<std::size_t>(0u) ||
+       session->ui->preview_dropdown_open())return nullptr;
+    try {
+        slinkywinky::MenuState mirror;
+        if(!mirror.toggle_expanded(0u))return nullptr;
+        slinkywinky::MenuProfileBridge profile(mirror);
+        slinkywinky::MenuRenderSession frames;
+        if(!frames.attach(169u,kWidth,kHeight))return nullptr;
+        const auto frame=frames.next(mirror,&profile);
+        const auto panel=slinkywinky::menu_panel_geometry(
+            kWidth,kHeight,false,slinkywinky::MenuPanelMode::CompactOverlay);
+        if(!frame || !panel || panel->scale<=0.0f ||
+           frame->visible.empty() ||
+           frame->visible[0].catalog_index!=0u ||
+           frame->visible[0].settings_offset!=0u)return nullptr;
+        std::array<const slinkywinky::RecoveredWidget*,5> widgets{};
+        if(!slinkywinky::recovered_widget_visible_page(
+            "Aim Assist",0u,
+            static_cast<int>(frame->aim_preview_mode),
+            static_cast<int>(frame->target_preview_mode),widgets) ||
+           !widgets[0] ||
+           std::string_view(widgets[0]->label)!="Mode" ||
+           std::string_view(widgets[0]->group)!="Aim" ||
+           widgets[0]->kind!=slinkywinky::RecoveredWidgetKind::Dropdown)
+            return nullptr;
+        const auto rect=slinkywinky::menu_module_card_rect(
+            *frame,panel->logical_width(),0u);
+        const auto col=slinkywinky::menu_setting_column(
+            rect.x,rect.width);
+        const float controlY=rect.y+
+            slinkywinky::menu_row_body_height(*frame)+
+            slinkywinky::menu_settings_control_offset(widgets,0u)+10.0f;
+        const int x=static_cast<int>(panel->left)+static_cast<int>(
+            std::lround((col.x+col.width*0.5f)*panel->scale));
+        const int y=static_cast<int>(panel->top)+static_cast<int>(
+            std::lround(controlY*panel->scale));
+        if(x<0 || y<0 || x>=static_cast<int>(kWidth) ||
+           y>=static_cast<int>(kHeight))return nullptr;
+        const auto hit=slinkywinky::hit_test_menu(
+            *frame,slinkywinky::MenuPanelMode::CompactOverlay,x,y);
+        if(!hit || hit->kind!=slinkywinky::MenuHitKind::AimModeControl ||
+           hit->catalog_index!=0u || hit->control_index!=0u)
+            return nullptr;
+        const jint xy[2]={x,y};
+        jintArray result=env->NewIntArray(2);
+        if(result)env->SetIntArrayRegion(result,0,2,xy);
+        return result;
+    }catch(...) {return nullptr;}
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R169DropdownJniSmoke_aimOptionTarget(
+        JNIEnv* env,jclass,jint option) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid() ||
+       !session->ui->preview_dropdown_open() ||
+       session->ui->focused_row()!=std::optional<std::size_t>(0u) ||
+       session->ui->settings_page(0u)!=std::optional<std::size_t>(0u) ||
+       option<0 || option>=4)return nullptr;
+    try {
+        slinkywinky::MenuState mirror;
+        if(!mirror.toggle_expanded(0u) ||
+           !mirror.open_preview_dropdown(
+                slinkywinky::MenuDropdownKind::AimMode,0u))
+            return nullptr;
+        slinkywinky::MenuProfileBridge profile(mirror);
+        slinkywinky::MenuRenderSession frames;
+        if(!frames.attach(170u,kWidth,kHeight))return nullptr;
+        const auto frame=frames.next(mirror,&profile);
+        const auto panel=slinkywinky::menu_panel_geometry(
+            kWidth,kHeight,false,slinkywinky::MenuPanelMode::CompactOverlay);
+        if(!frame || !panel)return nullptr;
+        const auto popup=slinkywinky::menu_dropdown_popup_geometry(
+            *frame,panel->logical_width(),panel->logical_height());
+        if(!popup || popup->option_count!=4u ||
+           popup->first_option!=0u || popup->row_height<=0.0f)
+            return nullptr;
+        const float lx=popup->x+popup->width*0.5f;
+        const float ly=popup->y+popup->row_height*
+            (static_cast<float>(option)+0.5f);
+        const int x=static_cast<int>(panel->left)+static_cast<int>(
+            std::lround(lx*panel->scale));
+        const int y=static_cast<int>(panel->top)+static_cast<int>(
+            std::lround(ly*panel->scale));
+        const auto hit=slinkywinky::hit_test_menu(
+            *frame,slinkywinky::MenuPanelMode::CompactOverlay,x,y);
+        if(!hit || hit->kind!=slinkywinky::MenuHitKind::DropdownOption ||
+           hit->catalog_index!=0u ||
+           hit->control_index!=static_cast<std::size_t>(option))
+            return nullptr;
+        const jint xy[2]={x,y};
+        jintArray result=env->NewIntArray(2);
+        if(result)env->SetIntArrayRegion(result,0,2,xy);
         return result;
     }catch(...) {return nullptr;}
 }

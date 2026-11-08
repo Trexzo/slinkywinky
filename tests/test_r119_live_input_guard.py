@@ -20,6 +20,7 @@ FORBIDDEN = (
     re.compile(r"\bR166RetainedPointerJniSmoke\b"),
     re.compile(r"\bR167RecoveredSliderJniSmoke\b"),
     re.compile(r"\bR168RecoveredBooleanJniSmoke\b"),
+    re.compile(r"\bR169DropdownJniSmoke\b"),
 )
 
 

@@ -111,6 +111,13 @@ try:
         if r168_fixture in set(audit.namelist()):
             raise AssertionError("R168 Boolean/paging JNI smoke leaked into audit JAR")
     print("PASS: R168 recovered Boolean paging excluded from runtime JARs")
+    r169_fixture = "dev/slinkywinky/attach/R169DropdownJniSmoke.class"
+    if r169_fixture in entries:
+        raise AssertionError("R169 popup pointer smoke leaked into injected agent")
+    with zipfile.ZipFile(render_audit_jar, "r") as audit:
+        if r169_fixture in set(audit.namelist()):
+            raise AssertionError("R169 popup pointer smoke leaked into audit JAR")
+    print("PASS: R169 source popup JNI smoke excluded from runtime JARs")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],
