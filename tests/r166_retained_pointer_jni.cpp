@@ -11,6 +11,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_numeric_tooltip.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_settings_vertical.hpp"
 #include <array>
@@ -26,6 +27,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace {
 constexpr unsigned kWidth=676u,kHeight=630u;
@@ -552,4 +554,85 @@ Java_dev_slinkywinky_attach_R175RetainedHoverJniSmoke_hoverEvidence(
         if(result)env->SetIntArrayRegion(result,0,5,value);
         return result;
     }catch(...) {return nullptr;}
+}
+
+// R177: isolated REAL GL11 framebuffer readback, bounded to the
+// source-identified recovered Auto Block / Main / Range tooltip rectangle.
+// Never linked into the production JNI library or Java instrumentation.
+extern "C" JNIEXPORT jlong JNICALL
+Java_dev_slinkywinky_attach_R177RetainedTooltipPixelsSmoke_pixelDigest(
+        JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() ||
+       session->ui->focused_row()!=std::optional<std::size_t>(1u) ||
+       session->ui->settings_page(1u)!=std::optional<std::size_t>(0u))
+        return static_cast<jlong>(-1);
+    try {
+        slinkywinky::MenuState mirror;
+        if(!mirror.toggle_expanded(1u))return static_cast<jlong>(-1);
+        slinkywinky::MenuProfileBridge local(mirror);
+        const auto& source=slinkywinky::recovered_widget_catalog();
+        std::size_t index=source.size();
+        for(std::size_t i=0;i<source.size();++i) {
+            const auto& w=source[i];
+            if(std::string_view(w.module)=="Auto Block" &&
+               std::string_view(w.group)=="Main" &&
+               std::string_view(w.label)=="Range" &&
+               w.kind==slinkywinky::RecoveredWidgetKind::Slider) {
+                index=i;break;
+            }
+        }
+        if(index==source.size() ||
+           !mirror.set_numeric_hover(
+               slinkywinky::MenuNumericHover{1u,index}))
+            return static_cast<jlong>(-1);
+        slinkywinky::MenuRenderSession frames;
+        if(!frames.attach(177u,kWidth,kHeight))return static_cast<jlong>(-1);
+        const auto frame=frames.next(mirror,&local);
+        const auto panel=slinkywinky::menu_panel_geometry(
+            kWidth,kHeight,false,slinkywinky::MenuPanelMode::CompactOverlay);
+        if(!frame || !panel || panel->scale<=0.0f)return static_cast<jlong>(-1);
+        const auto rect=slinkywinky::menu_numeric_tooltip_geometry(
+            *frame,panel->logical_width(),panel->logical_height());
+        if(!rect || rect->width<12.0f || rect->height!=20.0f)
+            return static_cast<jlong>(-1);
+        const int clientX=static_cast<int>(
+            std::floor(panel->left+rect->x*panel->scale));
+        const int clientY=static_cast<int>(
+            std::floor(panel->top+rect->y*panel->scale));
+        const int pixelsW=static_cast<int>(
+            std::ceil(rect->width*panel->scale));
+        const int pixelsH=static_cast<int>(
+            std::ceil(rect->height*panel->scale));
+        if(clientX<0 || clientY<0 || pixelsW<8 || pixelsH<8 ||
+           clientX+pixelsW>static_cast<int>(kWidth) ||
+           clientY+pixelsH>static_cast<int>(kHeight))
+            return static_cast<jlong>(-1);
+        // Re-establish one deterministic framebuffer for each render.
+        // The only possible pixel difference in the bounded source tooltip
+        // location is the first-party GL11 menu's passive hover state.
+        glClearColor(0,0,0,0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        if(!session->ui->draw(session->gl,session->dc,kWidth,kHeight))
+            return static_cast<jlong>(-1);
+        glFinish();
+        GLint readBuffer=0;
+        glGetIntegerv(GL_READ_BUFFER,&readBuffer);
+        if(readBuffer<=0)return static_cast<jlong>(-1);
+        glReadBuffer(GL_BACK);
+        std::vector<unsigned char> pixels(
+            static_cast<std::size_t>(pixelsW)*
+            static_cast<std::size_t>(pixelsH)*4u);
+        glPixelStorei(GL_PACK_ALIGNMENT,1);
+        glReadPixels(clientX,
+                     static_cast<int>(kHeight)-clientY-pixelsH,
+                     pixelsW,pixelsH,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+        const GLenum error=glGetError();
+        glReadBuffer(static_cast<GLenum>(readBuffer));
+        if(error!=GL_NO_ERROR || glGetError()!=GL_NO_ERROR)
+            return static_cast<jlong>(-1);
+        std::uint64_t hash=14695981039346656037ull;
+        for(auto item:pixels){hash^=item;hash*=1099511628211ull;}
+        return static_cast<jlong>(hash);
+    }catch(...){return static_cast<jlong>(-1);}
 }

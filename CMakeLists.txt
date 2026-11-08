@@ -371,17 +371,35 @@ if(WIN32)
           set_tests_properties(
             r175_java8_original_retained_passive_hover
             PROPERTIES TIMEOUT 40)
-          add_test(NAME r176_java8_original_retained_hover_receipt
+          # R177: real GL11 pixel readback in the exact source tooltip
+          # region. Disposable WGL/JNI fixture, never a production hook.
+          add_test(NAME r177_java8_jni_source_tooltip_pixel_proof
             COMMAND ${CMAKE_COMMAND}
               -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
               -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
               -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
               -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
-              -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
-              -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r176_hover_receipt.cmake)
+              -DLIBRARY_PATH=$<TARGET_FILE:slinkywinky_r166_pointer_test_jni>
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r177_tooltip_pixels.cmake)
           set_tests_properties(
-            r176_java8_original_retained_hover_receipt
-            PROPERTIES TIMEOUT 40)
+            r177_java8_jni_source_tooltip_pixel_proof
+            PROPERTIES TIMEOUT 45)
+          # R177: the source-only Java 8 receipt requires the attach
+          # agent JAR, not merely the standalone JNI-preview DLL.
+          # The JNI-only workflow has no slinkywinky_loader target.
+          if(SLINKYWINKY_BUILD_ATTACH)
+            add_test(NAME r176_java8_original_retained_hover_receipt
+              COMMAND ${CMAKE_COMMAND}
+                -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+                -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+                -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+                -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+                -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r176_hover_receipt.cmake)
+            set_tests_properties(
+              r176_java8_original_retained_hover_receipt
+              PROPERTIES TIMEOUT 40)
+          endif()
       endif()
     set_tests_properties(native_retained_menu_source_mouse_transactions
       PROPERTIES TIMEOUT 30)

@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * only after the exact original WGL window/foreground has been verified.
  */
 public final class R175RetainedHoverJniSmoke {
-    private static native boolean observeHover(int x,int y,
+    static native boolean observeHover(int x,int y,
                          boolean foreground,int width,int height);
     private static native int[] hoverReceipt();
     // Returns aggregate counters ONLY, backed by the real first-party
