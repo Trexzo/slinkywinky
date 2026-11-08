@@ -16,4 +16,8 @@ if(BUILD_TESTING)
   add_executable(slinkywinky_reference_event_replay_test tests/test_event_replay.cpp)
   target_link_libraries(slinkywinky_reference_event_replay_test PRIVATE slinkywinky_reference_event_model)
   add_test(NAME r174_native_event_replay COMMAND slinkywinky_reference_event_replay_test)
+  add_executable(slinkywinky_event_fixture_runner tools/run_candidate_event_fixture.cpp)
+  target_link_libraries(slinkywinky_event_fixture_runner PRIVATE slinkywinky_reference_event_model)
+  add_test(NAME r175_synthetic_event_fixture COMMAND slinkywinky_event_fixture_runner
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules.tsv")
 endif()
