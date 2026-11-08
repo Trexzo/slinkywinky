@@ -1,0 +1,28 @@
+name: Pinned OpenSlinky source reference audit
+on:
+  push:
+    branches:
+      - 'integration/openslinky-*'
+  pull_request:
+    paths:
+      - '.gitmodules'
+      - 'references/OpenSlinky'
+      - 'docs/OPENSLINKY_INTEGRATION.md'
+      - 'tools/audit_openslinky_reference.py'
+      - '.github/workflows/openslinky-reference-audit.yml'
+permissions:
+  contents: read
+jobs:
+  source-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Static inventory (never run untrusted native code)
+        run: python3 tools/audit_openslinky_reference.py --json-out reference_audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openslinky-static-reference-audit
+          path: reference_audit.json
