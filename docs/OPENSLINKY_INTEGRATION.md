@@ -175,3 +175,64 @@ not establish cycle-level equivalence, all instruction semantics, native
 injection success, safe unload, game-world packet ordering, or provenance
 of an authenticated commercial original.
 
+
+
+## R173: complete original .data section and relocation audit
+
+A new read-only verifier, `tools/audit_openslinky_data.py`, checks the
+*assembled data definitions* against the locally held private decrypted
+candidate. It parses x64 COFF sections, symbols and absolute relocations;
+it never links a DLL, starts Minecraft or loads an injector.
+
+Pinned upstream's `src/data/data.s` can be assembled on a machine with
+LLVM/Clang without any Windows runtime:
+
+```sh
+clang --target=x86_64-pc-windows-msvc -c \
+  references/OpenSlinky/src/data/data.s -o reference_data.obj
+python3 tools/audit_openslinky_data.py \
+  --source references/OpenSlinky \
+  --object reference_data.obj \
+  --json-out build/source_data_audit.json
+```
+
+That **source-only** run is CI-compatible and confirms structural facts
+(section length, absolute relocations, and append-only size). Do not publish
+the assembled COFF object or the original decrypted binary; CI publishes
+only the metadata-only JSON.
+
+To compare against the private candidate locally, add
+`--candidate-zip "/private/decrypted files.zip"` to the Python invocation.
+
+### Independently verified results
+
+| Measurement | Candidate original | Pinned new C++ source |
+|---|---:|---:|
+| Original `.data` section | **136,712** bytes (`0x21608`) | All original bytes represented |
+| Source-assembled `.data` length | — | **136,840** bytes (`0x21688`) |
+| Additional source data | — | **128** bytes (`0x80`) |
+| 64-bit pointer relocations in original-sized prefix | **2,438** | **2,438/2,438** correct address targets |
+| Non-pointer byte differences in original-sized prefix | 0 | **0** |
+| Relocations in appended source suffix | — | **4** |
+
+Method: Compile the pinned `data.s` to a COFF object without linking it.
+Every relocation in the first `0x21608` bytes is verified by resolving
+its COFF symbol using the published original-RVA symbol maps, taking local
+object symbol offsets and relocation addends into account. The original
+`.data` is separately authenticated against the fixed candidate SHA-256
+`8aee98d473f5092686ea3ed080828bbb02500e4bbd8d89130a3ce7751176dea5`.
+Both byte arrays have their *relocated pointer slots masked* before
+comparing the remaining bytes; all 2,438 pointer values are then compared
+separately against resolved original image addresses.
+
+**Result: exact original-prefix data parity after relocation, not an
+unconditional byte-for-byte executable match.** The 128-byte suffix
+corresponds to new Chest Stealer options appended after the original
+section; it is not native original evidence and requires separate
+functional review. The 66-to-67 module registration discrepancy is
+independent of this original-prefix data match.
+
+The proof is strictly **static data parity** for one candidate, not proof of
+in-game GUI, packet, module logic or lifecycle equivalence, or of verified
+official Slinky source provenance.
+
