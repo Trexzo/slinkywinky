@@ -95,4 +95,28 @@ if(BUILD_TESTING)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_null_move_category.tsv")
   set_tests_properties(r180_reject_wrong_null_move_event
     r180_reject_wrong_null_move_category PROPERTIES WILL_FAIL TRUE)
+  # R181: test native event-16 priority 200 Instant Stop before 100 Null Move,
+  # with a single shared offline movement frame. No JVM/game process needed.
+  add_executable(slinkywinky_instant_stop_bridge_test
+    tests/test_instant_stop_bridge.cpp)
+  target_link_libraries(slinkywinky_instant_stop_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r181_instant_stop_and_null_move
+    COMMAND slinkywinky_instant_stop_bridge_test)
+  add_test(NAME r181_four_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/six_modules_with_four_decisions.tsv")
+  add_test(NAME r181_reject_wrong_instant_stop_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_instant_stop_event.tsv")
+  add_test(NAME r181_reject_wrong_instant_stop_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_instant_stop_category.tsv")
+  add_test(NAME r181_reject_wrong_instant_stop_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_instant_stop_priority.tsv")
+  set_tests_properties(r181_reject_wrong_instant_stop_event
+    r181_reject_wrong_instant_stop_category
+    r181_reject_wrong_instant_stop_priority PROPERTIES WILL_FAIL TRUE)
 endif()
