@@ -20,4 +20,13 @@ if(BUILD_TESTING)
   target_link_libraries(slinkywinky_event_fixture_runner PRIVATE slinkywinky_reference_event_model)
   add_test(NAME r175_synthetic_event_fixture COMMAND slinkywinky_event_fixture_runner
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules.tsv")
+  # R176: exact same offline lifecycle oracle can consume a private candidate
+  # fixture locally; CI only uses invented synthetic data.
+  add_executable(slinkywinky_event_lifecycle_test tools/audit_candidate_lifecycle.cpp)
+  target_link_libraries(slinkywinky_event_lifecycle_test PRIVATE slinkywinky_reference_event_model)
+  add_test(NAME r176_lifecycle_synthetic COMMAND slinkywinky_event_lifecycle_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules.tsv")
+  add_test(NAME r176_reject_duplicate_subscription COMMAND slinkywinky_event_lifecycle_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/duplicate_subscription.tsv")
+  set_tests_properties(r176_reject_duplicate_subscription PROPERTIES WILL_FAIL TRUE)
 endif()
