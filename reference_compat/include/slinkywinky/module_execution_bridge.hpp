@@ -37,6 +37,20 @@ struct ExecutionFrame {
 
 using OfflineCallback = std::function<void(const Delivery&, ExecutionFrame&)>;
 
+// Registration evidence and functioning implementation are counted separately.
+// "Bound" means a real first-party offline callback is installed, not that a
+// Minecraft hook, injected module, or native original binary was tested.
+struct ExecutionCoverage {
+    std::size_t registered_modules = 0;
+    std::size_t modules_with_native_handlers = 0;
+    std::size_t native_callback_subscriptions = 0;
+    std::size_t modules_with_executable_bindings = 0;
+    std::size_t executable_callback_bindings = 0;
+    std::size_t unimplemented_callback_subscriptions = 0;
+    std::array<std::size_t, kEventSlots> declared_per_event{};
+    std::array<std::size_t, kEventSlots> implemented_per_event{};
+};
+
 // Every live action is absent by design. EventReplay holds metadata, this
 // adapter owns offline callbacks, and only an explicitly admitted frame can
 // invoke callbacks. No callback is implicitly inferred from a descriptor.
@@ -90,6 +104,39 @@ public:
                         reach.proposed_distance = controller_.evaluate(
                             reach.input, reach.settings);
                     });
+    }
+
+    // A full 66-module manifest is registered by add(); Reach is located by
+    // validated name/category/slot, never assumed to occupy a fixed ID.
+    bool bind_reach_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Reach")
+                return bind_reach(id);
+        return false;
+    }
+
+    ExecutionCoverage coverage() const noexcept {
+        ExecutionCoverage result;
+        result.registered_modules = definitions_.size();
+        for (std::size_t id = 0; id < definitions_.size(); ++id) {
+            bool any_declaration = false;
+            bool any_binding = false;
+            for (const auto& sub : definitions_[id].subscriptions) {
+                any_declaration = true;
+                ++result.native_callback_subscriptions;
+                ++result.declared_per_event[sub.event];
+                if (callbacks_[id][sub.event]) {
+                    any_binding = true;
+                    ++result.executable_callback_bindings;
+                    ++result.implemented_per_event[sub.event];
+                } else {
+                    ++result.unimplemented_callback_subscriptions;
+                }
+            }
+            if (any_declaration) ++result.modules_with_native_handlers;
+            if (any_binding) ++result.modules_with_executable_bindings;
+        }
+        return result;
     }
 
     bool dispatch(ExecutionFrame& frame) {
