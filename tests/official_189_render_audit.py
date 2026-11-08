@@ -266,6 +266,24 @@ def main():
                                global_input.stdout[-1900:] +
                                global_input.stderr[-1900:])
         print(global_input.stdout.rstrip(), flush=True)
+        # R173: exact-source GUI singleton getter and axu screen field,
+        # plus same-count getter mutation negative control. No game attach.
+        original_gui = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R173OriginalGuiFieldAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=70)
+        if (original_gui.returncode != 0 or
+                "R173_MOJANG_189_AVE_SINGLETON_GUI_FIELD_EXACT_SOURCE_PASS"
+                not in original_gui.stdout or
+                "R173_ALTERNATE_SINGLETON_NEGATIVE_CONTROL_PASS"
+                not in original_gui.stdout or
+                "R173_OFFLINE_ONLY_ORIGINAL_BYTES_UNCHANGED"
+                not in original_gui.stdout):
+            raise RuntimeError("R173 exact Mojang GUI field audit failed: " +
+                               original_gui.stdout[-1400:] +
+                               original_gui.stderr[-1400:])
+        print(original_gui.stdout.rstrip(), flush=True)
 
         # R72: a separate, offline-only ASM dry run of the SHA-pinned bfk
         # method. The Java helper never writes modified game class bytes.

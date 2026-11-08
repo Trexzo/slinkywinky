@@ -61,6 +61,10 @@ public final class RendererWglEvidence {
     private int auditRefused;
     private int auditPointerInside,auditPointerOutside,auditPointerPressed;
     private int auditPointerRefused;
+    // R173: source-pinned read-only reflection of ave.A().m from the
+    // original game's admitted render thread; never sends GUI input.
+    private OriginalGuiScreenProbe guiScreenProbe;
+    private int auditGuiPresent,auditGuiAbsent,auditGuiRefused;
     private final int maxSamples;
     private boolean overlayDrawn;
     private boolean overlayFailed;
@@ -91,6 +95,17 @@ public final class RendererWglEvidence {
         windowAudit=audit;
         maxSamples=(manual || operator)?2048:
                    ((multi || scripted || retained)?72:8);
+    }
+
+    // The binder is called ONLY after exact loaded original ave/bfk
+    // preflight, while the finite R101 window-audit option is explicit.
+    // This shape check is not itself source attestation or input ownership.
+    public synchronized boolean bindOriginalGuiObserver(
+            OriginalGuiScreenProbe probe) {
+        if(!windowAudit || probe==null || guiScreenProbe!=null ||
+           attempts!=0 || owner!=null)return false;
+        guiScreenProbe=probe;
+        return true;
     }
 
     // R158: narrow receipt schema. Do not parse arbitrary profile strings
@@ -246,6 +261,17 @@ public final class RendererWglEvidence {
                 // The window is identified from THIS original renderer's
                 // WGL HDC; no global hook, focus change or gameplay input.
                 final int identity=nativeAuditRenderWindow(context,dc,width,height);
+                if(identity>=0 && identity<=1) {
+                    final int observed=guiScreenProbe==null?
+                        OriginalGuiScreenProbe.REFUSED:guiScreenProbe.observe();
+                    if(observed==OriginalGuiScreenProbe.SCREEN_PRESENT)
+                        auditGuiPresent++;
+                    else if(observed==OriginalGuiScreenProbe.NO_SCREEN)
+                        auditGuiAbsent++;
+                    else {
+                        auditGuiRefused++;poisoned=true;invalid++;return;
+                    }
+                }
                 if(identity==1) {
                     auditForeground++;
                     // Read ONLY the foreground original HWND and actual WGL
@@ -418,6 +444,7 @@ public final class RendererWglEvidence {
                auditForeground+auditBackground==8 && auditRefused==0 &&
                auditPointerRefused==0 &&
                auditPointerInside+auditPointerOutside==auditForeground &&
+               auditGuiPresent+auditGuiAbsent==8 && auditGuiRefused==0 &&
                !poisoned && fullyStable();
     }
     // No raw coordinates or button codes enter logs or public GUI state.
@@ -427,6 +454,19 @@ public final class RendererWglEvidence {
     }
     public synchronized int refusedForegroundPointerSamples(){
         return windowAudit?auditPointerRefused:0;
+    }
+    public synchronized boolean originalGuiReadOnlyVerified(){
+        return windowIdentityVerified() &&
+               auditGuiPresent+auditGuiAbsent==8 && auditGuiRefused==0;
+    }
+    public synchronized int observedOriginalGuiPresent(){
+        return windowAudit?auditGuiPresent:0;
+    }
+    public synchronized int observedOriginalGuiAbsent(){
+        return windowAudit?auditGuiAbsent:0;
+    }
+    public synchronized int refusedOriginalGuiObservations(){
+        return windowAudit?auditGuiRefused:0;
     }
     public synchronized boolean operatorStopped(){return operatorMenu && operatorStop;}
     public synchronized boolean operatorFailed(){return operatorMenu &&

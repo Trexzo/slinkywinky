@@ -135,6 +135,18 @@ try:
         if r172_fixture in set(audit.namelist()):
             raise AssertionError("R172 Java8 pointer receipt smoke leaked into audit JAR")
     print("PASS: R172 Java8 pointer fixture absent from runtime and audit JARs")
+    r173_probe="dev/slinkywinky/instrument/OriginalGuiScreenProbe.class"
+    r173_audit="dev/slinkywinky/attach/R173OriginalGuiFieldAudit.class"
+    r173_test="dev/slinkywinky/instrument/R173OriginalGuiScreenProbeSmoke.class"
+    if r173_probe not in entries or r173_test in entries or r173_audit in entries:
+        raise AssertionError("R173 original GUI probe agent class isolation failed")
+    with zipfile.ZipFile(render_audit_jar,"r") as audit:
+        audited=set(audit.namelist())
+        if r173_audit not in audited or r173_test in audited:
+            raise AssertionError("R173 static Mojang GUI source audit JAR isolation failed")
+    if "ave.class" in entries or "axu.class" in entries:
+        raise AssertionError("R173 fake test-only original class names leaked")
+    print("PASS: R173 runtime read-only game GUI probe isolated from audit/test fixtures")
     classpath = str(classes) + ";" + str(instrument_jar)
     delegated = subprocess.run(
         [str(java), "-cp", classpath, "dev.slinkywinky.attach.ClassLoaderSmoke"],

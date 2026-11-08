@@ -287,6 +287,25 @@ public final class RendererFrameDiagnostic {
             // registering a bytecode-changing transformer. Never draw.
             evidence=contextDllPath==null?null:
                 RendererWglEvidence.open(contextDllPath,renderOverlay,multiFrame,scriptedVisibility,manualVisibility,retainedPreview,operatorMenu,windowAudit);
+            if(windowAudit) {
+                // R173: resolve the unique ALREADY LOADED original ave
+                // class after R73 has pinned the full ave/bfk bytecode.
+                // No class is redefined, no screen is opened or closed.
+                Class<?> game=null;
+                for(Class<?> loaded:instrumentation.getAllLoadedClasses()) {
+                    if("ave".equals(loaded.getName())) {
+                        if(game!=null)
+                            throw new IllegalStateException(
+                                "R173 multiple original GUI game owners");
+                        game=loaded;
+                    }
+                }
+                if(game==null || game.getClassLoader()!=loader ||
+                   !evidence.bindOriginalGuiObserver(
+                       OriginalGuiScreenProbe.bind(game,loader)))
+                    throw new IllegalStateException(
+                        "R173 original GUI screen read-only binding refused");
+            }
         } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
             // The read-only class inspector may still be installed. Do not
             // allow another attach while its removal is unproven.
@@ -428,8 +447,15 @@ public final class RendererFrameDiagnostic {
                                        "R78_READ_ONLY_WGL_CONTEXT_UNVERIFIED ")))))))+
                         evidence.result());
                     if(windowAudit) {
-                        if(stable)
+                        if(stable) {
                             System.out.println("R101_ORIGINAL_GAME_WINDOW_IDENTIFIED_PASS");
+                            if(evidence.originalGuiReadOnlyVerified())
+                                System.out.println(
+                                    "R173_ORIGINAL_GUI_SCREEN_STATE_READ_ONLY_PASS open="+
+                                    evidence.observedOriginalGuiPresent()+
+                                    " closed="+evidence.observedOriginalGuiAbsent()+
+                                    " refused="+evidence.refusedOriginalGuiObservations());
+                        }
                         else
                             System.err.println("R101_GAME_WINDOW_IDENTITY_UNVERIFIED");
                     }
