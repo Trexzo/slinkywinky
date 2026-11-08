@@ -261,3 +261,110 @@ Java_dev_slinkywinky_attach_R167RecoveredSliderJniSmoke_sliderTarget(
         return result;
     }catch(...) {return nullptr;}
 }
+
+// R168: original recovered Auto Block / Conditions / Damaged Boolean, page
+// offset 10 of 12 source controls. JNI exports are DISPOSABLE test-only.
+// A read-only source-page receipt guarantees the mirror hit-test cannot be
+// used as a substitute for the actual retained menu's current page.
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_attach_R168RecoveredBooleanJniSmoke_pageOffset(
+        JNIEnv*,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() ||
+       session->ui->focused_row()!=std::optional<std::size_t>(1u))
+        return -1;
+    const auto source=session->ui->settings_page(1u);
+    return source && *source<=10u?static_cast<jint>(*source):-1;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R168RecoveredBooleanJniSmoke_page(
+        JNIEnv*,jclass,jint action) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() || (action!=8 && action!=9) ||
+       session->ui->focused_row()!=std::optional<std::size_t>(1u) ||
+       !session->ui->settings_page(1u))
+        return JNI_FALSE;
+    try {
+        return session->ui->apply(
+            static_cast<slinkywinky::MenuNavAction>(action))?
+            JNI_TRUE:JNI_FALSE;
+    }catch(...) {return JNI_FALSE;}
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R168RecoveredBooleanJniSmoke_booleanTarget(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid() ||
+       session->ui->focused_row()!=std::optional<std::size_t>(1u) ||
+       session->ui->settings_page(1u)!=std::optional<std::size_t>(10u))
+        return nullptr;
+    try {
+        slinkywinky::MenuState mirror;
+        if(!mirror.toggle_expanded(1u) ||
+           !mirror.change_settings_page(1u,1) ||
+           !mirror.change_settings_page(1u,1) ||
+           mirror.settings_offset(1u)!=10u)return nullptr;
+        slinkywinky::MenuProfileBridge local(mirror);
+        slinkywinky::MenuRenderSession frames;
+        if(!frames.attach(168u,kWidth,kHeight))return nullptr;
+        const auto frame=frames.next(mirror,&local);
+        const auto panel=slinkywinky::menu_panel_geometry(
+            kWidth,kHeight,false,slinkywinky::MenuPanelMode::CompactOverlay);
+        if(!frame || !panel || panel->scale<=0.0f)return nullptr;
+        const auto& catalog=slinkywinky::recovered_widget_catalog();
+        std::size_t target=catalog.size();
+        for(std::size_t i=0;i<catalog.size();++i) {
+            const auto& w=catalog[i];
+            if(std::string_view(w.module)=="Auto Block" &&
+               std::string_view(w.group)=="Conditions" &&
+               std::string_view(w.label)=="Damaged" &&
+               w.kind==slinkywinky::RecoveredWidgetKind::Boolean) {
+                target=i;break;
+            }
+        }
+        if(target==catalog.size())return nullptr;
+        std::size_t row=frame->visible.size();
+        for(std::size_t i=0;i<frame->visible.size();++i)
+            if(frame->visible[i].catalog_index==1u) {
+                row=i;break;
+            }
+        if(row==frame->visible.size())return nullptr;
+        std::array<const slinkywinky::RecoveredWidget*,5> widgets{};
+        const auto& item=frame->visible[row];
+        if(item.settings_offset!=10u || !item.expanded ||
+           !slinkywinky::recovered_widget_visible_page(
+               item.title.c_str(),item.settings_offset,
+               static_cast<int>(frame->aim_preview_mode),
+               static_cast<int>(frame->target_preview_mode),widgets))
+            return nullptr;
+        std::size_t localWidget=widgets.size();
+        for(std::size_t i=0;i<widgets.size();++i)
+            if(widgets[i]==&catalog[target]) {
+                localWidget=i;break;
+            }
+        if(localWidget==widgets.size())return nullptr;
+        const auto rect=slinkywinky::menu_module_card_rect(
+            *frame,panel->logical_width(),row);
+        const auto col=slinkywinky::menu_setting_column(rect.x,rect.width);
+        const float logicalX=slinkywinky::menu_setting_switch_x(col)+20.0f;
+        const float logicalY=rect.y+
+            slinkywinky::menu_row_body_height(*frame)+
+            slinkywinky::menu_settings_control_offset(widgets,localWidget)+
+            10.0f;
+        const int x=static_cast<int>(panel->left)+static_cast<int>(
+            std::lround(logicalX*panel->scale));
+        const int y=static_cast<int>(panel->top)+static_cast<int>(
+            std::lround(logicalY*panel->scale));
+        if(x<0 || y<0 || x>=static_cast<int>(kWidth) ||
+           y>=static_cast<int>(kHeight))return nullptr;
+        const auto hit=slinkywinky::hit_test_menu(
+            *frame,slinkywinky::MenuPanelMode::CompactOverlay,x,y);
+        if(!hit || hit->kind!=slinkywinky::MenuHitKind::RecoveredBooleanPreview ||
+           hit->catalog_index!=1u || hit->control_index!=target)
+            return nullptr;
+        const jint coords[2]={x,y};
+        jintArray result=env->NewIntArray(2);
+        if(result)env->SetIntArrayRegion(result,0,2,coords);
+        return result;
+    }catch(...) {return nullptr;}
+}

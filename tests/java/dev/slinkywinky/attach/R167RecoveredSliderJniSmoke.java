@@ -7,7 +7,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * validated native settings. No original game process/input hooks.
  */
 public final class R167RecoveredSliderJniSmoke {
-    private static native boolean navigate(int action);
+    // R168 uses the same disposable native menu owner for source paging.
+    static native boolean navigate(int action);
     private static native int[] sliderTarget(int permille);
     private static void require(boolean pass,String reason) {
         if(!pass)throw new AssertionError("R167 "+reason);

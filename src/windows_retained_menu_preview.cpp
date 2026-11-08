@@ -170,6 +170,13 @@ bool WglRetainedMenuPreview::close() noexcept {
 std::optional<std::size_t> WglRetainedMenuPreview::focused_row() const {
     return owner_thread() && active_?navigation_.visible_focus():std::nullopt;
 }
+std::optional<std::size_t> WglRetainedMenuPreview::settings_page(
+        std::size_t index) const noexcept {
+    if(!owner_thread() || !active_ || index>=official_module_catalog().size() ||
+       official_module_catalog()[index].tab!=menu_.tab() ||
+       !menu_.expanded(index))return std::nullopt;
+    return menu_.settings_offset(index);
+}
 bool WglRetainedMenuPreview::preview_enabled(std::size_t index) const noexcept {
     return owner_thread() && active_ && profile_.enabled(index);
 }

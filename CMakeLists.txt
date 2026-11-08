@@ -338,6 +338,17 @@ if(WIN32)
         set_tests_properties(
           r167_java8_jni_recovered_slider_to_native_profile
           PROPERTIES TIMEOUT 40)
+        add_test(NAME r168_java8_jni_recovered_boolean_settings_paging
+          COMMAND ${CMAKE_COMMAND}
+            -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+            -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+            -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+            -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+            -DLIBRARY_PATH=$<TARGET_FILE:slinkywinky_r166_pointer_test_jni>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r168_boolean_jni.cmake)
+        set_tests_properties(
+          r168_java8_jni_recovered_boolean_settings_paging
+          PROPERTIES TIMEOUT 40)
       endif()
     set_tests_properties(native_retained_menu_source_mouse_transactions
       PROPERTIES TIMEOUT 30)

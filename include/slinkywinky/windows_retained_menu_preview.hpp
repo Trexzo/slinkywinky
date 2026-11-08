@@ -48,6 +48,9 @@ public:
     MenuTab tab() const noexcept {return menu_.tab();}
     std::size_t scroll() const noexcept {return menu_.scroll();}
     std::optional<std::size_t> focused_row() const;
+    // R168: strict source-page read-only receipt. This is local GUI
+    // configuration evidence, not a live Minecraft input ownership gate.
+    std::optional<std::size_t> settings_page(std::size_t index) const noexcept;
     bool preview_enabled(std::size_t index) const noexcept;
     // R158: only an active, source-pinned WGL/render owner may inspect the
     // actual typed native profile retained by the in-game GUI.
