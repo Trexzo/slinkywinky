@@ -352,3 +352,62 @@ hooks, packet processing, GUI rendering, and native teardown work
 inside Minecraft. The candidate original's official commercial
 provenance is not authenticated.
 
+
+
+## R176: original-derived callback ordering and five-stage lifecycle replay
+
+Added `reference_compat/tools/audit_candidate_lifecycle.cpp` as an
+**independent C++17 test oracle**. It reads the existing metadata-only TSV
+produced by R175; it neither compiles nor runs OpenSlinky or any original
+DLL. Existing R-series runtime, CMake and loader files remain untouched.
+
+For every one of the 27 event slots, the tool validates:
+
+- **Exact subscription membership:** each enabled, subscribed module appears
+  once and only once; each disabled or unsubscribed module appears zero times.
+- **Priority constraints:** callback order is non-increasing by the recovered
+  per-slot signed priority. Ties are intentionally not validated against an
+  original qsort order (the original source provides no stable tie guarantee).
+- **Dispatch receipt:** each callback is delivered once, in the same order
+  as the model's current handler list; no additional recipients are admitted.
+- **Lifecycle boundaries:** repeat all 27 assertions at initial registration,
+  after all 66 modules are admitted into a world, after disabling every
+  odd-indexed module, after disabling all modules, and after reenabling
+  every third module.
+- **Event-5 semantics:** verify the notification count and state flag
+  before handler-list rebuild in both disable batches; enable notifications
+  use the newly rebuilt handler list.
+- **World/player admission:** deny toggles before world and player both
+  exist, preserving pending requests; no callbacks after terminal shutdown.
+
+For the private candidate TSV, the all-enabled phase also checks the
+independently extracted 27-slot histogram (171 callbacks in total).
+
+To run on a machine already holding the local private fixture:
+
+```sh
+cmake -S reference_compat -B build-reference -DCMAKE_BUILD_TYPE=Release
+cmake --build build-reference --config Release
+./build-reference/slinkywinky_event_lifecycle_test \
+  build/private_candidate_modules.tsv --expect-candidate
+```
+
+When using a Visual Studio multi-config generator, substitute
+`build-reference/Release/slinkywinky_event_lifecycle_test.exe`.
+
+**Verification:** Locally, R176 passed on both the synthetic 3-module
+fixture and the original-derived private **66-module / 171-callback**
+manifest, with GCC and Clang at nonoptimized and optimized build levels.
+The isolated CTest suite covers the synthetic successful replay plus a
+**negative duplicate-subscription fixture**, which is expected to fail.
+The Windows and Ubuntu reference compatibility CI builds both Debug and
+Release. Only the synthetic fixtures are committed; the private candidate
+TSV and decrypted ZIP are not published.
+
+**Boundaries:** These tests verify the independently authored replay
+model's behavior under actual candidate **metadata**. They do not run
+the real module callback code, nor establish original native hook
+fidelity, Minecraft gameplay behavior, pixel-perfect GUI, or official
+commercial provenance. The event-5 ordering is derived from the
+candidate C++ reconstruction and remains a candidate until equivalent
+traces from an authenticated original are available.
