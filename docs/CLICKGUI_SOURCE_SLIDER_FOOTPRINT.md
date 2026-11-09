@@ -25,6 +25,12 @@ corner positions through the actual passive hover observer, in addition
 to the original center, wrong-thread, wrong-viewport, foreground-loss,
 unpainted-frame and close/teardown checks.
 
+A separate renderer-neutral C++ regression creates actual typed render frames
+for 676×630, 854×480 (the historical original-game viewport), and
+1024×768. At every size it checks five native hit-test points, strictly
+contained half-open rectangle boundaries, expanded/collapsed source
+visibility, wrong viewport, wrong tab, and forged module metadata.
+
 This is a conservative **five-point sampled footprint guarantee**, not
 a mathematical proof of every interior pixel or a certificate that the
 native GL11 slider is visible to a human operator. Existing original
