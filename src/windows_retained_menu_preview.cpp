@@ -298,6 +298,43 @@ WglRetainedMenuPreview::source_hover_evidence(
         drawn_frames_,source_visible_draws_,source_exact_hover_hits_
     };
 }
+bool WglRetainedMenuPreview::observe_original_window_focus(
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        OriginalWindowFocusState state,bool pointer_admitted) noexcept {
+    // One companion OS status per already-admitted passive hover. A
+    // missing/repeated sample cannot be used to forge a focus transition.
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       hover_samples_!=strict_hover_samples_+1 ||
+       source_exact_hover_hits_<strict_source_hits_ ||
+       source_exact_hover_hits_-strict_source_hits_>1)
+        return false;
+    const bool hit=source_exact_hover_hits_>strict_source_hits_;
+    if(!exact_window_focus_.observe(state,pointer_admitted,hit))
+        return false;
+    strict_hover_samples_=hover_samples_;
+    strict_source_hits_=source_exact_hover_hits_;
+    return true;
+}
+std::optional<std::array<std::uint64_t,6>>
+WglRetainedMenuPreview::original_window_focus_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       strict_hover_samples_!=hover_samples_ ||
+       exact_window_focus_.samples()!=hover_samples_)
+        return std::nullopt;
+    const auto counts=exact_window_focus_.counters();
+    if(counts[0]+counts[1]+counts[2]!=hover_samples_ ||
+       counts[0]>hover_foreground_ ||
+       counts[4]>counts[3] || counts[5]>source_exact_hover_hits_)
+        return std::nullopt;
+    return counts;
+}
 std::optional<std::array<std::uint64_t,3>>
 WglRetainedMenuPreview::focus_cycle_evidence(
         HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
