@@ -61,6 +61,11 @@ public:
     //  foreground samples whose cursor hit that exact source slider].
     std::optional<std::array<std::uint64_t,3>> source_hover_evidence(
         HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
+    // R182: only aggregate render-owner focus-loss/reacquisition sequence
+    // counters, plus exact source hits AFTER a verified reacquisition.
+    // These never authorize clicks or modify original game input.
+    std::optional<std::array<std::uint64_t,3>> focus_cycle_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
     bool close() noexcept;
     bool owner_thread() const noexcept;
     bool active() const noexcept {return active_;}
@@ -103,6 +108,12 @@ private:
     std::uint64_t hover_samples_=0,hover_foreground_=0,
                   hover_numeric_=0,hover_bind_=0;
     std::uint64_t source_visible_draws_=0,source_exact_hover_hits_=0;
+    std::uint64_t foreground_losses_=0,foreground_regains_=0,
+                  post_regain_exact_source_hits_=0;
+    bool focus_sample_seen_=false,had_foreground_=false,
+         previous_foreground_=false,post_regain_epoch_=false;
+    // Only invoked after the passive observation has been accepted.
+    void note_focus_sample(bool foreground,bool exact_source_hit) noexcept;
     bool active_=false;
 };
 } // namespace slinkywinky
