@@ -146,6 +146,7 @@ def verify_r183_original_window_focus(stdout,require_cycle=False):
     fg,bg,refused,osloss,osregain,post=map(int,matches[0].groups())
     if (fg+bg+refused!=63 or fg>foreground or
         osloss>fg or osloss>bg or osregain>osloss or
+        osloss>osregain+refused+1 or
         post>fg or post>exact or post>compat_post or
         (osregain==0 and post!=0) or
         (require_cycle and (refused!=0 or osloss<1 or
