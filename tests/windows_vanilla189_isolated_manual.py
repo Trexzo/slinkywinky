@@ -522,6 +522,19 @@ def main():
                     "--timeout-seconds", "45",
                     "--execute", "--report", str(report)
                 ]
+                # R181 opt-in: a brief, passive preparation window to let
+                # the operator manually bring the isolated game to foreground.
+                # No Get/SetForegroundWindow, SendInput, mouse move or click.
+                # The source slider will appear only after the harness starts.
+                if args.require_foreground_source_hits:
+                    print("R181: bring the isolated Minecraft window to the",
+                          "foreground now; no scripted input is sent.",flush=True)
+                    for remaining in (3,2,1):
+                        print("R181: passive source-hit run begins in",
+                              remaining,flush=True)
+                        time.sleep(1.0)
+                    if game.poll() is not None:
+                        raise RuntimeError("R181 original game exited during preparation")
                 # The R81 harness independently checks exact class hashes,
                 # target PID birth, fresh JVM stdout, WGL ownership and the
                 # original-bytecode restoration before each subsequent stage.
