@@ -748,6 +748,10 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                 static_cast<std::uintptr_t>(context));
             const auto hdc=reinterpret_cast<HDC>(
                 static_cast<std::uintptr_t>(dc));
+            // Keep the R175/R179 original/passive compatibility mode.
+            // A failed foreground pointer admission is NOT itself proof
+            // of a Win32 background/focus-loss transition. R182 counts
+            // loss/recovery of this admitted foreground state only.
             const auto point=slinkywinky::audit_original_render_pointer(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height));
@@ -803,6 +807,34 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadOriginalSourceTarg
        !retained_preview->active())return nullptr;
     try {
         const auto evidence=retained_preview->source_hover_evidence(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+            static_cast<unsigned>(width),static_cast<unsigned>(height));
+        if(!evidence)return nullptr;
+        jint counts[3]={};
+        for(std::size_t i=0;i<3u;i++) {
+            if((*evidence)[i]>static_cast<std::uint64_t>(
+                    std::numeric_limits<jint>::max()))return nullptr;
+            counts[i]=static_cast<jint>((*evidence)[i]);
+        }
+        jintArray result=env->NewIntArray(3);
+        if(result)env->SetIntArrayRegion(result,0,3,counts);
+        return result;
+    }catch(...) {return nullptr;}
+}
+// R182: focus-loss/reacquisition order on the same original WGL owner.
+// Three counters only. No OS cursor position, mouse/keyboard state, hook,
+// gameplay action, or claim of exclusive input ownership passes this boundary.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadRetainedFocusCycleEvidence(
+        JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || !context || !dc || width<320 || height<240 ||
+       width>8192 || height>8192)return nullptr;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !retained_preview->active())return nullptr;
+    try {
+        const auto evidence=retained_preview->focus_cycle_evidence(
             reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
             reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
             static_cast<unsigned>(width),static_cast<unsigned>(height));

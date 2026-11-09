@@ -682,3 +682,57 @@ Java_dev_slinkywinky_attach_R179ExactSourceTargetJniSmoke_nextTab(
     return session->ui->apply(slinkywinky::MenuNavAction::NextTab)?
            JNI_TRUE:JNI_FALSE;
 }
+// R182: DISPOSABLE JNI only. The first-party native model receives a
+// test-supplied foreground flag; these counters are not hardware evidence.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R182FocusCycleJniSmoke_targetCenter(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    const auto target=session->ui->source_hover_target(
+        session->gl,session->dc,kWidth,kHeight);
+    if(!target)return nullptr;
+    const jint data[2]={target->center_x,target->center_y};
+    jintArray result=env->NewIntArray(2);
+    if(result)env->SetIntArrayRegion(result,0,2,data);
+    return result;
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R182FocusCycleJniSmoke_focusEvidence(
+        JNIEnv* env,jclass,jint width,jint height) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid() ||
+       width<320 || height<240 || width>8192 || height>8192)
+        return nullptr;
+    const auto evidence=session->ui->focus_cycle_evidence(
+        session->gl,session->dc,
+        static_cast<unsigned>(width),static_cast<unsigned>(height));
+    if(!evidence)return nullptr;
+    for(const auto count:*evidence)
+        if(count>static_cast<std::uint64_t>(
+                     std::numeric_limits<jint>::max()))return nullptr;
+    const jint data[3]={static_cast<jint>((*evidence)[0]),
+                        static_cast<jint>((*evidence)[1]),
+                        static_cast<jint>((*evidence)[2])};
+    jintArray out=env->NewIntArray(3);
+    if(out)env->SetIntArrayRegion(out,0,3,data);
+    return out;
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R182FocusCycleJniSmoke_sourceEvidence(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    const auto evidence=session->ui->source_hover_evidence(
+        session->gl,session->dc,kWidth,kHeight);
+    if(!evidence)return nullptr;
+    for(const auto count:*evidence)
+        if(count>static_cast<std::uint64_t>(
+                     std::numeric_limits<jint>::max()))return nullptr;
+    const jint data[3]={static_cast<jint>((*evidence)[0]),
+                        static_cast<jint>((*evidence)[1]),
+                        static_cast<jint>((*evidence)[2])};
+    jintArray out=env->NewIntArray(3);
+    if(out)env->SetIntArrayRegion(out,0,3,data);
+    return out;
+}

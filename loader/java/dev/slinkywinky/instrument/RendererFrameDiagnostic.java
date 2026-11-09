@@ -503,6 +503,17 @@ public final class RendererFrameDiagnostic {
                                 " exact_hits="+target[2]+
                                 " native_click_delivery=disabled");
                     }
+                    if(retainedPreview && stable &&
+                       evidence.passiveHoverVerified()) {
+                        final int[] cycle=evidence.retainedFocusCycleCounters();
+                        if(cycle!=null && cycle.length==3)
+                            System.out.println(
+                                "R182_ORIGINAL_NATIVE_FOCUS_CYCLE_PASS "+
+                                "frames=64 losses="+cycle[0]+
+                                " regains="+cycle[1]+
+                                " post_hits="+cycle[2]+
+                                " native_click_delivery=disabled");
+                    }
                     if(evidence.overlayRequested()) {
                         if(stable && evidence.overlayDrawn())
                             System.out.println(operatorMenu?

@@ -98,6 +98,32 @@ def verify_r181_repeated_foreground_source_hits(stdout, minimum_hits=2):
             "the required repeated observed hover hits")
     return foreground,numeric,exact
 
+R182_FOCUS_MARKER="R182_ORIGINAL_NATIVE_FOCUS_CYCLE_PASS"
+R182_FOCUS_REGEX=re.compile(
+    r"^R182_ORIGINAL_NATIVE_FOCUS_CYCLE_PASS "
+    r"frames=64 losses=([0-9]{1,3}) regains=([0-9]{1,3}) "
+    r"post_hits=([0-9]{1,3}) native_click_delivery=disabled\r?$",
+    re.MULTILINE)
+
+def verify_r182_original_focus_cycle(stdout,require_cycle=False):
+    """Actual source-validated WGL observations, not input capture proof."""
+    if not isinstance(stdout,str) or stdout.count(R182_FOCUS_MARKER)!=1:
+        raise RuntimeError("R182 missing/duplicate original-JVM focus chronology")
+    matches=list(R182_FOCUS_REGEX.finditer(stdout))
+    if len(matches)!=1:
+        raise RuntimeError("R182 malformed original-JVM focus chronology")
+    if type(require_cycle) is not bool:
+        raise RuntimeError("R182 focus-cycle requirement must be explicit boolean")
+    fg,numeric,bind=verify_r176_original_hover_marker(stdout)
+    verify_r178_original_slider_window(stdout,fg)
+    exact=verify_r179_original_native_target(stdout,fg,numeric)
+    losses,regains,post=map(int,matches[0].groups())
+    if (regains>losses or post>exact or losses>fg or
+        losses+regains>63 or (regains==0 and post!=0) or
+        (require_cycle and (losses<1 or regains<1 or post<1))):
+        raise RuntimeError("R182 impossible or insufficient original focus cycle")
+    return losses,regains,post
+
 MARKERS = (
     "CALLBACK_CLASSLOADER_VALIDATED",
     "OBSERVATION_MAPPING_ADMITTED",
@@ -240,6 +266,8 @@ def main():
                         help="R99 opt-in: 64 original-game retained GL11 frames and inert navigation verification")
     parser.add_argument("--require-foreground-source-hits", action="store_true",
                         help="R181 manually supervised original-JVM test: require at least 2 foreground cursor samples hitting the actual painted Auto Block Range slider; never route clicks")
+    parser.add_argument("--require-focus-cycle-source-hit", action="store_true",
+                        help="R182 supervised read-only focus loss/recovery plus post-reacquisition exact slider hit; also requires --require-foreground-source-hits")
     parser.add_argument("--render-key-acceptance", action="store_true",
                         help="R95 opt-in: exact own-game window SendInput Insert x2 plus native stop, not physical hardware")
     parser.add_argument("--render-manual-acceptance", action="store_true",
@@ -277,6 +305,8 @@ def main():
         parser.error("R90 renderer acceptance must run alone, not with world/tick probes")
     if args.require_foreground_source_hits and not args.render_retained_acceptance:
         parser.error("--require-foreground-source-hits requires --render-retained-acceptance")
+    if args.require_focus_cycle_source_hit and not args.require_foreground_source_hits:
+        parser.error("--require-focus-cycle-source-hit requires --require-foreground-source-hits")
     if args.require_foreground_source_hits and not sys.stdin.isatty():
         parser.error("R181 foreground source-hit admission requires an interactive terminal")
     if args.require_ray_entity and not args.world_observation:
@@ -430,6 +460,10 @@ def main():
         print("appears. Do not click; no mouse movement or button is generated.",flush=True)
         print("The test requires at least TWO original foreground samples inside",flush=True)
         print("the actually drawn slider. Failure is expected when backgrounded.",flush=True)
+        if args.require_focus_cycle_source_hit:
+            print("R182: after an initial foreground hover, manually switch",flush=True)
+            print("away from Minecraft and back, then hover the slider again.",flush=True)
+            print("Only a source hit AFTER verified focus recovery is accepted.",flush=True)
     print("Launching one isolated vanilla 1.8.9 JVM; no Forge.", flush=True)
     with log.open("xb" if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance or args.render_window_audit_acceptance) else "wb") as output:
         game = subprocess.Popen(
@@ -581,6 +615,14 @@ def main():
                     eligible=verify_r178_original_slider_window(
                         read_log(),fg)
                     exact=verify_r179_original_native_target(read_log(),fg,num)
+                    losses,regains,post=verify_r182_original_focus_cycle(
+                        read_log(),args.require_focus_cycle_source_hit)
+                    if args.require_focus_cycle_source_hit:
+                        print("R182_ORIGINAL_VANILLA_FOCUS_RECOVERY_SOURCE_PASS "+
+                              "losses="+str(losses)+" regains="+str(regains)+
+                              " post_hits="+str(post)+
+                              " native_click_delivery=disabled",flush=True)
+                        print("R182_READ_ONLY_NOT_EXCLUSIVE_GAME_INPUT",flush=True)
                     if args.require_foreground_source_hits:
                         observed=verify_r181_repeated_foreground_source_hits(
                             read_log(),2)

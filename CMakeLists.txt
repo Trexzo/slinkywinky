@@ -397,6 +397,18 @@ if(WIN32)
           set_tests_properties(
             r179_java8_jni_native_exact_source_geometry
             PROPERTIES TIMEOUT 45)
+          # R182: synthetic foreground transitions on the actual retained
+          # WGL renderer. The test DLL is separate from the production agent.
+          add_test(NAME r182_java8_jni_native_focus_cycle
+            COMMAND ${CMAKE_COMMAND}
+              -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+              -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+              -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+              -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+              -DLIBRARY_PATH=$<TARGET_FILE:slinkywinky_r166_pointer_test_jni>
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r182_focus_jni.cmake)
+          set_tests_properties(r182_java8_jni_native_focus_cycle
+            PROPERTIES TIMEOUT 45)
           # R177: the source-only Java 8 receipt requires the attach
           # agent JAR, not merely the standalone JNI-preview DLL.
           # The JNI-only workflow has no slinkywinky_loader target.
@@ -433,6 +445,16 @@ if(WIN32)
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r179_source_receipt.cmake)
             set_tests_properties(
               r179_java8_original_native_source_target_receipt
+              PROPERTIES TIMEOUT 40)
+            add_test(NAME r182_java8_original_native_focus_cycle_receipt
+              COMMAND ${CMAKE_COMMAND}
+                -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+                -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+                -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+                -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+                -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r182_focus_receipt.cmake)
+            set_tests_properties(r182_java8_original_native_focus_cycle_receipt
               PROPERTIES TIMEOUT 40)
           endif()
       endif()
@@ -785,6 +807,11 @@ if(SLINKYWINKY_BUILD_ATTACH)
           COMMAND "${Python3_EXECUTABLE}" -B
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r181_original_foreground_source_hits.py")
         set_tests_properties(r181_original_client_foreground_source_hit_negatives
+          PROPERTIES TIMEOUT 25)
+        add_test(NAME r182_original_client_focus_cycle_marker_negatives
+          COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r182_original_focus_cycle.py")
+        set_tests_properties(r182_original_client_focus_cycle_marker_negatives
           PROPERTIES TIMEOUT 25)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
