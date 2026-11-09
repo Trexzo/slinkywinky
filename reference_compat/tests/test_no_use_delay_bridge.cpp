@@ -101,6 +101,7 @@ int main() {
     const auto module = bridge.add({"No Use Delay", 4, {{18, 0}}, false});
     const auto prior = bridge.add({"Prior Observer", 4, {{18, 100}}, true});
     const auto other = bridge.add({"Other Unimplemented", 0, {{18, -10}}, true});
+    CHECK(module == 0 && prior == 1 && other == 2);
     unsigned prior_count = 0;
     CHECK(bridge.bind(prior, kNoUseDelayEvent,
                       [&](const Delivery& d, ExecutionFrame&) {
