@@ -779,6 +779,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r179_original_native_target.py")
         set_tests_properties(r179_original_client_native_target_marker_negatives
           PROPERTIES TIMEOUT 25)
+        # R181: require repeated true original foreground samples for the
+        # exact last-painted source slider, without admitting click delivery.
+        add_test(NAME r181_original_client_foreground_source_hit_negatives
+          COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r181_original_foreground_source_hits.py")
+        set_tests_properties(r181_original_client_foreground_source_hit_negatives
+          PROPERTIES TIMEOUT 25)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
