@@ -15,6 +15,25 @@ WglRetainedMenuPreview::WglRetainedMenuPreview()
 bool WglRetainedMenuPreview::owner_thread() const noexcept {
     return owner_==std::this_thread::get_id();
 }
+// R182: sequence provenance, not a permission grant. Counters cannot
+// overflow because each increment is bounded by the admitted sample count.
+void WglRetainedMenuPreview::note_focus_sample(
+        bool foreground,bool exact_source_hit) noexcept {
+    if(focus_sample_seen_) {
+        if(previous_foreground_ && !foreground) {
+            ++foreground_losses_;
+            post_regain_epoch_=false;
+        } else if(!previous_foreground_ && foreground && had_foreground_) {
+            ++foreground_regains_;
+            post_regain_epoch_=true;
+        }
+    }
+    if(foreground)had_foreground_=true;
+    if(foreground && exact_source_hit && post_regain_epoch_)
+        ++post_regain_exact_source_hits_;
+    previous_foreground_=foreground;
+    focus_sample_seen_=true;
+}
 bool WglRetainedMenuPreview::draw(
     HGLRC context,HDC dc,unsigned width,unsigned height) {
     if(!owner_thread() || !context || !dc ||
@@ -200,6 +219,7 @@ bool WglRetainedMenuPreview::observe_hover(
         menu_.set_bind_hover_row(std::nullopt);
         ++hover_samples_;
         if(foreground_verified)++hover_foreground_;
+        note_focus_sample(foreground_verified,false);
         return true;
     }
     std::optional<MenuNumericHover> numeric;
@@ -248,6 +268,7 @@ bool WglRetainedMenuPreview::observe_hover(
            std::numeric_limits<std::uint64_t>::max())return false;
         ++source_exact_hover_hits_;
     }
+    note_focus_sample(foreground_verified,exactSourceHit);
     return true;
 }
 std::optional<MenuSourceHoverTarget>
@@ -275,6 +296,23 @@ WglRetainedMenuPreview::source_hover_evidence(
         return std::nullopt;
     return std::array<std::uint64_t,3>{
         drawn_frames_,source_visible_draws_,source_exact_hover_hits_
+    };
+}
+std::optional<std::array<std::uint64_t,3>>
+WglRetainedMenuPreview::focus_cycle_evidence(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
+    if(!owner_thread() || !active_ || !drawn_frames_ ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       foreground_losses_>hover_samples_ ||
+       foreground_regains_>foreground_losses_ ||
+       post_regain_exact_source_hits_>source_exact_hover_hits_ ||
+       (foreground_regains_==0 && post_regain_exact_source_hits_!=0))
+        return std::nullopt;
+    return std::array<std::uint64_t,3>{
+        foreground_losses_,foreground_regains_,
+        post_regain_exact_source_hits_
     };
 }
 std::optional<std::array<std::uint64_t,5>>
