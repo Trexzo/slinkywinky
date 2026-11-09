@@ -251,6 +251,7 @@ public final class RendererWglEvidence {
         return total==hover[1] && os[0]<=hover[2] &&
                os[3]<=os[0] && os[3]<=os[1] &&
                os[4]<=os[3] &&
+               (long)os[3]<=os[4]+(long)os[2]+1 &&
                os[5]<=os[0] && os[5]<=source[2] &&
                os[5]<=hover[3] &&
                (os[4]!=0 || os[5]==0);
