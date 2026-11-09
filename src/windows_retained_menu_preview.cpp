@@ -112,8 +112,11 @@ bool WglRetainedMenuPreview::pointer(
     }
     if(phase==RetainedPointerPhase::Cancel)
         return pointer_gesture_.cancel();
+    // R184: even a separately attested test gesture may only target an
+    // actually painted frame. Local navigation or a completed click must
+    // repaint before another gesture; never synthesize future hit geometry.
     if(!exclusive_dispatch_attested || !foreground_verified ||
-       !monotonic_ms || !pointer_frames_.attached()) {
+       !monotonic_ms || !pointer_frames_.attached() || !last_drawn_frame_) {
         pointer_gesture_.cancel(); // Fail closed on lost ownership/focus.
         return false;
     }
@@ -123,22 +126,23 @@ bool WglRetainedMenuPreview::pointer(
         pointer_gesture_.cancel();
         return false;
     }
-    const auto frame=pointer_frames_.next(menu_,&profile_,&navigation_);
-    if(!frame) {
-        pointer_gesture_.cancel();
-        return false;
-    }
+    const auto& frame=*last_drawn_frame_;
     constexpr auto mode=MenuPanelMode::CompactOverlay;
     if(phase==RetainedPointerPhase::Down)
         return pointer_gesture_.press(
-            *frame,mode,x,y,monotonic_ms,true);
+            frame,mode,x,y,monotonic_ms,true);
     if(phase==RetainedPointerPhase::Move)
-        return pointer_gesture_.move(*frame,mode,x,y,true);
+        return pointer_gesture_.move(frame,mode,x,y,true);
     const auto hit=pointer_gesture_.release(
-        *frame,mode,x,y,monotonic_ms,true);
+        frame,mode,x,y,monotonic_ms,true);
     if(!hit)return false;
-    // A preview gesture may change presentation; require repaint before hover.
-    last_drawn_frame_.reset();
+    // R184: slider commit still reads the EXACT painted frame below.
+    // Keep the snapshot alive until the entire dispatch returns, then
+    // invalidate it even if the local-only profile mutation is refused.
+    struct InvalidatePaintOnReturn final {
+        std::optional<MenuRenderFrame>& frame;
+        ~InvalidatePaintOnReturn() {frame.reset();}
+    } invalidate_paint{last_drawn_frame_};
     // The precise source hit was certified at mouse-down and mouse-up.
     // No arbitrary module values or gameplay input are dispatched.
     switch(hit->kind) {
@@ -178,10 +182,10 @@ bool WglRetainedMenuPreview::pointer(
                        hit->catalog_index,hit->control_index);
         case MenuHitKind::RecoveredSliderPreview: {
             const auto panel=menu_panel_geometry(
-                width,height,frame->appearance.wide,mode);
+                width,height,frame.appearance.wide,mode);
             if(!panel || panel->scale<=0.0f)return false;
             const auto track=menu_numeric_track_geometry(
-                *frame,panel->logical_width(),panel->logical_height(),
+                frame,panel->logical_width(),panel->logical_height(),
                 hit->catalog_index,hit->control_index);
             const auto& catalog=recovered_widget_catalog();
             if(!track || hit->control_index>=catalog.size())return false;

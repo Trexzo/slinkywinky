@@ -274,6 +274,11 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
                 context.gl,context.dc,676,630);
             REQUIRE(changedPointerProfile &&
                 parse_settings(*changedPointerProfile).settings.combat.aim_enabled);
+            // R184: the earlier click invalidated painted geometry. A
+            // second synthetic click is rejected until a real repaint.
+            REQUIRE(!pointerMenu.pointer(
+                down,context.gl,context.dc,676,630,x,y,2080,true,true));
+            REQUIRE(pointerMenu.draw(context.gl,context.dc,676,630));
             REQUIRE(pointerMenu.pointer(
                 down,context.gl,context.dc,676,630,x,y,2100,true,true));
             REQUIRE(!pointerMenu.pointer(
@@ -355,10 +360,21 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             const auto hit=hit_test_menu(*f,MenuPanelMode::CompactOverlay,x,y);
             REQUIRE(hit && hit->kind==MenuHitKind::RecoveredSliderPreview &&
                     hit->control_index==widget);
+            // R184: NextRow/ExpandFocused are only local model actions.
+            // Do not accept an input target before this panel is painted.
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,x,y,3980,true,true));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            const auto paintedTarget=pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630);
+            REQUIRE(paintedTarget && paintedTarget->catalog_index==1u &&
+                    paintedTarget->widget_index==widget);
             REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Down,
-                context.gl,context.dc,676,630,x,y,4000,true,true));
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,4000,true,true));
             REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Up,
-                context.gl,context.dc,676,630,x,y,4050,true,true));
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,4050,true,true));
             const auto saved=pointerNumeric.profile_snapshot(
                 context.gl,context.dc,676,630);
             REQUIRE(saved && parse_settings(*saved).valid);

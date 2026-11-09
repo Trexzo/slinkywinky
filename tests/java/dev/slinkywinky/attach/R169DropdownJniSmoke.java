@@ -73,8 +73,13 @@ public final class R169DropdownJniSmoke {
             alien.start();alien.join();
             check(foreignRejected.get(),
                   "Foreign thread accessed owner-bound native popup");
-
+            check(!point(0,x,y,1900),
+                  "Unpainted expanded dropdown admitted a click");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R184 dropdown source repaint after expand failed");
             check(click(dropdown,2000),"Aim Mode dropdown did not open");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R184 native popup paint after open failed");
             mode(0,true);
             check(aimControlTarget()==null && aimOptionTarget(-1)==null &&
                   aimOptionTarget(4)==null,
@@ -110,6 +115,8 @@ public final class R169DropdownJniSmoke {
 
             dropdown=aimControlTarget();
             check(click(dropdown,4000),"Reopen of Aim Mode failed");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R184 native popup paint after reopening failed");
             mode(2,true);
             final int[] choice1=aimOptionTarget(1);
             check(click(choice1,4600),"Second source option refused");

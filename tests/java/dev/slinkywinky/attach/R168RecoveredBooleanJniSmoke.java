@@ -90,7 +90,10 @@ public final class R168RecoveredBooleanJniSmoke {
                       0,x,y,1200,true,true,677,630),
                   "Wrong source viewport admitted");
             check(!damaged(),"Rejected Boolean events modified native profile");
-
+            check(!gesture(0,x,y,1900),
+                  "Unpainted source-page Boolean click admitted");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R184 source-page Boolean repaint failed");
             check(gesture(0,x,y,2000),"Recovered Boolean press denied");
             check(gesture(2,x,y,2040),"Recovered Boolean release denied");
             check(damaged(),"Source Boolean did not mutate native damage condition");
@@ -118,6 +121,10 @@ public final class R168RecoveredBooleanJniSmoke {
             check(damaged(),"Stale source page toggled native damage condition");
             check(page(8) && pageOffset()==10 && booleanTarget()!=null,
                   "Original source page not restored");
+            check(!gesture(0,x,y,3900),
+                  "Restored unpainted source page admitted a stale click");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R184 restored-page repaint failed");
             check(gesture(0,x,y,4000) && gesture(2,x,y,4040),
                   "Second Boolean gesture refused");
             check(!damaged(),"Second valid source gesture did not restore Boolean");

@@ -82,7 +82,11 @@ public final class R167RecoveredSliderJniSmoke {
             require(!pointer(0,x,y,1200,true,true,677,630),
                     "Wrong viewport accepted");
             require(blockRange()==initial,"Rejected source changed profile");
-
+            // R184: source geometry from an unpainted navigation is never
+            // a valid input target even in this disposable JNI fixture.
+            require(!point(0,x,y,1900),"Unpainted source press admitted");
+            require(R166RetainedPointerJniSmoke.redraw(),
+                    "R184 post-navigation source repaint failed");
             require(point(0,x,y,2000),"Mid-slider press refused");
             require(point(2,x,y,2050),"Mid-slider release refused");
             float mid=blockRange();
@@ -101,7 +105,10 @@ public final class R167RecoveredSliderJniSmoke {
                     "Out-of-engine-range 7+ source slider was committed");
             require(Math.abs(blockRange()-mid)<0.0001f,
                     "Rejected numeric value mutated native settings");
-
+            require(!point(0,lower[0],lower[1],3900),
+                    "Rejected slider release left stale frame clickable");
+            require(R166RetainedPointerJniSmoke.redraw(),
+                    "R184 repaint after rejected slider value failed");
             require(point(0,lower[0],lower[1],4000),
                     "Low source slider press refused");
             require(point(2,lower[0],lower[1],4050),
@@ -109,7 +116,10 @@ public final class R167RecoveredSliderJniSmoke {
             float low=blockRange();
             require(low>1.3f && low<2.3f && low<mid,
                     "Java source slider low value failed native quantization");
-
+            require(!point(0,x,y,4900),
+                    "Committed slider value left unpainted frame clickable");
+            require(R166RetainedPointerJniSmoke.redraw(),
+                    "R184 repaint after slider commit failed");
             require(point(0,x,y,5000),"Cancel transaction setup refused");
             require(point(3,x,y,5010),"Pending numeric capture cancellation failed");
             require(!point(2,x,y,5020),"Cancelled slider capture committed");

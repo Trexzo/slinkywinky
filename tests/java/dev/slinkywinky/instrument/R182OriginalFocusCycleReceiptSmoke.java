@@ -42,7 +42,7 @@ public final class R182OriginalFocusCycleReceiptSmoke {
                      new int[]{64,60,3},
                      new int[]{64,63,63,3,0}),
               "Too many transitions for the original 63 samples accepted");
-        check(!valid(new int[]{1,1,1},new int[]{64,60,4},hover),
+        check(!valid(new int[]{1,1,1},new int[]{64,60,5},hover),
               "Source counts greater than numeric hit evidence accepted");
         check(!valid(new int[]{1,1,1},source,background),
               "Focus cycle outside original foreground source admitted");

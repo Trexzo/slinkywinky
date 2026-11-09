@@ -35,9 +35,10 @@ public:
     WglRetainedMenuPreview();
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
     bool apply(MenuNavAction action);
-    // R159: admitted WGL owner + exact viewport, physical client pixels,
-    // monotonic timestamp, explicitly attested event exclusivity and
-    // foreground. This is NOT yet connected to LWJGL/Windows game input.
+    // R159/R184: admitted WGL owner + exact viewport, physical client
+    // pixels, monotonic timestamp, attested event exclusivity, foreground
+    // AND last successfully painted GL11 hit geometry. Navigation / click
+    // invalidation requires another draw. No live original-game input hook.
     bool pointer(RetainedPointerPhase phase,HGLRC context,HDC dc,
                  unsigned width,unsigned height,int x,int y,
                  std::uint64_t monotonic_ms,bool exclusive_dispatch_attested,
