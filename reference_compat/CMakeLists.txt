@@ -269,4 +269,27 @@ if(BUILD_TESTING)
     r187_reject_no_item_release_event
     r187_reject_no_item_release_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R188: visual Anti Debuff independent pure policy and event-18 coexistence.
+  add_executable(slinkywinky_anti_debuff_bridge_test
+    tests/test_anti_debuff_bridge.cpp)
+  target_link_libraries(slinkywinky_anti_debuff_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r188_anti_debuff_bridge COMMAND slinkywinky_anti_debuff_bridge_test)
+  add_test(NAME r188_eleven_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/thirteen_modules_with_eleven_decisions.tsv")
+  add_test(NAME r188_reject_anti_debuff_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_anti_debuff_category.tsv")
+  add_test(NAME r188_reject_anti_debuff_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_anti_debuff_event.tsv")
+  add_test(NAME r188_reject_anti_debuff_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_anti_debuff_priority.tsv")
+  set_tests_properties(r188_reject_anti_debuff_category
+    r188_reject_anti_debuff_event
+    r188_reject_anti_debuff_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()

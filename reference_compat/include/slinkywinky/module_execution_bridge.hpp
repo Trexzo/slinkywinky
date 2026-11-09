@@ -13,6 +13,7 @@
 #include "slinkywinky/item_use_fix_controller.hpp"
 #include "slinkywinky/ping_fix_controller.hpp"
 #include "slinkywinky/no_item_release_controller.hpp"
+#include "slinkywinky/anti_debuff_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -92,6 +93,12 @@ struct NoItemReleaseTickPayload {
     unsigned executions = 0;
 };
 
+struct AntiDebuffTickPayload {
+    AntiDebuffInput input{};
+    AntiDebuffDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -106,6 +113,7 @@ struct ExecutionFrame {
     std::optional<ItemUseFixTickPayload> item_use_fix{};
     std::optional<PingFixTickPayload> ping_fix{};
     std::optional<NoItemReleaseTickPayload> no_item_release{};
+    std::optional<AntiDebuffTickPayload> anti_debuff{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -466,6 +474,34 @@ public:
         return false;
     }
 
+    // Candidate original: Anti Debuff descriptor 2, visual category 2,
+    // event 18 with priority 0. Pure offline screen-state proposals only.
+    bool bind_anti_debuff(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "Anti Debuff" ||
+            definitions_[id].category != 2)
+            return false;
+        bool correct = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kAntiDebuffEvent && sub.priority == 0)
+                correct = true;
+        if (!correct) return false;
+        return bind(id, kAntiDebuffEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.anti_debuff) return;
+                        auto& payload = *frame.anti_debuff;
+                        ++payload.executions;
+                        payload.decision = anti_debuff_.evaluate(payload.input);
+                    });
+    }
+
+    bool bind_anti_debuff_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Anti Debuff")
+                return bind_anti_debuff(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -520,6 +556,8 @@ public:
             frame.event != kOutgoingPacketEvent) return false;
         if (frame.no_item_release && frame.event != kNoItemReleaseEvent)
             return false;
+        if (frame.anti_debuff && frame.event != kAntiDebuffEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -533,7 +571,8 @@ public:
             static_cast<unsigned>(frame.no_use_delay.has_value()) +
             static_cast<unsigned>(frame.item_use_fix.has_value()) +
             static_cast<unsigned>(frame.ping_fix.has_value()) +
-            static_cast<unsigned>(frame.no_item_release.has_value());
+            static_cast<unsigned>(frame.no_item_release.has_value()) +
+            static_cast<unsigned>(frame.anti_debuff.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -543,8 +582,11 @@ public:
         const bool combined_outgoing_packet =
             typed_count == 2 && frame.event == kOutgoingPacketEvent &&
             frame.ping_fix && frame.no_item_release;
+        const bool combined_late_tick =
+            typed_count == 2 && frame.event == kAntiDebuffEvent &&
+            frame.no_use_delay && frame.anti_debuff;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
-            !combined_outgoing_packet)
+            !combined_outgoing_packet && !combined_late_tick)
             return false;
         if (combined_outgoing_packet) {
             const bool c00 =
@@ -607,6 +649,10 @@ public:
             frame.no_item_release->decision = {};
             frame.no_item_release->executions = 0;
         }
+        if (frame.anti_debuff) {
+            frame.anti_debuff->decision = {};
+            frame.anti_debuff->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -662,6 +708,7 @@ private:
     ItemUseFixController item_use_fix_;
     PingFixController ping_fix_;
     NoItemReleaseController no_item_release_;
+    AntiDebuffController anti_debuff_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

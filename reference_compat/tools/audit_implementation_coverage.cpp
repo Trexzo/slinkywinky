@@ -3,6 +3,7 @@
 #include "slinkywinky/candidate_catalog.hpp"
 #include "slinkywinky/module_execution_bridge.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <fstream>
@@ -168,6 +169,25 @@ static ExecutionFrame no_item_release_frame(NoItemReleaseInput input,
     return frame;
 }
 
+static ExecutionFrame anti_debuff_frame(bool blindness, bool nausea,
+                                         bool effect_active, bool include_use_delay = false) {
+    ExecutionFrame result;
+    result.event = kAntiDebuffEvent;
+    result.world_present = true;
+    result.player_present = true;
+    result.anti_debuff = AntiDebuffTickPayload{
+        {blindness, nausea, effect_active}, {}, 0};
+    if (include_use_delay) {
+        NoUseDelayTickPayload payload;
+        payload.input.in_game = true;
+        payload.input.use_key_down = true;
+        payload.input.physical_use_held = true;
+        payload.input.use_ticks_left = 3;
+        result.no_use_delay = payload;
+    }
+    return result;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -282,6 +302,14 @@ int main(int argc, char** argv) {
         if (has_no_item_release)
             require(bridge.bind_no_item_release_from_catalog(),
                     "No Item Release is present but original event-3/priority-0 binding failed");
+        std::size_t anti_debuff_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Anti Debuff")
+                anti_debuff_id = i;
+        const bool has_anti_debuff = anti_debuff_id < manifest.modules.size();
+        if (has_anti_debuff)
+            require(bridge.bind_anti_debuff_from_catalog(),
+                    "Anti Debuff exists but candidate event18/category2/priority0 binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -290,7 +318,8 @@ int main(int argc, char** argv) {
                                                (has_no_use_delay ? 1u : 0u) +
                                                (has_item_use_fix ? 2u : 0u) +
                                                (has_ping_fix ? 2u : 0u) +
-                                               (has_no_item_release ? 1u : 0u);
+                                               (has_no_item_release ? 1u : 0u) +
+                                               (has_anti_debuff ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -312,8 +341,9 @@ int main(int argc, char** argv) {
         require(c.implemented_per_event[kNoSlowEvent] == (has_no_slow ? 1u : 0u),
                 "No Slow callback not routed through event 21");
 
-        require(c.implemented_per_event[kNoUseDelayEvent] == (has_no_use_delay ? 1u : 0u),
-                "No Use Delay callback not routed through event 18");
+        require(c.implemented_per_event[kNoUseDelayEvent] ==
+                    (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u),
+                "No Use Delay / Anti Debuff shared event 18 inventory mismatch");
         require(c.implemented_per_event[kItemUseFixBeforeEvent] ==
                     (has_no_hit_delay ? 1u : 0u) + (has_item_use_fix ? 1u : 0u),
                 "Shared event 14 module binding inventory mismatch");
@@ -731,16 +761,61 @@ int main(int argc, char** argv) {
                     "Disabled No Item Release still ran outgoing callback");
         }
 
+        if (has_anti_debuff) {
+            require(bridge.request(anti_debuff_id, true),
+                    "Anti Debuff enable rejected");
+            require(!bridge.apply(false, false),
+                    "Anti Debuff bypassed missing world/player gate");
+            if (has_no_use_delay)
+                require(bridge.request(no_use_delay_id, true),
+                        "No Use Delay could not be readmitted for event 18");
+            require(bridge.apply(true, true), "Anti Debuff enable failed");
+            auto debuff_frame = anti_debuff_frame(true, true, true, has_no_use_delay);
+            require(bridge.dispatch(debuff_frame) && debuff_frame.anti_debuff &&
+                    debuff_frame.anti_debuff->executions == 1 &&
+                    debuff_frame.anti_debuff->decision.proposed_blindness_duration == 0 &&
+                    debuff_frame.anti_debuff->decision.proposed_time_in_portal == 0.0f &&
+                    debuff_frame.anti_debuff->decision.proposed_prev_time_in_portal == 0.0f,
+                    "Anti Debuff blindness/nausea proposal mismatch");
+            require(debuff_frame.executed_modules.size() ==
+                    (has_no_use_delay ? 2u : 1u),
+                    "Anti Debuff event18 callback membership mismatch");
+            if (has_no_use_delay)
+                require(debuff_frame.no_use_delay &&
+                        debuff_frame.no_use_delay->executions == 1,
+                        "No Use Delay was dropped from shared event18");
+            // Equal priority tie ordering is NOT verified as native-identical.
+            require(std::count(debuff_frame.executed_modules.begin(),
+                               debuff_frame.executed_modules.end(),
+                               anti_debuff_id) == 1,
+                    "Anti Debuff callback missing from shared event18");
+            debuff_frame = anti_debuff_frame(true, false, false, has_no_use_delay);
+            require(bridge.dispatch(debuff_frame) &&
+                    !debuff_frame.anti_debuff->decision.proposed_blindness_duration &&
+                    !debuff_frame.anti_debuff->decision.proposed_time_in_portal &&
+                    !debuff_frame.anti_debuff->decision.proposed_prev_time_in_portal,
+                    "Anti Debuff disabled/effect-absent proposal mismatch");
+            require(bridge.request(anti_debuff_id, false),
+                    "Anti Debuff disable rejected");
+            require(bridge.apply(true, true), "Anti Debuff disable failed");
+            debuff_frame = anti_debuff_frame(true, true, true, has_no_use_delay);
+            require(bridge.dispatch(debuff_frame) &&
+                    debuff_frame.anti_debuff->executions == 0 &&
+                    debuff_frame.executed_modules.size() ==
+                        (has_no_use_delay ? 1u : 0u),
+                    "Disabled Anti Debuff still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
-                    c.registered_modules == 66 &&
+                    has_anti_debuff && c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 10 &&
-                    c.executable_callback_bindings == 12 &&
-                    c.unimplemented_callback_subscriptions == 159,
+                    c.modules_with_executable_bindings == 11 &&
+                    c.executable_callback_bindings == 13 &&
+                    c.unimplemented_callback_subscriptions == 158,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -756,7 +831,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R187 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R188 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }

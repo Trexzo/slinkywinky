@@ -919,3 +919,46 @@ implemented callback bindings, leaving **159** subscriptions without
 first-party implementations. No functioning live packet interception
 or in-game parity is claimed. PR #2 remains draft; the parallel
 runtime PR #1 remains untouched.
+
+## R188: Anti Debuff — independent event-18 visual policy
+
+The user-provided decrypted candidate has been locally verified
+against the pinned `.data` and `.rdata` SHA-256 hashes. Descriptor
+index **2** identifies `Anti Debuff` in **visual category 2** with
+one callback on native **event 18 at priority 0**. The pinned
+OpenSlinky reference describes two independently selectable visual
+effects: clear an active blindness potion effect's duration to zero,
+and set both current and previous portal-wobble values to zero.
+
+The original first-party `AntiDebuffController` returns only typed
+offline **proposals**. Blindness duration is proposed as 0 only if
+the blindness setting is enabled **and** an active blindness effect
+exists; nausea/portal proposals are emitted only when nausea is
+enabled. No Minecraft fields, entities or potion effects are
+actually accessed or changed. No original executable instructions
+or unlicensed third-party source are copied into this branch.
+
+The `ModuleExecutionBridge` validates the exact module name,
+visual category, event 18 and signed priority 0 before binding.
+The typed event-18 envelope can contain both Anti Debuff and
+No Use Delay callbacks. Both have native priority 0; native qsort
+tie ordering is **not** claimed or asserted. Other conflicting
+typed payload combinations, absent player/world, disabled
+module state and shutdown remain gated.
+
+R188 tests exercise independent setting combinations, missing
+blindness effect, shared event 18, teardown, and invalid
+category/event/priority metadata. A thirteen-module synthetic
+catalog with three negative fixtures is run in the independent
+Windows/Ubuntu CTest matrix (Debug and Release). The private
+candidate-exporter also pins descriptor index 2 in metadata-only
+checks without publishing the original derived 66-module TSV.
+
+Full-candidate accounting: **66 module descriptors**, **171**
+native event registrations, **11 independently authored offline
+module decision policies**, **13 implemented callback bindings**,
+and **158** remaining callback registrations without a binding.
+These numbers measure binding inventory, **not** the percentage
+of completed client gameplay, rendering or GUI functionality.
+PR #2 remains draft and separate from the other chat's runtime
+branch; no live Minecraft acceptance is inferred.
