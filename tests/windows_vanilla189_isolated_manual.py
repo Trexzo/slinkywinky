@@ -654,14 +654,14 @@ def main():
                     exact=verify_r179_original_native_target(read_log(),fg,num)
                     losses,regains,post=verify_r182_original_focus_cycle(
                         read_log(),args.require_focus_cycle_source_hit)
-                    os=verify_r183_original_window_focus(
+                    os_counts=verify_r183_original_window_focus(
                         read_log(),args.require_exact_os_focus_cycle)
                     if args.require_exact_os_focus_cycle:
                         print("R183_ORIGINAL_VANILLA_EXACT_OS_FOCUS_RECOVERY_PASS "+
-                              "foreground="+str(os[0])+" background="+str(os[1])+
-                              " refused="+str(os[2])+
-                              " losses="+str(os[3])+" regains="+str(os[4])+
-                              " post_hits="+str(os[5])+
+                              "foreground="+str(os_counts[0])+" background="+str(os_counts[1])+
+                              " refused="+str(os_counts[2])+
+                              " losses="+str(os_counts[3])+" regains="+str(os_counts[4])+
+                              " post_hits="+str(os_counts[5])+
                               " native_click_delivery=disabled",flush=True)
                         print("R183_REAL_OS_FOCUS_NOT_HARDWARE_INPUT_PROOF",flush=True)
                     if args.require_focus_cycle_source_hit:

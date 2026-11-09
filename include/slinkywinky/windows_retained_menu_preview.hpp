@@ -113,6 +113,9 @@ private:
     // R180: immutable snapshot of the WGL frame actually painted.
     // Never expose hover geometry from navigation that has not been drawn.
     std::optional<MenuRenderFrame> last_drawn_frame_;
+    // R186: an observed post-paint viewport loss cancels model gestures,
+    // invalidates old hit rectangles and ends focus chronology. Owner-only.
+    void invalidate_painted_input() noexcept;
     std::thread::id owner_;
     HGLRC context_=nullptr;
     HDC dc_=nullptr;

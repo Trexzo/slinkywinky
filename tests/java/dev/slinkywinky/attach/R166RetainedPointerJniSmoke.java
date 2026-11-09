@@ -71,6 +71,9 @@ public final class R166RetainedPointerJniSmoke {
             });
             foreign.start();foreign.join();
             check(foreignRefused.get(),"Foreign Java thread changed WGL owner");
+            // R186: rejected same-owner viewport invalidated the paint.
+            check(!gesture(0,x,y,2800),"Stale viewport hit revived before repaint");
+            check(redraw(),"R186 input repaint after refused viewport failed");
 
             check(gesture(0,x,y,3000),"Valid press was refused");
             check(gesture(2,x,y,3040),"Valid release was refused");
@@ -92,6 +95,8 @@ public final class R166RetainedPointerJniSmoke {
                   "Release from changed viewport committed");
             check(!gesture(2,x,y,4240),"Stale viewport left click held");
             check(aim(profile(),true),"Changed viewport changed settings");
+            check(!gesture(0,x,y,4500),"Stale click after viewport loss admitted");
+            check(redraw(),"R186 repaint after abandoned press failed");
 
             check(gesture(0,x,y,5000),"Move-out setup refused");
             check(!gesture(1,-20,-20,5010),"Movement outside retained GUI accepted");

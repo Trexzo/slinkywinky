@@ -265,6 +265,9 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             REQUIRE(!pointerMenu.pointer(
                 down,context.gl,context.dc,676,630,x,y,1030,true,false));
             REQUIRE(!pointerMenu.preview_enabled(0));
+            // R186: wrong WGL size/context revoked the previous paint.
+            // The previous test's later successful Down now needs repaint.
+            REQUIRE(pointerMenu.draw(context.gl,context.dc,676,630));
             REQUIRE(pointerMenu.pointer(
                 down,context.gl,context.dc,676,630,x,y,2000,true,true));
             REQUIRE(pointerMenu.pointer(
@@ -291,6 +294,7 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             REQUIRE(!pointerMenu.pointer(
                 up,context.gl,context.dc,676,630,x,y,2620,true,true));
             REQUIRE(pointerMenu.preview_enabled(0)); // stale viewport abort
+            REQUIRE(pointerMenu.draw(context.gl,context.dc,676,630));
             REQUIRE(pointerMenu.pointer(
                 down,context.gl,context.dc,676,630,x,y,3000,true,true));
             REQUIRE(pointerMenu.pointer(
@@ -468,12 +472,77 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
             REQUIRE(pointerNumeric.source_hover_target(
                 context.gl,context.dc,676,630).has_value());
+            // R186: the real GL viewport can drift AFTER a successful
+            // paint, without another draw or a changed WGL context/DC.
+            // Source hover must fail closed and stay revoked when viewport
+            // dimensions alone are subsequently restored.
+            glViewport(4,0,676,630);
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            glViewport(0,0,676,630);
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+
+            // A passive physical hover cannot count a numeric/source hit
+            // while the actual viewport is different from the WGL draw.
+            glViewport(0,0,675,630);
+            REQUIRE(!pointerNumeric.observe_hover(
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,true));
+            glViewport(0,0,676,630);
+            REQUIRE(!pointerNumeric.observed_numeric_hover());
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+
+            // A first mouse Down with a drifted real viewport cannot claim
+            // old geometry, even when the caller passes the correct size.
+            glViewport(0,0,676,629);
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,6000,true,true));
+            glViewport(0,0,676,630);
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,6050,true,true));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+
+            // A mid-transaction viewport mutation cancels an already
+            // admitted press. The subsequent Up cannot alter settings,
+            // even after the caller restores the previous viewport.
+            REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,6500,true,true));
+            glViewport(0,0,674,630);
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Up,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,6550,true,true));
+            glViewport(0,0,676,630);
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Up,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,6580,true,true));
+            const auto afterDrift=pointerNumeric.profile_snapshot(
+                context.gl,context.dc,676,630);
+            REQUIRE(afterDrift && *saved==*afterDrift);
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
             REQUIRE(pointerNumeric.close());
             REQUIRE(reference.detach());
             same(r99Before,snapshot());
         }
         std::cout<<"R159_WGL_RETAINED_POINTER_EXCLUSIVE_GESTURES_AND_PROFILE_PASS\\n";
         std::cout<<"R185_WGL_OWNER_RENDER_REFUSAL_INVALIDATES_PAINT_AND_PRESS_PASS\\n";
+        std::cout<<"R186_POST_PAINT_VIEWPORT_DRIFT_FAIL_CLOSED_PASS\\n";
 
 }
 

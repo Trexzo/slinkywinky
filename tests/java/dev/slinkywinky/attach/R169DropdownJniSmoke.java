@@ -104,6 +104,10 @@ public final class R169DropdownJniSmoke {
                 2,choice2[0],choice2[1],2700,true,true,677,630),
                 "Changed viewport erroneously committed popup");
             mode(0,true);
+            check(!point(0,choice2[0],choice2[1],2800),
+                  "R186 stale popup option admitted after viewport loss");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R186 repaint after popup viewport loss failed");
 
             check(click(choice2,3000),"Third Aim Mode option refused");
             mode(2,false);

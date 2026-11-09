@@ -112,6 +112,9 @@ public final class R168RecoveredBooleanJniSmoke {
             check(!gesture(2,x,y,3130),
                   "Viewport-loss cancellation left held click active");
             check(damaged(),"Viewport loss corrupted native damage condition");
+            check(!gesture(0,x,y,3200),"R186 stale page click before repaint admitted");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R186 Boolean repaint after viewport loss failed");
 
             check(gesture(0,x,y,3500),"Page-change setup refused");
             check(page(9) && pageOffset()==5 && booleanTarget()==null,

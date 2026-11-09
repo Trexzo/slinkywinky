@@ -2,6 +2,7 @@
 """R183 exact original HWND OS focus receipt synthetic negative controls."""
 from __future__ import annotations
 import sys
+import subprocess
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from windows_vanilla189_isolated_manual import verify_r183_original_window_focus
@@ -33,6 +34,15 @@ def refused(source,strict=False):
     raise AssertionError("R183 falsely accepted unverified OS focus evidence")
 
 def main():
+    # R186: exercise the actual CLI entrypoint without --run; importing
+    # the helper alone missed a local 'os' shadow that crashed at startup.
+    help_probe=subprocess.run(
+        [sys.executable,str(Path(__file__).with_name(
+            "windows_vanilla189_isolated_manual.py")),"--help"],
+        capture_output=True,text=True,timeout=15)
+    assert help_probe.returncode==0 and (
+        "--render-retained-acceptance" in help_probe.stdout),(
+        "Original vanilla CLI help failed before launching Minecraft")
     baseline=receipt()
     assert verify_r183_original_window_focus(baseline,True)==(
         4,59,0,1,1,1)
@@ -75,6 +85,7 @@ def main():
         "native_click_delivery=enabled"))
     refused(baseline,1)
     refused(baseline,"true")
+    print("R186_ORIGINAL_CLIENT_CLI_MODULE_SHADOW_PREVENTION_PASS")
     print("R183_EXACT_WINDOW_FOCUS_MARKER_NEGATIVES_PASS")
     print("R183_BACKGROUND_NEVER_EQUALS_REFUSED_ADMISSION_PASS")
     print("R183_SYNTHETIC_MARKERS_NOT_ORIGINAL_GAME_OR_HARDWARE_PROOF")

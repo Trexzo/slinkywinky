@@ -9,11 +9,35 @@
 #include <utility>
 
 namespace slinkywinky {
+namespace {
+// R186: post-paint GL viewport continuity, not merely the expected
+// width/height parameters supplied by a caller. No GL state changes.
+bool exact_current_viewport(unsigned width,unsigned height) noexcept {
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewport);
+    return viewport[0]==0 && viewport[1]==0 &&
+           viewport[2]==static_cast<GLint>(width) &&
+           viewport[3]==static_cast<GLint>(height);
+}
+}
 WglRetainedMenuPreview::WglRetainedMenuPreview()
     : profile_(menu_),navigation_(menu_,profile_),
       owner_(std::this_thread::get_id()) {}
 bool WglRetainedMenuPreview::owner_thread() const noexcept {
     return owner_==std::this_thread::get_id();
+}
+void WglRetainedMenuPreview::invalidate_painted_input() noexcept {
+    // Caller must already own the pinned render thread. A foreign thread
+    // cannot revoke this instance's legitimate painted snapshot.
+    pointer_gesture_.cancel();
+    last_drawn_frame_.reset();
+    menu_.set_numeric_hover(std::nullopt);
+    menu_.set_bind_hover_row(std::nullopt);
+    focus_sample_seen_=false;
+    had_foreground_=false;
+    previous_foreground_=false;
+    post_regain_epoch_=false;
+    exact_window_focus_.break_sequence();
 }
 // R182: sequence provenance, not a permission grant. Counters cannot
 // overflow because each increment is bounded by the admitted sample count.
@@ -42,17 +66,9 @@ bool WglRetainedMenuPreview::draw(
     // hit surface AND any held preview press. Restoring the old WGL context
     // cannot resurrect it: another successful draw is required.
     const auto refuse_paint=[this]() noexcept {
-        pointer_gesture_.cancel();
-        last_drawn_frame_.reset();
-        menu_.set_numeric_hover(std::nullopt);
-        menu_.set_bind_hover_row(std::nullopt);
-        // R182/R183: no source-pinned focus cycle may bridge an invalid
-        // paint, even if a later frame recovers the same WGL context.
-        focus_sample_seen_=false;
-        had_foreground_=false;
-        previous_foreground_=false;
-        post_regain_epoch_=false;
-        exact_window_focus_.break_sequence();
+        // R185/R186: a rejected paint never preserves old input geometry
+        // or bridges read-only original-window focus chronology.
+        invalidate_painted_input();
         return false;
     };
     if(!context || !dc ||
@@ -126,11 +142,18 @@ bool WglRetainedMenuPreview::pointer(
     if(!context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc) {
-        pointer_gesture_.cancel(); // A changed render owner aborts a held press.
+        invalidate_painted_input(); // Wrong owner/viewport: revoke geometry.
         return false;
     }
     if(phase==RetainedPointerPhase::Cancel)
         return pointer_gesture_.cancel();
+    // R186: the caller's stale dimensions are insufficient. A game render
+    // can change GL_VIEWPORT between valid paints without changing WGL
+    // context/DC. Revoke the old painted geometry and held gesture.
+    if(!exact_current_viewport(width,height)) {
+        invalidate_painted_input();
+        return false;
+    }
     // R184: even a separately attested test gesture may only target an
     // actually painted frame. Local navigation or a completed click must
     // repaint before another gesture; never synthesize future hit geometry.
@@ -234,6 +257,10 @@ bool WglRetainedMenuPreview::observe_hover(
        hover_foreground_==std::numeric_limits<std::uint64_t>::max() ||
        hover_numeric_==std::numeric_limits<std::uint64_t>::max() ||
        hover_bind_==std::numeric_limits<std::uint64_t>::max())return false;
+    if(!exact_current_viewport(width,height)) {
+        invalidate_painted_input();
+        return false;
+    }
     if(!last_drawn_frame_) {
         // R180: the old image is invalidated by navigation. Count this
         // original WGL observation as EMPTY (preserves 63-frame telemetry)
@@ -302,6 +329,10 @@ WglRetainedMenuPreview::source_hover_target(
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc)
         return std::nullopt;
+    if(!exact_current_viewport(width,height)) {
+        invalidate_painted_input();
+        return std::nullopt;
+    }
     return last_drawn_frame_?
         menu_original_auto_block_range_target(
             *last_drawn_frame_,width,height):std::nullopt;
