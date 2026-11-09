@@ -536,13 +536,121 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
             REQUIRE(pointerNumeric.source_hover_target(
                 context.gl,context.dc,676,630).has_value());
+            // R187: a wrong-thread passive hover is denied but must never
+            // mutate the legitimate pinned renderer's painted source.
+            bool foreignHoverAdmitted=true;
+            std::thread foreignHover([&] {
+                foreignHoverAdmitted=pointerNumeric.observe_hover(
+                    context.gl,context.dc,676,630,
+                    paintedTarget->center_x,paintedTarget->center_y,true);
+            });
+            foreignHover.join();
+            REQUIRE(!foreignHoverAdmitted);
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+
+            // Actual WGL context loss without a menu redraw: the passive
+            // target query must revoke the last paint, not merely return
+            // null and let the old geometry reappear after rebind.
+            REQUIRE(wglMakeCurrent(nullptr,nullptr));
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(wglMakeCurrent(context.dc,context.gl));
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,7100,true,true));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+
+            // A held press followed by real context loss via a passive
+            // read must cancel the gesture even though pending() normally
+            // denies passive hover observations. After rebind, Up fails.
+            REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,7500,true,true));
+            REQUIRE(wglMakeCurrent(nullptr,nullptr));
+            REQUIRE(!pointerNumeric.observe_hover(
+                context.gl,context.dc,676,630,
+                paintedTarget->center_x,paintedTarget->center_y,true));
+            REQUIRE(wglMakeCurrent(context.dc,context.gl));
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Up,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,7540,true,true));
+            const auto afterWglLoss=pointerNumeric.profile_snapshot(
+                context.gl,context.dc,676,630);
+            REQUIRE(afterWglLoss && *saved==*afterWglLoss);
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+            // R187: pending() must not hide a passive OBSERVED viewport
+            // change. That hover is refused and the press is canceled.
+            REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,8000,true,true));
+            glViewport(0,0,675,630);
+            REQUIRE(!pointerNumeric.observe_hover(
+                context.gl,context.dc,676,630,
+                paintedTarget->center_x,paintedTarget->center_y,true));
+            glViewport(0,0,676,630);
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Up,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,8040,true,true));
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            const auto afterPendingViewport=pointerNumeric.profile_snapshot(
+                context.gl,context.dc,676,630);
+            REQUIRE(afterPendingViewport && *saved==*afterPendingViewport);
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
             REQUIRE(pointerNumeric.close());
+            // R187: even a separate OS-focus sample MUST NOT pair with a
+            // passive hover from before a WGL binding or viewport loss.
+            // These are synthetic native fixture states, not real OS input.
+            {
+                WglRetainedMenuPreview pairedFocus;
+                REQUIRE(pairedFocus.draw(context.gl,context.dc,676,630));
+                REQUIRE(pairedFocus.observe_hover(
+                    context.gl,context.dc,676,630,0,0,false));
+                REQUIRE(wglMakeCurrent(nullptr,nullptr));
+                REQUIRE(!pairedFocus.observe_original_window_focus(
+                    context.gl,context.dc,676,630,
+                    OriginalWindowFocusState::Background,false));
+                REQUIRE(wglMakeCurrent(context.dc,context.gl));
+                REQUIRE(!pairedFocus.original_window_focus_evidence(
+                    context.gl,context.dc,676,630));
+                REQUIRE(pairedFocus.draw(context.gl,context.dc,676,630));
+                REQUIRE(!pairedFocus.original_window_focus_evidence(
+                    context.gl,context.dc,676,630));
+                REQUIRE(pairedFocus.close());
+            }
+            {
+                WglRetainedMenuPreview pairedViewport;
+                REQUIRE(pairedViewport.draw(context.gl,context.dc,676,630));
+                REQUIRE(pairedViewport.observe_hover(
+                    context.gl,context.dc,676,630,0,0,false));
+                glViewport(0,0,675,630);
+                REQUIRE(!pairedViewport.observe_original_window_focus(
+                    context.gl,context.dc,676,630,
+                    OriginalWindowFocusState::Background,false));
+                glViewport(0,0,676,630);
+                REQUIRE(!pairedViewport.original_window_focus_evidence(
+                    context.gl,context.dc,676,630));
+                REQUIRE(pairedViewport.draw(context.gl,context.dc,676,630));
+                REQUIRE(pairedViewport.close());
+            }
             REQUIRE(reference.detach());
             same(r99Before,snapshot());
         }
         std::cout<<"R159_WGL_RETAINED_POINTER_EXCLUSIVE_GESTURES_AND_PROFILE_PASS\\n";
         std::cout<<"R185_WGL_OWNER_RENDER_REFUSAL_INVALIDATES_PAINT_AND_PRESS_PASS\\n";
         std::cout<<"R186_POST_PAINT_VIEWPORT_DRIFT_FAIL_CLOSED_PASS\\n";
+        std::cout<<"R187_WGL_BINDING_LOSS_REQUIRES_REPAINT_AND_BREAKS_OS_PAIR_PASS\\n";
 
 }
 

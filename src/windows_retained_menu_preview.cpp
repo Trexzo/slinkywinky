@@ -248,19 +248,27 @@ bool WglRetainedMenuPreview::observe_hover(
         int x,int y,bool foreground_verified) {
     // A read-only visual hint, not input ownership. A pending synthetic
     // gesture cannot have its immutable input frame altered by hover.
-    if(!owner_thread() || !active_ || !drawn_frames_ ||
-       !context || !dc || context!=context_ || dc!=dc_ ||
+    if(!owner_thread() || !active_ || !drawn_frames_)return false;
+    // R187: reject missing/moved actual WGL ownership before checking
+    // pending gestures. A subsequent same-context rebind cannot revive
+    // the hit rectangles or a held synthetic press without a new draw.
+    if(!context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
-       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
-       pointer_gesture_.pending() ||
-       hover_samples_==std::numeric_limits<std::uint64_t>::max() ||
-       hover_foreground_==std::numeric_limits<std::uint64_t>::max() ||
-       hover_numeric_==std::numeric_limits<std::uint64_t>::max() ||
-       hover_bind_==std::numeric_limits<std::uint64_t>::max())return false;
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc) {
+        invalidate_painted_input();
+        return false;
+    }
+    // R187: check viewport continuity BEFORE pending(), otherwise a
+    // passive read during a held press could silently hide a GL resize.
     if(!exact_current_viewport(width,height)) {
         invalidate_painted_input();
         return false;
     }
+    if(pointer_gesture_.pending() ||
+       hover_samples_==std::numeric_limits<std::uint64_t>::max() ||
+       hover_foreground_==std::numeric_limits<std::uint64_t>::max() ||
+       hover_numeric_==std::numeric_limits<std::uint64_t>::max() ||
+       hover_bind_==std::numeric_limits<std::uint64_t>::max())return false;
     if(!last_drawn_frame_) {
         // R180: the old image is invalidated by navigation. Count this
         // original WGL observation as EMPTY (preserves 63-frame telemetry)
@@ -324,12 +332,14 @@ bool WglRetainedMenuPreview::observe_hover(
 std::optional<MenuSourceHoverTarget>
 WglRetainedMenuPreview::source_hover_target(
         HGLRC context,HDC dc,unsigned width,unsigned height) {
-    if(!owner_thread() || !active_ || !drawn_frames_ ||
-       !context || !dc || context!=context_ || dc!=dc_ ||
-       width!=width_ || height!=height_ ||
-       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc)
+    if(!owner_thread() || !active_ || !drawn_frames_)
         return std::nullopt;
-    if(!exact_current_viewport(width,height)) {
+    // R187: source read on a lost/moved render owner revokes old hit
+    // rectangles. Rebinding identical WGL handles does not revalidate.
+    if(!context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       !exact_current_viewport(width,height)) {
         invalidate_painted_input();
         return std::nullopt;
     }
@@ -357,11 +367,18 @@ bool WglRetainedMenuPreview::observe_original_window_focus(
         OriginalWindowFocusState state,bool pointer_admitted) noexcept {
     // One companion OS status per already-admitted passive hover. A
     // missing/repeated sample cannot be used to forge a focus transition.
-    if(!owner_thread() || !active_ || !drawn_frames_ ||
-       !context || !dc || context!=context_ || dc!=dc_ ||
+    if(!owner_thread() || !active_ || !drawn_frames_)return false;
+    // R187: no OS focus status may pair with an earlier hover after a
+    // genuine WGL binding/DC change or viewport drift. A loss is NOT a
+    // sampled OS-background state, so preserve the receipt counters.
+    if(!context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
-       hover_samples_!=strict_hover_samples_+1 ||
+       !exact_current_viewport(width,height)) {
+        invalidate_painted_input();
+        return false;
+    }
+    if(hover_samples_!=strict_hover_samples_+1 ||
        source_exact_hover_hits_<strict_source_hits_ ||
        source_exact_hover_hits_-strict_source_hits_>1)
         return false;

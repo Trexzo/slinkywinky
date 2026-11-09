@@ -64,6 +64,13 @@ public final class R175RetainedHoverJniSmoke {
             });
             alien.start();alien.join();
             check(foreignDenied.get(),"Foreign JNI thread obtained WGL hover");
+            // R187: a refused owner viewport revoked the last GL11 paint;
+            // a foreign hover must not restore it. Only redraw reopens hit
+            // geometry. This test previously expected stale hover success.
+            check(observeHover(x,y,true,676,630) && hoverReceipt()==null,
+                  "Unpainted hover after refused WGL viewport was not empty");
+            check(R166RetainedPointerJniSmoke.redraw(),
+                  "R187 source repaint after invalid WGL viewport failed");
 
             check(observeHover(x,y,true,676,630),
                   "Source slider hover refused");
@@ -71,13 +78,13 @@ public final class R175RetainedHoverJniSmoke {
             check(seen!=null && seen.length==2 && seen[0]==1 &&
                   seen[1]>=0,"Native source numeric hover not retained");
             int[] first=hoverEvidence();
-            check(first!=null && first.length==5 && first[0]==2 &&
-                  first[1]==2 && first[2]==2 && first[3]==1 && first[4]==0,
+            check(first!=null && first.length==5 && first[0]==3 &&
+                  first[1]==3 && first[2]==3 && first[3]==1 && first[4]==0,
                   "Source numeric hover did not increment exact WGL counters");
             check(observeHover(x,y,true,676,630),
                   "Repeated identical source hover should be idempotent");
             int[] repeat=hoverEvidence();
-            check(repeat!=null && repeat[1]==3 && repeat[2]==3 &&
+            check(repeat!=null && repeat[1]==4 && repeat[2]==4 &&
                   repeat[3]==2 && repeat[4]==0,
                   "Repeat source hover audit did not count accepted samples");
             check(R166RetainedPointerJniSmoke.redraw(),
