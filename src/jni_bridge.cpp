@@ -760,6 +760,18 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                 static_cast<unsigned>(height),
                 point?point->client_x:0,point?point->client_y:0,
                 point.has_value()))return JNI_FALSE;
+            // R183: separate exact HWND/OS tri-state from the nullable
+            // pointer admission above. A refused identity or race must NOT
+            // be counted as a proven background/focus-loss transition.
+            const auto status=slinkywinky::audit_game_render_window(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height));
+            if(!retained_preview->observe_original_window_focus(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height),
+                static_cast<slinkywinky::OriginalWindowFocusState>(
+                    static_cast<int>(status)),point.has_value()))
+                return JNI_FALSE;
         }
         return drawValidatedMenuOverlay(context,dc,width,height,
             slinkywinky::MenuGL11Mode::CompactOverlay,retained_preview.get());
@@ -847,6 +859,34 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadRetainedFocusCycle
         }
         jintArray result=env->NewIntArray(3);
         if(result)env->SetIntArrayRegion(result,0,3,counts);
+        return result;
+    }catch(...) {return nullptr;}
+}
+// R183: source-pinned original WGL exact Win32 focus trace. Unlike the
+// nullable R172 pointer hint, -1 is a REFUSAL, not a background sample.
+// Counts are aggregate and strictly inert for original Minecraft input.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadExactWindowFocusEvidence(
+        JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || !context || !dc || width<320 || height<240 ||
+       width>8192 || height>8192)return nullptr;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !retained_preview->active())return nullptr;
+    try {
+        const auto evidence=retained_preview->original_window_focus_evidence(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+            static_cast<unsigned>(width),static_cast<unsigned>(height));
+        if(!evidence)return nullptr;
+        jint counts[6]={};
+        for(std::size_t i=0;i<6u;i++) {
+            if((*evidence)[i]>static_cast<std::uint64_t>(
+                    std::numeric_limits<jint>::max()))return nullptr;
+            counts[i]=static_cast<jint>((*evidence)[i]);
+        }
+        jintArray result=env->NewIntArray(6);
+        if(result)env->SetIntArrayRegion(result,0,6,counts);
         return result;
     }catch(...) {return nullptr;}
 }
