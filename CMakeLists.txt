@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R183: pure C++ exact OS focus/refusal sequence, portable and input-free.
+  add_executable(slinkywinky_original_focus_trace_tests
+    tests/test_original_window_focus_trace.cpp)
+  target_include_directories(slinkywinky_original_focus_trace_tests
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(slinkywinky_original_focus_trace_tests
+    PRIVATE cxx_std_17)
+  add_test(NAME r183_exact_os_focus_tri_state_negative_controls
+    COMMAND slinkywinky_original_focus_trace_tests)
   add_executable(slinkywinky_bridge_tests tests/test_bridge.cpp)
   target_link_libraries(slinkywinky_bridge_tests PRIVATE slinkywinky_bridge)
   add_test(NAME bridge_abi COMMAND slinkywinky_bridge_tests)
