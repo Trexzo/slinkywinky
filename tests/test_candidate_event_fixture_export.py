@@ -53,6 +53,9 @@ class TestCandidateManifestExporter(unittest.TestCase):
         rows[2]["name"] = "Anti Debuff"
         rows[2]["category"] = 2
         rows[2]["subscriptions"] = [(18, 0)]
+        rows[21]["name"] = "Fast Accel"
+        rows[21]["category"] = 1
+        rows[21]["subscriptions"] = [(22, 0)]
         rows[31]["name"] = "Instant Stop"
         rows[31]["category"] = 1
         rows[31]["subscriptions"] = [(16, 200)]
@@ -125,6 +128,10 @@ class TestCandidateManifestExporter(unittest.TestCase):
             fixture.verify_known_original_bindings(rows)
         rows[44]["subscriptions"] = [(3, 0)]
         rows[2]["subscriptions"] = [(18, 1)]
+        with self.assertRaisesRegex(ValueError, "binding drift"):
+            fixture.verify_known_original_bindings(rows)
+        rows[2]["subscriptions"] = [(18, 0)]
+        rows[21]["subscriptions"] = [(22, 1)]
         with self.assertRaisesRegex(ValueError, "binding drift"):
             fixture.verify_known_original_bindings(rows)
 

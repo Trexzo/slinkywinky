@@ -14,6 +14,7 @@
 #include "slinkywinky/ping_fix_controller.hpp"
 #include "slinkywinky/no_item_release_controller.hpp"
 #include "slinkywinky/anti_debuff_controller.hpp"
+#include "slinkywinky/fast_accel_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -99,6 +100,12 @@ struct AntiDebuffTickPayload {
     unsigned executions = 0;
 };
 
+struct FastAccelTickPayload {
+    FastAccelInput input{};
+    FastAccelDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -114,6 +121,7 @@ struct ExecutionFrame {
     std::optional<PingFixTickPayload> ping_fix{};
     std::optional<NoItemReleaseTickPayload> no_item_release{};
     std::optional<AntiDebuffTickPayload> anti_debuff{};
+    std::optional<FastAccelTickPayload> fast_accel{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -502,6 +510,34 @@ public:
         return false;
     }
 
+    // Original candidate Fast Accel: movement category 1, event 22,
+    // priority 0. All motion changes are proposed offline only.
+    bool bind_fast_accel(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "Fast Accel" ||
+            definitions_[id].category != 1)
+            return false;
+        bool original_event = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kFastAccelEvent && sub.priority == 0)
+                original_event = true;
+        if (!original_event) return false;
+        return bind(id, kFastAccelEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.fast_accel) return;
+                        auto& payload = *frame.fast_accel;
+                        ++payload.executions;
+                        payload.decision = fast_accel_.evaluate(payload.input);
+                    });
+    }
+
+    bool bind_fast_accel_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Fast Accel")
+                return bind_fast_accel(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -558,6 +594,8 @@ public:
             return false;
         if (frame.anti_debuff && frame.event != kAntiDebuffEvent)
             return false;
+        if (frame.fast_accel && frame.event != kFastAccelEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -572,7 +610,8 @@ public:
             static_cast<unsigned>(frame.item_use_fix.has_value()) +
             static_cast<unsigned>(frame.ping_fix.has_value()) +
             static_cast<unsigned>(frame.no_item_release.has_value()) +
-            static_cast<unsigned>(frame.anti_debuff.has_value());
+            static_cast<unsigned>(frame.anti_debuff.has_value()) +
+            static_cast<unsigned>(frame.fast_accel.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -653,6 +692,10 @@ public:
             frame.anti_debuff->decision = {};
             frame.anti_debuff->executions = 0;
         }
+        if (frame.fast_accel) {
+            frame.fast_accel->decision = {};
+            frame.fast_accel->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -709,6 +752,7 @@ private:
     PingFixController ping_fix_;
     NoItemReleaseController no_item_release_;
     AntiDebuffController anti_debuff_;
+    FastAccelController fast_accel_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

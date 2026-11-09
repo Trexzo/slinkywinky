@@ -292,4 +292,27 @@ if(BUILD_TESTING)
     r188_reject_anti_debuff_event
     r188_reject_anti_debuff_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R189: pure Fast Accel motion decision and 20-tick friction oracle.
+  add_executable(slinkywinky_fast_accel_bridge_test
+    tests/test_fast_accel_bridge.cpp)
+  target_link_libraries(slinkywinky_fast_accel_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r189_fast_accel_bridge COMMAND slinkywinky_fast_accel_bridge_test)
+  add_test(NAME r189_twelve_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/fifteen_modules_with_twelve_decisions.tsv")
+  add_test(NAME r189_reject_fast_accel_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_fast_accel_category.tsv")
+  add_test(NAME r189_reject_fast_accel_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_fast_accel_event.tsv")
+  add_test(NAME r189_reject_fast_accel_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_fast_accel_priority.tsv")
+  set_tests_properties(r189_reject_fast_accel_category
+    r189_reject_fast_accel_event
+    r189_reject_fast_accel_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()

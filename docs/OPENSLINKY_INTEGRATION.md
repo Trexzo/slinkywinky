@@ -962,3 +962,49 @@ These numbers measure binding inventory, **not** the percentage
 of completed client gameplay, rendering or GUI functionality.
 PR #2 remains draft and separate from the other chat's runtime
 branch; no live Minecraft acceptance is inferred.
+
+## R189: Fast Accel — 20-tick friction calculation as a pure policy
+
+The locally held decrypted original binary's pinned data/rdata hashes
+verify **Fast Accel** at descriptor **index 21**, movement category
+**1**, native event **22** with signed priority **0**. The event-22
+catalog includes one additional registered handler without a
+corresponding first-party offline implementation.
+
+The independently authored `FastAccelController` consumes a typed
+movement hook (forward/strafe/speed), current X/Y/Z motion, grounded
+and sprint state, hurt time, accepted-weapon status and three settings.
+It computes the normalized per-tick horizontal push, estimates the
+speed after 20 ground ticks using a friction factor of **0.546**
+(an initial push followed by **19** recurrence iterations),
+optionally adds the conditional **0.2** sprint bonus, and interpolates
+the current horizontal speed toward the computed target.
+The proposed horizontal motion preserves the current direction and
+leaves Y untouched. Input gates reject no movement, zero current
+speed, airborne state, missing required weapon or damage restrictions;
+already-above-target motion is left untouched. Nonfinite, negative
+speed and acceleration outside [0,1] fail closed as deliberate
+hardening, NOT necessarily native-identical exceptional behavior.
+
+All changes remain **offline proposals**. No JNI calls, memory writes,
+packet interception, keyboard injection, or Minecraft process access
+were introduced. The isolated `ModuleExecutionBridge` validates
+the original name, category, event-22 slot and priority-zero
+subscription before attaching this one first-party callback.
+
+A dedicated C++ test uses an **independent geometric-series oracle**
+for the 20-tick terminal speed and verifies interpolation, direction
+and Y preservation, sprint bonus, diagonal normalization, gating,
+malformed input rejection, world/player admission, enable/disable,
+wrong event/category/priority fixtures and teardown. The synthetic
+15-module fixture also retains an unimplemented event-22 handler
+to verify the callback inventory is not falsely expanded.
+
+The full original candidate remains **66 descriptors, 171 native
+callback subscriptions**. R189's expected inventory becomes
+**12** independently implemented offline module decision policies,
+**14** executable callback bindings, and **157** original native
+subscriptions without an implementation. This measures registrations
+only, not total module fidelity. Windows/Ubuntu Debug/Release
+reference CI is required before accepting the revision.
+PR #2 stays draft; no changes to the other chat's live runtime.

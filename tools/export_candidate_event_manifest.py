@@ -90,6 +90,7 @@ def verify_known_original_bindings(rows):
     """Pinned private-candidate descriptor contracts; no original code copied."""
     expected = (
         (2, "Anti Debuff", 2, [(18, 0)]),
+        (21, "Fast Accel", 1, [(22, 0)]),
         (31, "Instant Stop", 1, [(16, 200)]),
         (35, "Item Use Fix", 4, [(14, 0), (15, 0)]),
         (42, "No Hit Delay", 4, [(14, 0)]),

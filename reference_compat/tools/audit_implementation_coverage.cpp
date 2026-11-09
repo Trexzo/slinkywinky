@@ -188,6 +188,26 @@ static ExecutionFrame anti_debuff_frame(bool blindness, bool nausea,
     return result;
 }
 
+static ExecutionFrame fast_accel_frame(bool sprinting = false,
+                                       bool grounded = true) {
+    ExecutionFrame frame;
+    frame.event = kFastAccelEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    FastAccelTickPayload payload;
+    payload.input.forward = 1.0f;
+    payload.input.movement_speed = 0.1f;
+    payload.input.on_ground = grounded;
+    payload.input.sprint_hook = sprinting;
+    payload.input.entity_sprinting = sprinting;
+    payload.input.motion_x = 0.1;
+    payload.input.motion_y = 0.25;
+    payload.input.motion_z = 0.0;
+    payload.input.settings.acceleration = 0.5f;
+    frame.fast_accel = payload;
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -310,6 +330,13 @@ int main(int argc, char** argv) {
         if (has_anti_debuff)
             require(bridge.bind_anti_debuff_from_catalog(),
                     "Anti Debuff exists but candidate event18/category2/priority0 binding failed");
+        std::size_t fast_accel_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Fast Accel") fast_accel_id = i;
+        const bool has_fast_accel = fast_accel_id < manifest.modules.size();
+        if (has_fast_accel)
+            require(bridge.bind_fast_accel_from_catalog(),
+                    "Fast Accel candidate event22/category1/priority0 binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -319,7 +346,8 @@ int main(int argc, char** argv) {
                                                (has_item_use_fix ? 2u : 0u) +
                                                (has_ping_fix ? 2u : 0u) +
                                                (has_no_item_release ? 1u : 0u) +
-                                               (has_anti_debuff ? 1u : 0u);
+                                               (has_anti_debuff ? 1u : 0u) +
+                                               (has_fast_accel ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -340,6 +368,8 @@ int main(int argc, char** argv) {
                 "Movement callbacks not routed through event 16");
         require(c.implemented_per_event[kNoSlowEvent] == (has_no_slow ? 1u : 0u),
                 "No Slow callback not routed through event 21");
+        require(c.implemented_per_event[kFastAccelEvent] == (has_fast_accel ? 1u : 0u),
+                "Fast Accel callback not routed through event 22");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u),
@@ -359,7 +389,8 @@ int main(int argc, char** argv) {
                 event != kMovementTickEvent && event != kNoSlowEvent &&
                 event != kNoHitDelayEvent && event != kNoUseDelayEvent &&
                 event != kItemUseFixAfterEvent &&
-                event != kIncomingPacketEvent && event != kOutgoingPacketEvent)
+                event != kIncomingPacketEvent && event != kOutgoingPacketEvent &&
+                event != kFastAccelEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -806,16 +837,55 @@ int main(int argc, char** argv) {
                     "Disabled Anti Debuff still executed");
         }
 
+        if (has_fast_accel) {
+            require(bridge.request(fast_accel_id, true), "Fast Accel enable rejected");
+            require(!bridge.apply(false, false), "Fast Accel bypassed world gate");
+            require(bridge.apply(true, true), "Fast Accel enable failed");
+            auto accel_tick = fast_accel_frame();
+            const double expected_top =
+                0.1 * (1.0 - std::pow(0.546, 20.0)) / (1.0 - 0.546);
+            require(bridge.dispatch(accel_tick) && accel_tick.fast_accel &&
+                    accel_tick.fast_accel->executions == 1 &&
+                    accel_tick.fast_accel->decision.proposed_motion &&
+                    std::abs(accel_tick.fast_accel->decision.target_horizontal_speed -
+                             expected_top) < 0.00001 &&
+                    std::abs(accel_tick.fast_accel->decision.proposed_motion->x -
+                             (0.1 + expected_top) / 2.0) < 0.00001 &&
+                    accel_tick.fast_accel->decision.proposed_motion->y == 0.25 &&
+                    accel_tick.executed_modules.size() == 1 &&
+                    accel_tick.executed_modules.front() == fast_accel_id,
+                    "Fast Accel 20-tick friction and interpolation oracle mismatch");
+            accel_tick = fast_accel_frame(true);
+            require(bridge.dispatch(accel_tick) && accel_tick.fast_accel &&
+                    accel_tick.fast_accel->decision.proposed_motion &&
+                    std::abs(accel_tick.fast_accel->decision.target_horizontal_speed -
+                             (expected_top + 0.2)) < 0.00001,
+                    "Fast Accel conditional sprint bonus mismatch");
+            accel_tick = fast_accel_frame(false, false);
+            require(bridge.dispatch(accel_tick) && accel_tick.fast_accel &&
+                    accel_tick.fast_accel->executions == 1 &&
+                    !accel_tick.fast_accel->decision.proposed_motion,
+                    "Fast Accel changed airborne motion");
+            require(bridge.request(fast_accel_id, false), "Fast Accel disable rejected");
+            require(bridge.apply(true, true), "Fast Accel disable failed");
+            accel_tick = fast_accel_frame();
+            require(bridge.dispatch(accel_tick) && accel_tick.fast_accel &&
+                    accel_tick.fast_accel->executions == 0 &&
+                    accel_tick.executed_modules.empty(),
+                    "Disabled Fast Accel callback still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
-                    has_anti_debuff && c.registered_modules == 66 &&
+                    has_anti_debuff && has_fast_accel &&
+                    c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 11 &&
-                    c.executable_callback_bindings == 13 &&
-                    c.unimplemented_callback_subscriptions == 158,
+                    c.modules_with_executable_bindings == 12 &&
+                    c.executable_callback_bindings == 14 &&
+                    c.unimplemented_callback_subscriptions == 157,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -831,7 +901,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R188 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R189 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }
