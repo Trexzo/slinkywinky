@@ -33,6 +33,8 @@ enum class RetainedPointerPhase : unsigned char {
 class WglRetainedMenuPreview final {
 public:
     WglRetainedMenuPreview();
+    // R185: rejected same-owner WGL paints revoke prior hit geometry and
+    // cancel held preview gestures. Foreign-thread calls never mutate owner.
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
     bool apply(MenuNavAction action);
     // R159/R184: admitted WGL owner + exact viewport, physical client

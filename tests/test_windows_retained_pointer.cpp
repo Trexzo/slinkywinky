@@ -369,6 +369,40 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
                 context.gl,context.dc,676,630);
             REQUIRE(paintedTarget && paintedTarget->catalog_index==1u &&
                     paintedTarget->widget_index==widget);
+            // R185: a FOREIGN renderer cannot revoke the real WGL owner.
+            bool foreignDrawAdmitted=true;
+            std::thread foreignDraw([&] {
+                foreignDrawAdmitted=pointerNumeric.draw(
+                    context.gl,context.dc,676,630);
+            });
+            foreignDraw.join();
+            REQUIRE(!foreignDrawAdmitted);
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+            // A same-owner refused viewport paint invalidates the prior
+            // hit surface; restoring the old viewport alone is not enough.
+            REQUIRE(!pointerNumeric.draw(context.gl,context.dc,677,630));
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            // A passive cursor sample after a failed paint remains EMPTY;
+            // it cannot turn the rejected last frame into a source hit.
+            REQUIRE(pointerNumeric.observe_hover(
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,true));
+            // Synthetic OS status is confined to the disposable WGL test.
+            REQUIRE(pointerNumeric.observe_original_window_focus(
+                context.gl,context.dc,676,630,
+                OriginalWindowFocusState::Foreground,true));
+            REQUIRE(!pointerNumeric.observed_numeric_hover());
+            const auto rejectedHover=pointerNumeric.source_hover_evidence(
+                context.gl,context.dc,676,630);
+            REQUIRE(rejectedHover && (*rejectedHover)[2]==0u);
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,3800,true,true));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
             REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Down,
                 context.gl,context.dc,676,630,paintedTarget->center_x,
                 paintedTarget->center_y,4000,true,true));
@@ -380,11 +414,66 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             REQUIRE(saved && parse_settings(*saved).valid);
             const float configured=parse_settings(*saved).settings.combat.block_range;
             REQUIRE(configured>3.1f && configured<6.01f);
+            // R185: failed paint DURING an already held press must cancel
+            // its eventual Up. The previous source frame cannot return.
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.observe_hover(
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,false));
+            REQUIRE(pointerNumeric.observe_original_window_focus(
+                context.gl,context.dc,676,630,
+                OriginalWindowFocusState::Background,false));
+            REQUIRE(pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,5000,true,true));
+            REQUIRE(!pointerNumeric.draw(context.gl,nullptr,676,630));
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Up,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,5040,true,true));
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
+            REQUIRE(pointerNumeric.observe_hover(
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,true));
+            REQUIRE(pointerNumeric.observe_original_window_focus(
+                context.gl,context.dc,676,630,
+                OriginalWindowFocusState::Foreground,true));
+            const auto osAfterRefusal=pointerNumeric.original_window_focus_evidence(
+                context.gl,context.dc,676,630);
+            const auto admissionAfterRefusal=pointerNumeric.focus_cycle_evidence(
+                context.gl,context.dc,676,630);
+            REQUIRE(osAfterRefusal && (*osAfterRefusal)[0]==2u &&
+                    (*osAfterRefusal)[1]==1u && (*osAfterRefusal)[2]==0u &&
+                    (*osAfterRefusal)[3]==1u && (*osAfterRefusal)[4]==0u &&
+                    (*osAfterRefusal)[5]==0u);
+            REQUIRE(admissionAfterRefusal && (*admissionAfterRefusal)[0]==1u &&
+                    (*admissionAfterRefusal)[1]==0u &&
+                    (*admissionAfterRefusal)[2]==0u);
+            const auto afterRefusal=pointerNumeric.profile_snapshot(
+                context.gl,context.dc,676,630);
+            REQUIRE(afterRefusal && *saved==*afterRefusal);
+            // A GL viewport mismatch (not just a caller-supplied size)
+            // is equally terminal for the previous painted hit geometry.
+            glViewport(0,0,650,610);
+            REQUIRE(!pointerNumeric.draw(context.gl,context.dc,676,630));
+            glViewport(0,0,676,630);
+            REQUIRE(!pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630));
+            REQUIRE(!pointerNumeric.pointer(RetainedPointerPhase::Down,
+                context.gl,context.dc,676,630,paintedTarget->center_x,
+                paintedTarget->center_y,5500,true,true));
+            REQUIRE(pointerNumeric.draw(context.gl,context.dc,676,630));
+            REQUIRE(pointerNumeric.source_hover_target(
+                context.gl,context.dc,676,630).has_value());
             REQUIRE(pointerNumeric.close());
             REQUIRE(reference.detach());
             same(r99Before,snapshot());
         }
         std::cout<<"R159_WGL_RETAINED_POINTER_EXCLUSIVE_GESTURES_AND_PROFILE_PASS\\n";
+        std::cout<<"R185_WGL_OWNER_RENDER_REFUSAL_INVALIDATES_PAINT_AND_PRESS_PASS\\n";
 
 }
 

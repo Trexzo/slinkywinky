@@ -12,6 +12,15 @@ enum class OriginalWindowFocusState : int {
 };
 class OriginalWindowFocusTrace final {
 public:
+    // R185: a rejected WGL paint is not a sampled OS focus state. Break
+    // chronology without fabricating an extra foreground/background/refused
+    // observation; retain all bounded evidence counters and sample count.
+    void break_sequence() noexcept {
+        previous_seen_=false;
+        previous_foreground_=false;
+        had_foreground_=false;
+        after_regain_=false;
+    }
     // Refused observations are counted but NEVER treated as background or
     // bridged across as a valid foreground-loss/reacquisition sequence.
     bool observe(OriginalWindowFocusState status,bool pointer_admitted,
@@ -24,10 +33,7 @@ public:
            (foreground!=pointer_admitted) ||
            (!foreground && exact_source_hit)) {
             ++refused_;
-            previous_seen_=false;
-            previous_foreground_=false;
-            had_foreground_=false;
-            after_regain_=false;
+            break_sequence();
             return true;
         }
         if(foreground) {

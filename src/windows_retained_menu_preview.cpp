@@ -36,31 +36,50 @@ void WglRetainedMenuPreview::note_focus_sample(
 }
 bool WglRetainedMenuPreview::draw(
     HGLRC context,HDC dc,unsigned width,unsigned height) {
-    if(!owner_thread() || !context || !dc ||
+    // R185: foreign render callers must never mutate the pinned owner.
+    if(!owner_thread())return false;
+    // A refusal on the correct thread invalidates both the prior painted
+    // hit surface AND any held preview press. Restoring the old WGL context
+    // cannot resurrect it: another successful draw is required.
+    const auto refuse_paint=[this]() noexcept {
+        pointer_gesture_.cancel();
+        last_drawn_frame_.reset();
+        menu_.set_numeric_hover(std::nullopt);
+        menu_.set_bind_hover_row(std::nullopt);
+        // R182/R183: no source-pinned focus cycle may bridge an invalid
+        // paint, even if a later frame recovers the same WGL context.
+        focus_sample_seen_=false;
+        had_foreground_=false;
+        previous_foreground_=false;
+        post_regain_epoch_=false;
+        exact_window_focus_.break_sequence();
+        return false;
+    };
+    if(!context || !dc ||
        width<320 || width>8192 || height<240 || height>8192 ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
        drawn_frames_==std::numeric_limits<std::uint64_t>::max())
-        return false;
+        return refuse_paint();
     if(active_ && (context_!=context || dc_!=dc ||
-                   width_!=width || height_!=height))return false;
+                   width_!=width || height_!=height))return refuse_paint();
     const bool was_active=active_;
     // Failed paint attempts must not retain previously certified input geometry.
     last_drawn_frame_.reset();
     // First observed frame pins a single original OpenGL render epoch.
     // A changed GL context/viewport requires an explicit new session.
     WglMenuOverlayHost host;
-    if(!host.open(context,dc,width,height))return false;
+    if(!host.open(context,dc,width,height))return refuse_paint();
     bool rendered=false;
     try {
         rendered=host.draw(menu_,&profile_,MenuGL11Mode::CompactOverlay,
                            &navigation_);
     } catch(...) {rendered=false;}
     const bool closed=host.close(); // same admitted graphics owner
-    if(!rendered || !closed)return false;
+    if(!rendered || !closed)return refuse_paint();
     if(!active_) {
         // Separate source-identified pointer snapshots from WGL paint
         // frames. Both are owner-thread local and pinned to one viewport.
-        if(!pointer_frames_.attach(1u,width,height))return false;
+        if(!pointer_frames_.attach(1u,width,height))return refuse_paint();
         context_=context;
         dc_=dc;
         width_=width;
@@ -71,10 +90,10 @@ bool WglRetainedMenuPreview::draw(
     // navigated (but not yet drawn) menu cannot expose a source hover target.
     const auto rendered_frame=pointer_frames_.next(
         menu_,&profile_,&navigation_);
-    if(!rendered_frame)return false;
+    if(!rendered_frame)return refuse_paint();
     if(was_active) {
         if(source_visible_draws_==
-           std::numeric_limits<std::uint64_t>::max())return false;
+           std::numeric_limits<std::uint64_t>::max())return refuse_paint();
         if(menu_original_auto_block_range_target(
             *rendered_frame,width,height))++source_visible_draws_;
     }

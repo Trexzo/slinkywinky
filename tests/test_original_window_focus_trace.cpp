@@ -55,6 +55,21 @@ int main() {
         invalidWindow.observe(F::Foreground,true,true);
         expect(invalidWindow,{{3,2,1,1,1,1}});
 
+        // R185: a failed renderer paint is NOT an OS focus observation.
+        // It must preserve sample conservation, but cannot connect an
+        // earlier true loss to a later independently reacquired foreground.
+        OriginalWindowFocusTrace invalidPaint;
+        invalidPaint.observe(F::Foreground,true,true);
+        invalidPaint.observe(F::Background,false,false);
+        expect(invalidPaint,{{1,1,0,1,0,0}});
+        invalidPaint.break_sequence();
+        expect(invalidPaint,{{1,1,0,1,0,0}});
+        invalidPaint.observe(F::Foreground,true,true);
+        expect(invalidPaint,{{2,1,0,1,0,0}});
+        invalidPaint.observe(F::Background,false,false);
+        invalidPaint.observe(F::Foreground,true,true);
+        expect(invalidPaint,{{3,2,0,2,1,1}});
+
         // Background with a returned foreground pointer is a race or
         // inconsistent audit. It cannot silently be treated as a loss.
         OriginalWindowFocusTrace mismatch;
@@ -71,6 +86,7 @@ int main() {
         // changes are exercised by this pure cross-platform fixture.
         std::cout<<"R183_EXACT_OS_FOCUS_TRI_STATE_NEGATIVES_PASS\n";
         std::cout<<"R183_REFUSALS_CANNOT_FABRICATE_REACQUISITION_PASS\n";
+        std::cout<<"R185_REFUSED_PAINT_BREAKS_OS_FOCUS_EPOCH_NO_FAKE_SAMPLES_PASS\n";
         std::cout<<"R183_NATIVE_CLICK_DISPATCH_REMAINS_DISABLED\n";
         return 0;
     } catch(const std::exception& error) {
