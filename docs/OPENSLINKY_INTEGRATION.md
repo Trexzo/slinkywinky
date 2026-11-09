@@ -804,3 +804,41 @@ The synthetic C++ regression and full catalog tests are wired to
 Windows/Ubuntu Debug/Release CI. No private extracted binary, original
 candidate module code or proprietary assets are committed. This PR
 remains draft and separate from the other chat's development branch.
+
+## R185: Item Use Fix — paired before/after offline decision callbacks
+
+The decrypted original candidate identifies **Item Use Fix** at
+descriptor index **35**, category utility **4**, with two native
+event subscriptions: before **14** and after **15**, both priority **0**.
+Unlike previous single-callback modules, the independent offline
+`ItemUseFixController` maintains one saved hitting-block state.
+
+On a real (non-skipped) right-click before callback, it records whether
+the game was hitting a block. If so it proposes clearing that flag
+before item use. On the after callback it proposes restoring the
+saved flag, unless the hook was marked as skipped. As in the observed
+candidate implementation, a skipped before does not replace the
+saved value and after does not automatically clear the saved flag;
+a new real before overwrites the flag. A separate world-reset method
+clears it explicitly when requested.
+
+`ModuleExecutionBridge::bind_item_use_fix()` validates **both**
+original subscriptions before registering either callback. Missing
+event 15, invalid event/category/priority, or a duplicate registered
+handler rejects the pair instead of reporting a half-working module.
+The typed offline event envelope supports Item Use Fix and No Hit Delay
+together on event 14; the native qsort priority-tie order is
+**not** claimed to be deterministic. Event 15 admits Item Use Fix only.
+
+The 66-module private-catalog coverage now expects **8** independent
+offline module decisions and **9** implemented callback bindings
+(Item Use Fix occupies two subscriptions). Of the **171** recovered
+original callback registrations, **162** still lack first-party bindings.
+R185 tests include a synthetic ten-module catalog, wrong-category,
+wrong-event, wrong-priority and missing-after rejection fixtures,
+and direct two-phase callback/lifecycle tests for Windows and Ubuntu.
+
+Nothing has been attached to Minecraft: the state writes are only
+proposals, not actual JVM changes. The decrypted original ZIP,
+module executable bytes and upstream code remain outside GitHub.
+The other chat's R-series branch is not modified.

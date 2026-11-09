@@ -188,4 +188,31 @@ if(BUILD_TESTING)
     r184_reject_wrong_no_use_delay_category
     r184_reject_wrong_no_use_delay_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R185: paired Item Use Fix before/after events (14/15) and catalog.
+  add_executable(slinkywinky_item_use_fix_bridge_test
+    tests/test_item_use_fix_bridge.cpp)
+  target_link_libraries(slinkywinky_item_use_fix_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r185_item_use_fix_bridge COMMAND slinkywinky_item_use_fix_bridge_test)
+  add_test(NAME r185_eight_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ten_modules_with_eight_decisions.tsv")
+  add_test(NAME r185_reject_item_use_wrong_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_item_use_fix_event.tsv")
+  add_test(NAME r185_reject_item_use_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_item_use_fix_category.tsv")
+  add_test(NAME r185_reject_item_use_wrong_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_item_use_fix_priority.tsv")
+  add_test(NAME r185_reject_missing_after_callback
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/missing_item_use_fix_after.tsv")
+  set_tests_properties(r185_reject_item_use_wrong_event
+    r185_reject_item_use_wrong_category
+    r185_reject_item_use_wrong_priority
+    r185_reject_missing_after_callback PROPERTIES WILL_FAIL TRUE)
+
 endif()

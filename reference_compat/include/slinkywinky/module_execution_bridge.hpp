@@ -10,6 +10,7 @@
 #include "slinkywinky/no_slow_controller.hpp"
 #include "slinkywinky/no_hit_delay_controller.hpp"
 #include "slinkywinky/no_use_delay_controller.hpp"
+#include "slinkywinky/item_use_fix_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -71,6 +72,12 @@ struct NoUseDelayTickPayload {
     unsigned executions = 0;
 };
 
+struct ItemUseFixTickPayload {
+    ItemUseFixInput input{};
+    ItemUseFixDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -82,6 +89,7 @@ struct ExecutionFrame {
     std::optional<NoSlowTickPayload> no_slow{};
     std::optional<NoHitDelayTickPayload> no_hit_delay{};
     std::optional<NoUseDelayTickPayload> no_use_delay{};
+    std::optional<ItemUseFixTickPayload> item_use_fix{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -325,6 +333,51 @@ public:
         return false;
     }
 
+    // Item Use Fix has TWO original callbacks on event 14 (before)
+    // and event 15 (after), both priority zero. Registration is atomic:
+    // never count a half-implemented module as a completed pair.
+    bool bind_item_use_fix(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Item Use Fix" ||
+            definitions_[id].category != 4)
+            return false;
+        bool before = false, after = false;
+        for (const auto& sub : definitions_[id].subscriptions) {
+            if (sub.event == kItemUseFixBeforeEvent && sub.priority == 0)
+                before = true;
+            if (sub.event == kItemUseFixAfterEvent && sub.priority == 0)
+                after = true;
+        }
+        if (!before || !after ||
+            callbacks_[id][kItemUseFixBeforeEvent] ||
+            callbacks_[id][kItemUseFixAfterEvent])
+            return false;
+        const bool first = bind(id, kItemUseFixBeforeEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.item_use_fix) return;
+                auto& payload = *frame.item_use_fix;
+                ++payload.executions;
+                payload.decision = item_use_fix_.before(payload.input);
+            });
+        const bool second = bind(id, kItemUseFixAfterEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.item_use_fix) return;
+                auto& payload = *frame.item_use_fix;
+                ++payload.executions;
+                payload.decision = item_use_fix_.after(payload.input);
+            });
+        if (!first || !second)
+            throw std::logic_error("validated Item Use Fix pair failed");
+        return true;
+    }
+
+    bool bind_item_use_fix_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Item Use Fix")
+                return bind_item_use_fix(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -371,6 +424,9 @@ public:
         if (frame.no_slow && frame.event != kNoSlowEvent) return false;
         if (frame.no_hit_delay && frame.event != kNoHitDelayEvent) return false;
         if (frame.no_use_delay && frame.event != kNoUseDelayEvent) return false;
+        if (frame.item_use_fix &&
+            frame.event != kItemUseFixBeforeEvent &&
+            frame.event != kItemUseFixAfterEvent) return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -381,10 +437,16 @@ public:
             static_cast<unsigned>(frame.instant_stop.has_value()) +
             static_cast<unsigned>(frame.no_slow.has_value()) +
             static_cast<unsigned>(frame.no_hit_delay.has_value()) +
-            static_cast<unsigned>(frame.no_use_delay.has_value());
-        if (typed_count > 1 &&
-            !(typed_count == 2 && frame.event == kMovementTickEvent &&
-              frame.null_move && frame.instant_stop)) return false;
+            static_cast<unsigned>(frame.no_use_delay.has_value()) +
+            static_cast<unsigned>(frame.item_use_fix.has_value());
+        const bool combined_movement =
+            typed_count == 2 && frame.event == kMovementTickEvent &&
+            frame.null_move && frame.instant_stop;
+        const bool combined_mouse_click =
+            typed_count == 2 && frame.event == kItemUseFixBeforeEvent &&
+            frame.no_hit_delay && frame.item_use_fix;
+        if (typed_count > 1 && !combined_movement && !combined_mouse_click)
+            return false;
         if (frame.null_move && frame.instant_stop) {
             const auto& a = frame.instant_stop->input;
             const auto& b = frame.null_move->input;
@@ -422,6 +484,10 @@ public:
             frame.no_use_delay->decision = {};
             frame.no_use_delay->executions = 0;
         }
+        if (frame.item_use_fix) {
+            frame.item_use_fix->decision = {};
+            frame.item_use_fix->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -442,6 +508,7 @@ public:
     void reset_null_move_world_state() noexcept { null_move_.reset(); }
     void reset_instant_stop_world_state() noexcept { instant_stop_.reset(); }
     void reset_no_use_delay_world_state() noexcept { no_use_delay_.reset(); }
+    void reset_item_use_fix_world_state() noexcept { item_use_fix_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -451,6 +518,7 @@ public:
         null_move_.reset();
         instant_stop_.reset();
         no_use_delay_.reset();
+        item_use_fix_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -470,6 +538,7 @@ private:
     NoSlowController no_slow_;
     NoHitDelayController no_hit_delay_;
     NoUseDelayController no_use_delay_;
+    ItemUseFixController item_use_fix_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
