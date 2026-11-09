@@ -87,23 +87,37 @@ public final class R179ExactSourceTargetJniSmoke {
                       rect[4],rect[5],true,676,630),
                   "Repeated source numeric hover refused");
             expectEvidence(2,1,2);
+
+            // Boundary hardening: a source rectangle is admitted only if
+            // every physical-pixel corner belongs to the same exact native
+            // recovered slider (not a neighboring widget or empty region).
+            final int[][] corners=new int[][]{
+                {rect[0],rect[1]}, {rect[2]-1,rect[1]},
+                {rect[0],rect[3]-1}, {rect[2]-1,rect[3]-1}
+            };
+            for(int[] corner:corners) {
+                check(R175RetainedHoverJniSmoke.observeHover(
+                          corner[0],corner[1],true,676,630),
+                      "Native source target corner was not observable");
+            }
+            expectEvidence(2,1,6);
             check(R166RetainedPointerJniSmoke.redraw(),
                   "Additional real GL11 source-slider draw failed");
-            expectEvidence(3,2,2);
+            expectEvidence(3,2,6);
             check(R175RetainedHoverJniSmoke.observeHover(
                       rect[4],rect[5],false,676,630),
                   "Focus loss must fail closed to no numeric hover");
-            expectEvidence(3,2,2);
+            expectEvidence(3,2,6);
             check(R175RetainedHoverJniSmoke.observeHover(
                       rect[0]-2,rect[5],true,676,630),
                   "Outside source numeric rect should be harmless");
-            expectEvidence(3,2,2);
+            expectEvidence(3,2,6);
             check(profile.equals(R166RetainedPointerJniSmoke.profile()),
                   "Source inspection changed original preview profile");
             check(!R175RetainedHoverJniSmoke.observeHover(
                       rect[4],rect[5],true,677,630),
                   "Wrong viewport source hover admitted");
-            expectEvidence(3,2,2);
+            expectEvidence(3,2,6);
 
             check(nextTab(),
                   "Original source final tab transition not admitted");
@@ -111,7 +125,7 @@ public final class R179ExactSourceTargetJniSmoke {
                   "Source numeric track persisted on wrong tab");
             check(R166RetainedPointerJniSmoke.redraw(),
                   "Real GL11 wrong-tab retained redraw refused");
-            expectEvidence(4,2,2);
+            expectEvidence(4,2,6);
             check(profile.equals(R166RetainedPointerJniSmoke.profile()),
                   "Source tab transition wrote client gameplay settings");
             System.out.println("R179_JAVA8_JNI_EXACT_CXX_SOURCE_TARGET_GEOMETRY_PASS");

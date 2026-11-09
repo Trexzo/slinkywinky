@@ -72,10 +72,22 @@ menu_original_auto_block_range_target(
     if(left<0 || top<0 || right>static_cast<int>(width) ||
        bottom>static_cast<int>(height) ||
        right-left<4 || bottom-top<4)return std::nullopt;
-    const auto hit=hit_test_menu(
-        frame,MenuPanelMode::CompactOverlay,cx,cy);
-    if(!hit || hit->kind!=MenuHitKind::RecoveredSliderPreview ||
-       hit->catalog_index!=module || hit->control_index!=widget)
+    // A center-only check can admit a rectangle whose edges are owned
+    // by another hit target after physical-pixel rounding. The source
+    // rectangle is evidence only when its center and all four inclusive
+    // interior corners resolve to the SAME recovered slider via the real
+    // renderer hit tester. This remains read-only (no input ownership).
+    const auto matches_source=[&](int x,int y) noexcept {
+        const auto hit=hit_test_menu(
+            frame,MenuPanelMode::CompactOverlay,x,y);
+        return hit && hit->kind==MenuHitKind::RecoveredSliderPreview &&
+               hit->catalog_index==module && hit->control_index==widget;
+    };
+    if(!matches_source(cx,cy) ||
+       !matches_source(left,top) ||
+       !matches_source(right-1,top) ||
+       !matches_source(left,bottom-1) ||
+       !matches_source(right-1,bottom-1))
         return std::nullopt;
     return MenuSourceHoverTarget{
         left,top,right,bottom,cx,cy,module,widget};
