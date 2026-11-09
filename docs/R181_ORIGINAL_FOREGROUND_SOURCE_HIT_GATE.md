@@ -30,10 +30,13 @@ JNI/WGL owner, original bytecode restoration and no-click admission remain
 mandatory. An interactive terminal is required for this explicit opt-in;
 a noninteractive CI process and other acceptance modes cannot request it.
 
-The operator must focus **the isolated game window** and position the
-cursor over the visible **Auto Block > Main > Range** slider while the
-64-frame passive test is running. The test does not synthesize cursor
-movement, inject clicks or switch window focus.
+The supervised runner prints a **three-second passive countdown**
+before starting the finite renderer trace, giving the operator a chance to
+focus the isolated game window. The operator must position the cursor over
+the visible **Auto Block > Main > Range** slider while the 64-frame
+passive test runs. The test does not synthesize cursor movement, inject
+clicks or switch window focus; the countdown does not guarantee an
+actual foreground observation.
 
 The strict verifier rechecks all three exact original-JVM receipts:
 
