@@ -322,7 +322,7 @@ std::optional<std::array<std::uint64_t,6>>
 WglRetainedMenuPreview::original_window_focus_evidence(
         HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
     if(!owner_thread() || !active_ || !drawn_frames_ ||
-       !context || !dc || context!=context_ || dc!=dc ||
+       !context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
        strict_hover_samples_!=hover_samples_ ||
