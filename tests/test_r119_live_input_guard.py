@@ -27,6 +27,8 @@ FORBIDDEN = (
     # R182 synthetic focus transitions must remain confined to the
     # disposable JNI test library, never the real original-game agent.
     re.compile(r"\bR182FocusCycleJniSmoke\b"),
+    # R183 synthetic OS-focus status JNI must remain in disposable tests.
+    re.compile(r"\bR183ExactWindowFocusJniSmoke\b"),
 )
 
 
