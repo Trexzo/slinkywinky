@@ -44,6 +44,10 @@ public final class RendererWglEvidence {
     // source-exact hover samples strictly AFTER a reacquisition.
     private static native int[] nativeReadRetainedFocusCycleEvidence(
         long context,long dc,int width,int height);
+    // R183: exact original HWND's OS foreground/background/refused trace.
+    // A null pointer observation never becomes an OS background fact.
+    private static native int[] nativeReadExactWindowFocusEvidence(
+        long context,long dc,int width,int height);
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
     private static native int nativePollOperatorMenu(long context,long dc);
@@ -96,6 +100,7 @@ public final class RendererWglEvidence {
     private int[] retainedHoverCounters;
     private int[] originalSourceTargetCounters;
     private int[] retainedFocusCycleCounters;
+    private int[] exactWindowFocusCounters;
     private int acceptedOperatorEvents;
     private int rejectedOperatorEvents;
     private int lastOperatorTab=-1;
@@ -231,6 +236,24 @@ public final class RendererWglEvidence {
             return false;
         return (physicalHover[2]>0 || (cycle[0]==0 && cycle[1]==0)) &&
                cycle[2]<=physicalHover[3];
+    }
+
+    // R183: distinct exact Win32 HWND/OS focus chronology. A refused
+    // window/pointer read is NOT an OS background state. This validates
+    // the shape; only native owner-bound audit supplies real OS evidence.
+    static boolean validExactWindowFocusEvidence(
+            int[] os,int[] source,int[] hover,int[] admitted,int drawn) {
+        if(!validOriginalSourceTargetEvidence(source,hover,drawn) ||
+           !validRetainedFocusCycleEvidence(admitted,source,hover,drawn) ||
+           os==null || os.length!=6)return false;
+        for(int count:os)if(count<0)return false;
+        final long total=(long)os[0]+os[1]+os[2];
+        return total==hover[1] && os[0]<=hover[2] &&
+               os[3]<=os[0] && os[3]<=os[1] &&
+               os[4]<=os[3] &&
+               os[5]<=os[0] && os[5]<=source[2] &&
+               os[5]<=hover[3] &&
+               (os[4]!=0 || os[5]==0);
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -517,6 +540,13 @@ public final class RendererWglEvidence {
                         poisoned=true;overlayFailed=true;invalid++;return;
                     }
                     retainedFocusCycleCounters=cycle.clone();
+                    final int[] exactWindow=nativeReadExactWindowFocusEvidence(
+                        context,dc,width,height);
+                    if(!validExactWindowFocusEvidence(
+                           exactWindow,source,hover,cycle,64)) {
+                        poisoned=true;overlayFailed=true;invalid++;return;
+                    }
+                    exactWindowFocusCounters=exactWindow.clone();
                 }
                 if(overlayFrames>=5)retainedVerified=true;
                 return;
@@ -625,6 +655,9 @@ public final class RendererWglEvidence {
                validRetainedFocusCycleEvidence(
                    retainedFocusCycleCounters,originalSourceTargetCounters,
                    retainedHoverCounters,64) &&
+               validExactWindowFocusEvidence(
+                   exactWindowFocusCounters,originalSourceTargetCounters,
+                   retainedHoverCounters,retainedFocusCycleCounters,64) &&
                !poisoned && !overlayFailed;
     }
     public synchronized boolean passiveHoverVerified(){
@@ -643,6 +676,10 @@ public final class RendererWglEvidence {
     public synchronized int[] retainedFocusCycleCounters(){
         return passiveHoverVerified()?
             retainedFocusCycleCounters.clone():null;
+    }
+    public synchronized int[] exactWindowFocusCounters(){
+        return passiveHoverVerified()?
+            exactWindowFocusCounters.clone():null;
     }
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}
