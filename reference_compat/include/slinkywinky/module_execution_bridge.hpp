@@ -15,6 +15,7 @@
 #include "slinkywinky/no_item_release_controller.hpp"
 #include "slinkywinky/anti_debuff_controller.hpp"
 #include "slinkywinky/fast_accel_controller.hpp"
+#include "slinkywinky/safe_walk_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -106,6 +107,12 @@ struct FastAccelTickPayload {
     unsigned executions = 0;
 };
 
+struct SafeWalkTickPayload {
+    SafeWalkInput input{};
+    SafeWalkDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -122,6 +129,7 @@ struct ExecutionFrame {
     std::optional<NoItemReleaseTickPayload> no_item_release{};
     std::optional<AntiDebuffTickPayload> anti_debuff{};
     std::optional<FastAccelTickPayload> fast_accel{};
+    std::optional<SafeWalkTickPayload> safe_walk{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -538,6 +546,35 @@ public:
         return false;
     }
 
+    // Candidate original Safe Walk module 56, movement category 1,
+    // event 0 at priority 0. Returns only simulated edge-guard and
+    // horizontal motion proposals; edge collision belongs to the engine.
+    bool bind_safe_walk(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "Safe Walk" ||
+            definitions_[id].category != 1)
+            return false;
+        bool correct = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kSafeWalkEvent && sub.priority == 0)
+                correct = true;
+        if (!correct) return false;
+        return bind(id, kSafeWalkEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.safe_walk) return;
+                        auto& payload = *frame.safe_walk;
+                        ++payload.executions;
+                        payload.decision = safe_walk_.evaluate(payload.input);
+                    });
+    }
+
+    bool bind_safe_walk_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Safe Walk")
+                return bind_safe_walk(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -596,6 +633,8 @@ public:
             return false;
         if (frame.fast_accel && frame.event != kFastAccelEvent)
             return false;
+        if (frame.safe_walk && frame.event != kSafeWalkEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -611,7 +650,8 @@ public:
             static_cast<unsigned>(frame.ping_fix.has_value()) +
             static_cast<unsigned>(frame.no_item_release.has_value()) +
             static_cast<unsigned>(frame.anti_debuff.has_value()) +
-            static_cast<unsigned>(frame.fast_accel.has_value());
+            static_cast<unsigned>(frame.fast_accel.has_value()) +
+            static_cast<unsigned>(frame.safe_walk.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -696,6 +736,10 @@ public:
             frame.fast_accel->decision = {};
             frame.fast_accel->executions = 0;
         }
+        if (frame.safe_walk) {
+            frame.safe_walk->decision = {};
+            frame.safe_walk->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -753,6 +797,7 @@ private:
     NoItemReleaseController no_item_release_;
     AntiDebuffController anti_debuff_;
     FastAccelController fast_accel_;
+    SafeWalkController safe_walk_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

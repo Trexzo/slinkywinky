@@ -1008,3 +1008,47 @@ subscriptions without an implementation. This measures registrations
 only, not total module fidelity. Windows/Ubuntu Debug/Release
 reference CI is required before accepting the revision.
 PR #2 stays draft; no changes to the other chat's live runtime.
+
+## R190: Safe Walk — offline edge-guard and movement policy
+
+After independent SHA-256 verification of the user's decrypted
+candidate `.data`/`.rdata`, module **Safe Walk** was confirmed at
+descriptor **56**, movement category **1**, original event **0**
+at signed priority **0**. The actual edge collision behavior runs
+in a separate engine-side hook, which is **not** reconstructed here.
+
+The independently authored `SafeWalkController` evaluates three
+optional conditions: player looking down at least **65 degrees**,
+not moving forward (forward input no greater than zero), and
+holding a block. If a required condition fails it proposes
+turning off the edge guard; otherwise it proposes enabling the
+guard. When grounded and the configured motion multiplier differs
+from 1.0, it also proposes scaling horizontal X/Z velocity,
+preserving Y untouched. It does not act outside game; it deliberately
+rejects nonfinite numeric inputs or negative multipliers rather
+than attempting unsafe multiplication. These guards are safety
+divergences and not claimed as bit-identical candidate behavior.
+
+The offline `ModuleExecutionBridge` checks the original module name,
+category, event 0 and priority before accepting the callback.
+The direct policy/bridge test includes pitch threshold, forward
+and backward movement, block possession, airborne state, default
+multiplier, multiplier zero, no-game behavior, wrong typed event,
+world/player admission, enable/disable and shutdown. Synthetic
+event-0 higher-priority observer and unimplemented Fast Place
+handler demonstrate priority and leave other registrations
+explicitly without first-party implementations.
+
+R190 adds a sixteen-module positive catalog fixture and negative
+wrong category/event/priority fixtures to Windows/Ubuntu
+Debug/Release CTest, as well as the pinned private candidate
+descriptor 56/event 0/priority 0 exporter check. The decrypted
+binary itself is not committed.
+
+Accounting for the original 66 modules and 171 native callback
+registrations: **13** independent first-party offline module
+policies, **15** executable callback bindings and **156** original
+subscriptions without implementations. This is not equivalent
+to a working engine edge guard, GUI, native loader or live
+Minecraft gameplay acceptance. The other chat's runtime PR #1
+remains untouched; PR #2 stays draft and unmerged.

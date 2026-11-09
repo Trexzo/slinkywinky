@@ -315,4 +315,27 @@ if(BUILD_TESTING)
     r189_reject_fast_accel_event
     r189_reject_fast_accel_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R190: Safe Walk event-0 guard/motion proposal and metadata drift tests.
+  add_executable(slinkywinky_safe_walk_bridge_test
+    tests/test_safe_walk_bridge.cpp)
+  target_link_libraries(slinkywinky_safe_walk_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  add_test(NAME r190_thirteen_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sixteen_modules_with_thirteen_decisions.tsv")
+  add_test(NAME r190_reject_safe_walk_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_safe_walk_category.tsv")
+  add_test(NAME r190_reject_safe_walk_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_safe_walk_event.tsv")
+  add_test(NAME r190_reject_safe_walk_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_safe_walk_priority.tsv")
+  set_tests_properties(r190_reject_safe_walk_category
+    r190_reject_safe_walk_event
+    r190_reject_safe_walk_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()

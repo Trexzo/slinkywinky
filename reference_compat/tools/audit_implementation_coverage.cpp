@@ -208,6 +208,27 @@ static ExecutionFrame fast_accel_frame(bool sprinting = false,
     return frame;
 }
 
+static ExecutionFrame safe_walk_frame(bool in_game = true,
+                                     bool looking_down = true,
+                                     bool holding_blocks = true) {
+    ExecutionFrame frame;
+    frame.event = kSafeWalkEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    SafeWalkTickPayload payload;
+    payload.input.in_game = in_game;
+    payload.input.pitch_degrees = looking_down ? 65.0f : 45.0f;
+    payload.input.move_forward = 0.0f;
+    payload.input.holding_blocks = holding_blocks;
+    payload.input.on_ground = true;
+    payload.input.motion_x = 0.8;
+    payload.input.motion_y = 0.25;
+    payload.input.motion_z = -0.4;
+    payload.input.settings = {true, true, true, 0.5f};
+    frame.safe_walk = payload;
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -337,6 +358,13 @@ int main(int argc, char** argv) {
         if (has_fast_accel)
             require(bridge.bind_fast_accel_from_catalog(),
                     "Fast Accel candidate event22/category1/priority0 binding failed");
+        std::size_t safe_walk_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Safe Walk") safe_walk_id = i;
+        const bool has_safe_walk = safe_walk_id < manifest.modules.size();
+        if (has_safe_walk)
+            require(bridge.bind_safe_walk_from_catalog(),
+                    "Safe Walk exists but candidate event0/category1/priority0 binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -347,7 +375,8 @@ int main(int argc, char** argv) {
                                                (has_ping_fix ? 2u : 0u) +
                                                (has_no_item_release ? 1u : 0u) +
                                                (has_anti_debuff ? 1u : 0u) +
-                                               (has_fast_accel ? 1u : 0u);
+                                               (has_fast_accel ? 1u : 0u) +
+                                               (has_safe_walk ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -370,6 +399,8 @@ int main(int argc, char** argv) {
                 "No Slow callback not routed through event 21");
         require(c.implemented_per_event[kFastAccelEvent] == (has_fast_accel ? 1u : 0u),
                 "Fast Accel callback not routed through event 22");
+        require(c.implemented_per_event[kSafeWalkEvent] == (has_safe_walk ? 1u : 0u),
+                "Safe Walk callback not routed through event 0");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u),
@@ -390,7 +421,7 @@ int main(int argc, char** argv) {
                 event != kNoHitDelayEvent && event != kNoUseDelayEvent &&
                 event != kItemUseFixAfterEvent &&
                 event != kIncomingPacketEvent && event != kOutgoingPacketEvent &&
-                event != kFastAccelEvent)
+                event != kFastAccelEvent && event != kSafeWalkEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -875,17 +906,56 @@ int main(int argc, char** argv) {
                     "Disabled Fast Accel callback still executed");
         }
 
+        if (has_safe_walk) {
+            require(bridge.request(safe_walk_id, true), "Safe Walk enable rejected");
+            require(!bridge.apply(false, false), "Safe Walk bypassed world gate");
+            require(bridge.apply(true, true), "Safe Walk enable failed");
+            auto safe_tick = safe_walk_frame();
+            require(bridge.dispatch(safe_tick) && safe_tick.safe_walk &&
+                    safe_tick.safe_walk->executions == 1 &&
+                    safe_tick.safe_walk->decision.proposed_edge_guard_active == true &&
+                    safe_tick.safe_walk->decision.proposed_motion &&
+                    std::abs(safe_tick.safe_walk->decision.proposed_motion->x - 0.4) < 1e-9 &&
+                    std::abs(safe_tick.safe_walk->decision.proposed_motion->y - 0.25) < 1e-9 &&
+                    std::abs(safe_tick.safe_walk->decision.proposed_motion->z + 0.2) < 1e-9 &&
+                    safe_tick.executed_modules.size() == 1 &&
+                    safe_tick.executed_modules.front() == safe_walk_id,
+                    "Safe Walk eligible edge-guard and motion policy mismatch");
+            safe_tick = safe_walk_frame(true, false);
+            require(bridge.dispatch(safe_tick) && safe_tick.safe_walk &&
+                    safe_tick.safe_walk->decision.proposed_edge_guard_active == false &&
+                    !safe_tick.safe_walk->decision.proposed_motion,
+                    "Safe Walk ignored pitch prerequisite");
+            safe_tick = safe_walk_frame(true, true, false);
+            require(bridge.dispatch(safe_tick) && safe_tick.safe_walk &&
+                    safe_tick.safe_walk->decision.proposed_edge_guard_active == false &&
+                    !safe_tick.safe_walk->decision.proposed_motion,
+                    "Safe Walk ignored held-block prerequisite");
+            safe_tick = safe_walk_frame(false);
+            require(bridge.dispatch(safe_tick) && safe_tick.safe_walk &&
+                    !safe_tick.safe_walk->decision.proposed_edge_guard_active &&
+                    !safe_tick.safe_walk->decision.proposed_motion,
+                    "Safe Walk wrote an edge guard outside game");
+            require(bridge.request(safe_walk_id, false), "Safe Walk disable rejected");
+            require(bridge.apply(true, true), "Safe Walk disable failed");
+            safe_tick = safe_walk_frame();
+            require(bridge.dispatch(safe_tick) && safe_tick.safe_walk &&
+                    safe_tick.safe_walk->executions == 0 &&
+                    safe_tick.executed_modules.empty(),
+                    "Disabled Safe Walk callback still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
-                    has_anti_debuff && has_fast_accel &&
+                    has_anti_debuff && has_fast_accel && has_safe_walk &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 12 &&
-                    c.executable_callback_bindings == 14 &&
-                    c.unimplemented_callback_subscriptions == 157,
+                    c.modules_with_executable_bindings == 13 &&
+                    c.executable_callback_bindings == 15 &&
+                    c.unimplemented_callback_subscriptions == 156,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -901,7 +971,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R189 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R190 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }
