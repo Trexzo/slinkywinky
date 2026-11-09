@@ -117,6 +117,23 @@ static ExecutionFrame no_hit_delay_frame(unsigned mode = 0, bool target_present 
     return frame;
 }
 
+static ExecutionFrame no_use_delay_frame(int ticks = 3, int slot = 0,
+                                             bool desync = false) {
+    ExecutionFrame frame;
+    frame.event = kNoUseDelayEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    NoUseDelayTickPayload payload;
+    payload.input.in_game = true;
+    payload.input.use_key_down = true;
+    payload.input.physical_use_held = true;
+    payload.input.selected_slot = slot;
+    payload.input.use_ticks_left = ticks;
+    payload.input.allow_desync = desync;
+    frame.no_use_delay = payload;
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -202,11 +219,19 @@ int main(int argc, char** argv) {
         if (has_no_hit_delay)
             require(bridge.bind_no_hit_delay_from_catalog(),
                     "No Hit Delay exists but event 14/priority 0/utility binding failed");
+        std::size_t no_use_delay_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "No Use Delay") no_use_delay_id = i;
+        const bool has_no_use_delay = no_use_delay_id < manifest.modules.size();
+        if (has_no_use_delay)
+            require(bridge.bind_no_use_delay_from_catalog(),
+                    "No Use Delay exists but event 18/priority 0/utility binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
                                                (has_no_slow ? 1u : 0u) +
-                                               (has_no_hit_delay ? 1u : 0u);
+                                               (has_no_hit_delay ? 1u : 0u) +
+                                               (has_no_use_delay ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -227,10 +252,12 @@ int main(int argc, char** argv) {
                 "No Slow callback not routed through event 21");
         require(c.implemented_per_event[kNoHitDelayEvent] == (has_no_hit_delay ? 1u : 0u),
                 "No Hit Delay callback not routed through event 14");
+        require(c.implemented_per_event[kNoUseDelayEvent] == (has_no_use_delay ? 1u : 0u),
+                "No Use Delay callback not routed through event 18");
         for (unsigned event = 0; event < kEventSlots; ++event)
             if (event != kReachQueryEvent && event != kPlayerUpdateEvent &&
                 event != kMovementTickEvent && event != kNoSlowEvent &&
-                event != kNoHitDelayEvent)
+                event != kNoHitDelayEvent && event != kNoUseDelayEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -440,15 +467,60 @@ int main(int argc, char** argv) {
                     "disabled No Hit Delay still executed");
         }
 
+        if (has_no_use_delay) {
+            require(bridge.request(no_use_delay_id, true), "No Use Delay enable rejected");
+            require(!bridge.apply(false, false), "No Use Delay bypassed world gate");
+            require(bridge.apply(true, true), "No Use Delay enable not applied");
+            auto use = no_use_delay_frame(3);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->executions == 1 &&
+                    use.no_use_delay->decision.tracked_remaining_ticks == 3 &&
+                    !use.no_use_delay->decision.proposed_use_key_pressed,
+                    "No Use Delay failed to initialize countdown");
+            require(use.executed_modules.size() == 1 &&
+                    use.executed_modules.front() == no_use_delay_id,
+                    "unimplemented event-18 callback executed");
+            use = no_use_delay_frame(2);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->decision.tracked_remaining_ticks == 2 &&
+                    !use.no_use_delay->decision.proposed_use_key_pressed,
+                    "No Use Delay tick did not decrement countdown");
+            use = no_use_delay_frame(1);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->decision.tracked_remaining_ticks == 1,
+                    "No Use Delay countdown second tick drift");
+            use = no_use_delay_frame(0);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->decision.proposed_use_key_pressed == false,
+                    "No Use Delay did not release completed item-use");
+            use = no_use_delay_frame(5, 1);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->decision.tracked_slot == 1 &&
+                    use.no_use_delay->decision.proposed_use_key_pressed == true,
+                    "No Use Delay did not restore use key on slot change");
+            use = no_use_delay_frame(0, 1, true);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->decision.proposed_use_key_pressed == false,
+                    "No Use Delay desync setting did not release key early");
+            require(bridge.request(no_use_delay_id, false),
+                    "No Use Delay disable rejected");
+            require(bridge.apply(true, true), "No Use Delay disable not applied");
+            use = no_use_delay_frame(3);
+            require(bridge.dispatch(use) && use.no_use_delay &&
+                    use.no_use_delay->executions == 0 &&
+                    use.executed_modules.empty(),
+                    "disabled No Use Delay callback executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
-                    has_no_slow && has_no_hit_delay &&
+                    has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 6 &&
-                    c.executable_callback_bindings == 6 &&
-                    c.unimplemented_callback_subscriptions == 165,
+                    c.modules_with_executable_bindings == 7 &&
+                    c.executable_callback_bindings == 7 &&
+                    c.unimplemented_callback_subscriptions == 164,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -464,7 +536,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R183 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R184 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }

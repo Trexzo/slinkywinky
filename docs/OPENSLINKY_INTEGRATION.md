@@ -758,3 +758,49 @@ metadata; the decrypted candidate and extracted binary assets stay local.
 Native execution, module algorithm parity and in-game combat behavior
 are **not yet established**. This integration PR remains draft and
 does not modify the other chat's live Minecraft runtime branch.
+
+## R184: No Use Delay — seventh independent offline module decision
+
+The original candidate's decrypted module descriptor at index **48**
+registers **No Use Delay** in utility category **4** at event **18**
+with priority **0**. The pinned public reconstruction describes its
+late-tick callback as a stateful item-use countdown with a hotbar-slot
+change reset and the optional `allow_desync` setting.
+
+An independently authored `NoUseDelayController` now stores its
+remaining item-use count and previously seen selected hotbar slot.
+In game it first restores the effective use-key state to the physical
+key state when the selected slot changes; it then checks the effective
+key state sampled at the beginning of the tick. If this starts a
+new item use, it records the reported ticks remaining. On subsequent
+ticks it decrements that value and proposes releasing the use key
+when the count reaches zero. With `allow_desync`, it also proposes
+release when the client reports zero use ticks remaining.
+
+When outside a game it clears only the use countdown (the original
+observed branch leaves the selected-slot state untouched). It may
+be explicitly reset at a world boundary by the offline bridge.
+
+All outputs are proposed `std::optional<bool>` key states. No real
+click is generated and no Minecraft/JNI method, packets or native
+game state are touched. Event-18 binding checks its module name,
+utility category and priority 0, with world/player gating, invalid
+typed-frame rejection, enable/disable and shutdown fencing.
+
+R184 adds a synthetic nine-module event catalog with seven first-party
+offline decisions plus invalid category/event/priority fixtures.
+Original reference metadata is separately pinned and checked by
+the private candidate exporter (index 48, event 18, priority 0).
+
+| Metric | R183 | R184 |
+|---|---:|---:|
+| Candidate module descriptors | 66 | 66 |
+| Original native event subscriptions | 171 | 171 |
+| Independently implemented offline decision bindings | 6 | **7** |
+| Registrations without first-party offline implementations | 165 | **164** |
+| Verified live Minecraft module behavior | No | No |
+
+The synthetic C++ regression and full catalog tests are wired to
+Windows/Ubuntu Debug/Release CI. No private extracted binary, original
+candidate module code or proprietary assets are committed. This PR
+remains draft and separate from the other chat's development branch.

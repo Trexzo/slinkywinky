@@ -165,4 +165,27 @@ if(BUILD_TESTING)
     r183_reject_wrong_no_hit_delay_category
     r183_reject_wrong_no_hit_delay_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R184: stateful No Use Delay late-tick policy and seven-decision coverage.
+  add_executable(slinkywinky_no_use_delay_bridge_test
+    tests/test_no_use_delay_bridge.cpp)
+  target_link_libraries(slinkywinky_no_use_delay_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r184_no_use_delay_bridge COMMAND slinkywinky_no_use_delay_bridge_test)
+  add_test(NAME r184_seven_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/nine_modules_with_seven_decisions.tsv")
+  add_test(NAME r184_reject_wrong_no_use_delay_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_use_delay_event.tsv")
+  add_test(NAME r184_reject_wrong_no_use_delay_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_use_delay_category.tsv")
+  add_test(NAME r184_reject_wrong_no_use_delay_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_use_delay_priority.tsv")
+  set_tests_properties(r184_reject_wrong_no_use_delay_event
+    r184_reject_wrong_no_use_delay_category
+    r184_reject_wrong_no_use_delay_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()

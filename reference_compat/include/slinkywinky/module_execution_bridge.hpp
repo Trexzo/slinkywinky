@@ -9,6 +9,7 @@
 #include "slinkywinky/instant_stop_controller.hpp"
 #include "slinkywinky/no_slow_controller.hpp"
 #include "slinkywinky/no_hit_delay_controller.hpp"
+#include "slinkywinky/no_use_delay_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -64,6 +65,12 @@ struct NoHitDelayTickPayload {
     unsigned executions = 0;
 };
 
+struct NoUseDelayTickPayload {
+    NoUseDelayInput input{};
+    NoUseDelayDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -74,6 +81,7 @@ struct ExecutionFrame {
     std::optional<InstantStopTickPayload> instant_stop{};
     std::optional<NoSlowTickPayload> no_slow{};
     std::optional<NoHitDelayTickPayload> no_hit_delay{};
+    std::optional<NoUseDelayTickPayload> no_use_delay{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -289,6 +297,34 @@ public:
         return false;
     }
 
+    // Original candidate utility callback: module "No Use Delay" is
+    // registered on event 18 at priority 0. Only typed, offline proposals.
+    bool bind_no_use_delay(std::size_t id) {
+        if (id >= definitions_.size() ||
+            definitions_[id].name != "No Use Delay" ||
+            definitions_[id].category != 4)
+            return false;
+        bool candidate_slot = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kNoUseDelayEvent && sub.priority == 0)
+                candidate_slot = true;
+        if (!candidate_slot) return false;
+        return bind(id, kNoUseDelayEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.no_use_delay) return;
+                        auto& use = *frame.no_use_delay;
+                        ++use.executions;
+                        use.decision = no_use_delay_.evaluate(use.input);
+                    });
+    }
+
+    bool bind_no_use_delay_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "No Use Delay")
+                return bind_no_use_delay(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -334,6 +370,7 @@ public:
         if (frame.instant_stop && frame.event != kMovementTickEvent) return false;
         if (frame.no_slow && frame.event != kNoSlowEvent) return false;
         if (frame.no_hit_delay && frame.event != kNoHitDelayEvent) return false;
+        if (frame.no_use_delay && frame.event != kNoUseDelayEvent) return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -343,7 +380,8 @@ public:
             static_cast<unsigned>(frame.null_move.has_value()) +
             static_cast<unsigned>(frame.instant_stop.has_value()) +
             static_cast<unsigned>(frame.no_slow.has_value()) +
-            static_cast<unsigned>(frame.no_hit_delay.has_value());
+            static_cast<unsigned>(frame.no_hit_delay.has_value()) +
+            static_cast<unsigned>(frame.no_use_delay.has_value());
         if (typed_count > 1 &&
             !(typed_count == 2 && frame.event == kMovementTickEvent &&
               frame.null_move && frame.instant_stop)) return false;
@@ -380,6 +418,10 @@ public:
             frame.no_hit_delay->decision = {};
             frame.no_hit_delay->executions = 0;
         }
+        if (frame.no_use_delay) {
+            frame.no_use_delay->decision = {};
+            frame.no_use_delay->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -399,6 +441,7 @@ public:
     void reset_reach_world_state() noexcept { controller_.reset(); }
     void reset_null_move_world_state() noexcept { null_move_.reset(); }
     void reset_instant_stop_world_state() noexcept { instant_stop_.reset(); }
+    void reset_no_use_delay_world_state() noexcept { no_use_delay_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -407,6 +450,7 @@ public:
         controller_.reset();
         null_move_.reset();
         instant_stop_.reset();
+        no_use_delay_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -425,6 +469,7 @@ private:
     InstantStopController instant_stop_;
     NoSlowController no_slow_;
     NoHitDelayController no_hit_delay_;
+    NoUseDelayController no_use_delay_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
