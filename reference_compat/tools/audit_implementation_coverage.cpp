@@ -143,6 +143,15 @@ static ExecutionFrame item_use_fix_frame(unsigned event, bool hitting, bool skip
     return frame;
 }
 
+static ExecutionFrame ping_fix_frame(unsigned event, PingPacketClass packet_type) {
+    ExecutionFrame frame;
+    frame.event = event;
+    frame.world_present = true;
+    frame.player_present = true;
+    frame.ping_fix = PingFixTickPayload{{packet_type}, {}, 0};
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -242,19 +251,28 @@ int main(int argc, char** argv) {
         if (has_item_use_fix)
             require(bridge.bind_item_use_fix_from_catalog(),
                     "Item Use Fix exists but original 14+15/utility binding failed");
+        std::size_t ping_fix_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Ping Fix") ping_fix_id = i;
+        const bool has_ping_fix = ping_fix_id < manifest.modules.size();
+        if (has_ping_fix)
+            require(bridge.bind_ping_fix_from_catalog(),
+                    "Ping Fix exists but original incoming/outgoing priorities mismatch");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
                                                (has_no_slow ? 1u : 0u) +
                                                (has_no_hit_delay ? 1u : 0u) +
                                                (has_no_use_delay ? 1u : 0u) +
-                                               (has_item_use_fix ? 2u : 0u);
+                                               (has_item_use_fix ? 2u : 0u) +
+                                               (has_ping_fix ? 2u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
                 "callback coverage drift");
         require(c.modules_with_executable_bindings ==
-                    expected_bindings - (has_item_use_fix ? 1u : 0u) &&
+                    expected_bindings - (has_item_use_fix ? 1u : 0u) -
+                    (has_ping_fix ? 1u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -276,11 +294,16 @@ int main(int argc, char** argv) {
                 "Shared event 14 module binding inventory mismatch");
         require(c.implemented_per_event[kItemUseFixAfterEvent] == (has_item_use_fix ? 1u : 0u),
                 "Item Use Fix after callback not routed through event 15");
+        require(c.implemented_per_event[kIncomingPacketEvent] == (has_ping_fix ? 1u : 0u),
+                "Ping Fix incoming event 2 not routed");
+        require(c.implemented_per_event[kOutgoingPacketEvent] == (has_ping_fix ? 1u : 0u),
+                "Ping Fix outgoing event 3 not routed");
         for (unsigned event = 0; event < kEventSlots; ++event)
             if (event != kReachQueryEvent && event != kPlayerUpdateEvent &&
                 event != kMovementTickEvent && event != kNoSlowEvent &&
                 event != kNoHitDelayEvent && event != kNoUseDelayEvent &&
-                event != kItemUseFixAfterEvent)
+                event != kItemUseFixAfterEvent &&
+                event != kIncomingPacketEvent && event != kOutgoingPacketEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -573,15 +596,63 @@ int main(int argc, char** argv) {
                     "disabled Item Use Fix post-handler executed");
         }
 
+        if (has_ping_fix) {
+            require(bridge.request(ping_fix_id, true), "Ping Fix enable rejected");
+            require(!bridge.apply(false, false), "Ping Fix bypassed world gate");
+            require(bridge.apply(true, true), "Ping Fix enable failed");
+            auto incoming = ping_fix_frame(
+                kIncomingPacketEvent, PingPacketClass::s00_server_keepalive);
+            require(bridge.dispatch(incoming) && incoming.ping_fix &&
+                    incoming.ping_fix->executions == 1 &&
+                    incoming.ping_fix->decision.proposed_packet_state == 3 &&
+                    incoming.executed_modules.size() == 1 &&
+                    incoming.executed_modules.front() == ping_fix_id,
+                    "Ping Fix failed to identify incoming S00 keep-alive");
+            auto outgoing = ping_fix_frame(
+                kOutgoingPacketEvent, PingPacketClass::c00_client_keepalive);
+            require(bridge.dispatch(outgoing) && outgoing.ping_fix &&
+                    outgoing.ping_fix->executions == 1 &&
+                    outgoing.ping_fix->decision.proposed_packet_state == 3 &&
+                    outgoing.executed_modules.size() == 1 &&
+                    outgoing.executed_modules.front() == ping_fix_id,
+                    "Ping Fix failed to identify outgoing C00 keep-alive");
+            incoming = ping_fix_frame(
+                kIncomingPacketEvent, PingPacketClass::c00_client_keepalive);
+            require(bridge.dispatch(incoming) && incoming.ping_fix &&
+                    !incoming.ping_fix->decision.proposed_packet_state,
+                    "Ping Fix incorrectly selected opposite-direction packet");
+            outgoing = ping_fix_frame(
+                kOutgoingPacketEvent, PingPacketClass::other);
+            require(bridge.dispatch(outgoing) && outgoing.ping_fix &&
+                    !outgoing.ping_fix->decision.proposed_packet_state,
+                    "Ping Fix incorrectly selected unrelated packet");
+            require(bridge.request(ping_fix_id, false),
+                    "Ping Fix disable rejected");
+            require(bridge.apply(true, true), "Ping Fix disable failed");
+            outgoing = ping_fix_frame(
+                kOutgoingPacketEvent, PingPacketClass::c00_client_keepalive);
+            require(bridge.dispatch(outgoing) && outgoing.ping_fix &&
+                    outgoing.ping_fix->executions == 0 &&
+                    outgoing.executed_modules.empty(),
+                    "disabled Ping Fix outgoing callback still executed");
+            incoming = ping_fix_frame(
+                kIncomingPacketEvent, PingPacketClass::s00_server_keepalive);
+            require(bridge.dispatch(incoming) && incoming.ping_fix &&
+                    incoming.ping_fix->executions == 0 &&
+                    incoming.executed_modules.empty(),
+                    "disabled Ping Fix incoming callback still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
-                    has_item_use_fix && c.registered_modules == 66 &&
+                    has_item_use_fix && has_ping_fix &&
+                    c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 8 &&
-                    c.executable_callback_bindings == 9 &&
-                    c.unimplemented_callback_subscriptions == 162,
+                    c.modules_with_executable_bindings == 9 &&
+                    c.executable_callback_bindings == 11 &&
+                    c.unimplemented_callback_subscriptions == 160,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -597,7 +668,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R185 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R186 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }

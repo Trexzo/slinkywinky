@@ -96,6 +96,7 @@ def verify_known_original_bindings(rows):
         (46, "No Slow", 1, [(21, 200)]),
         (48, "No Use Delay", 4, [(18, 0)]),
         (49, "Null Move", 1, [(16, 100)]),
+        (51, "Ping Fix", 4, [(2, -1000), (3, -1000)]),
         (54, "Reach", 0, [(8, 0)]),
     )
     for index, name, category, subscriptions in expected:

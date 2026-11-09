@@ -842,3 +842,40 @@ Nothing has been attached to Minecraft: the state writes are only
 proposals, not actual JVM changes. The decrypted original ZIP,
 module executable bytes and upstream code remain outside GitHub.
 The other chat's R-series branch is not modified.
+
+## R186: Ping Fix — independent incoming/outgoing packet-event decisions
+
+The user-supplied decrypted original candidate identifies **Ping Fix**
+as module descriptor index **51** in utility category **4**.
+It registers two callbacks, **incoming event 2** and **outgoing
+event 3**, both with signed priority **-1000**. The pinned C++
+reconstruction classifies the inbound `S00PacketKeepAlive` and outbound
+`C00PacketKeepAlive` packet types respectively, proposing event
+`state = 3` (drop) when the corresponding packet type matches.
+
+The independently authored first-party `PingFixController` represents
+the decision as an **offline optional numeric event-state proposal**.
+It neither reads nor modifies a packet, hooks a socket, cancels real
+traffic, accesses a JVM or runs inside Minecraft. Wrong-direction
+keep-alive classes and unrelated packet types produce no proposal.
+
+The isolated `ModuleExecutionBridge::bind_ping_fix()` verifies both
+event subscriptions and priorities **before** binding either callback.
+It rejects missing events, wrong priority, category and double-binding.
+The two typed frame handlers remain separately enumerable in
+`ExecutionCoverage`. The model's existing world/player presence guard
+remains a deliberate fail-closed condition; its exact equivalence
+to early-login native packet events has **not** been demonstrated.
+
+R186 adds a synthetic eleven-module fixture, positive C++ packet
+direction and lifecycle tests, and five negative metadata fixtures.
+The full original-derived private manifest still contains **66**
+modules and **171** descriptor subscriptions. The offline bridge now
+has **9** first-party implemented module decisions with **11**
+executable callback bindings (both Item Use Fix and Ping Fix use
+two slots), leaving **160** registration slots unimplemented.
+
+Windows and Ubuntu Debug/Release tests use only synthetic fixtures.
+The private source DLL and decoded data never enter GitHub. This
+is not evidence of a working live packet hook or full original
+client equivalence. PR #2 remains draft and separate from PR #1.

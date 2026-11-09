@@ -11,6 +11,7 @@
 #include "slinkywinky/no_hit_delay_controller.hpp"
 #include "slinkywinky/no_use_delay_controller.hpp"
 #include "slinkywinky/item_use_fix_controller.hpp"
+#include "slinkywinky/ping_fix_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -78,6 +79,12 @@ struct ItemUseFixTickPayload {
     unsigned executions = 0;
 };
 
+struct PingFixTickPayload {
+    PingFixInput input{};
+    PingFixDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -90,6 +97,7 @@ struct ExecutionFrame {
     std::optional<NoHitDelayTickPayload> no_hit_delay{};
     std::optional<NoUseDelayTickPayload> no_use_delay{};
     std::optional<ItemUseFixTickPayload> item_use_fix{};
+    std::optional<PingFixTickPayload> ping_fix{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -378,6 +386,50 @@ public:
         return false;
     }
 
+    // Original candidate Ping Fix: receive slot 2 and send slot 3,
+    // both signed priority -1000. Validate BOTH before binding either.
+    bool bind_ping_fix(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Ping Fix" ||
+            definitions_[id].category != 4)
+            return false;
+        bool inbound = false, outbound = false;
+        for (const auto& sub : definitions_[id].subscriptions) {
+            if (sub.event == kIncomingPacketEvent && sub.priority == -1000)
+                inbound = true;
+            if (sub.event == kOutgoingPacketEvent && sub.priority == -1000)
+                outbound = true;
+        }
+        if (!inbound || !outbound ||
+            callbacks_[id][kIncomingPacketEvent] ||
+            callbacks_[id][kOutgoingPacketEvent])
+            return false;
+        const bool first = bind(id, kIncomingPacketEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.ping_fix) return;
+                auto& packet = *frame.ping_fix;
+                ++packet.executions;
+                packet.decision = ping_fix_.on_receive(packet.input);
+            });
+        const bool second = bind(id, kOutgoingPacketEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.ping_fix) return;
+                auto& packet = *frame.ping_fix;
+                ++packet.executions;
+                packet.decision = ping_fix_.on_send(packet.input);
+            });
+        if (!first || !second)
+            throw std::logic_error("validated Ping Fix event pair failed");
+        return true;
+    }
+
+    bool bind_ping_fix_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Ping Fix")
+                return bind_ping_fix(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -427,6 +479,9 @@ public:
         if (frame.item_use_fix &&
             frame.event != kItemUseFixBeforeEvent &&
             frame.event != kItemUseFixAfterEvent) return false;
+        if (frame.ping_fix &&
+            frame.event != kIncomingPacketEvent &&
+            frame.event != kOutgoingPacketEvent) return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -438,7 +493,8 @@ public:
             static_cast<unsigned>(frame.no_slow.has_value()) +
             static_cast<unsigned>(frame.no_hit_delay.has_value()) +
             static_cast<unsigned>(frame.no_use_delay.has_value()) +
-            static_cast<unsigned>(frame.item_use_fix.has_value());
+            static_cast<unsigned>(frame.item_use_fix.has_value()) +
+            static_cast<unsigned>(frame.ping_fix.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -487,6 +543,10 @@ public:
         if (frame.item_use_fix) {
             frame.item_use_fix->decision = {};
             frame.item_use_fix->executions = 0;
+        }
+        if (frame.ping_fix) {
+            frame.ping_fix->decision = {};
+            frame.ping_fix->executions = 0;
         }
         struct ClearFrame {
             ModuleExecutionBridge& self;
@@ -539,6 +599,7 @@ private:
     NoHitDelayController no_hit_delay_;
     NoUseDelayController no_use_delay_;
     ItemUseFixController item_use_fix_;
+    PingFixController ping_fix_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

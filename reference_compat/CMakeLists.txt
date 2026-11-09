@@ -215,4 +215,35 @@ if(BUILD_TESTING)
     r185_reject_item_use_wrong_priority
     r185_reject_missing_after_callback PROPERTIES WILL_FAIL TRUE)
 
+  # R186: metadata-backed incoming/outgoing Ping Fix (events 2 and 3).
+  add_executable(slinkywinky_ping_fix_bridge_test
+    tests/test_ping_fix_bridge.cpp)
+  target_link_libraries(slinkywinky_ping_fix_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r186_ping_fix_bridge COMMAND slinkywinky_ping_fix_bridge_test)
+  add_test(NAME r186_nine_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/eleven_modules_with_nine_decisions.tsv")
+  add_test(NAME r186_reject_ping_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_category.tsv")
+  add_test(NAME r186_reject_ping_wrong_receive
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_receive_event.tsv")
+  add_test(NAME r186_reject_ping_wrong_send
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_send_event.tsv")
+  add_test(NAME r186_reject_ping_wrong_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_priority.tsv")
+  add_test(NAME r186_reject_ping_missing_receive
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/missing_ping_fix_receive.tsv")
+  set_tests_properties(r186_reject_ping_wrong_category
+    r186_reject_ping_wrong_receive
+    r186_reject_ping_wrong_send
+    r186_reject_ping_wrong_priority
+    r186_reject_ping_missing_receive PROPERTIES WILL_FAIL TRUE)
+
 endif()
