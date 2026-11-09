@@ -10,6 +10,7 @@
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_source_hover_target.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
+#include "slinkywinky/original_window_focus_trace.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -66,6 +67,15 @@ public:
     // These never authorize clicks or modify original game input.
     std::optional<std::array<std::uint64_t,3>> focus_cycle_evidence(
         HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
+    // R183: companion receipt requires a tri-state OS window audit on the
+    // same original WGL owner. Invoked after ONE accepted passive hover.
+    bool observe_original_window_focus(HGLRC context,HDC dc,
+        unsigned width,unsigned height,OriginalWindowFocusState state,
+        bool pointer_admitted) noexcept;
+    // [OS foreground, OS background, refused, losses, regains, post hits].
+    std::optional<std::array<std::uint64_t,6>>
+    original_window_focus_evidence(HGLRC context,HDC dc,
+        unsigned width,unsigned height) const noexcept;
     bool close() noexcept;
     bool owner_thread() const noexcept;
     bool active() const noexcept {return active_;}
@@ -114,6 +124,8 @@ private:
          previous_foreground_=false,post_regain_epoch_=false;
     // Only invoked after the passive observation has been accepted.
     void note_focus_sample(bool foreground,bool exact_source_hit) noexcept;
+    OriginalWindowFocusTrace exact_window_focus_;
+    std::uint64_t strict_hover_samples_=0,strict_source_hits_=0;
     bool active_=false;
 };
 } // namespace slinkywinky
