@@ -748,14 +748,27 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                 static_cast<std::uintptr_t>(context));
             const auto hdc=reinterpret_cast<HDC>(
                 static_cast<std::uintptr_t>(dc));
-            const auto point=slinkywinky::audit_original_render_pointer(
+            // R182: distinguish a VERIFIED background original game
+            // window from an invalid HWND/WGL/viewport audit. The latter
+            // must never masquerade as a successful loss of foreground.
+            const auto focus=slinkywinky::audit_game_render_window(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height));
+            if(focus==slinkywinky::GameWindowFocus::Refused)
+                return JNI_FALSE;
+            const bool foreground=
+                focus==slinkywinky::GameWindowFocus::ValidForeground;
+            const auto point=foreground?
+                slinkywinky::audit_original_render_pointer(
+                    gl,hdc,static_cast<unsigned>(width),
+                    static_cast<unsigned>(height)):
+                std::optional<slinkywinky::OriginalPointerObservation>{};
+            if(foreground && !point)return JNI_FALSE;
             if(!retained_preview->observe_hover(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height),
                 point?point->client_x:0,point?point->client_y:0,
-                point.has_value()))return JNI_FALSE;
+                foreground))return JNI_FALSE;
         }
         return drawValidatedMenuOverlay(context,dc,width,height,
             slinkywinky::MenuGL11Mode::CompactOverlay,retained_preview.get());
