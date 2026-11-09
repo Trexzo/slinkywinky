@@ -124,6 +124,35 @@ def verify_r182_original_focus_cycle(stdout,require_cycle=False):
         raise RuntimeError("R182 impossible or insufficient original focus cycle")
     return losses,regains,post
 
+R183_WINDOW_MARKER="R183_ORIGINAL_EXACT_WINDOW_OS_FOCUS_PASS"
+R183_WINDOW_REGEX=re.compile(
+    r"^R183_ORIGINAL_EXACT_WINDOW_OS_FOCUS_PASS "
+    r"frames=64 foreground=([0-9]{1,3}) background=([0-9]{1,3}) "
+    r"refused=([0-9]{1,3}) losses=([0-9]{1,3}) "
+    r"regains=([0-9]{1,3}) post_hits=([0-9]{1,3}) "
+    r"native_click_delivery=disabled\r?$",re.MULTILINE)
+
+def verify_r183_original_window_focus(stdout,require_cycle=False):
+    """Original-pinned read-only OS HWND focus tri-state (not physical input)."""
+    if not isinstance(stdout,str) or stdout.count(R183_WINDOW_MARKER)!=1:
+        raise RuntimeError("R183 missing/duplicate original-JVM OS focus evidence")
+    matches=list(R183_WINDOW_REGEX.finditer(stdout))
+    if len(matches)!=1 or type(require_cycle) is not bool:
+        raise RuntimeError("R183 malformed OS focus receipt or requirement")
+    foreground,numeric,_=verify_r176_original_hover_marker(stdout)
+    verify_r178_original_slider_window(stdout,foreground)
+    exact=verify_r179_original_native_target(stdout,foreground,numeric)
+    losses,regains,compat_post=verify_r182_original_focus_cycle(stdout)
+    fg,bg,refused,osloss,osregain,post=map(int,matches[0].groups())
+    if (fg+bg+refused!=63 or fg>foreground or
+        osloss>fg or osloss>bg or osregain>osloss or
+        post>fg or post>exact or post>compat_post or
+        (osregain==0 and post!=0) or
+        (require_cycle and (refused!=0 or osloss<1 or
+                            osregain<1 or post<1))):
+        raise RuntimeError("R183 OS window focus cycle contradicted native source")
+    return fg,bg,refused,osloss,osregain,post
+
 MARKERS = (
     "CALLBACK_CLASSLOADER_VALIDATED",
     "OBSERVATION_MAPPING_ADMITTED",
@@ -268,6 +297,8 @@ def main():
                         help="R181 manually supervised original-JVM test: require at least 2 foreground cursor samples hitting the actual painted Auto Block Range slider; never route clicks")
     parser.add_argument("--require-focus-cycle-source-hit", action="store_true",
                         help="R182 supervised read-only focus loss/recovery plus post-reacquisition exact slider hit; also requires --require-foreground-source-hits")
+    parser.add_argument("--require-exact-os-focus-cycle", action="store_true",
+                        help="R183 strict original Win32 foreground->background->foreground and exact post-recovery source hit; also requires R182 mode")
     parser.add_argument("--render-key-acceptance", action="store_true",
                         help="R95 opt-in: exact own-game window SendInput Insert x2 plus native stop, not physical hardware")
     parser.add_argument("--render-manual-acceptance", action="store_true",
@@ -307,6 +338,8 @@ def main():
         parser.error("--require-foreground-source-hits requires --render-retained-acceptance")
     if args.require_focus_cycle_source_hit and not args.require_foreground_source_hits:
         parser.error("--require-focus-cycle-source-hit requires --require-foreground-source-hits")
+    if args.require_exact_os_focus_cycle and not args.require_focus_cycle_source_hit:
+        parser.error("--require-exact-os-focus-cycle requires --require-focus-cycle-source-hit")
     if args.require_foreground_source_hits and not sys.stdin.isatty():
         parser.error("R181 foreground source-hit admission requires an interactive terminal")
     if args.require_ray_entity and not args.world_observation:
@@ -464,6 +497,9 @@ def main():
             print("R182: after an initial foreground hover, manually switch",flush=True)
             print("away from Minecraft and back, then hover the slider again.",flush=True)
             print("Only a source hit AFTER verified focus recovery is accepted.",flush=True)
+            if args.require_exact_os_focus_cycle:
+                print("R183: strict Win32 OS focus identity is required.",flush=True)
+                print("An invalid pointer read can NEVER count as focus loss.",flush=True)
     print("Launching one isolated vanilla 1.8.9 JVM; no Forge.", flush=True)
     with log.open("xb" if (args.render_context_acceptance or args.render_overlay_acceptance or args.render_multiframe_acceptance or args.render_visibility_acceptance or args.render_manual_acceptance or args.render_key_acceptance or args.render_retained_acceptance or args.render_operator_menu_acceptance or args.render_window_audit_acceptance) else "wb") as output:
         game = subprocess.Popen(
@@ -617,6 +653,16 @@ def main():
                     exact=verify_r179_original_native_target(read_log(),fg,num)
                     losses,regains,post=verify_r182_original_focus_cycle(
                         read_log(),args.require_focus_cycle_source_hit)
+                    os=verify_r183_original_window_focus(
+                        read_log(),args.require_exact_os_focus_cycle)
+                    if args.require_exact_os_focus_cycle:
+                        print("R183_ORIGINAL_VANILLA_EXACT_OS_FOCUS_RECOVERY_PASS "+
+                              "foreground="+str(os[0])+" background="+str(os[1])+
+                              " refused="+str(os[2])+
+                              " losses="+str(os[3])+" regains="+str(os[4])+
+                              " post_hits="+str(os[5])+
+                              " native_click_delivery=disabled",flush=True)
+                        print("R183_REAL_OS_FOCUS_NOT_HARDWARE_INPUT_PROOF",flush=True)
                     if args.require_focus_cycle_source_hit:
                         print("R182_ORIGINAL_VANILLA_FOCUS_RECOVERY_SOURCE_PASS "+
                               "losses="+str(losses)+" regains="+str(regains)+
