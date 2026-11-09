@@ -685,49 +685,49 @@ int main(int argc, char** argv) {
             start.item_present = true;
             start.item_id = 267;
             start.mode = 0;
-            auto frame = no_item_release_frame(start, has_ping_fix);
-            require(bridge.dispatch(frame) && frame.no_item_release &&
-                    frame.no_item_release->executions == 1 &&
-                    frame.no_item_release->decision.release_locked &&
-                    !frame.no_item_release->decision.proposed_packet_state,
+            auto packet_frame = no_item_release_frame(start, has_ping_fix);
+            require(bridge.dispatch(packet_frame) && packet_frame.no_item_release &&
+                    packet_frame.no_item_release->executions == 1 &&
+                    packet_frame.no_item_release->decision.release_locked &&
+                    !packet_frame.no_item_release->decision.proposed_packet_state,
                     "No Item Release failed to arm on sword use");
-            require(frame.executed_modules.size() ==
+            require(packet_frame.executed_modules.size() ==
                     (has_ping_fix ? 2u : 1u) &&
-                    frame.executed_modules.front() == no_item_release_id &&
+                    packet_frame.executed_modules.front() == no_item_release_id &&
                     (!has_ping_fix ||
-                     frame.executed_modules.back() == ping_fix_id),
+                     packet_frame.executed_modules.back() == ping_fix_id),
                     "Original outgoing packet priority: No Item Release 0 before Ping Fix -1000");
             NoItemReleaseInput alive;
             alive.packet = NoItemReleasePacketKind::c00_keepalive;
-            frame = no_item_release_frame(alive, has_ping_fix);
-            require(bridge.dispatch(frame) &&
-                    frame.no_item_release->decision.release_locked &&
-                    !frame.no_item_release->decision.proposed_packet_state &&
+            packet_frame = no_item_release_frame(alive, has_ping_fix);
+            require(bridge.dispatch(packet_frame) &&
+                    packet_frame.no_item_release->decision.release_locked &&
+                    !packet_frame.no_item_release->decision.proposed_packet_state &&
                     (!has_ping_fix ||
-                     frame.ping_fix->decision.proposed_packet_state == 3),
+                     packet_frame.ping_fix->decision.proposed_packet_state == 3),
                     "Keepalive should preserve release-lock while Ping Fix reacts");
             NoItemReleaseInput release;
             release.packet = NoItemReleasePacketKind::c07_digging;
             release.digging_status = 5;
-            frame = no_item_release_frame(release, has_ping_fix);
-            require(bridge.dispatch(frame) &&
-                    frame.no_item_release->decision.proposed_packet_state == 2 &&
-                    !frame.no_item_release->decision.release_locked &&
+            packet_frame = no_item_release_frame(release, has_ping_fix);
+            require(bridge.dispatch(packet_frame) &&
+                    packet_frame.no_item_release->decision.proposed_packet_state == 2 &&
+                    !packet_frame.no_item_release->decision.release_locked &&
                     (!has_ping_fix ||
-                     !frame.ping_fix->decision.proposed_packet_state),
+                     !packet_frame.ping_fix->decision.proposed_packet_state),
                     "No Item Release failed one-shot dig-release decision");
-            frame = no_item_release_frame(release, has_ping_fix);
-            require(bridge.dispatch(frame) &&
-                    !frame.no_item_release->decision.proposed_packet_state,
+            packet_frame = no_item_release_frame(release, has_ping_fix);
+            require(bridge.dispatch(packet_frame) &&
+                    !packet_frame.no_item_release->decision.proposed_packet_state,
                     "No Item Release cancelled two releases without new use");
             require(bridge.request(no_item_release_id, false),
                     "No Item Release disable rejected");
             require(bridge.apply(true, true),
                     "No Item Release disable failed");
-            frame = no_item_release_frame(start, has_ping_fix);
-            require(bridge.dispatch(frame) &&
-                    frame.no_item_release->executions == 0 &&
-                    frame.executed_modules.size() == (has_ping_fix ? 1u : 0u),
+            packet_frame = no_item_release_frame(start, has_ping_fix);
+            require(bridge.dispatch(packet_frame) &&
+                    packet_frame.no_item_release->executions == 0 &&
+                    packet_frame.executed_modules.size() == (has_ping_fix ? 1u : 0u),
                     "Disabled No Item Release still ran outgoing callback");
         }
 
