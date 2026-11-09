@@ -40,6 +40,10 @@ public final class RendererWglEvidence {
     // foreground hover hits; no raw cursor, OS inputs, or Minecraft actions.
     private static native int[] nativeReadOriginalSourceTargetEvidence(
         long context,long dc,int width,int height);
+    // R182: read-only ordering: foreground loss, reacquisition, and
+    // source-exact hover samples strictly AFTER a reacquisition.
+    private static native int[] nativeReadRetainedFocusCycleEvidence(
+        long context,long dc,int width,int height);
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
     private static native int nativePollOperatorMenu(long context,long dc);
@@ -91,6 +95,7 @@ public final class RendererWglEvidence {
     private boolean retainedVerified;
     private int[] retainedHoverCounters;
     private int[] originalSourceTargetCounters;
+    private int[] retainedFocusCycleCounters;
     private int acceptedOperatorEvents;
     private int rejectedOperatorEvents;
     private int lastOperatorTab=-1;
@@ -209,6 +214,22 @@ public final class RendererWglEvidence {
         return source[2]<=physicalHover[2] &&
                source[2]<=physicalHover[3] &&
                source[2]<=source[1];
+    }
+
+    // R182: native focus chronology is checked against already validated
+    // real-window source/foreground counters. Zero focus cycles are valid
+    // observations, not proof of reacquisition. Never enables click capture.
+    static boolean validRetainedFocusCycleEvidence(
+            int[] cycle,int[] source,int[] physicalHover,int drawn) {
+        if(!validOriginalSourceTargetEvidence(source,physicalHover,drawn) ||
+           cycle==null || cycle.length!=3 ||
+           cycle[0]<0 || cycle[1]<0 || cycle[2]<0 ||
+           cycle[1]>cycle[0] || cycle[2]>source[2] ||
+           (cycle[1]==0 && cycle[2]!=0) ||
+           (long)cycle[0]+cycle[1]>physicalHover[1])
+            return false;
+        return (physicalHover[2]>0 || (cycle[0]==0 && cycle[1]==0)) &&
+               cycle[2]<=physicalHover[3];
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -489,6 +510,12 @@ public final class RendererWglEvidence {
                         poisoned=true;overlayFailed=true;invalid++;return;
                     }
                     originalSourceTargetCounters=source.clone();
+                    final int[] cycle=nativeReadRetainedFocusCycleEvidence(
+                        context,dc,width,height);
+                    if(!validRetainedFocusCycleEvidence(cycle,source,hover,64)) {
+                        poisoned=true;overlayFailed=true;invalid++;return;
+                    }
+                    retainedFocusCycleCounters=cycle.clone();
                 }
                 if(overlayFrames>=5)retainedVerified=true;
                 return;
@@ -594,6 +621,9 @@ public final class RendererWglEvidence {
                validRetainedHoverEvidence(retainedHoverCounters,64) &&
                validOriginalSourceTargetEvidence(
                    originalSourceTargetCounters,retainedHoverCounters,64) &&
+               validRetainedFocusCycleEvidence(
+                   retainedFocusCycleCounters,originalSourceTargetCounters,
+                   retainedHoverCounters,64) &&
                !poisoned && !overlayFailed;
     }
     public synchronized boolean passiveHoverVerified(){
@@ -608,6 +638,10 @@ public final class RendererWglEvidence {
     public synchronized int[] originalSourceTargetCounters(){
         return passiveHoverVerified()?
             originalSourceTargetCounters.clone():null;
+    }
+    public synchronized int[] retainedFocusCycleCounters(){
+        return passiveHoverVerified()?
+            retainedFocusCycleCounters.clone():null;
     }
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}
