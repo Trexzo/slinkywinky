@@ -102,7 +102,7 @@ R182_FOCUS_MARKER="R182_ORIGINAL_NATIVE_FOCUS_CYCLE_PASS"
 R182_FOCUS_REGEX=re.compile(
     r"^R182_ORIGINAL_NATIVE_FOCUS_CYCLE_PASS "
     r"frames=64 losses=([0-9]{1,3}) regains=([0-9]{1,3}) "
-    r"post_hits=([0-9]{1,3}) native_click_delivery=disabled\\r?$",
+    r"post_hits=([0-9]{1,3}) native_click_delivery=disabled\r?$",
     re.MULTILINE)
 
 def verify_r182_original_focus_cycle(stdout,require_cycle=False):
