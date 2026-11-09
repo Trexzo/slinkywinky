@@ -246,4 +246,27 @@ if(BUILD_TESTING)
     r186_reject_ping_wrong_priority
     r186_reject_ping_missing_receive PROPERTIES WILL_FAIL TRUE)
 
+  # R187: No Item Release one-shot state and shared packet event-3 routing.
+  add_executable(slinkywinky_no_item_release_bridge_test
+    tests/test_no_item_release_bridge.cpp)
+  target_link_libraries(slinkywinky_no_item_release_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r187_no_item_release_bridge COMMAND slinkywinky_no_item_release_bridge_test)
+  add_test(NAME r187_ten_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twelve_modules_with_ten_decisions.tsv")
+  add_test(NAME r187_reject_no_item_release_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_item_release_category.tsv")
+  add_test(NAME r187_reject_no_item_release_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_item_release_event.tsv")
+  add_test(NAME r187_reject_no_item_release_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_item_release_priority.tsv")
+  set_tests_properties(r187_reject_no_item_release_category
+    r187_reject_no_item_release_event
+    r187_reject_no_item_release_priority PROPERTIES WILL_FAIL TRUE)
+
 endif()

@@ -12,6 +12,7 @@
 #include "slinkywinky/no_use_delay_controller.hpp"
 #include "slinkywinky/item_use_fix_controller.hpp"
 #include "slinkywinky/ping_fix_controller.hpp"
+#include "slinkywinky/no_item_release_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -85,6 +86,12 @@ struct PingFixTickPayload {
     unsigned executions = 0;
 };
 
+struct NoItemReleaseTickPayload {
+    NoItemReleaseInput input{};
+    NoItemReleaseDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -98,6 +105,7 @@ struct ExecutionFrame {
     std::optional<NoUseDelayTickPayload> no_use_delay{};
     std::optional<ItemUseFixTickPayload> item_use_fix{};
     std::optional<PingFixTickPayload> ping_fix{};
+    std::optional<NoItemReleaseTickPayload> no_item_release{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -430,6 +438,34 @@ public:
         return false;
     }
 
+    // Original candidate module 44: No Item Release, event 3 priority 0.
+    // State advances on simulated C08/C07 outgoing packets. No actual I/O.
+    bool bind_no_item_release(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "No Item Release" ||
+            definitions_[id].category != 4)
+            return false;
+        bool correct = false;
+        for (const auto& sub : definitions_[id].subscriptions)
+            if (sub.event == kNoItemReleaseEvent && sub.priority == 0)
+                correct = true;
+        if (!correct) return false;
+        return bind(id, kNoItemReleaseEvent,
+                    [this](const Delivery&, ExecutionFrame& frame) {
+                        if (!frame.no_item_release) return;
+                        auto& packet = *frame.no_item_release;
+                        ++packet.executions;
+                        packet.decision = no_item_release_.evaluate(packet.input);
+                    });
+    }
+
+    bool bind_no_item_release_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "No Item Release")
+                return bind_no_item_release(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -482,6 +518,8 @@ public:
         if (frame.ping_fix &&
             frame.event != kIncomingPacketEvent &&
             frame.event != kOutgoingPacketEvent) return false;
+        if (frame.no_item_release && frame.event != kNoItemReleaseEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -494,15 +532,32 @@ public:
             static_cast<unsigned>(frame.no_hit_delay.has_value()) +
             static_cast<unsigned>(frame.no_use_delay.has_value()) +
             static_cast<unsigned>(frame.item_use_fix.has_value()) +
-            static_cast<unsigned>(frame.ping_fix.has_value());
+            static_cast<unsigned>(frame.ping_fix.has_value()) +
+            static_cast<unsigned>(frame.no_item_release.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
         const bool combined_mouse_click =
             typed_count == 2 && frame.event == kItemUseFixBeforeEvent &&
             frame.no_hit_delay && frame.item_use_fix;
-        if (typed_count > 1 && !combined_movement && !combined_mouse_click)
+        const bool combined_outgoing_packet =
+            typed_count == 2 && frame.event == kOutgoingPacketEvent &&
+            frame.ping_fix && frame.no_item_release;
+        if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
+            !combined_outgoing_packet)
             return false;
+        if (combined_outgoing_packet) {
+            const bool c00 =
+                frame.no_item_release->input.packet ==
+                NoItemReleasePacketKind::c00_keepalive;
+            const auto ping_class = frame.ping_fix->input.packet;
+            // These two views must describe the SAME outgoing packet:
+            // only C00 keepalives can be labelled as such in Ping Fix.
+            if (c00 != (ping_class == PingPacketClass::c00_client_keepalive))
+                return false;
+            if (ping_class == PingPacketClass::s00_server_keepalive)
+                return false;
+        }
         if (frame.null_move && frame.instant_stop) {
             const auto& a = frame.instant_stop->input;
             const auto& b = frame.null_move->input;
@@ -548,6 +603,10 @@ public:
             frame.ping_fix->decision = {};
             frame.ping_fix->executions = 0;
         }
+        if (frame.no_item_release) {
+            frame.no_item_release->decision = {};
+            frame.no_item_release->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -569,6 +628,7 @@ public:
     void reset_instant_stop_world_state() noexcept { instant_stop_.reset(); }
     void reset_no_use_delay_world_state() noexcept { no_use_delay_.reset(); }
     void reset_item_use_fix_world_state() noexcept { item_use_fix_.reset(); }
+    void reset_no_item_release_world_state() noexcept { no_item_release_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -579,6 +639,7 @@ public:
         instant_stop_.reset();
         no_use_delay_.reset();
         item_use_fix_.reset();
+        no_item_release_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -600,6 +661,7 @@ private:
     NoUseDelayController no_use_delay_;
     ItemUseFixController item_use_fix_;
     PingFixController ping_fix_;
+    NoItemReleaseController no_item_release_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;

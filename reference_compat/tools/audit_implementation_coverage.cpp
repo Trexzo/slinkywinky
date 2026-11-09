@@ -152,6 +152,22 @@ static ExecutionFrame ping_fix_frame(unsigned event, PingPacketClass packet_type
     return frame;
 }
 
+static ExecutionFrame no_item_release_frame(NoItemReleaseInput input,
+                                             bool with_ping_fix = false) {
+    ExecutionFrame frame;
+    frame.event = kNoItemReleaseEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    frame.no_item_release = NoItemReleaseTickPayload{input, {}, 0};
+    if (with_ping_fix) {
+        const bool c00 = input.packet == NoItemReleasePacketKind::c00_keepalive;
+        frame.ping_fix = PingFixTickPayload{
+            {c00 ? PingPacketClass::c00_client_keepalive : PingPacketClass::other},
+            {}, 0};
+    }
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -258,6 +274,14 @@ int main(int argc, char** argv) {
         if (has_ping_fix)
             require(bridge.bind_ping_fix_from_catalog(),
                     "Ping Fix exists but original incoming/outgoing priorities mismatch");
+        std::size_t no_item_release_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "No Item Release")
+                no_item_release_id = i;
+        const bool has_no_item_release = no_item_release_id < manifest.modules.size();
+        if (has_no_item_release)
+            require(bridge.bind_no_item_release_from_catalog(),
+                    "No Item Release is present but original event-3/priority-0 binding failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -265,7 +289,8 @@ int main(int argc, char** argv) {
                                                (has_no_hit_delay ? 1u : 0u) +
                                                (has_no_use_delay ? 1u : 0u) +
                                                (has_item_use_fix ? 2u : 0u) +
-                                               (has_ping_fix ? 2u : 0u);
+                                               (has_ping_fix ? 2u : 0u) +
+                                               (has_no_item_release ? 1u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -296,8 +321,9 @@ int main(int argc, char** argv) {
                 "Item Use Fix after callback not routed through event 15");
         require(c.implemented_per_event[kIncomingPacketEvent] == (has_ping_fix ? 1u : 0u),
                 "Ping Fix incoming event 2 not routed");
-        require(c.implemented_per_event[kOutgoingPacketEvent] == (has_ping_fix ? 1u : 0u),
-                "Ping Fix outgoing event 3 not routed");
+        require(c.implemented_per_event[kOutgoingPacketEvent] ==
+                    (has_ping_fix ? 1u : 0u) + (has_no_item_release ? 1u : 0u),
+                "Outgoing event 3 packet callback inventory mismatch");
         for (unsigned event = 0; event < kEventSlots; ++event)
             if (event != kReachQueryEvent && event != kPlayerUpdateEvent &&
                 event != kMovementTickEvent && event != kNoSlowEvent &&
@@ -643,16 +669,78 @@ int main(int argc, char** argv) {
                     "disabled Ping Fix incoming callback still executed");
         }
 
+        if (has_no_item_release) {
+            require(bridge.request(no_item_release_id, true),
+                    "No Item Release enable rejected");
+            require(!bridge.apply(false, false),
+                    "No Item Release bypassed world gate");
+            if (has_ping_fix)
+                require(bridge.request(ping_fix_id, true),
+                        "Ping Fix reenable for shared event rejected");
+            require(bridge.apply(true, true),
+                    "No Item Release enable failed");
+            NoItemReleaseInput start;
+            start.packet = NoItemReleasePacketKind::c08_item_use;
+            start.stack_present = true;
+            start.item_present = true;
+            start.item_id = 267;
+            start.mode = 0;
+            auto frame = no_item_release_frame(start, has_ping_fix);
+            require(bridge.dispatch(frame) && frame.no_item_release &&
+                    frame.no_item_release->executions == 1 &&
+                    frame.no_item_release->decision.release_locked &&
+                    !frame.no_item_release->decision.proposed_packet_state,
+                    "No Item Release failed to arm on sword use");
+            require(frame.executed_modules.size() ==
+                    (has_ping_fix ? 2u : 1u) &&
+                    frame.executed_modules.front() == no_item_release_id &&
+                    (!has_ping_fix ||
+                     frame.executed_modules.back() == ping_fix_id),
+                    "Original outgoing packet priority: No Item Release 0 before Ping Fix -1000");
+            NoItemReleaseInput alive;
+            alive.packet = NoItemReleasePacketKind::c00_keepalive;
+            frame = no_item_release_frame(alive, has_ping_fix);
+            require(bridge.dispatch(frame) &&
+                    frame.no_item_release->decision.release_locked &&
+                    !frame.no_item_release->decision.proposed_packet_state &&
+                    (!has_ping_fix ||
+                     frame.ping_fix->decision.proposed_packet_state == 3),
+                    "Keepalive should preserve release-lock while Ping Fix reacts");
+            NoItemReleaseInput release;
+            release.packet = NoItemReleasePacketKind::c07_digging;
+            release.digging_status = 5;
+            frame = no_item_release_frame(release, has_ping_fix);
+            require(bridge.dispatch(frame) &&
+                    frame.no_item_release->decision.proposed_packet_state == 2 &&
+                    !frame.no_item_release->decision.release_locked &&
+                    (!has_ping_fix ||
+                     !frame.ping_fix->decision.proposed_packet_state),
+                    "No Item Release failed one-shot dig-release decision");
+            frame = no_item_release_frame(release, has_ping_fix);
+            require(bridge.dispatch(frame) &&
+                    !frame.no_item_release->decision.proposed_packet_state,
+                    "No Item Release cancelled two releases without new use");
+            require(bridge.request(no_item_release_id, false),
+                    "No Item Release disable rejected");
+            require(bridge.apply(true, true),
+                    "No Item Release disable failed");
+            frame = no_item_release_frame(start, has_ping_fix);
+            require(bridge.dispatch(frame) &&
+                    frame.no_item_release->executions == 0 &&
+                    frame.executed_modules.size() == (has_ping_fix ? 1u : 0u),
+                    "Disabled No Item Release still ran outgoing callback");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
-                    has_item_use_fix && has_ping_fix &&
+                    has_item_use_fix && has_ping_fix && has_no_item_release &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 9 &&
-                    c.executable_callback_bindings == 11 &&
-                    c.unimplemented_callback_subscriptions == 160,
+                    c.modules_with_executable_bindings == 10 &&
+                    c.executable_callback_bindings == 12 &&
+                    c.unimplemented_callback_subscriptions == 159,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
@@ -668,7 +756,7 @@ int main(int argc, char** argv) {
                 "callback binding leaked after shutdown");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "R186 coverage audit failed: " << e.what() << '\n';
+        std::cerr << "R187 coverage audit failed: " << e.what() << '\n';
         return 1;
     }
 }

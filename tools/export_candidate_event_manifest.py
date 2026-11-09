@@ -92,6 +92,7 @@ def verify_known_original_bindings(rows):
         (31, "Instant Stop", 1, [(16, 200)]),
         (35, "Item Use Fix", 4, [(14, 0), (15, 0)]),
         (42, "No Hit Delay", 4, [(14, 0)]),
+        (44, "No Item Release", 4, [(3, 0)]),
         (45, "No Jump Delay", 1, [(17, 100)]),
         (46, "No Slow", 1, [(21, 200)]),
         (48, "No Use Delay", 4, [(18, 0)]),

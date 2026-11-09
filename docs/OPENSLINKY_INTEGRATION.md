@@ -879,3 +879,43 @@ Windows and Ubuntu Debug/Release tests use only synthetic fixtures.
 The private source DLL and decoded data never enter GitHub. This
 is not evidence of a working live packet hook or full original
 client equivalence. PR #2 remains draft and separate from PR #1.
+
+## R187: No Item Release packet state and shared outgoing event-3 priority
+
+The private original candidate's descriptor **44** (utility category
+**4**) declares one outgoing callback on event **3**, priority **0**.
+Ping Fix occupies the same event at priority **-1000** and thus runs
+later in the native descending-priority dispatcher.
+
+The independent offline `NoItemReleaseController` models the candidate's
+one-shot release lock: a C08 use-item packet with an eligible item
+arms it according to mode (0 swords, 1 non-swords, other values both),
+while bows (261) and fishing rods (346) are always excluded. Missing
+item stack/item cancels a previous lock. A subsequent C07 digging
+packet consumes the lock regardless of status; status **5** proposes
+packet event state **2** (cancel once). Other packet classes, including
+C00 keep-alive, leave the lock unchanged. These are data-only proposals;
+this code does not cancel game packets or touch Java network objects.
+
+`ModuleExecutionBridge` validates the exact name, utility category,
+event 3 and priority 0 before installing its sole callback. Typed
+outgoing frames can contain **both** No Item Release and Ping Fix,
+provided their packet class views agree. The shared event executes
+No Item Release before Ping Fix and rejects contradictory C00 labels,
+other mixed event types, missing world/player state and shutdown calls.
+
+Synthetic C++ tests cover item modes, all sword IDs, bow/rod exclusion,
+missing items, C07 one-shot cancellation, non-release C07 consumption,
+unrelated keepalive preserving the lock, shared packet priority,
+invalid metadata, disable and teardown. A twelve-module synthetic
+manifest and negative fixtures run in the Windows/Ubuntu Debug/Release
+reference workflow. No original DLL bytes or proprietary sources are
+committed.
+
+The original candidate still contains **66** module descriptors and
+**171** native callback registrations. The isolated bridge now has
+**10** independent first-party offline module decisions and **12**
+implemented callback bindings, leaving **159** subscriptions without
+first-party implementations. No functioning live packet interception
+or in-game parity is claimed. PR #2 remains draft; the parallel
+runtime PR #1 remains untouched.
