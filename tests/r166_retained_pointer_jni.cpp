@@ -736,3 +736,59 @@ Java_dev_slinkywinky_attach_R182FocusCycleJniSmoke_sourceEvidence(
     if(out)env->SetIntArrayRegion(out,0,3,data);
     return out;
 }
+
+// R183: test-only exact OS focus sequence injected as synthetic status data.
+// The JNI DLL is disposable and NEVER part of the Minecraft injector.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R183ExactWindowFocusJniSmoke_target(
+        JNIEnv* env,jclass) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid())return nullptr;
+    const auto target=session->ui->source_hover_target(
+        session->gl,session->dc,kWidth,kHeight);
+    if(!target)return nullptr;
+    const jint data[2]={target->center_x,target->center_y};
+    jintArray out=env->NewIntArray(2);
+    if(out)env->SetIntArrayRegion(out,0,2,data);
+    return out;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R183ExactWindowFocusJniSmoke_sample(
+        JNIEnv*,jclass,jint status,jboolean pointerValid,
+        jint x,jint y,jint width,jint height) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!session || !session->valid() ||
+       status<-1 || status>1 ||
+       width!=static_cast<jint>(kWidth) ||
+       height!=static_cast<jint>(kHeight))return JNI_FALSE;
+    try {
+        const bool physical=pointerValid==JNI_TRUE;
+        if(!session->ui->observe_hover(
+               session->gl,session->dc,kWidth,kHeight,x,y,physical))
+            return JNI_FALSE;
+        return session->ui->observe_original_window_focus(
+            session->gl,session->dc,kWidth,kHeight,
+            static_cast<slinkywinky::OriginalWindowFocusState>(status),
+            physical)?JNI_TRUE:JNI_FALSE;
+    }catch(...) {return JNI_FALSE;}
+}
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_attach_R183ExactWindowFocusJniSmoke_evidence(
+        JNIEnv* env,jclass,jint width,jint height) {
+    std::lock_guard<std::mutex> lock(gate);
+    if(!env || !session || !session->valid() ||
+       width<320 || height<240 || width>8192 || height>8192)
+        return nullptr;
+    const auto evidence=session->ui->original_window_focus_evidence(
+        session->gl,session->dc,
+        static_cast<unsigned>(width),static_cast<unsigned>(height));
+    if(!evidence)return nullptr;
+    for(const auto count:*evidence)
+        if(count>static_cast<std::uint64_t>(
+                     std::numeric_limits<jint>::max()))return nullptr;
+    jint data[6]{};
+    for(std::size_t i=0;i<6u;i++)data[i]=static_cast<jint>((*evidence)[i]);
+    jintArray result=env->NewIntArray(6);
+    if(result)env->SetIntArrayRegion(result,0,6,data);
+    return result;
+}
