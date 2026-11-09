@@ -24,6 +24,9 @@ FORBIDDEN = (
     re.compile(r"\bR175RetainedHoverJniSmoke\b"),
     re.compile(r"\bR177RetainedTooltipPixelsSmoke\b"),
     re.compile(r"\bR179ExactSourceTargetJniSmoke\b"),
+    # R182 synthetic focus transitions must remain confined to the
+    # disposable JNI test library, never the real original-game agent.
+    re.compile(r"\bR182FocusCycleJniSmoke\b"),
 )
 
 
