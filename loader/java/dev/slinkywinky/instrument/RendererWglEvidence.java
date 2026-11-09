@@ -224,7 +224,8 @@ public final class RendererWglEvidence {
         if(!validOriginalSourceTargetEvidence(source,physicalHover,drawn) ||
            cycle==null || cycle.length!=3 ||
            cycle[0]<0 || cycle[1]<0 || cycle[2]<0 ||
-           cycle[1]>cycle[0] || cycle[2]>source[2] ||
+           cycle[1]>cycle[0] || cycle[0]>physicalHover[2] ||
+           cycle[2]>source[2] ||
            (cycle[1]==0 && cycle[2]!=0) ||
            (long)cycle[0]+cycle[1]>physicalHover[1])
             return false;
