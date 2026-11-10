@@ -752,25 +752,35 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
             // A failed foreground pointer admission is NOT itself proof
             // of a Win32 background/focus-loss transition. R182 counts
             // loss/recovery of this admitted foreground state only.
+            // R188: bracket the passive physical pointer read with TWO
+            // independent, exact original-HWND/WGL focus audits. A mid-read
+            // foreground switch or missing cursor is REFUSED; it cannot
+            // fabricate a foreground hit or a background/loss transition.
+            const auto before=slinkywinky::audit_game_render_window(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height));
             const auto point=slinkywinky::audit_original_render_pointer(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height));
+            const auto after=slinkywinky::audit_game_render_window(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height));
+            const auto status=slinkywinky::reconcile_original_pointer_focus(
+                before,point.has_value(),after);
+            const bool foreground=
+                status==slinkywinky::GameWindowFocus::ValidForeground;
             if(!retained_preview->observe_hover(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height),
                 point?point->client_x:0,point?point->client_y:0,
-                point.has_value()))return JNI_FALSE;
-            // R183: separate exact HWND/OS tri-state from the nullable
-            // pointer admission above. A refused identity or race must NOT
-            // be counted as a proven background/focus-loss transition.
-            const auto status=slinkywinky::audit_game_render_window(
-                gl,hdc,static_cast<unsigned>(width),
-                static_cast<unsigned>(height));
+                foreground))return JNI_FALSE;
+            // R183/R188: preserve separate HWND/OS tri-state evidence.
+            // An invalid identity or audit race is not true background.
             if(!retained_preview->observe_original_window_focus(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height),
                 static_cast<slinkywinky::OriginalWindowFocusState>(
-                    static_cast<int>(status)),point.has_value()))
+                    static_cast<int>(status)),foreground))
                 return JNI_FALSE;
         }
         return drawValidatedMenuOverlay(context,dc,width,height,

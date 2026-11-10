@@ -984,6 +984,30 @@ int main() {
         REQUIRE(!point_inside_original_client(675,630,676,630));
         REQUIRE(!point_inside_original_client(-1,0,676,630));
         REQUIRE(!point_inside_original_client(0,-1,676,630));
+        // R188: all 18 orderings of two exact HWND/OS audits and the
+        // nullable physical cursor sample. Only stable matched states
+        // survive; foreground loss/recovery between reads is REFUSED.
+        constexpr std::array<GameWindowFocus,3> focusStatuses{{
+            GameWindowFocus::Refused,
+            GameWindowFocus::ValidBackground,
+            GameWindowFocus::ValidForeground}};
+        for(const auto firstStatus:focusStatuses)
+            for(const auto lastStatus:focusStatuses)
+                for(const bool cursorAdmitted:{false,true}) {
+                    const auto observed=reconcile_original_pointer_focus(
+                        firstStatus,cursorAdmitted,lastStatus);
+                    const bool foregroundPass=
+                        firstStatus==GameWindowFocus::ValidForeground &&
+                        lastStatus==GameWindowFocus::ValidForeground &&
+                        cursorAdmitted;
+                    const bool backgroundPass=
+                        firstStatus==GameWindowFocus::ValidBackground &&
+                        lastStatus==GameWindowFocus::ValidBackground &&
+                        !cursorAdmitted;
+                    REQUIRE(observed==(foregroundPass?
+                        GameWindowFocus::ValidForeground:(backgroundPass?
+                        GameWindowFocus::ValidBackground:GameWindowFocus::Refused)));
+                }
         REQUIRE(!audit_original_render_pointer(context.gl,context.dc,676,630));
         // R101: spoofing a title alone must not grant input admission.
         // The HDC must be the actual current WGL renderer window, owned by
@@ -1006,13 +1030,27 @@ int main() {
                 localWindow==GameWindowFocus::ValidForeground);
         const auto physical=audit_original_render_pointer(
             context.gl,context.dc,676,630);
-        if(localWindow==GameWindowFocus::ValidForeground) {
-            REQUIRE(physical.has_value());
+        // R188: actual read-only audit brackets on the disposable WGL
+        // context. The foreground can change externally at any instant,
+        // so REFUSED remains a valid result and no focus is changed here.
+        const auto afterWindow=audit_game_render_window(
+            context.gl,context.dc,676,630);
+        const auto paired=reconcile_original_pointer_focus(
+            localWindow,physical.has_value(),afterWindow);
+        if(paired==GameWindowFocus::ValidForeground)
+            REQUIRE(localWindow==GameWindowFocus::ValidForeground &&
+                    afterWindow==GameWindowFocus::ValidForeground && physical);
+        if(paired==GameWindowFocus::ValidBackground)
+            REQUIRE(localWindow==GameWindowFocus::ValidBackground &&
+                    afterWindow==GameWindowFocus::ValidBackground && !physical);
+        if(physical) {
+            // An admitted physical sample was foreground at its own audit
+            // but may race with the independent before/after observations.
             REQUIRE(physical->button_down_mask<=31u);
             REQUIRE(physical->inside_client==
                 point_inside_original_client(
                     physical->client_x,physical->client_y,676,630));
-        } else REQUIRE(!physical.has_value());
+        }
 #ifdef SW_R91_TEST_JNI_OVERLAY
         // Invalid JNI environment cannot expose cursor data.
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeObservePhysicalPointer(
@@ -1422,6 +1460,7 @@ int main() {
         std::cout<<"R104_REAL_WGL_WINDOW_FOCUS_FENCE_NEVER_CAPTURES_GAME_INPUT_PASS\\n";
         std::cout<<"R101_READ_ONLY_WGL_BOUND_GAME_WINDOW_IDENTITY_NEGATIVE_CONTROLS_PASS\\n";
         std::cout<<"R172_ORIGINAL_WINDOW_PASSIVE_POINTER_ONLY_PASS"<<std::endl;
+        std::cout<<"R188_BRACKETED_FOCUS_CURSOR_READS_FAIL_CLOSED_PASS"<<std::endl;
         std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";
         std::cout<<"R70_WGL_CONTEXT_LOSS_FAIL_CLOSED_PASS\n";
         std::cout<<"R67_ISOLATED_WGL_CONTEXT_PASS\n";

@@ -28,6 +28,23 @@ inline bool point_inside_original_client(int x,int y,
         static_cast<unsigned>(y)<height;
 }
 
+// R188: a single foreground poll is not an atomic cursor/focus sample.
+// Before/after HWND audits MUST agree, and a foreground read must have an
+// actual accepted pointer receipt. A race, missing pointer or invalid WGL
+// audit is REFUSED, never a fabricated background/foreground transition.
+// This reconcile function is pure; it cannot change OS focus or input.
+inline GameWindowFocus reconcile_original_pointer_focus(
+        GameWindowFocus before,bool pointer_admitted,
+        GameWindowFocus after) noexcept {
+    if(before==GameWindowFocus::ValidForeground &&
+       after==GameWindowFocus::ValidForeground && pointer_admitted)
+        return GameWindowFocus::ValidForeground;
+    if(before==GameWindowFocus::ValidBackground &&
+       after==GameWindowFocus::ValidBackground && !pointer_admitted)
+        return GameWindowFocus::ValidBackground;
+    return GameWindowFocus::Refused;
+}
+
 // This function ONLY reads OS state. It neither calls Peek/GetMessage nor
 // changes the cursor, capture, focus, WGL state, or any vanilla LWJGL state.
 // The caller's original-Mojang class pin must still be checked by its agent.
