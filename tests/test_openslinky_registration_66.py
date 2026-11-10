@@ -86,7 +86,7 @@ class CorrectedRegistrationTests(unittest.TestCase):
             (root / audit.MANAGER_REL).write_bytes(raw)
             (root / audit.RDATA_REL).write_text(synthetic_table(), encoding="utf-8")
             sha = hashlib.sha256(raw).hexdigest()
-            rdata_sha = hashlib.sha256(synthetic_table().encode()).hexdigest()
+            rdata_sha = hashlib.sha256((root / audit.RDATA_REL).read_bytes()).hexdigest()
             git_result = types.SimpleNamespace(stdout=audit.UPSTREAM_SHA + "\n")
             with patch.object(audit, "MANAGER_SHA256", sha), patch.object(
                 audit, "RDATA_SHA256", rdata_sha
