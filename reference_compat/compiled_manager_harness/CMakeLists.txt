@@ -6,6 +6,17 @@ project(slinkywinky_compiled_manager_acceptance LANGUAGES CXX)
 if(NOT WIN32 OR NOT MSVC)
   message(FATAL_ERROR "R195 compiled-manager harness requires the Windows x64 MSVC ABI")
 endif()
+# Public CI must compile this first-party harness WITHOUT requiring an
+# unlicensed external COFF object. It does not link or run anything.
+option(SLINKY_MANAGER_SOURCE_ONLY "Compile first-party harness source only" OFF)
+if(SLINKY_MANAGER_SOURCE_ONLY)
+  add_library(slinkywinky_r195_harness_source OBJECT manager_acceptance.cpp)
+  set_property(TARGET slinkywinky_r195_harness_source PROPERTY
+    MSVC_RUNTIME_LIBRARY "MultiThreaded")
+  target_compile_features(slinkywinky_r195_harness_source PRIVATE cxx_std_17)
+  target_compile_options(slinkywinky_r195_harness_source PRIVATE /W4 /WX /EHsc)
+  return()
+endif()
 if(NOT DEFINED SLINKY_MANAGER_OBJECT OR NOT EXISTS "${SLINKY_MANAGER_OBJECT}")
   message(FATAL_ERROR "Set -DSLINKY_MANAGER_OBJECT=<absolute path to compiled module_manager.cpp.obj>")
 endif()
