@@ -2,10 +2,12 @@
 import importlib.util
 from pathlib import Path
 import struct
+import sys
 import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "tools" / "verify_compiled_registration_66.py"
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location("compiled_registration", SCRIPT)
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
