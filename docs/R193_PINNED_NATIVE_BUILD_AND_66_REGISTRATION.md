@@ -22,6 +22,7 @@ Date: November 10, 2026. Scope: offline compilation and static inspection only.
 ## Source-guarded registration correction
 
 - The independent script at tools/prepare_openslinky_registration_66.py verifies the upstream SHA, expected module_manager.cpp SHA-256 (d65288ae2c890db7dd09b9783ac5cad7090bd5c32908c07dc3d50061f837de96), 67-entry descriptor table and the extra chest_stealer_module_descriptor at index 17.
+- It additionally verifies the entire pinned src/data/rdata.s byte fingerprint, SHA-256 b17dd02a9f6894d3dd366d559dcc5f3e2db71600571c8108473a1fe57618e3e6; mismatching source is refused before the adjusted file is written.
 - It writes only an adjusted manager source file *outside* the upstream tree, with no upstream code checked in.
 - A private 66-entry manager copy now concatenates the first 17 original pointers and the remaining 49 after skipping index 17 (136 + 392 = 528 bytes), and changes loop, allocation and queue-capacity bounds to 66. The original upstream static data array remains unchanged.
 - The resulting manager source SHA-256: 771faf3bbd2c027a56110f6b9ac4941cc0dcf1a026bd8069bf4451f3bd5fbf3a.
