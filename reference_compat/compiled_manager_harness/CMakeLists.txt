@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.20)
+project(slinkywinky_compiled_manager_acceptance LANGUAGES CXX)
+
+# This first-party harness links only the separately built public OpenSlinky
+# module_manager.cpp COFF object. It never links or loads the full DLL.
+if(NOT WIN32 OR NOT MSVC)
+  message(FATAL_ERROR "R195 compiled-manager harness requires the Windows x64 MSVC ABI")
+endif()
+if(NOT DEFINED SLINKY_MANAGER_OBJECT OR NOT EXISTS "${SLINKY_MANAGER_OBJECT}")
+  message(FATAL_ERROR "Set -DSLINKY_MANAGER_OBJECT=<absolute path to compiled module_manager.cpp.obj>")
+endif()
+
+add_executable(slinkywinky_r195_manager_acceptance
+  manager_acceptance.cpp
+  "${SLINKY_MANAGER_OBJECT}"
+)
+set_source_files_properties("${SLINKY_MANAGER_OBJECT}" PROPERTIES
+  EXTERNAL_OBJECT TRUE GENERATED TRUE
+)
+target_compile_features(slinkywinky_r195_manager_acceptance PRIVATE cxx_std_17)
+target_compile_options(slinkywinky_r195_manager_acceptance PRIVATE /W4 /WX /EHsc)
+target_link_options(slinkywinky_r195_manager_acceptance PRIVATE /INCREMENTAL:NO)
+enable_testing()
+add_test(NAME r195_actual_compiled_manager_synthetic_runtime
+  COMMAND slinkywinky_r195_manager_acceptance)
+set_tests_properties(r195_actual_compiled_manager_synthetic_runtime PROPERTIES TIMEOUT 10)
