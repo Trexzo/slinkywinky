@@ -221,7 +221,7 @@ void prepare_linked_fixture(const char *path) {
             require(bool(file >> token), "truncated native event slot");
             int event = -1, priority = 0;
             char extra = 0;
-            require(std::sscanf(token.c_str(), "%d:%d%c", &event, &priority, &extra) == 2,
+            require(sscanf_s(token.c_str(), "%d:%d%c", &event, &priority, &extra, 1) == 2,
                     "malformed native event priority token");
             require(event >= 0 && event < 27 && mod.h[event].f == nullptr,
                     "duplicate or invalid native event subscription");
