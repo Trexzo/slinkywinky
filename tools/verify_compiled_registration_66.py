@@ -88,6 +88,8 @@ def audit_linked_pointer_table(dll_path, map_path, source_entries):
     symbols = parse_map_symbols(Path(map_path).read_text(encoding="utf-8"), source_entries)
     if len(source_entries) != SOURCE_COUNT:
         raise ValueError("not a 67-entry pinned source table")
+    if source_entries[EXTRA_INDEX] != "chest_stealer_module_descriptor":
+        raise ValueError("Chest Stealer original discrepancy shifted")
     table_address = symbols[TABLE_SYMBOL]
     # Read PE header before mapping the requested image-relative table offset.
     nt = struct.unpack_from("<I", dll, 0x3C)[0] if len(dll) >= 0x40 else 0
@@ -110,8 +112,6 @@ def audit_linked_pointer_table(dll_path, map_path, source_entries):
     for index, (actual, wanted) in enumerate(zip(linked, expected)):
         if actual != wanted:
             raise ValueError("linked descriptor pointer mismatch at index " + str(index))
-    if source_entries[EXTRA_INDEX] != "chest_stealer_module_descriptor":
-        raise ValueError("Chest Stealer original discrepancy shifted")
     return {
         "dll_sha256": sha256(dll),
         "size_bytes": len(dll),
