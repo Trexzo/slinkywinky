@@ -32,13 +32,19 @@ def sha256(payload):
     return hashlib.sha256(payload).hexdigest()
 
 
-def parse_map_symbols(source):
+def parse_map_symbols(source, required_names):
     symbols = {}
+    required = set(required_names) | {TABLE_SYMBOL}
     for match in MAP_SYMBOL.finditer(source):
         name, address = match.groups()
         value = int(address, 16)
+        # Link maps can legitimately list identically named non-descriptor
+        # helper symbols from different COMDATs. Descriptor/table ambiguity
+        # is never tolerated.
         if name in symbols and symbols[name] != value:
-            raise ValueError("linker map has conflicting values for " + name)
+            if name in required:
+                raise ValueError("linker map has conflicting values for " + name)
+            continue
         symbols[name] = value
     if TABLE_SYMBOL not in symbols:
         raise ValueError("linker map lacks static candidate table")
@@ -79,7 +85,7 @@ def map_rva_to_offset(blob, rva, length):
 
 def audit_linked_pointer_table(dll_path, map_path, source_entries):
     dll = Path(dll_path).read_bytes()
-    symbols = parse_map_symbols(Path(map_path).read_text(encoding="utf-8"))
+    symbols = parse_map_symbols(Path(map_path).read_text(encoding="utf-8"), source_entries)
     if len(source_entries) != SOURCE_COUNT:
         raise ValueError("not a 67-entry pinned source table")
     table_address = symbols[TABLE_SYMBOL]
