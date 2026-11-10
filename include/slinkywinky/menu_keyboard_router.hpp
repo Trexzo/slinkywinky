@@ -41,6 +41,11 @@ public:
     bool fixture_routes(const MenuNavigation& target) const noexcept {
         return same_owner() && &navigation_==&target;
     }
+    // R193: a read-only fixture cleanup gate; a fully drained router
+    // is Idle and requires no further synthetic router restoration.
+    bool fixture_idle() const noexcept {
+        return same_owner() && state_==State::Idle;
+    }
     bool active() const noexcept;
     bool revoked() const noexcept;
     std::uint64_t epoch() const noexcept;

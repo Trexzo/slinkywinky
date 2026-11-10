@@ -1021,6 +1021,155 @@ void verify_r192_joint_handoff(Context& context,const State& expected) {
     std::cout<<"R192_ORPHAN_MOUSE_UP_AND_HELD_KEY_CANCEL_PASS\n";
 }
 
+// R193: synthetic input release stays quarantined even after native GUI
+// close()/WGL release. The fixture never forwards an event to vanilla.
+void verify_r193_closed_gui_drain(Context& context,const State& expected) {
+    using Device=InputHandoffDevice;
+    {
+        WglRetainedMenuPreview menu;
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(menu.fixture_navigation());
+        REQUIRE(menu.draw(context.gl,context.dc,676,630));
+        REQUIRE(ledger.request(1930,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(1930,true,true,true));
+        REQUIRE(menu.fixture_begin_keyboard(1930,ledger,router));
+        REQUIRE(menu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1930,
+            ledger,router,17,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+        REQUIRE(ledger.tracked_down(Device::Keyboard,17));
+        REQUIRE(menu.fixture_end_keyboard(ledger,router));
+        REQUIRE(ledger.phase()==InputHandoffPhase::Draining);
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,true,true)); // even an attested claim
+        REQUIRE(menu.close());
+        // R193: release and restoration MUST work after WGL is genuinely
+        // detached, not just after the GUI model marks itself closed.
+        REQUIRE(wglMakeCurrent(nullptr,nullptr));
+        REQUIRE(wglGetCurrentContext()==nullptr);
+        bool foreignRelease=false;
+        std::thread foreign([&] {
+            foreignRelease=menu.fixture_drain_release(
+                ledger,router,Device::Keyboard,17);
+        });
+        foreign.join();
+        REQUIRE(!foreignRelease);
+        REQUIRE(ledger.tracked_down(Device::Keyboard,17));
+        REQUIRE(!menu.fixture_drain_release(
+            ledger,router,Device::Keyboard,18)); // never held
+        REQUIRE(menu.fixture_drain_release(
+            ledger,router,Device::Keyboard,17));
+        REQUIRE(!menu.fixture_drain_release(
+            ledger,router,Device::Keyboard,17)); // duplicate Up
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(router.fixture_idle());
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,true,false));
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,false,true));
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,false,true,true));
+        REQUIRE(menu.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(ledger.phase()==InputHandoffPhase::Idle);
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(!ledger.may_deliver_live_minecraft_event());
+        REQUIRE(wglMakeCurrent(context.dc,context.gl));
+        REQUIRE(wglGetCurrentContext()==context.gl);
+    }
+    {
+        // A genuine painted native toggle is pressed but NOT released
+        // before modal closure: its late Up can never commit the toggle.
+        MenuState mirror;
+        MenuProfileBridge profile(mirror);
+        MenuRenderSession frames;
+        REQUIRE(frames.attach(1931,676,630));
+        const auto frame=frames.next(mirror,&profile);
+        REQUIRE(frame);
+        const auto panel=menu_panel_geometry(
+            676,630,false,MenuPanelMode::CompactOverlay);
+        REQUIRE(panel);
+        const auto card=menu_module_card_rect(
+            *frame,panel->logical_width(),0);
+        const int x=static_cast<int>(panel->left)+
+            static_cast<int>(std::lround(
+                (card.x+card.width-30.0f)*panel->scale));
+        const int y=static_cast<int>(panel->top)+
+            static_cast<int>(std::lround(
+                (card.y+17.0f)*panel->scale));
+        REQUIRE(hit_test_menu(
+            *frame,MenuPanelMode::CompactOverlay,x,y));
+        REQUIRE(frames.detach());
+        WglRetainedMenuPreview menu;
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(menu.fixture_navigation());
+        REQUIRE(menu.draw(context.gl,context.dc,676,630));
+        REQUIRE(ledger.request(1931,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(1931,true,true,true));
+        REQUIRE(menu.fixture_begin_keyboard(1931,ledger,router));
+        REQUIRE(menu.fixture_pointer_event(
+            RetainedPointerPhase::Down,context.gl,context.dc,676,630,
+            1931,ledger,router,x,y,10000,true));
+        REQUIRE(ledger.tracked_down(Device::Mouse,0));
+        REQUIRE(!menu.preview_enabled(0));
+        REQUIRE(menu.fixture_end_keyboard(ledger,router));
+        REQUIRE(!menu.preview_enabled(0)); // close canceled preview press
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(menu.close());
+        REQUIRE(menu.fixture_drain_release(
+            ledger,router,Device::Mouse,0));
+        REQUIRE(!menu.fixture_drain_release(
+            ledger,router,Device::Mouse,0)); // duplicate late Up
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(!menu.fixture_pointer_event(
+            RetainedPointerPhase::Up,context.gl,context.dc,676,630,
+            1931,ledger,router,x,y,10100,true));
+        REQUIRE(menu.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(ledger.phase()==InputHandoffPhase::Idle);
+        REQUIRE(!ledger.may_suppress_vanilla_event());
+    }
+    {
+        // After mid-key focus loss, the synthetic router and ledger may
+        // be in Revoked with unpaired held edges. Only explicit external
+        // release and original dispatcher restoration assertions recover.
+        WglRetainedMenuPreview menu;
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(menu.fixture_navigation());
+        REQUIRE(menu.draw(context.gl,context.dc,676,630));
+        REQUIRE(ledger.request(1932,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(1932,true,true,true));
+        REQUIRE(menu.fixture_begin_keyboard(1932,ledger,router));
+        REQUIRE(menu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1932,
+            ledger,router,17,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+        REQUIRE(menu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1932,
+            ledger,router,17,false,false).delivery==
+            MenuKeyDelivery::Quarantined);
+        REQUIRE(ledger.phase()==InputHandoffPhase::Revoked);
+        REQUIRE(router.revoked());
+        REQUIRE(!menu.fixture_drain_release(
+            ledger,router,Device::Keyboard,17));
+        REQUIRE(menu.close());
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,false,true));
+        REQUIRE(!menu.fixture_finish_restore(
+            ledger,router,true,true,false));
+        REQUIRE(menu.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(ledger.phase()==InputHandoffPhase::Idle);
+        REQUIRE(router.fixture_idle());
+    }
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R193_CLOSED_WGL_LATE_RELEASE_QUARANTINED_PASS\n";
+    std::cout<<"R193_PENDING_MOUSE_CLICK_DROPPED_AND_RESTORE_ATTESTED_PASS\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -1031,6 +1180,7 @@ int main() {
         const State before=snapshot();
         verify_r159_pointer_admission(context,before);
         verify_r192_joint_handoff(context,before);
+        verify_r193_closed_gui_drain(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
         return 0;

@@ -55,6 +55,16 @@ public:
         bool foreground_verified);
     bool fixture_end_keyboard(MenuInputHandoffLedger& ledger,
                               MenuKeyboardRouter& router);
+    // R193: finish a *synthetic* held-key/mouse release after close.
+    // No live game or GL context is required; release is quarantined.
+    bool fixture_drain_release(MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,InputHandoffDevice device,
+        unsigned code) noexcept;
+    // External test attestation of both original dispatch restoration and
+    // physical release is mandatory. This never restores real handlers.
+    bool fixture_finish_restore(MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,bool menu_closed,
+        bool all_controls_released,bool original_dispatch_restored) noexcept;
     // R192: test-only *paired* left-button gesture. Must use the same R190
     // ledger and R191 router as native keyboard navigation. No runtime
     // Minecraft input callsite, event injection or vanilla suppression.

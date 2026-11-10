@@ -59,6 +59,10 @@ void full_fixture_cycle() {
     CHECK(!h.close(false));
     CHECK(h.close(true));
     CHECK(h.phase()==InputHandoffPhase::Draining);
+    // R193: even a host-provided 'released' assertion must not skip an
+    // actually tracked held edge while draining, unlike revocation where
+    // independent host recovery can override missing synthetic releases.
+    CHECK(!h.restore(true,true,true));
     CHECK(!h.restore(true,false,true));
     CHECK(!h.restore(true,true,false));
     CHECK(!h.restore(false,true,true));

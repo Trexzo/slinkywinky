@@ -110,7 +110,9 @@ public:
            (phase_!=InputHandoffPhase::Draining &&
             phase_!=InputHandoffPhase::Revoked) ||
            !menu_closed || !all_controls_released ||
-           !original_dispatch_restored)return false;
+           !original_dispatch_restored ||
+           (phase_==InputHandoffPhase::Draining &&
+            !tracked_released()))return false;
         key_down_.fill(false);
         mouse_mask_=0;
         phase_=InputHandoffPhase::Idle;

@@ -217,6 +217,60 @@ bool WglRetainedMenuPreview::fixture_end_keyboard(
     invalidate_painted_input();
     return ledger.close(true);
 }
+bool WglRetainedMenuPreview::fixture_drain_release(
+        MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router,
+        InputHandoffDevice device,unsigned code) noexcept {
+    // R193: a late synthetic release after closing the WGL menu is
+    // quarantined. Do not require a current GL context, window focus or
+    // even active_ here: the disposable preview may already be closed.
+    if(!owner_thread() || !router.fixture_routes(navigation_) ||
+       ledger.phase()!=InputHandoffPhase::Draining ||
+       ledger.epoch()==0 || router.epoch()!=ledger.epoch() ||
+       !ledger.tracked_down(device,code))
+        return false;
+    const auto result=ledger.simulate(
+        {device,code,false},false,false,false,false);
+    if(result!=InputHandoffRoute::Quarantined ||
+       ledger.phase()!=InputHandoffPhase::Draining)
+        return false;
+    if(device==InputHandoffDevice::Keyboard) {
+        const auto routed=router.event(
+            code,false,false,false,false);
+        return routed.delivery==MenuKeyDelivery::Quarantined &&
+               !routed.action_applied && !routed.request_close;
+    }
+    // The preview's synthetic mouse gesture was canceled on close.
+    // Never call pointer(), hit-test, or update the native profile here.
+    pointer_gesture_.cancel();
+    return true;
+}
+
+bool WglRetainedMenuPreview::fixture_finish_restore(
+        MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router,
+        bool menu_closed,bool all_controls_released,
+        bool original_dispatch_restored) noexcept {
+    if(!owner_thread() || !router.fixture_routes(navigation_) ||
+       ledger.epoch()==0 || router.epoch()!=ledger.epoch() ||
+       (ledger.phase()!=InputHandoffPhase::Draining &&
+        ledger.phase()!=InputHandoffPhase::Revoked) ||
+       !menu_closed || !all_controls_released ||
+       !original_dispatch_restored ||
+       (ledger.phase()==InputHandoffPhase::Draining &&
+        !ledger.tracked_released()))
+        return false;
+    // A revoke can leave the separate synthetic keyboard model active.
+    // Explicitly revoke it before letting the separately attested host
+    // restoration reset both models; no original handler is called.
+    if(router.active())
+        router.event(0,false,false,false,true);
+    if(!router.fixture_idle() &&
+       !router.release_after_abort(
+           menu_closed,all_controls_released,original_dispatch_restored))
+        return false;
+    return ledger.restore(
+        menu_closed,all_controls_released,original_dispatch_restored);
+}
+
 bool WglRetainedMenuPreview::fixture_pointer_event(
         RetainedPointerPhase phase,HGLRC context,HDC dc,
         unsigned width,unsigned height,std::uint64_t epoch,
