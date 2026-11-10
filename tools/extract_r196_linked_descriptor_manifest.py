@@ -10,8 +10,9 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+import subprocess
 
-from prepare_openslinky_registration_66 import RDATA_REL, RDATA_SHA256, descriptor_entries
+from prepare_openslinky_registration_66 import RDATA_REL, RDATA_SHA256, UPSTREAM_SHA, descriptor_entries
 from verify_compiled_registration_66 import (
     TABLE_SYMBOL, audit_linked_pointer_table, map_rva_to_offset,
     parse_map_symbols,
@@ -52,7 +53,13 @@ def extract_descriptor_metadata(dll_bytes, address, image_base):
 
 
 def inspect(upstream_root, dll_path, map_path):
-    upstream_root = Path(upstream_root)
+    upstream_root = Path(upstream_root).resolve(strict=True)
+    git = subprocess.run(
+        ["git", "-C", str(upstream_root), "rev-parse", "HEAD"],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    if git.returncode != 0 or git.stdout.strip().lower() != UPSTREAM_SHA:
+        raise ValueError("linked descriptor source is not the pinned upstream revision")
     source_bytes = (upstream_root / RDATA_REL).read_bytes()
     if hashlib.sha256(source_bytes).hexdigest() != RDATA_SHA256:
         raise ValueError("upstream rdata source hash mismatch")
