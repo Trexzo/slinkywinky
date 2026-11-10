@@ -609,6 +609,64 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
             REQUIRE(pointerNumeric.source_hover_target(
                 context.gl,context.dc,676,630).has_value());
             REQUIRE(pointerNumeric.close());
+            // R189: held Win32 mouse buttons can still coexist with an
+            // independently confirmed foreground window, but may NOT
+            // certify a source slider hover. This fixture uses explicit
+            // synthetic released/held flags; it never presses an OS button.
+            {
+                WglRetainedMenuPreview quietHover;
+                REQUIRE(quietHover.draw(context.gl,context.dc,676,630));
+                REQUIRE(quietHover.apply(MenuNavAction::NextRow));
+                REQUIRE(quietHover.apply(MenuNavAction::ExpandFocused));
+                REQUIRE(quietHover.draw(context.gl,context.dc,676,630));
+                const auto target=quietHover.source_hover_target(
+                    context.gl,context.dc,676,630);
+                REQUIRE(target);
+                for(unsigned mask=1u;mask<32u;++mask) {
+                    REQUIRE(quietHover.observe_hover(
+                        context.gl,context.dc,676,630,
+                        target->center_x,target->center_y,true,false));
+                    REQUIRE(quietHover.observe_original_window_focus(
+                        context.gl,context.dc,676,630,
+                        OriginalWindowFocusState::Foreground,true));
+                    REQUIRE(!quietHover.observed_numeric_hover());
+                    const auto evidence=quietHover.source_hover_evidence(
+                        context.gl,context.dc,676,630);
+                    REQUIRE(evidence && (*evidence)[2]==0u);
+                }
+                const auto held=quietHover.hover_evidence(
+                    context.gl,context.dc,676,630);
+                // [draws, samples, foreground, numeric, bind]: held
+                // buttons preserve 31 valid foreground samples, but zero
+                // numeric hits (and zero exact source hits as checked).
+                REQUIRE(held && (*held)[1]==31u && (*held)[2]==31u &&
+                        (*held)[3]==0u && (*held)[4]==0u);
+                REQUIRE(quietHover.observe_hover(
+                    context.gl,context.dc,676,630,
+                    target->center_x,target->center_y,true,true));
+                REQUIRE(quietHover.observe_original_window_focus(
+                    context.gl,context.dc,676,630,
+                    OriginalWindowFocusState::Foreground,true));
+                REQUIRE(quietHover.observed_numeric_hover());
+                const auto accepted=quietHover.source_hover_evidence(
+                    context.gl,context.dc,676,630);
+                REQUIRE(accepted && (*accepted)[2]==1u);
+                REQUIRE(quietHover.observe_hover(
+                    context.gl,context.dc,676,630,
+                    target->center_x,target->center_y,true,false));
+                REQUIRE(quietHover.observe_original_window_focus(
+                    context.gl,context.dc,676,630,
+                    OriginalWindowFocusState::Foreground,true));
+                REQUIRE(!quietHover.observed_numeric_hover());
+                const auto afterHold=quietHover.source_hover_evidence(
+                    context.gl,context.dc,676,630);
+                REQUIRE(afterHold && (*afterHold)[2]==1u);
+                const auto os=quietHover.original_window_focus_evidence(
+                    context.gl,context.dc,676,630);
+                REQUIRE(os && (*os)[0]==33u && (*os)[1]==0u &&
+                        (*os)[2]==0u);
+                REQUIRE(quietHover.close());
+            }
             // R187: even a separate OS-focus sample MUST NOT pair with a
             // passive hover from before a WGL binding or viewport loss.
             // These are synthetic native fixture states, not real OS input.
@@ -651,6 +709,7 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
         std::cout<<"R185_WGL_OWNER_RENDER_REFUSAL_INVALIDATES_PAINT_AND_PRESS_PASS\\n";
         std::cout<<"R186_POST_PAINT_VIEWPORT_DRIFT_FAIL_CLOSED_PASS\\n";
         std::cout<<"R187_WGL_BINDING_LOSS_REQUIRES_REPAINT_AND_BREAKS_OS_PAIR_PASS\\n";
+        std::cout<<"R189_HELD_BUTTON_NEVER_CERTIFIES_SOURCE_HOVER_PASS\\n";
 
 }
 

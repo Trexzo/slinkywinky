@@ -1008,6 +1008,15 @@ int main() {
                         GameWindowFocus::ValidForeground:(backgroundPass?
                         GameWindowFocus::ValidBackground:GameWindowFocus::Refused)));
                 }
+        // R189: all 31 nonzero combinations of five sampled Win32
+        // mouse buttons (including chords) are ineligible for passive
+        // source-slider hover; focus observation is a separate concept.
+        OriginalPointerObservation buttonSample{};
+        for(std::uint32_t mask=0;mask<32u;++mask) {
+            buttonSample.button_down_mask=mask;
+            REQUIRE(original_pointer_released_for_hover(buttonSample)==
+                    (mask==0u));
+        }
         REQUIRE(!audit_original_render_pointer(context.gl,context.dc,676,630));
         // R101: spoofing a title alone must not grant input admission.
         // The HDC must be the actual current WGL renderer window, owned by
@@ -1461,6 +1470,7 @@ int main() {
         std::cout<<"R101_READ_ONLY_WGL_BOUND_GAME_WINDOW_IDENTITY_NEGATIVE_CONTROLS_PASS\\n";
         std::cout<<"R172_ORIGINAL_WINDOW_PASSIVE_POINTER_ONLY_PASS"<<std::endl;
         std::cout<<"R188_BRACKETED_FOCUS_CURSOR_READS_FAIL_CLOSED_PASS"<<std::endl;
+        std::cout<<"R189_ALL_WIN32_MOUSE_BUTTON_MASKS_PASS"<<std::endl;
         std::cout<<"R70_WGL_OWNER_CONTEXT_SWITCH_AND_REATTACH_PASS\n";
         std::cout<<"R70_WGL_CONTEXT_LOSS_FAIL_CLOSED_PASS\n";
         std::cout<<"R67_ISOLATED_WGL_CONTEXT_PASS\n";

@@ -47,8 +47,13 @@ public:
                  bool foreground_verified);
     // R175: actual original-foreground window passive physical cursor to
     // source-validated *visual* hover. NEVER presses, releases or gameplay.
+    // R189: production source hover requires all physical mouse buttons
+    // sampled RELEASED. Foreground focus remains separately observable.
+    // Default preserves disposable synthetic test fixture calls only;
+    // original Minecraft always passes the sampled button-state result.
     bool observe_hover(HGLRC context,HDC dc,unsigned width,unsigned height,
-                       int x,int y,bool foreground_verified);
+                       int x,int y,bool foreground_verified,
+                       bool buttons_released=true);
     std::optional<MenuNumericHover> observed_numeric_hover() const noexcept;
     std::optional<std::size_t> observed_bind_hover() const noexcept;
     // R176: counters ONLY. Exact WGL/owner/viewport receipt is the sole

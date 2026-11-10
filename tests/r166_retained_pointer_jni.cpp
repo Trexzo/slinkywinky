@@ -510,7 +510,7 @@ Java_dev_slinkywinky_attach_R175RetainedHoverJniSmoke_observeHover(
         return session->ui->observe_hover(
             session->gl,session->dc,
             static_cast<unsigned>(width),static_cast<unsigned>(height),
-            x,y,foreground==JNI_TRUE)?JNI_TRUE:JNI_FALSE;
+            x,y,foreground==JNI_TRUE,true)?JNI_TRUE:JNI_FALSE; // disposable fixture: synthetic release
     }catch(...) {return JNI_FALSE;}
 }
 extern "C" JNIEXPORT jintArray JNICALL

@@ -773,7 +773,9 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                 gl,hdc,static_cast<unsigned>(width),
                 static_cast<unsigned>(height),
                 point?point->client_x:0,point?point->client_y:0,
-                foreground))return JNI_FALSE;
+                foreground,point &&
+                slinkywinky::original_pointer_released_for_hover(*point)))
+                return JNI_FALSE;
             // R183/R188: preserve separate HWND/OS tri-state evidence.
             // An invalid identity or audit race is not true background.
             if(!retained_preview->observe_original_window_focus(

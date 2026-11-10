@@ -28,6 +28,14 @@ inline bool point_inside_original_client(int x,int y,
         static_cast<unsigned>(y)<height;
 }
 
+// R189: GetKeyState reports last-dequeued Win32 button status, NOT a
+// reliable original LWJGL event queue. A sampled pressed button must not
+// certify a passive source slider hit. No synthetic click is authorized.
+inline bool original_pointer_released_for_hover(
+        const OriginalPointerObservation& pointer) noexcept {
+    return pointer.button_down_mask==0u;
+}
+
 // R188: a single foreground poll is not an atomic cursor/focus sample.
 // Before/after HWND audits MUST agree, and a foreground read must have an
 // actual accepted pointer receipt. A race, missing pointer or invalid WGL

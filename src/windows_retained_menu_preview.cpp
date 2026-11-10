@@ -245,7 +245,7 @@ bool WglRetainedMenuPreview::pointer(
 }
 bool WglRetainedMenuPreview::observe_hover(
         HGLRC context,HDC dc,unsigned width,unsigned height,
-        int x,int y,bool foreground_verified) {
+        int x,int y,bool foreground_verified,bool buttons_released) {
     // A read-only visual hint, not input ownership. A pending synthetic
     // gesture cannot have its immutable input frame altered by hover.
     if(!owner_thread() || !active_ || !drawn_frames_)return false;
@@ -283,7 +283,10 @@ bool WglRetainedMenuPreview::observe_hover(
     std::optional<MenuNumericHover> numeric;
     std::optional<std::size_t> bind;
     bool exactSourceHit=false;
-    if(foreground_verified && x>=0 && y>=0 &&
+    // R189: a pressed mouse button is possible vanilla GUI/game input.
+    // Record actual foreground separately, but do not count a numeric,
+    // bind or exact-source hover hit until every sampled button is up.
+    if(foreground_verified && buttons_released && x>=0 && y>=0 &&
        static_cast<unsigned>(x)<width &&
        static_cast<unsigned>(y)<height) {
         const auto& frame=*last_drawn_frame_;
