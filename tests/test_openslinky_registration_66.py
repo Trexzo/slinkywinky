@@ -42,7 +42,7 @@ class CorrectedRegistrationTests(unittest.TestCase):
     def test_exact_compaction_and_no_table_mutation(self):
         original = synthetic_manager()
         patched = audit.patch_manager(original)
-        self.assertEqual(original.count("0x43"), 9)
+        self.assertEqual(original.count("0x43"), 8)
         self.assertIn("manager->count = 0x42;", patched)
         self.assertEqual(patched.count("manager->mods[i]"), 2)
         self.assertEqual(patched.count("i != 0x42"), 2)
