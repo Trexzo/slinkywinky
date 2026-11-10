@@ -39,3 +39,13 @@ enable_testing()
 add_test(NAME r195_actual_compiled_manager_synthetic_runtime
   COMMAND slinkywinky_r195_manager_acceptance)
 set_tests_properties(r195_actual_compiled_manager_synthetic_runtime PROPERTIES TIMEOUT 10)
+# Optional local-only R196 acceptance. Fixture is produced from a linked,
+# verified DLL by the independent metadata extractor; CI has no third-party DLL.
+if(DEFINED SLINKY_DESCRIPTOR_FIXTURE)
+  if(NOT EXISTS "${SLINKY_DESCRIPTOR_FIXTURE}")
+    message(FATAL_ERROR "R196 linked descriptor fixture path does not exist")
+  endif()
+  add_test(NAME r196_compiled_manager_real_linked_metadata
+    COMMAND slinkywinky_r195_manager_acceptance "${SLINKY_DESCRIPTOR_FIXTURE}")
+  set_tests_properties(r196_compiled_manager_real_linked_metadata PROPERTIES TIMEOUT 10)
+endif()
