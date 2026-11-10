@@ -86,10 +86,11 @@ class CorrectedRegistrationTests(unittest.TestCase):
             (root / audit.MANAGER_REL).write_bytes(raw)
             (root / audit.RDATA_REL).write_text(synthetic_table(), encoding="utf-8")
             sha = hashlib.sha256(raw).hexdigest()
+            rdata_sha = hashlib.sha256(synthetic_table().encode()).hexdigest()
             git_result = types.SimpleNamespace(stdout=audit.UPSTREAM_SHA + "\n")
             with patch.object(audit, "MANAGER_SHA256", sha), patch.object(
-                audit.subprocess, "run", return_value=git_result
-            ):
+                audit, "RDATA_SHA256", rdata_sha
+            ), patch.object(audit.subprocess, "run", return_value=git_result):
                 inside = root / "modified_manager.cpp"
                 with self.assertRaises(ValueError):
                     audit.make_patch(root, inside)
@@ -100,6 +101,13 @@ class CorrectedRegistrationTests(unittest.TestCase):
                 self.assertEqual(result["candidate_registration_count"], 66)
                 self.assertFalse(result["native_compiled"])
                 self.assertEqual((root / audit.MANAGER_REL).read_bytes(), raw)
+                (root / audit.RDATA_REL).write_text(
+                    synthetic_table() + "# synthetic drift\n", encoding="utf-8"
+                )
+                drift_output = base / "drift_manager.cpp"
+                with self.assertRaises(ValueError):
+                    audit.make_patch(root, drift_output)
+                self.assertFalse(drift_output.exists())
                 with self.assertRaises(FileExistsError):
                     audit.make_patch(root, outside)
 
