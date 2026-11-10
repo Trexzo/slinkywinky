@@ -6,7 +6,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 
 using Handler = void (*)(void *);
 struct Module;
@@ -170,8 +173,164 @@ int java_jni_is_instance_of_entity_living_base(void *, void *) { return 0; }
 int java_jni_is_instance_of_score_player_team(void *, void *) { return 0; }
 }
 
-int main() {
+
+namespace {
+unsigned linked_callback_calls[27] = {};
+unsigned linked_expected_per_event[27] = {};
+unsigned linked_expected_per_category[5] = {};
+
+void linked_mock_handler(void *event) {
+    unsigned type = *static_cast<unsigned *>(event);
+    if (type < 27) ++linked_callback_calls[type];
+}
+int linked_slot_priority(const Module *module, unsigned event) {
+    const std::uintptr_t repr = reinterpret_cast<std::uintptr_t>(module->h[event].x);
+    const std::uint32_t bits = static_cast<std::uint32_t>(repr);
+    std::int32_t out = 0;
+    std::memcpy(&out, &bits, sizeof(out));
+    return static_cast<int>(out);
+}
+void prepare_linked_fixture(const char *path) {
+    reset_synthetic_modules();
+    // Discard R195's fabricated callback assignments; use the 66 public-PE
+    // metadata records, while all executable callback pointers remain stubs.
+    for (auto &module : modules) {
+        for (auto &slot : module.h) slot = {};
+        module.enabled = 0;
+    }
+    std::ifstream file(path);
+    require(file.good(), "linked descriptor fixture could not be opened");
+    std::string magic;
+    unsigned count = 0, total = 0;
+    require(bool(file >> magic >> count >> total), "fixture header missing");
+    require(magic == "R196-LINKED-DESCRIPTORS-V1" && count == 66 && total == 171,
+            "fixture header version or totals mismatch");
+    for (unsigned compact = 0; compact < 66; ++compact) {
+        unsigned source = 0, category = 0, initial = 0, n = 0;
+        require(bool(file >> source >> category >> initial >> n),
+                "truncated native descriptor row");
+        const unsigned expected_source = compact < 17 ? compact : compact + 1;
+        require(source == expected_source && category < 5 && initial == 0 && n <= 27,
+                "native descriptor ordering/category/default drift");
+        Module &mod = modules[source];
+        mod.cat = category;
+        mod.enabled = static_cast<unsigned char>(initial);
+        ++linked_expected_per_category[category];
+        for (unsigned j = 0; j < n; ++j) {
+            std::string token;
+            require(bool(file >> token), "truncated native event slot");
+            int event = -1, priority = 0;
+            char extra = 0;
+            require(std::sscanf(token.c_str(), "%d:%d%c", &event, &priority, &extra) == 2,
+                    "malformed native event priority token");
+            require(event >= 0 && event < 27 && mod.h[event].f == nullptr,
+                    "duplicate or invalid native event subscription");
+            mod.h[event].f = &linked_mock_handler;
+            // Constructor comparator reads signed int at module + 0x50 + 16*t.
+            mod.h[event].x = reinterpret_cast<void *>(
+                static_cast<std::uintptr_t>(static_cast<std::uint32_t>(priority))
+            );
+            ++linked_expected_per_event[event];
+        }
+    }
+    std::string unexpected;
+    require(!(file >> unexpected), "native fixture has extra trailing records");
+    unsigned subscription_total = 0;
+    for (unsigned value : linked_expected_per_event) subscription_total += value;
+    require(subscription_total == 171, "native linked fixture subscription count changed");
+}
+int run_linked_native_manifest(const char *path) {
+    prepare_linked_fixture(path);
+    Mgr manager = {};
+    require(create_module_manager(&manager, state_setter) == 0,
+            "compiled real-metadata native manager constructor failed");
+    require(manager.count == 66, "real-metadata manager count not 66");
+    require(manager.mods[17] == &modules[18] && manager.mods[65] == &modules[66],
+            "real-metadata manager source-order compaction changed");
+    for (unsigned source = 0; source < 67; ++source) {
+        if (source == 17) continue;
+        const unsigned compact = source < 17 ? source : source - 1;
+        require(manager.mods[compact] == &modules[source], "native compacted slot drift");
+    }
+    for (unsigned cat = 0; cat < 5; ++cat)
+        require(manager.cat[cat].n == linked_expected_per_category[cat],
+                "compiled native category count differs from linked descriptor data");
+
+    for (unsigned event = 0; event < 27; ++event) {
+        require(manager.reg[event].n == linked_expected_per_event[event],
+                "compiled event bucket differs from linked descriptor data");
+        int last_priority = 2147483647;
+        for (unsigned j = 0; j < manager.reg[event].n; ++j) {
+            Module *mod = manager.reg[event].list[j];
+            require(mod >= &modules[0] && mod < &modules[67] && mod != &modules[17],
+                    "compiled registry included excluded or foreign descriptor");
+            require(mod->h[event].f == &linked_mock_handler,
+                    "compiled registry contains a callback absent from linked manifest");
+            const int priority = linked_slot_priority(mod, event);
+            require(priority <= last_priority, "compiled event sorting is not nonincreasing");
+            last_priority = priority;
+        }
+    }
+    require(linked_expected_per_event[0] == 24 && linked_expected_per_event[5] == 25,
+            "pinned event 0 / event 5 distribution changed");
+    unsigned event0 = 0;
+    dispatch_event(&manager, &event0);
+    require(linked_callback_calls[0] == 0, "disabled linked-data callbacks executed");
+
+    for (unsigned source = 0; source < 67; ++source) {
+        if (source == 17) continue;
+        require(queue_module_toggle(&manager, &modules[source], 1),
+                "compiled linked-data enable request rejected");
+    }
+    require(manager.en_count == 66, "linked-data native queue did not reach 66");
+    require(!queue_module_toggle(&manager, &modules[17], 1),
+            "compiled linked-data queue accepted 67th entry");
+
+    HCtx ctx = {};
+    ctx.module_manager = &manager;
+    apply_module_toggles(&ctx);
+    require(manager.en_count == 66, "null-world gate did not preserve linked-data queue");
+    int dummy_world = 1, dummy_player = 1;
+    ctx.world = &dummy_world;
+    ctx.player = &dummy_player;
+    apply_module_toggles(&ctx);
+    require(!has_queued_modules(&manager), "linked-data queue not drained");
+    require(linked_callback_calls[5] == 66 * linked_expected_per_event[5],
+            "linked-data event-5 callbacks not delivered for all 66 enables");
+    dispatch_event(&manager, &event0);
+    require(linked_callback_calls[0] == linked_expected_per_event[0],
+            "linked-data event-0 callback dispatch count differs");
+
+    unsigned target = 67;
+    for (unsigned source = 0; source < 67; ++source) {
+        if (source != 17 && modules[source].h[0].f != nullptr) {
+            target = source;
+            break;
+        }
+    }
+    require(target < 67, "no linked-data event-0 target for disable");
+    require(queue_module_toggle(&manager, &modules[target], 0),
+            "linked-data disable request rejected");
+    apply_module_toggles(&ctx);
+    dispatch_event(&manager, &event0);
+    require(linked_callback_calls[0] == linked_expected_per_event[0] * 2 - 1,
+            "linked-data callback list did not drop the disabled handler");
+    require(released_owners == 1, "linked-data native disable owner not released");
+    destroy_module_manager(&manager);
+    require(allocations == releases, "linked-data compiled manager did not clean up");
+    std::printf(
+        "R196_COMPILED_LINKED_DATA_PASS registrations=66 callbacks=171 "
+        "event0=%u event5=%u allocations=%zu frees=%zu\n",
+        linked_expected_per_event[0], linked_expected_per_event[5], allocations, releases
+    );
+    return 0;
+}
+} // namespace
+
+int main(int argc, char **argv) {
     try {
+        if (argc == 2) return run_linked_native_manifest(argv[1]);
+        require(argc == 1, "expected no arguments or one linked metadata fixture");
         reset_synthetic_modules();
         Mgr manager = {};
         require(create_module_manager(&manager, state_setter) == 0, "constructor failed");
