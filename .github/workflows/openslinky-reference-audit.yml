@@ -85,6 +85,11 @@ jobs:
         run: |
           cmake --build build-reference-debug --config Debug --parallel
           ctest --test-dir build-reference-debug -C Debug --output-on-failure
+      - name: Compile R195 first-party manager harness source only (Windows; no upstream object)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S reference_compat/compiled_manager_harness -B build-r195-harness-source -DSLINKY_MANAGER_SOURCE_ONLY=ON
+          cmake --build build-r195-harness-source --config Release --parallel
       - name: Configure C++ reference replay (Release)
         run: cmake -S reference_compat -B build-reference-release -DCMAKE_BUILD_TYPE=Release
       - name: Build and test C++ reference replay (Release)
