@@ -39,7 +39,7 @@ public:
     explicit EventReplay(Observer observer = {}) : observer_(std::move(observer)) {}
 
     std::size_t add(ModuleSpec spec) {
-        if (stopped_ || modules_.size() >= kCandidateModules || spec.name.empty() ||
+        if (stopped_ || busy_ || modules_.size() >= kCandidateModules || spec.name.empty() ||
             spec.category >= 5) throw std::invalid_argument("invalid module descriptor");
         for (const auto& module : modules_)
             if (module.name == spec.name) throw std::invalid_argument("duplicate module name");
@@ -63,14 +63,15 @@ public:
     }
 
     bool dispatch(unsigned event, std::size_t target = 0, bool state = false) {
-        if (stopped_ || event >= kEventSlots) return false;
+        if (stopped_ || busy_ || event >= kEventSlots) return false;
+        DeliveryFence fence(busy_);
         bool ignored = false;
         deliver(event, target, state, ignored);
-        return true;
+        return !stopped_;
     }
 
     bool request(std::size_t id, bool enabled) {
-        if (stopped_ || id >= modules_.size()) return false;
+        if (stopped_ || busy_ || id >= modules_.size()) return false;
         auto& module = modules_[id];
         // The native queue can admit duplicates. This test model rejects
         // contradictory or duplicate pending requests as a safety divergence.
@@ -78,8 +79,11 @@ public:
         if (module.enabled == enabled) return true;
         if (!enabled) {
             bool veto = false;
-            deliver(kBeforeDisable, id, false, veto);
-            if (veto) return false;
+            {
+                DeliveryFence fence(busy_);
+                deliver(kBeforeDisable, id, false, veto);
+            }
+            if (stopped_ || veto) return false;
         }
         auto& queue = enabled ? pending_enable_ : pending_disable_;
         if (queue.size() >= kCandidateModules) return false;
@@ -88,24 +92,39 @@ public:
     }
 
     bool apply(bool world_present, bool player_present) {
-        if (stopped_ || !world_present || !player_present) return false;
+        if (stopped_ || busy_ || !world_present || !player_present) return false;
         if (pending_enable_.empty() && pending_disable_.empty()) return true;
-        for (auto id : pending_enable_) modules_[id].enabled = true;
-        rebuild();
-        for (auto id : pending_enable_) {
-            bool ignored = false;
-            deliver(kToggleNotification, id, true, ignored);
+        // Keep stable queue snapshots: an observer may request permanent stop()
+        // from a notification. stop() clears the live queues immediately.
+        const auto enabling = pending_enable_;
+        const auto disabling = pending_disable_;
+        DeliveryFence fence(busy_);
+        try {
+            for (auto id : enabling) modules_[id].enabled = true;
+            rebuild();
+            for (auto id : enabling) {
+                if (stopped_) return false;
+                bool ignored = false;
+                deliver(kToggleNotification, id, true, ignored);
+            }
+            if (stopped_) return false;
+            pending_enable_.clear();
+            for (auto id : disabling) modules_[id].enabled = false;
+            // Disable notices use the previous handler list; rebuild comes after.
+            for (auto id : disabling) {
+                if (stopped_) return false;
+                bool ignored = false;
+                deliver(kToggleNotification, id, false, ignored);
+            }
+            if (stopped_) return false;
+            pending_disable_.clear();
+            rebuild();
+            return true;
+        } catch (...) {
+            // A throwing observer must not leave a half-applied batch live.
+            stop();
+            throw;
         }
-        pending_enable_.clear();
-        for (auto id : pending_disable_) modules_[id].enabled = false;
-        // Disable notices use the previous handler list; rebuild comes after.
-        for (auto id : pending_disable_) {
-            bool ignored = false;
-            deliver(kToggleNotification, id, false, ignored);
-        }
-        pending_disable_.clear();
-        rebuild();
-        return true;
     }
 
     void stop() noexcept {
@@ -127,6 +146,17 @@ public:
     void clear_trace() { trace_.clear(); }
 
 private:
+    // Pure replay observer callbacks are deliberately non-reentrant. This
+    // avoids mutations to registration and toggle queues during delivery.
+    struct DeliveryFence {
+        explicit DeliveryFence(bool& flag) noexcept : flag_(flag) { flag_ = true; }
+        ~DeliveryFence() { flag_ = false; }
+        DeliveryFence(const DeliveryFence&) = delete;
+        DeliveryFence& operator=(const DeliveryFence&) = delete;
+    private:
+        bool& flag_;
+    };
+
     struct Module {
         std::string name;
         unsigned category = 0;
@@ -155,6 +185,7 @@ private:
         // the handler traversal. Callbacks must remain offline/side-effect free.
         const auto recipients = active_[event];
         for (auto id : recipients) {
+            if (stopped_) break;
             Delivery d{event, id, target, state};
             trace_.push_back(d);
             if (observer_) observer_(d, veto);
@@ -167,5 +198,6 @@ private:
     std::vector<std::size_t> pending_disable_;
     std::vector<Delivery> trace_;
     bool stopped_ = false;
+    bool busy_ = false;
 };
 } // namespace slinkywinky::reference_compat
