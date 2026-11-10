@@ -20,6 +20,8 @@ on:
       - 'tests/test_candidate_event_fixture_export.py'
       - 'tools/probe_openslinky_native_toolchain.py'
       - 'tests/test_openslinky_native_toolchain.py'
+      - 'tools/prepare_openslinky_registration_66.py'
+      - 'tests/test_openslinky_registration_66.py'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -47,6 +49,8 @@ jobs:
         run: python3 tools/audit_openslinky_data.py --object reference_data.obj --json-out data_audit.json
       - name: Native reference prerequisite probe tests (synthetic only)
         run: python3 -m unittest discover -s tests -p 'test_openslinky_native_toolchain.py' -v
+      - name: Original 66-registration correction safety tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_registration_66.py' -v
       - name: Native reference compiler availability (informational; no DLL build)
         run: python3 tools/probe_openslinky_native_toolchain.py --json-out native_toolchain_preflight.json
       - name: Static inventory (never run untrusted native code)
