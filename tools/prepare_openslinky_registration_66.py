@@ -13,6 +13,7 @@ import subprocess
 
 UPSTREAM_SHA = "fd9c5922da34dd59c5145bf4c897b79ff1bbd5a4"
 MANAGER_SHA256 = "d65288ae2c890db7dd09b9783ac5cad7090bd5c32908c07dc3d50061f837de96"
+RDATA_SHA256 = "b17dd02a9f6894d3dd366d559dcc5f3e2db71600571c8108473a1fe57618e3e6"
 MANAGER_REL = Path("src/engine/jni/module_manager.cpp")
 RDATA_REL = Path("src/data/rdata.s")
 TABLE_LABEL = "ptr_to_aim_assist_module_descriptor:"
@@ -97,7 +98,10 @@ def make_patch(root, output):
     source_sha = hashlib.sha256(raw).hexdigest()
     if source_sha != MANAGER_SHA256:
         raise ValueError("upstream manager source changed despite expected commit")
-    entries = descriptor_entries((root / RDATA_REL).read_text(encoding="utf-8"))
+    rdata_bytes = (root / RDATA_REL).read_bytes()
+    if hashlib.sha256(rdata_bytes).hexdigest() != RDATA_SHA256:
+        raise ValueError("upstream rdata source changed despite expected commit")
+    entries = descriptor_entries(rdata_bytes.decode("utf-8"))
     updated = patch_manager(raw.decode("utf-8"))
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("xb") as file:
@@ -105,6 +109,7 @@ def make_patch(root, output):
     return {
         "schema": 1, "upstream_sha": observed_sha,
         "manager_source_sha256": source_sha,
+        "rdata_source_sha256": RDATA_SHA256,
         "manager_patched_sha256": hashlib.sha256(updated.encode("utf-8")).hexdigest(),
         "candidate_registration_count": ORIGINAL_ENTRIES,
         "upstream_registration_count": UPSTREAM_ENTRIES,
