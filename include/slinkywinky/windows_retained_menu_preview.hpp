@@ -7,6 +7,8 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
+#include "slinkywinky/menu_keyboard_router.hpp"
+#include "slinkywinky/menu_input_handoff_ledger.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_source_hover_target.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
@@ -37,6 +39,22 @@ public:
     // cancel held preview gestures. Foreign-thread calls never mutate owner.
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
     bool apply(MenuNavAction action);
+    // R191: OFFLINE WGL fixture only. A synthetic R190 handoff ledger can
+    // drive the SAME first-party retained GUI's keyboard navigation.
+    // These are not hooked into Minecraft's input callback or original
+    // LWJGL2 queues. A key action revokes the old painted hit geometry.
+    // The router is caller-owned to preserve the retained menu's binary
+    // layout. It must be bound to THIS menu's actual navigation instance.
+    MenuNavigation& fixture_navigation() noexcept {return navigation_;}
+    bool fixture_begin_keyboard(std::uint64_t epoch,
+        MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router);
+    MenuKeyOutcome fixture_keyboard_event(
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        std::uint64_t epoch,MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,unsigned lwjgl_key,bool down,
+        bool foreground_verified);
+    bool fixture_end_keyboard(MenuInputHandoffLedger& ledger,
+                              MenuKeyboardRouter& router);
     // R159/R184: admitted WGL owner + exact viewport, physical client
     // pixels, monotonic timestamp, attested event exclusivity, foreground
     // AND last successfully painted GL11 hit geometry. Navigation / click

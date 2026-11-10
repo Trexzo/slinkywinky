@@ -132,6 +132,91 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
     accepted_actions_++;
     return true;
 }
+bool WglRetainedMenuPreview::fixture_begin_keyboard(
+        std::uint64_t epoch,MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router) {
+    // R191: native retained-GUI integration of OFFLINE first-party models.
+    // Caller owns router so WglRetainedMenuPreview ABI/layout is unchanged.
+    if(!owner_thread() || !active_ || !last_drawn_frame_ ||
+       pointer_gesture_.pending() || epoch==0 ||
+       !router.fixture_routes(navigation_) ||
+       ledger.phase()!=InputHandoffPhase::MenuFixture ||
+       ledger.epoch()!=epoch)
+        return false;
+    if(wglGetCurrentContext()!=context_ || wglGetCurrentDC()!=dc_ ||
+       !exact_current_viewport(width_,height_)) {
+        ledger.abort();
+        invalidate_painted_input();
+        return false;
+    }
+    return router.begin(epoch,true,true);
+}
+
+MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        std::uint64_t epoch,MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,
+        unsigned lwjgl_key,bool down,bool foreground_verified) {
+    constexpr MenuKeyOutcome denied{
+        MenuKeyDelivery::Quarantined,false,false};
+    if(!owner_thread() || !active_ || epoch==0 ||
+       !router.fixture_routes(navigation_) ||
+       router.epoch()!=epoch || ledger.epoch()!=epoch)
+        return denied;
+    const bool exact_wgl=context && dc && context==context_ && dc==dc_ &&
+       width==width_ && height==height_ &&
+       wglGetCurrentContext()==context && wglGetCurrentDC()==dc;
+    if(!exact_wgl || !exact_current_viewport(width,height)) {
+        ledger.abort();
+        router.event(lwjgl_key,down,false,false,true);
+        invalidate_painted_input();
+        return denied;
+    }
+    const bool draining=ledger.phase()==InputHandoffPhase::Draining;
+    if(ledger.phase()!=InputHandoffPhase::MenuFixture && !draining)
+        return denied;
+    if(!draining && (pointer_gesture_.pending() ||
+                     (down && !last_drawn_frame_))) {
+        // Never accept simultaneous fixture keyboard and held mouse.
+        ledger.abort();
+        router.event(lwjgl_key,down,false,false,true);
+        invalidate_painted_input();
+        return denied;
+    }
+    const auto route=ledger.simulate(
+        {InputHandoffDevice::Keyboard,lwjgl_key,down},
+        true,foreground_verified,!draining,true);
+    if(draining) {
+        router.event(lwjgl_key,down,foreground_verified,true,false);
+        return denied;
+    }
+    if(route!=InputHandoffRoute::MenuFixtureOnly) {
+        router.event(lwjgl_key,down,false,false,true);
+        invalidate_painted_input();
+        return denied;
+    }
+    const auto outcome=router.event(
+        lwjgl_key,down,foreground_verified,true,true);
+    if(outcome.delivery!=MenuKeyDelivery::MenuExclusive) {
+        ledger.abort();
+        invalidate_painted_input();
+        return denied;
+    }
+    if(outcome.action_applied)
+        invalidate_painted_input();
+    return outcome;
+}
+
+bool WglRetainedMenuPreview::fixture_end_keyboard(
+        MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router) {
+    if(!owner_thread() || !active_ ||
+       !router.fixture_routes(navigation_) ||
+       ledger.phase()!=InputHandoffPhase::MenuFixture ||
+       ledger.epoch()!=router.epoch() ||
+       !router.end())return false;
+    invalidate_painted_input();
+    return ledger.close(true);
+}
 bool WglRetainedMenuPreview::pointer(
         RetainedPointerPhase phase,HGLRC context,HDC dc,
         unsigned width,unsigned height,int x,int y,

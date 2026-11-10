@@ -58,6 +58,34 @@ class TestDormantOriginalKeyboardInput(unittest.TestCase):
             "R119 unverified live gameplay-keyboard input interception introduced",
         )
 
+    def test_r191_offline_keyboard_fixture_never_enters_original_agent(self):
+        # R191 may call the real first-party WGL keyboard router only from
+        # native fixture tests. No JNI/agent bridge or Java Minecraft
+        # instrumenter may invoke the synthetic handoff methods.
+        forbidden = (
+            "fixture_begin_keyboard(",
+            "fixture_keyboard_event(",
+            "fixture_end_keyboard(",
+            "MenuInputHandoffLedger",
+        )
+        real_jni = (ROOT / "src" / "jni_bridge.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertTrue(all(name not in real_jni for name in forbidden))
+        agent_dir = ROOT / "loader" / "java"
+        for path in agent_dir.rglob("*.java"):
+            source = path.read_text(encoding="utf-8")
+            self.assertTrue(
+                all(name not in source for name in forbidden),
+                f"R191 fixture-only handoff entered original agent: {path}",
+            )
+        retained = (ROOT / "src" / "windows_retained_menu_preview.cpp")
+        model = retained.read_text(encoding="utf-8")
+        self.assertIn("ledger.simulate(", model)
+        self.assertIn("router.fixture_routes(navigation_)", model)
+        self.assertIn("router.event(", model)
+        self.assertIn("invalidate_painted_input();", model)
+
     def test_source_pin_is_only_in_test_audit_and_existing_dormant_weaver(self):
         agent_file = ROOT / "loader" / "java" / "dev" / "slinkywinky" / "instrument" / "OriginalKeyboardBridgeWeaver.java"
         text = agent_file.read_text(encoding="utf-8")

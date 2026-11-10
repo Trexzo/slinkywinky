@@ -36,6 +36,11 @@ public:
     // original vanilla input path restored. No source calls this in-game.
     bool release_after_abort(bool menu_closed,bool controls_released,
                              bool original_input_restored) noexcept;
+    // R191: fixture-only check that an external keyboard model operates
+    // on the identical retained MenuNavigation, not a dummy menu copy.
+    bool fixture_routes(const MenuNavigation& target) const noexcept {
+        return same_owner() && &navigation_==&target;
+    }
     bool active() const noexcept;
     bool revoked() const noexcept;
     std::uint64_t epoch() const noexcept;

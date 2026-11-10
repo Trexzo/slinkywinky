@@ -702,6 +702,92 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
                 REQUIRE(pairedViewport.draw(context.gl,context.dc,676,630));
                 REQUIRE(pairedViewport.close());
             }
+            // R191: the SAME native retained WGL menu now accepts only
+            // synthetic keyboard edges from the R190 fixture handoff
+            // ledger. The first real keyboard action changes its rendered
+            // tab, invalidates painted input and requires another GL draw.
+            {
+                WglRetainedMenuPreview keyboardMenu;
+                MenuInputHandoffLedger keyLedger;
+                MenuKeyboardRouter actualRouter(keyboardMenu.fixture_navigation());
+                REQUIRE(keyboardMenu.draw(context.gl,context.dc,676,630));
+                const auto oldProfile=keyboardMenu.profile_snapshot(
+                    context.gl,context.dc,676,630);
+                REQUIRE(oldProfile);
+                REQUIRE(!keyboardMenu.fixture_begin_keyboard(191,keyLedger,actualRouter));
+                REQUIRE(keyLedger.request(191,true,true,true,true));
+                REQUIRE(!keyboardMenu.fixture_begin_keyboard(191,keyLedger,actualRouter));
+                REQUIRE(keyLedger.confirm_fixture(191,true,true,true));
+                // Two routers on the same owner thread are not equivalent:
+                // the fixture must route to THIS retained menu's navigation.
+                MenuState wrongMenu;
+                MenuProfileBridge wrongProfile(wrongMenu);
+                MenuNavigation wrongNav(wrongMenu,wrongProfile);
+                MenuKeyboardRouter wrongRouter(wrongNav);
+                REQUIRE(!keyboardMenu.fixture_begin_keyboard(
+                    191,keyLedger,wrongRouter));
+                REQUIRE(keyboardMenu.fixture_begin_keyboard(191,keyLedger,actualRouter));
+                bool foreignKeyAccepted=false;
+                std::thread foreignKey([&] {
+                    foreignKeyAccepted=keyboardMenu.fixture_keyboard_event(
+                        context.gl,context.dc,676,630,191,keyLedger,actualRouter,
+                        15,true,true).delivery==MenuKeyDelivery::MenuExclusive;
+                });
+                foreignKey.join();
+                REQUIRE(!foreignKeyAccepted);
+                REQUIRE(keyboardMenu.tab()==MenuTab::Combat);
+                const auto tabKey=keyboardMenu.fixture_keyboard_event(
+                    context.gl,context.dc,676,630,191,keyLedger,actualRouter,
+                    15,true,true);
+                REQUIRE(tabKey.delivery==MenuKeyDelivery::MenuExclusive &&
+                        tabKey.action_applied &&
+                        keyboardMenu.tab()==MenuTab::Move);
+                REQUIRE(!keyboardMenu.pointer(
+                    RetainedPointerPhase::Down,context.gl,context.dc,
+                    676,630,300,200,192000,true,true));
+                REQUIRE(keyboardMenu.fixture_keyboard_event(
+                    context.gl,context.dc,676,630,191,keyLedger,actualRouter,
+                    15,false,true).delivery==MenuKeyDelivery::MenuExclusive);
+                REQUIRE(keyLedger.tracked_released());
+                REQUIRE(keyboardMenu.draw(context.gl,context.dc,676,630));
+                const auto afterKeyboard=keyboardMenu.profile_snapshot(
+                    context.gl,context.dc,676,630);
+                REQUIRE(afterKeyboard && *afterKeyboard==*oldProfile);
+                REQUIRE(keyboardMenu.fixture_end_keyboard(keyLedger,actualRouter));
+                REQUIRE(keyLedger.phase()==InputHandoffPhase::Draining);
+                REQUIRE(keyboardMenu.fixture_keyboard_event(
+                    context.gl,context.dc,676,630,191,keyLedger,actualRouter,
+                    15,false,false).delivery==MenuKeyDelivery::Quarantined);
+                REQUIRE(!keyLedger.restore(true,true,false));
+                REQUIRE(keyLedger.restore(true,true,true));
+                REQUIRE(!keyboardMenu.fixture_begin_keyboard(191,keyLedger,actualRouter));
+                // New epoch, real WGL viewport loss during a held key:
+                // fixture session is revoked, geometry remains invalid,
+                // and no key is injected into the original game.
+                REQUIRE(keyboardMenu.draw(context.gl,context.dc,676,630));
+                REQUIRE(keyLedger.request(192,true,true,true,true));
+                REQUIRE(keyLedger.confirm_fixture(192,true,true,true));
+                REQUIRE(keyboardMenu.fixture_begin_keyboard(192,keyLedger,actualRouter));
+                REQUIRE(keyboardMenu.fixture_keyboard_event(
+                    context.gl,context.dc,676,630,192,keyLedger,actualRouter,
+                    17,true,true).delivery==MenuKeyDelivery::MenuExclusive);
+                REQUIRE(!keyLedger.tracked_released());
+                glViewport(0,0,675,630);
+                REQUIRE(keyboardMenu.fixture_keyboard_event(
+                    context.gl,context.dc,676,630,192,keyLedger,actualRouter,
+                    17,false,true).delivery==MenuKeyDelivery::Quarantined);
+                glViewport(0,0,676,630);
+                REQUIRE(keyLedger.phase()==InputHandoffPhase::Revoked);
+                REQUIRE(!keyboardMenu.fixture_end_keyboard(keyLedger,actualRouter));
+                REQUIRE(!keyboardMenu.pointer(
+                    RetainedPointerPhase::Down,context.gl,context.dc,
+                    676,630,300,200,192500,true,true));
+                REQUIRE(!keyLedger.restore(true,false,true));
+                REQUIRE(keyLedger.restore(true,true,true));
+                REQUIRE(keyboardMenu.close());
+                REQUIRE(!keyLedger.may_deliver_live_minecraft_event());
+                REQUIRE(!keyLedger.may_suppress_vanilla_event());
+            }
             REQUIRE(reference.detach());
             same(r99Before,snapshot());
         }
@@ -710,6 +796,7 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
         std::cout<<"R186_POST_PAINT_VIEWPORT_DRIFT_FAIL_CLOSED_PASS\\n";
         std::cout<<"R187_WGL_BINDING_LOSS_REQUIRES_REPAINT_AND_BREAKS_OS_PAIR_PASS\\n";
         std::cout<<"R189_HELD_BUTTON_NEVER_CERTIFIES_SOURCE_HOVER_PASS\\n";
+        std::cout<<"R191_RETAINED_WGL_KEYBOARD_HANDOFF_NAVIGATION_REPAINT_PASS\\n";
 
 }
 
