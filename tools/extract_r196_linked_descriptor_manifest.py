@@ -95,12 +95,32 @@ def inspect(upstream_root, dll_path, map_path):
     }
 
 
+def fixture_lines(result):
+    """Whitelisted, non-executable manager input; absolutely no native addresses."""
+    if result["active_registration_count"] != ORIGINAL_COUNT or result["callback_subscriptions"] != 171:
+        raise ValueError("manifest registration/subscription totals differ")
+    lines = ["R196-LINKED-DESCRIPTORS-V1 66 171"]
+    for active_idx, entry in enumerate(result["entries"]):
+        source_idx = active_idx if active_idx < OMITTED_INDEX else active_idx + 1
+        if entry["source_index"] != source_idx:
+            raise ValueError("manifest entry source order drifted")
+        handlers = entry["handlers"]
+        line = [
+            str(source_idx), str(entry["category"]),
+            str(int(entry["default_enabled"])), str(len(handlers))
+        ]
+        line.extend(f'{h["event"]}:{h["priority"]}' for h in handlers)
+        lines.append(" ".join(line))
+    return "\n".join(lines) + "\n"
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--upstream", required=True)
     p.add_argument("--dll", required=True)
     p.add_argument("--map", required=True)
     p.add_argument("--json-out")
+    p.add_argument("--fixture-out", help="private text fixture for first-party COFF harness")
     args = p.parse_args(argv)
     result = inspect(args.upstream, args.dll, args.map)
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
@@ -110,6 +130,12 @@ def main(argv=None):
             raise FileExistsError("refusing to overwrite existing descriptor evidence")
         outfile.parent.mkdir(parents=True, exist_ok=True)
         outfile.write_text(text, encoding="utf-8")
+    if args.fixture_out:
+        outfile = Path(args.fixture_out)
+        if outfile.exists():
+            raise FileExistsError("refusing to overwrite existing runtime fixture")
+        outfile.parent.mkdir(parents=True, exist_ok=True)
+        outfile.write_text(fixture_lines(result), encoding="ascii")
     print(json.dumps({key: value for key, value in result.items() if key != "entries"}, indent=2, sort_keys=True))
 
 
