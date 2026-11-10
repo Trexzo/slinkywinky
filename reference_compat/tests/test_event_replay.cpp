@@ -112,6 +112,93 @@ int main() {
     expect_invalid(spec("duplicate_event", {{4, 1}, {4, 2}}));
     expect_invalid(spec("", {{4, 1}}));
 
-    std::cout << "R174 event replay PASS: 66 modules, 27 event slots, "
+
+    // R191: an observer must not re-enter dispatch, queue mutation or
+    // registration while an event is being delivered.
+    EventReplay* during_callback = nullptr;
+    int reentrant_observations = 0;
+    EventReplay reentrant([&](const Delivery& delivery, bool&) {
+        if (delivery.event != 2) return;
+        ++reentrant_observations;
+        CHECK(!during_callback->dispatch(2));
+        CHECK(!during_callback->request(0, false));
+        CHECK(!during_callback->apply(true, true));
+        bool rejected_registration = false;
+        try { during_callback->add(spec("late", {{2, 1}})); }
+        catch (const std::invalid_argument&) { rejected_registration = true; }
+        CHECK(rejected_registration);
+    });
+    during_callback = &reentrant;
+    reentrant.add(spec("observer", {{2, 5}}, true));
+    reentrant.add(spec("other", {{2, 1}}, true));
+    CHECK(reentrant.dispatch(2));
+    CHECK(reentrant_observations == 2);
+    CHECK(reentrant.module_count() == 2 && reentrant.pending_disables() == 0);
+    CHECK(reentrant.trace().size() == 2);
+
+    // stop() during a delivery must prevent remaining recipients from firing.
+    EventReplay* during_stop = nullptr;
+    int stop_observations = 0;
+    EventReplay stops([&](const Delivery&, bool&) {
+        ++stop_observations;
+        during_stop->stop();
+    });
+    during_stop = &stops;
+    stops.add(spec("stopper", {{2, 50}}, true));
+    stops.add(spec("should_not_fire", {{2, 10}}, true));
+    CHECK(!stops.dispatch(2));
+    CHECK(stop_observations == 1 && stops.trace().size() == 1);
+    CHECK(stops.handlers(2).empty());
+    CHECK(!stops.request(0, false));
+
+    // A notification observer can stop() while apply() is iterating the
+    // pending batch; stable snapshots ensure no iterator invalidation.
+    EventReplay* during_apply = nullptr;
+    int notification_count = 0;
+    EventReplay interrupted([&](const Delivery& delivery, bool&) {
+        if (delivery.event != 5) return;
+        ++notification_count;
+        during_apply->stop();
+    });
+    during_apply = &interrupted;
+    interrupted.add(spec("notify", {{5, 1}}, true));
+    auto pending_one = interrupted.add(spec("pending_one", {{5, 0}}));
+    auto pending_two = interrupted.add(spec("pending_two", {{5, -1}}));
+    CHECK(interrupted.request(pending_one, true));
+    CHECK(interrupted.request(pending_two, true));
+    CHECK(!interrupted.apply(true, true));
+    CHECK(notification_count == 1);
+    CHECK(interrupted.pending_enables() == 0 && interrupted.pending_disables() == 0);
+    CHECK(interrupted.handlers(5).empty());
+
+    // Throwing dispatch observers release the admission fence; throwing
+    // apply observers permanently stop a potentially half-applied batch.
+    bool throw_once = true;
+    EventReplay throwing_dispatch([&](const Delivery&, bool&) {
+        if (throw_once) {
+            throw_once = false;
+            throw std::runtime_error("synthetic dispatch failure");
+        }
+    });
+    throwing_dispatch.add(spec("throwing", {{2, 1}}, true));
+    bool dispatch_threw = false;
+    try { throwing_dispatch.dispatch(2); }
+    catch (const std::runtime_error&) { dispatch_threw = true; }
+    CHECK(dispatch_threw && throwing_dispatch.dispatch(2));
+
+    EventReplay throwing_apply([&](const Delivery&, bool&) {
+        throw std::runtime_error("synthetic apply failure");
+    });
+    throwing_apply.add(spec("notify", {{5, 1}}, true));
+    auto apply_target = throwing_apply.add(spec("target", {{5, 0}}));
+    CHECK(throwing_apply.request(apply_target, true));
+    bool apply_threw = false;
+    try { throwing_apply.apply(true, true); }
+    catch (const std::runtime_error&) { apply_threw = true; }
+    CHECK(apply_threw && !throwing_apply.dispatch(5));
+    CHECK(throwing_apply.pending_enables() == 0);
+    CHECK(throwing_apply.handlers(5).empty());
+
+    std::cout << "R174/R191 event replay PASS: 66 modules, 27 event slots, "
                  "priority, cancellation, lifecycle and bounds\n";
 }
