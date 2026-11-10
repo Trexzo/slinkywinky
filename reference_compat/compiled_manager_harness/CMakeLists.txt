@@ -17,6 +17,10 @@ add_executable(slinkywinky_r195_manager_acceptance
 set_source_files_properties("${SLINKY_MANAGER_OBJECT}" PROPERTIES
   EXTERNAL_OBJECT TRUE GENERATED TRUE
 )
+# The pinned public clang-cl COFF object declares /DEFAULTLIB:libcmt.lib.
+# Match that static CRT for the harness in both configs, avoiding LNK4098.
+set_property(TARGET slinkywinky_r195_manager_acceptance PROPERTY
+  MSVC_RUNTIME_LIBRARY "MultiThreaded")
 target_compile_features(slinkywinky_r195_manager_acceptance PRIVATE cxx_std_17)
 target_compile_options(slinkywinky_r195_manager_acceptance PRIVATE /W4 /WX /EHsc)
 target_link_options(slinkywinky_r195_manager_acceptance PRIVATE /INCREMENTAL:NO)
