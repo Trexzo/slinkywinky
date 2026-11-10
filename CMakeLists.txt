@@ -22,6 +22,18 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R190: completely isolated paired keyboard/mouse handoff and recovery
+  # model. No OS hooks, no Minecraft input dispatch, no live ownership.
+  add_executable(slinkywinky_menu_input_handoff_ledger_tests
+    tests/test_menu_input_handoff_ledger.cpp)
+  target_include_directories(slinkywinky_menu_input_handoff_ledger_tests
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(slinkywinky_menu_input_handoff_ledger_tests
+    PRIVATE cxx_std_17)
+  target_link_libraries(slinkywinky_menu_input_handoff_ledger_tests
+    PRIVATE Threads::Threads)
+  add_test(NAME r190_paired_input_handoff_recovery_fixture
+    COMMAND slinkywinky_menu_input_handoff_ledger_tests)
   # R183: pure C++ exact OS focus/refusal sequence, portable and input-free.
   add_executable(slinkywinky_original_focus_trace_tests
     tests/test_original_window_focus_trace.cpp)
