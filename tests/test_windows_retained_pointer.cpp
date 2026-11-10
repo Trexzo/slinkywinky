@@ -802,6 +802,225 @@ void verify_r159_pointer_admission(Context& context,const State& r99Before) {
 
 }
 
+// R192: release-ordered synthetic mouse Down/Up and keyboard navigation
+// actually mutate the same retained GL11 GUI, never a Minecraft event queue.
+// Kept in its own frame because the Windows test stack is 1 MB.
+void verify_r192_joint_handoff(Context& context,const State& expected) {
+    auto coords=[]() {
+        MenuState mirror;
+        MenuProfileBridge profile(mirror);
+        MenuRenderSession frames;
+        REQUIRE(frames.attach(192,676,630));
+        const auto frame=frames.next(mirror,&profile);
+        REQUIRE(frame);
+        const auto panel=menu_panel_geometry(
+            676,630,false,MenuPanelMode::CompactOverlay);
+        REQUIRE(panel);
+        const auto card=menu_module_card_rect(
+            *frame,panel->logical_width(),0);
+        const int x=static_cast<int>(panel->left)+
+            static_cast<int>(std::lround(
+                (card.x+card.width-30.0f)*panel->scale));
+        const int y=static_cast<int>(panel->top)+
+            static_cast<int>(std::lround(
+                (card.y+17.0f)*panel->scale));
+        const auto hit=hit_test_menu(
+            *frame,MenuPanelMode::CompactOverlay,x,y);
+        REQUIRE(hit && hit->kind==MenuHitKind::Toggle &&
+                hit->catalog_index==0u);
+        REQUIRE(frames.detach());
+        return std::array<int,2>{x,y};
+    }();
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    const int x=coords[0],y=coords[1];
+    {
+        WglRetainedMenuPreview nativeMenu;
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(nativeMenu.fixture_navigation());
+        REQUIRE(nativeMenu.draw(context.gl,context.dc,676,630));
+        REQUIRE(!nativeMenu.preview_enabled(0));
+        REQUIRE(ledger.request(1920,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(1920,true,true,true));
+        REQUIRE(nativeMenu.fixture_begin_keyboard(1920,ledger,router));
+        MenuState wrongMenu;
+        MenuProfileBridge wrongProfile(wrongMenu);
+        MenuNavigation wrongNav(wrongMenu,wrongProfile);
+        MenuKeyboardRouter wrongRouter(wrongNav);
+        REQUIRE(!nativeMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1920,
+            ledger,wrongRouter,x,y,9990,true));
+        REQUIRE(ledger.phase()==InputHandoffPhase::MenuFixture);
+        REQUIRE(!ledger.tracked_down(InputHandoffDevice::Mouse,0));
+        REQUIRE(nativeMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1920,
+            ledger,router,x,y,10000,true));
+        REQUIRE(ledger.tracked_down(InputHandoffDevice::Mouse,0));
+        REQUIRE(!ledger.tracked_released());
+        REQUIRE(nativeMenu.fixture_pointer_event(
+            up,context.gl,context.dc,676,630,1920,
+            ledger,router,x,y,10040,true));
+        REQUIRE(!ledger.tracked_down(InputHandoffDevice::Mouse,0));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(nativeMenu.preview_enabled(0));
+        const auto profile=nativeMenu.profile_snapshot(
+            context.gl,context.dc,676,630);
+        REQUIRE(profile && parse_settings(*profile).valid);
+        REQUIRE(parse_settings(*profile).settings.combat.aim_enabled);
+        // A successful click invalidates the last drawn frame, then a
+        // fresh physical GL11 repaint permits the next keyboard action.
+        REQUIRE(nativeMenu.draw(context.gl,context.dc,676,630));
+        const auto tab=nativeMenu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1920,
+            ledger,router,15,true,true);
+        REQUIRE(tab.delivery==MenuKeyDelivery::MenuExclusive &&
+                tab.action_applied && nativeMenu.tab()==MenuTab::Move);
+        REQUIRE(ledger.tracked_down(InputHandoffDevice::Keyboard,15));
+        REQUIRE(nativeMenu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1920,
+            ledger,router,15,false,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(nativeMenu.draw(context.gl,context.dc,676,630));
+        const auto finalProfile=nativeMenu.profile_snapshot(
+            context.gl,context.dc,676,630);
+        REQUIRE(finalProfile && *profile==*finalProfile);
+        REQUIRE(nativeMenu.fixture_end_keyboard(ledger,router));
+        REQUIRE(ledger.phase()==InputHandoffPhase::Draining);
+        REQUIRE(!ledger.restore(true,true,false));
+        REQUIRE(ledger.restore(true,true,true));
+        REQUIRE(nativeMenu.close());
+        REQUIRE(!ledger.may_deliver_live_minecraft_event());
+        REQUIRE(!ledger.may_suppress_vanilla_event());
+    }
+    {
+        // An orphan Up is quarantined and revokes, not counted as a click.
+        WglRetainedMenuPreview orphanMenu;
+        MenuInputHandoffLedger orphan;
+        MenuKeyboardRouter router(orphanMenu.fixture_navigation());
+        REQUIRE(orphanMenu.draw(context.gl,context.dc,676,630));
+        REQUIRE(orphan.request(1921,true,true,true,true));
+        REQUIRE(orphan.confirm_fixture(1921,true,true,true));
+        REQUIRE(orphanMenu.fixture_begin_keyboard(1921,orphan,router));
+        REQUIRE(!orphanMenu.fixture_pointer_event(
+            up,context.gl,context.dc,676,630,1921,
+            orphan,router,x,y,11000,true));
+        REQUIRE(orphan.phase()==InputHandoffPhase::Revoked);
+        REQUIRE(!orphanMenu.preview_enabled(0));
+        REQUIRE(!orphan.restore(true,true,false));
+        REQUIRE(orphan.restore(true,true,true));
+        REQUIRE(orphanMenu.close());
+    }
+    {
+        // Held keyboard + new mouse Down can never share the model
+        // input owner. The session revokes without mutating settings.
+        WglRetainedMenuPreview heldMenu;
+        MenuInputHandoffLedger held;
+        MenuKeyboardRouter router(heldMenu.fixture_navigation());
+        REQUIRE(heldMenu.draw(context.gl,context.dc,676,630));
+        REQUIRE(held.request(1922,true,true,true,true));
+        REQUIRE(held.confirm_fixture(1922,true,true,true));
+        REQUIRE(heldMenu.fixture_begin_keyboard(1922,held,router));
+        REQUIRE(heldMenu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1922,
+            held,router,17,true,true).delivery==
+            MenuKeyDelivery::MenuExclusive);
+        REQUIRE(held.tracked_down(InputHandoffDevice::Keyboard,17));
+        REQUIRE(!heldMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1922,
+            held,router,x,y,12000,true));
+        REQUIRE(held.phase()==InputHandoffPhase::Revoked);
+        REQUIRE(!heldMenu.preview_enabled(0));
+        REQUIRE(!held.restore(true,false,true));
+        REQUIRE(held.restore(true,true,true));
+        REQUIRE(heldMenu.close());
+    }
+    {
+        // Once the actual GL11 click mutates the profile, the old input
+        // rectangle is not valid until a new paint. Its next Down cannot
+        // be accepted by a still-signed synthetic R190 fixture epoch.
+        WglRetainedMenuPreview staleMenu;
+        MenuInputHandoffLedger stale;
+        MenuKeyboardRouter router(staleMenu.fixture_navigation());
+        REQUIRE(staleMenu.draw(context.gl,context.dc,676,630));
+        REQUIRE(stale.request(1923,true,true,true,true));
+        REQUIRE(stale.confirm_fixture(1923,true,true,true));
+        REQUIRE(staleMenu.fixture_begin_keyboard(1923,stale,router));
+        REQUIRE(staleMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1923,
+            stale,router,x,y,13000,true));
+        REQUIRE(staleMenu.fixture_pointer_event(
+            up,context.gl,context.dc,676,630,1923,
+            stale,router,x,y,13050,true));
+        REQUIRE(staleMenu.preview_enabled(0));
+        REQUIRE(!staleMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1923,
+            stale,router,x,y,13100,true));
+        REQUIRE(stale.phase()==InputHandoffPhase::Revoked);
+        REQUIRE(staleMenu.preview_enabled(0));
+        REQUIRE(stale.restore(true,true,true));
+        REQUIRE(staleMenu.close());
+    }
+    {
+        // A key cannot navigate the source menu DURING a held mouse
+        // press. Both source-hit and key dispatch are invalidated.
+        WglRetainedMenuPreview pressedMenu;
+        MenuInputHandoffLedger pressed;
+        MenuKeyboardRouter router(pressedMenu.fixture_navigation());
+        REQUIRE(pressedMenu.draw(context.gl,context.dc,676,630));
+        REQUIRE(pressed.request(1924,true,true,true,true));
+        REQUIRE(pressed.confirm_fixture(1924,true,true,true));
+        REQUIRE(pressedMenu.fixture_begin_keyboard(1924,pressed,router));
+        REQUIRE(pressedMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1924,
+            pressed,router,x,y,14000,true));
+        REQUIRE(pressed.tracked_down(InputHandoffDevice::Mouse,0));
+        REQUIRE(pressedMenu.fixture_keyboard_event(
+            context.gl,context.dc,676,630,1924,
+            pressed,router,15,true,true).delivery==
+            MenuKeyDelivery::Quarantined);
+        REQUIRE(pressed.phase()==InputHandoffPhase::Revoked);
+        REQUIRE(pressedMenu.tab()==MenuTab::Combat);
+        REQUIRE(!pressedMenu.fixture_pointer_event(
+            up,context.gl,context.dc,676,630,1924,
+            pressed,router,x,y,14050,true));
+        REQUIRE(!pressedMenu.preview_enabled(0));
+        REQUIRE(!pressed.restore(true,false,true));
+        REQUIRE(pressed.restore(true,true,true));
+        REQUIRE(pressedMenu.close());
+    }
+    {
+        // An actual post-press WGL viewport drift invalidates the input
+        // epoch and prevents its late Up from changing a native profile.
+        WglRetainedMenuPreview driftMenu;
+        MenuInputHandoffLedger drift;
+        MenuKeyboardRouter router(driftMenu.fixture_navigation());
+        REQUIRE(driftMenu.draw(context.gl,context.dc,676,630));
+        REQUIRE(drift.request(1925,true,true,true,true));
+        REQUIRE(drift.confirm_fixture(1925,true,true,true));
+        REQUIRE(driftMenu.fixture_begin_keyboard(1925,drift,router));
+        REQUIRE(driftMenu.fixture_pointer_event(
+            down,context.gl,context.dc,676,630,1925,
+            drift,router,x,y,15000,true));
+        glViewport(1,0,676,630);
+        REQUIRE(!driftMenu.fixture_pointer_event(
+            up,context.gl,context.dc,676,630,1925,
+            drift,router,x,y,15040,true));
+        glViewport(0,0,676,630);
+        REQUIRE(drift.phase()==InputHandoffPhase::Revoked);
+        REQUIRE(!driftMenu.preview_enabled(0));
+        REQUIRE(!driftMenu.fixture_pointer_event(
+            up,context.gl,context.dc,676,630,1925,
+            drift,router,x,y,15050,true));
+        REQUIRE(drift.restore(true,true,true));
+        REQUIRE(driftMenu.close());
+    }
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R192_SAME_NATIVE_WGL_MOUSE_KEY_HANDOFF_PROFILE_TAB_PASS\n";
+    std::cout<<"R192_ORPHAN_MOUSE_UP_AND_HELD_KEY_CANCEL_PASS\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -811,6 +1030,7 @@ int main() {
         REQUIRE(glGetError()==GL_NO_ERROR);
         const State before=snapshot();
         verify_r159_pointer_admission(context,before);
+        verify_r192_joint_handoff(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
         return 0;

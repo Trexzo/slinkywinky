@@ -55,6 +55,14 @@ public:
         bool foreground_verified);
     bool fixture_end_keyboard(MenuInputHandoffLedger& ledger,
                               MenuKeyboardRouter& router);
+    // R192: test-only *paired* left-button gesture. Must use the same R190
+    // ledger and R191 router as native keyboard navigation. No runtime
+    // Minecraft input callsite, event injection or vanilla suppression.
+    bool fixture_pointer_event(RetainedPointerPhase phase,
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        std::uint64_t epoch,MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,int x,int y,
+        std::uint64_t monotonic_ms,bool foreground_verified);
     // R159/R184: admitted WGL owner + exact viewport, physical client
     // pixels, monotonic timestamp, attested event exclusivity, foreground
     // AND last successfully painted GL11 hit geometry. Navigation / click

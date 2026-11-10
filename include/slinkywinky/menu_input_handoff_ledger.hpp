@@ -130,6 +130,18 @@ public:
         return true;
     }
 
+    // R192: read-only held-edge query for paired synthetic event ordering.
+    // A duplicate mouse-down or orphan mouse-up cannot be routed into the
+    // retained native GUI merely because the model is in MenuFixture.
+    bool tracked_down(InputHandoffDevice device,unsigned code) const noexcept {
+        if(!same_owner())return false;
+        if(device==InputHandoffDevice::Keyboard)
+            return code>0 && code<key_down_.size() && key_down_[code];
+        if(device==InputHandoffDevice::Mouse)
+            return code<5u && (mouse_mask_ & (1u<<code))!=0u;
+        return false;
+    }
+
     // Permanent guard: this offline ledger can NEVER license live routing.
     bool may_deliver_live_minecraft_event() const noexcept {return false;}
     bool may_suppress_vanilla_event() const noexcept {return false;}

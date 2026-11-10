@@ -50,6 +50,12 @@ void full_fixture_cycle() {
         CHECK(h.simulate(mouse(i,true),true,true,true,true)==
               InputHandoffRoute::MenuFixtureOnly);
     CHECK(!h.tracked_released());
+    CHECK(h.tracked_down(InputHandoffDevice::Keyboard,200));
+    CHECK(h.tracked_down(InputHandoffDevice::Mouse,0));
+    CHECK(h.tracked_down(InputHandoffDevice::Mouse,4));
+    CHECK(!h.tracked_down(InputHandoffDevice::Mouse,5));
+    CHECK(!h.tracked_down(InputHandoffDevice::Keyboard,256));
+    CHECK(!h.tracked_down(static_cast<InputHandoffDevice>(255),0));
     CHECK(!h.close(false));
     CHECK(h.close(true));
     CHECK(h.phase()==InputHandoffPhase::Draining);
@@ -65,6 +71,8 @@ void full_fixture_cycle() {
         CHECK(h.simulate(mouse(i,false),false,false,false,false)==
               InputHandoffRoute::Quarantined);
     CHECK(h.tracked_released());
+    CHECK(!h.tracked_down(InputHandoffDevice::Mouse,0));
+    CHECK(!h.tracked_down(InputHandoffDevice::Keyboard,200));
     CHECK(h.phase()==InputHandoffPhase::Draining);
     CHECK(h.restore(true,true,true));
     CHECK(h.phase()==InputHandoffPhase::Idle && h.epoch()==190);

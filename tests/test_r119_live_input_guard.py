@@ -66,6 +66,7 @@ class TestDormantOriginalKeyboardInput(unittest.TestCase):
             "fixture_begin_keyboard(",
             "fixture_keyboard_event(",
             "fixture_end_keyboard(",
+            "fixture_pointer_event(",
             "MenuInputHandoffLedger",
         )
         real_jni = (ROOT / "src" / "jni_bridge.cpp").read_text(

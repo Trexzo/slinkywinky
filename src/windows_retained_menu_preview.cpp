@@ -217,6 +217,56 @@ bool WglRetainedMenuPreview::fixture_end_keyboard(
     invalidate_painted_input();
     return ledger.close(true);
 }
+bool WglRetainedMenuPreview::fixture_pointer_event(
+        RetainedPointerPhase phase,HGLRC context,HDC dc,
+        unsigned width,unsigned height,std::uint64_t epoch,
+        MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router,
+        int x,int y,std::uint64_t monotonic_ms,
+        bool foreground_verified) {
+    // R192: synthetic model integration ONLY. This is deliberately absent
+    // from original Minecraft JNI and Java agent input dispatch.
+    if(!owner_thread() || !active_ || !router.fixture_routes(navigation_) ||
+       !epoch || router.epoch()!=epoch || ledger.epoch()!=epoch)
+        return false;
+    const auto reject=[&]() {
+        ledger.abort();
+        pointer_gesture_.cancel();
+        invalidate_painted_input();
+        return false;
+    };
+    if(ledger.phase()!=InputHandoffPhase::MenuFixture ||
+       !router.active())return reject();
+    if(phase==RetainedPointerPhase::Cancel)return reject();
+    if(!context || !dc || context!=context_ || dc!=dc_ ||
+       width!=width_ || height!=height_ ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       !exact_current_viewport(width,height) ||
+       !foreground_verified || !monotonic_ms)return reject();
+    const bool is_down=phase==RetainedPointerPhase::Down;
+    const bool is_up=phase==RetainedPointerPhase::Up;
+    const bool is_move=phase==RetainedPointerPhase::Move;
+    if(!is_down && !is_up && !is_move)return reject();
+    // Only a fresh left mouse Down with EVERY key/button released may
+    // start. Duplicate Down and orphan Up (or Move) fail closed.
+    const bool held=ledger.tracked_down(InputHandoffDevice::Mouse,0);
+    if(is_down ? (!ledger.tracked_released() || pointer_gesture_.pending() ||
+                  !last_drawn_frame_) : !held)
+        return reject();
+    if((is_up || is_move) && !pointer_gesture_.pending())
+        return reject();
+    // Ledger attests a synthetic button edge BEFORE mutating preview.
+    if(!is_move) {
+        const auto route=ledger.simulate(
+            {InputHandoffDevice::Mouse,0,is_down},
+            true,true,true,true);
+        if(route!=InputHandoffRoute::MenuFixtureOnly)
+            return reject();
+    }
+    if(!pointer(phase,context,dc,width,height,x,y,monotonic_ms,true,true))
+        return reject();
+    return true;
+}
+
 bool WglRetainedMenuPreview::pointer(
         RetainedPointerPhase phase,HGLRC context,HDC dc,
         unsigned width,unsigned height,int x,int y,
