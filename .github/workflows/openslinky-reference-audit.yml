@@ -18,6 +18,8 @@ on:
       - 'reference_compat/**'
       - 'tools/export_candidate_event_manifest.py'
       - 'tests/test_candidate_event_fixture_export.py'
+      - 'tools/probe_openslinky_native_toolchain.py'
+      - 'tests/test_openslinky_native_toolchain.py'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -43,6 +45,10 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_openslinky_data_audit.py' -v
       - name: Inspect COFF data layout (source-only metadata)
         run: python3 tools/audit_openslinky_data.py --object reference_data.obj --json-out data_audit.json
+      - name: Native reference prerequisite probe tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_native_toolchain.py' -v
+      - name: Native reference compiler availability (informational; no DLL build)
+        run: python3 tools/probe_openslinky_native_toolchain.py --json-out native_toolchain_preflight.json
       - name: Static inventory (never run untrusted native code)
         run: python3 tools/audit_openslinky_reference.py --json-out reference_audit.json
       - uses: actions/upload-artifact@v4
@@ -52,6 +58,7 @@ jobs:
             reference_audit.json
             dispatch_audit.json
             data_audit.json
+            native_toolchain_preflight.json
 
   native-event-replay:
     name: Offline C++ reference event replay
