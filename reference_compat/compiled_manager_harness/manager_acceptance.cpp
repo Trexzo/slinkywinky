@@ -529,6 +529,12 @@ struct GuardedToggleQueue {
 
     bool enqueue(Module *module, unsigned char enabled) {
         if (!module || enabled > 1) return false;
+        // Reject pointers outside the actual compacted 66 descriptor identities.
+        // The upstream compiled queue admission does not verify membership.
+        bool is_registered = false;
+        for (unsigned i = 0; i < manager->count && i < 66; ++i)
+            if (manager->mods[i] == module) { is_registered = true; break; }
+        if (!is_registered) return false;
         for (unsigned i = 0; i < manager->en_count; ++i)
             if (manager->en_list[i] == module) return enabled == 1;
         for (unsigned i = 0; i < manager->dis_count; ++i)
@@ -574,6 +580,10 @@ void synthetic_reentrant_callback(void *event) {
         if (active_guard) {
             require(active_guard->enqueue(&modules[1], 1),
                     "R199 guarded reentrant enable rejected");
+            require(active_guard->enqueue(&modules[1], 1),
+                    "R199 guarded duplicate reentrant request was not idempotent");
+            require(active_guard->deferred_count == 1,
+                    "R199 guarded reentrant request queued more than once");
         } else {
             require(queue_module_toggle(e->ctx->module_manager, &modules[1], 1),
                     "R199 direct reentrant enable rejected");
@@ -653,6 +663,10 @@ int run_first_party_toggle_guard_acceptance() {
         require(guarded.enqueue(&modules[0], 1),
                 "R199 first-party guard rejected duplicate enable admission");
     require(manager.en_count == 1, "R199 guarded duplicate enables not collapsed");
+    require(!guarded.enqueue(&modules[17], 1),
+            "R199 guard admitted excluded source index 17");
+    require(!guarded.enqueue(&modules[0], 0),
+            "R199 guard accepted contradictory pending disable");
     guarded.apply(&ctx);
     require(modules[0].enabled == 1 && delivered_toggle == 1,
             "R199 guarded enable emitted repeated notification");
