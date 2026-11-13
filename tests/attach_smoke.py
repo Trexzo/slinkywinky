@@ -176,6 +176,16 @@ try:
     if entries.intersection(r194_graph_classes):
         raise AssertionError("R194 static original input graph leaked into agent")
     print("PASS: R194 original input call graph only in offline audit JAR")
+    r195_dispatch_classes = {
+        "dev/slinkywinky/attach/R195PossibleInputDispatch.class",
+        "dev/slinkywinky/attach/R195PossibleInputDispatchSmoke.class",
+    }
+    with zipfile.ZipFile(render_audit_jar, "r") as inspected:
+        if not r195_dispatch_classes.issubset(set(inspected.namelist())):
+            raise AssertionError("R195 offline-only polymorphic audit absent")
+    if entries.intersection(r195_dispatch_classes):
+        raise AssertionError("R195 polymorphic input audit leaked to game agent")
+    print("PASS: R195 original polymorphic input audit only in offline audit JAR")
     r172_fixture="dev/slinkywinky/instrument/R172OriginalPointerReceiptSmoke.class"
     if r172_fixture in entries:
         raise AssertionError("R172 Java8 pointer receipt smoke leaked into agent")

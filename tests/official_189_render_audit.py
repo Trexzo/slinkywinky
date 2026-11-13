@@ -287,6 +287,29 @@ def main():
             raise RuntimeError("R194 original 1.8.9 declared-call reachability failed: "+
                                call_graph.stdout[-2200:]+call_graph.stderr[-2200:])
         print(call_graph.stdout.rstrip(), flush=True)
+        # R195: expand possible virtual/interface targets over known
+        # concrete descendants, without pretending to prove runtime paths.
+        possible_dispatch = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R195PossibleInputDispatchSmoke",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=90)
+        if (possible_dispatch.returncode != 0 or
+                "R195_PINNED_ORIGINAL_HIERARCHY_SCAN_PASS"
+                not in possible_dispatch.stdout or
+                "R195_CLASS_OVERRIDE_POSSIBLE_INPUT_EDGE_PASS"
+                not in possible_dispatch.stdout or
+                "R195_INTERFACE_POSSIBLE_INPUT_EDGE_PASS"
+                not in possible_dispatch.stdout or
+                "R195_PINNED_DISPATCH_SHA256 "
+                "3c8399abdc065c43d933e14355b6835675898e2386851054940fa006ef60fbfe"
+                not in possible_dispatch.stdout or
+                "R195_NOT_RUNTIME_INPUT_OWNERSHIP_OR_GAMEPLAY_PROOF"
+                not in possible_dispatch.stdout):
+            raise RuntimeError("R195 source hierarchy input graph mismatch: "+
+                               possible_dispatch.stdout[-2200:]+
+                               possible_dispatch.stderr[-2200:])
+        print(possible_dispatch.stdout.rstrip(), flush=True)
         # R173: exact-source GUI singleton getter and axu screen field,
         # plus same-count getter mutation negative control. No game attach.
         original_gui = subprocess.run(
