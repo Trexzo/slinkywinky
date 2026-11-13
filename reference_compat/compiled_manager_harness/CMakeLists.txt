@@ -49,6 +49,16 @@ add_test(NAME r198_compiled_manager_repeated_lifecycle
   COMMAND slinkywinky_r195_manager_acceptance --lifecycle-cycles)
 set_tests_properties(r198_compiled_manager_repeated_lifecycle
   PROPERTIES TIMEOUT 15)
+# R199 explicitly preserves native-hazard repro evidence and tests a
+# first-party queue-admission/deferral guard without altering upstream COFF.
+add_test(NAME r199_native_duplicate_reentrant_hazard_observation
+  COMMAND slinkywinky_r195_manager_acceptance --observe-native-toggle-hazards)
+set_tests_properties(r199_native_duplicate_reentrant_hazard_observation
+  PROPERTIES TIMEOUT 10)
+add_test(NAME r199_first_party_guarded_toggle_acceptance
+  COMMAND slinkywinky_r195_manager_acceptance --guarded-toggle-acceptance)
+set_tests_properties(r199_first_party_guarded_toggle_acceptance
+  PROPERTIES TIMEOUT 10)
 # Optional local-only R196 acceptance. Fixture is produced from a linked,
 # verified DLL by the independent metadata extractor; CI has no third-party DLL.
 if(DEFINED SLINKY_DESCRIPTOR_FIXTURE)
