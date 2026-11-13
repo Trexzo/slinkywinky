@@ -517,10 +517,195 @@ int run_repeated_lifecycle() {
                 kCycles, lifecycle_event_calls, allocations, releases);
     return 0;
 }
+
+struct GuardedToggleQueue {
+    struct Pending { Module *module; unsigned char enabled; };
+    Mgr *manager = nullptr;
+    std::array<Pending, 66> deferred = {};
+    unsigned deferred_count = 0;
+    bool applying = false;
+
+    explicit GuardedToggleQueue(Mgr *mgr) : manager(mgr) {}
+
+    bool enqueue(Module *module, unsigned char enabled) {
+        if (!module || enabled > 1) return false;
+        for (unsigned i = 0; i < manager->en_count; ++i)
+            if (manager->en_list[i] == module) return enabled == 1;
+        for (unsigned i = 0; i < manager->dis_count; ++i)
+            if (manager->dis_list[i] == module) return enabled == 0;
+        for (unsigned i = 0; i < deferred_count; ++i)
+            if (deferred[i].module == module)
+                return deferred[i].enabled == enabled;
+        if (applying) {
+            if (deferred_count == deferred.size()) return false;
+            deferred[deferred_count++] = {module, enabled};
+            return true;
+        }
+        return queue_module_toggle(manager, module, enabled);
+    }
+
+    void apply(HCtx *ctx) {
+        require(ctx && ctx->module_manager == manager,
+                "R199 guard received the wrong native manager context");
+        require(!applying, "R199 nested apply is forbidden by first-party guard");
+        applying = true;
+        apply_module_toggles(ctx);
+        applying = false;
+        const unsigned n = deferred_count;
+        deferred_count = 0;
+        for (unsigned i = 0; i < n; ++i) {
+            require(enqueue(deferred[i].module, deferred[i].enabled),
+                    "R199 guarded deferred toggle was rejected");
+            deferred[i] = {};
+        }
+    }
+};
+
+GuardedToggleQueue *active_guard = nullptr;
+bool reentrant_once = false;
+unsigned reentrant_notification_count = 0;
+
+void synthetic_reentrant_callback(void *event) {
+    ToggleEvent *e = static_cast<ToggleEvent *>(event);
+    require(e->type == 5, "R199 event-5 callback received wrong event type");
+    ++reentrant_notification_count;
+    if (!reentrant_once && e->on && e->mod == &modules[0]) {
+        reentrant_once = true;
+        if (active_guard) {
+            require(active_guard->enqueue(&modules[1], 1),
+                    "R199 guarded reentrant enable rejected");
+        } else {
+            require(queue_module_toggle(e->ctx->module_manager, &modules[1], 1),
+                    "R199 direct reentrant enable rejected");
+        }
+    }
+}
+
+HCtx synthetic_ready_context(Mgr *manager, int *world, int *player) {
+    HCtx ctx = {};
+    ctx.module_manager = manager;
+    ctx.world = world;
+    ctx.player = player;
+    return ctx;
+}
+
+int run_original_toggle_observations() {
+    reset_synthetic_modules();
+    Mgr manager = {};
+    require(create_module_manager(&manager, state_setter) == 0
+            && manager.count == 66, "R199 observation requires corrected manager");
+    int world = 1, player = 1;
+    HCtx ctx = synthetic_ready_context(&manager, &world, &player);
+    for (int i = 0; i < 3; ++i)
+        require(queue_module_toggle(&manager, &modules[0], 1),
+                "R199 duplicate native enable failed before capacity");
+    require(manager.en_count == 3, "R199 duplicate native enables were unexpectedly deduplicated");
+    apply_module_toggles(&ctx);
+    require(modules[0].enabled == 1 && delivered_toggle == 3,
+            "R199 native duplicate enable notification observation changed");
+    for (int i = 0; i < 3; ++i)
+        require(queue_module_toggle(&manager, &modules[0], 0),
+                "R199 duplicate native disable unexpectedly rejected");
+    require(manager.dis_count == 3, "R199 native duplicate disable was unexpectedly deduplicated");
+    apply_module_toggles(&ctx);
+    require(modules[0].enabled == 0 && released_owners == 3
+            && delivered_toggle == 6,
+            "R199 native duplicate disable side-effect observation changed");
+    destroy_module_manager(&manager);
+    require(allocations == releases, "R199 observed original queue leaked allocations");
+
+    reset_synthetic_modules();
+    delivered_toggle = 0;
+    reentrant_once = false;
+    reentrant_notification_count = 0;
+    active_guard = nullptr;
+    modules[0].h[5] = {synthetic_reentrant_callback, nullptr};
+    Mgr reentrant = {};
+    require(create_module_manager(&reentrant, state_setter) == 0
+            && reentrant.count == 66, "R199 reentrant observation requires corrected manager");
+    HCtx ctx2 = synthetic_ready_context(&reentrant, &world, &player);
+    require(queue_module_toggle(&reentrant, &modules[0], 1),
+            "R199 initial native enable failed");
+    apply_module_toggles(&ctx2);
+    require(reentrant_once && reentrant_notification_count == 2,
+            "R199 reentrant native event-5 notification count changed");
+    require(modules[0].enabled == 1 && modules[1].enabled == 0
+            && !has_queued_modules(&reentrant),
+            "R199 direct reentrant pending enable was not lost as expected");
+    destroy_module_manager(&reentrant);
+    require(allocations == releases, "R199 unguarded observation leaked allocations");
+    std::printf("R199_UNGUARDED_NATIVE_HAZARDS_REPRODUCED "
+                "duplicate_notifications=6 duplicate_releases=3 "
+                "reentrant_request_lost=1 allocations=%zu frees=%zu\n",
+                allocations, releases);
+    return 0;
+}
+
+int run_first_party_toggle_guard_acceptance() {
+    reset_synthetic_modules();
+    Mgr manager = {};
+    require(create_module_manager(&manager, state_setter) == 0
+            && manager.count == 66, "R199 guarded test requires corrected manager");
+    GuardedToggleQueue guarded(&manager);
+    int world = 1, player = 1;
+    HCtx ctx = synthetic_ready_context(&manager, &world, &player);
+    for (int i = 0; i < 3; ++i)
+        require(guarded.enqueue(&modules[0], 1),
+                "R199 first-party guard rejected duplicate enable admission");
+    require(manager.en_count == 1, "R199 guarded duplicate enables not collapsed");
+    guarded.apply(&ctx);
+    require(modules[0].enabled == 1 && delivered_toggle == 1,
+            "R199 guarded enable emitted repeated notification");
+    for (int i = 0; i < 3; ++i)
+        require(guarded.enqueue(&modules[0], 0),
+                "R199 first-party guard rejected duplicate disable admission");
+    require(manager.dis_count == 1, "R199 guarded duplicate disables not collapsed");
+    guarded.apply(&ctx);
+    require(modules[0].enabled == 0 && released_owners == 1
+            && delivered_toggle == 2,
+            "R199 guarded disable emitted duplicate release or notifications");
+    destroy_module_manager(&manager);
+    require(allocations == releases, "R199 guarded duplicate fixture leaked allocations");
+
+    reset_synthetic_modules();
+    reentrant_once = false;
+    reentrant_notification_count = 0;
+    modules[0].h[5] = {synthetic_reentrant_callback, nullptr};
+    Mgr managed = {};
+    require(create_module_manager(&managed, state_setter) == 0
+            && managed.count == 66, "R199 guarded reentrant constructor failed");
+    GuardedToggleQueue deferrer(&managed);
+    active_guard = &deferrer;
+    HCtx ctx2 = synthetic_ready_context(&managed, &world, &player);
+    require(deferrer.enqueue(&modules[0], 1), "R199 initial guarded enable rejected");
+    deferrer.apply(&ctx2);
+    require(reentrant_once && reentrant_notification_count == 1
+            && managed.en_count == 1
+            && modules[0].enabled == 1 && modules[1].enabled == 0,
+            "R199 guarded event-5 request was not deferred to next frame");
+    deferrer.apply(&ctx2);
+    require(reentrant_notification_count == 2
+            && modules[0].enabled == 1 && modules[1].enabled == 1
+            && !has_queued_modules(&managed),
+            "R199 guarded event-5 deferred enable not applied next frame");
+    active_guard = nullptr;
+    destroy_module_manager(&managed);
+    require(allocations == releases,
+            "R199 first-party guarded native manager leaked allocations");
+    std::printf("R199_GUARDED_NATIVE_TOGGLE_ACCEPTANCE_PASS "
+                "duplicate_notifications=2 duplicate_releases=1 "
+                "reentrant_deferred_then_applied=1 allocations=%zu frees=%zu\n",
+                allocations, releases);
+    return 0;
+}
 } // namespace
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::strcmp(argv[1], "--observe-native-toggle-hazards") == 0)
+            return run_original_toggle_observations();
+        if (argc == 2 && std::strcmp(argv[1], "--guarded-toggle-acceptance") == 0)
+            return run_first_party_toggle_guard_acceptance();
         if (argc == 2 && std::strcmp(argv[1], "--allocator-fault-matrix") == 0)
             return run_allocator_fault_matrix();
         if (argc == 2 && std::strcmp(argv[1], "--lifecycle-cycles") == 0)
