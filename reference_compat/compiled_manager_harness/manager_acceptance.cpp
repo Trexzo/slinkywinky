@@ -1,5 +1,6 @@
 // R195 independent synthetic harness; links a separately compiled COFF object.
 // No third-party source, original DLL, JNI JVM, Minecraft or injector involved.
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -69,6 +70,7 @@ static_assert(offsetof(Module, cat) == 0x10, "Module category layout");
 static_assert(offsetof(Module, enabled) == 0x14, "Module enabled layout");
 static_assert(offsetof(Module, h) == 0x48, "Module handler layout");
 static_assert(offsetof(HSlot, x) == 8, "Handler priority layout");
+static_assert(sizeof(Module) == 0x1f8, "Private raw native module record layout");
 
 extern "C" {
 int create_module_manager(Mgr *, void (*)(void *, int));
@@ -239,8 +241,94 @@ void prepare_linked_fixture(const char *path) {
     for (unsigned value : linked_expected_per_event) subscription_total += value;
     require(subscription_total == 171, "native linked fixture subscription count changed");
 }
-int run_linked_native_manifest(const char *path) {
+
+void replace_metadata_with_raw_records(const char *path) {
+    // The local fixture contains full pinned PE .data records, including
+    // native addresses. Every callable pointer and name is scrubbed before
+    // the original manager object ever receives a module pointer.
+    struct Header {
+        char magic[8];
+        std::uint32_t count;
+        std::uint32_t record_size;
+        unsigned char dll_sha256[32];
+    };
+    static_assert(sizeof(Header) == 48, "R197 binary header layout");
+    static const unsigned char expected_sha[32] = {
+        0x36,0x13,0xa4,0x66,0x43,0x3f,0xb1,0xfa,
+        0x83,0xd2,0xd9,0xe9,0x68,0x15,0xec,0xe7,
+        0x19,0xc1,0x66,0xf8,0x81,0xc7,0x86,0x42,
+        0xdc,0x18,0xd3,0xe1,0x3a,0xe2,0xaa,0x14
+    };
+    std::ifstream file(path, std::ios::binary);
+    require(file.good(), "private linked native record fixture cannot be opened");
+    Header header = {};
+    file.read(reinterpret_cast<char *>(&header), sizeof(header));
+    require(file.gcount() == sizeof(header)
+            && std::memcmp(header.magic, "R197REC1", 8) == 0
+            && header.count == 66 && header.record_size == sizeof(Module)
+            && std::memcmp(header.dll_sha256, expected_sha, 32) == 0,
+            "private linked PE record file header or DLL fingerprint invalid");
+
+    for (unsigned compact = 0; compact < 66; ++compact) {
+        std::uint32_t source = 0;
+        file.read(reinterpret_cast<char *>(&source), sizeof(source));
+        require(file.gcount() == sizeof(source), "truncated private native record index");
+        const unsigned expected_source = compact < 17 ? compact : compact + 1;
+        require(source == expected_source, "private native record source order changed");
+        std::array<unsigned char, sizeof(Module)> raw = {};
+        file.read(reinterpret_cast<char *>(raw.data()), raw.size());
+        require(file.gcount() == static_cast<std::streamsize>(raw.size()),
+                "truncated private linked native record bytes");
+
+        Module &mod = modules[source];
+        Module original = {};
+        // The exact 0x1f8 compiled DLL bytes enter memory, but no pointer is
+        // invoked. Compare against separately verified R196 metadata first.
+        std::memcpy(&original, raw.data(), raw.size());
+        require(original.cat == mod.cat && original.enabled == mod.enabled,
+                "linked PE native record category/default differs from R196 manifest");
+        for (unsigned event = 0; event < 27; ++event) {
+            std::uint64_t raw_handler_va = 0;
+            std::memcpy(&raw_handler_va, raw.data() + 0x48 + event * 16,
+                        sizeof(raw_handler_va));
+            const bool expected_present = mod.h[event].f != nullptr;
+            require((raw_handler_va != 0) == expected_present,
+                    "native raw callback-presence mismatch");
+            if (expected_present) {
+                std::int32_t raw_priority = 0;
+                std::memcpy(&raw_priority, raw.data() + 0x50 + event * 16,
+                            sizeof(raw_priority));
+                require(raw_priority == linked_slot_priority(&mod, event),
+                        "native raw event priority differs from R196 manifest");
+            }
+        }
+        // Preserve native record scalar layout, then scrub potentially
+        // executable/dangling addresses before any compiled code sees it.
+        std::memcpy(&mod, raw.data(), raw.size());
+        mod.name = "private-raw-record-safe-name";
+        std::memset(mod.padding_08, 0, sizeof(mod.padding_08));
+        std::memset(mod.padding_15, 0, sizeof(mod.padding_15));
+        for (unsigned event = 0; event < 27; ++event) {
+            std::uint64_t native_callback = 0;
+            std::int32_t priority = 0;
+            std::memcpy(&native_callback, raw.data() + 0x48 + event * 16, 8);
+            std::memcpy(&priority, raw.data() + 0x50 + event * 16, 4);
+            mod.h[event].f = native_callback ? &linked_mock_handler : nullptr;
+            mod.h[event].x = native_callback
+                ? reinterpret_cast<void *>(
+                    static_cast<std::uintptr_t>(static_cast<std::uint32_t>(priority))
+                )
+                : nullptr;
+        }
+    }
+    char trailer = '\0';
+    require(!file.read(&trailer, 1), "private native record fixture has trailing bytes");
+    require(file.eof() && !file.bad(), "private native record fixture read error");
+}
+
+int run_linked_native_manifest(const char *path, const char *record_path = nullptr) {
     prepare_linked_fixture(path);
+    if (record_path) replace_metadata_with_raw_records(record_path);
     Mgr manager = {};
     require(create_module_manager(&manager, state_setter) == 0,
             "compiled real-metadata native manager constructor failed");
@@ -319,8 +407,10 @@ int run_linked_native_manifest(const char *path) {
     destroy_module_manager(&manager);
     require(allocations == releases, "linked-data compiled manager did not clean up");
     std::printf(
-        "R196_COMPILED_LINKED_DATA_PASS registrations=66 callbacks=171 "
+        "%s registrations=66 callbacks=171 "
         "event0=%u event5=%u allocations=%zu frees=%zu\n",
+        record_path ? "R197_COMPILED_NATIVE_RECORDS_PASS"
+                    : "R196_COMPILED_LINKED_DATA_PASS",
         linked_expected_per_event[0], linked_expected_per_event[5], allocations, releases
     );
     return 0;
@@ -329,6 +419,8 @@ int run_linked_native_manifest(const char *path) {
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 4 && std::strcmp(argv[1], "--native-records") == 0)
+            return run_linked_native_manifest(argv[3], argv[2]);
         if (argc == 2) return run_linked_native_manifest(argv[1]);
         require(argc == 1, "expected no arguments or one linked metadata fixture");
         reset_synthetic_modules();
