@@ -87,6 +87,9 @@ namespace {
 Module modules[67] = {};
 std::size_t allocations = 0;
 std::size_t releases = 0;
+std::size_t allocation_attempts = 0;
+std::size_t fail_on_allocation_attempt = 0;
+unsigned lifecycle_event_calls = 0;
 unsigned released_owners = 0;
 unsigned delivered_event_zero = 0;
 unsigned delivered_toggle = 0;
@@ -99,6 +102,7 @@ void require(bool condition, const char *reason) {
     if (!condition) throw std::runtime_error(reason);
 }
 void state_setter(void *, int) {}
+void lifecycle_handler(void *) { ++lifecycle_event_calls; }
 void event_low(void *event) {
     require(*static_cast<unsigned *>(event) == 0, "unexpected event type in low handler");
     emitted_order[order_cursor++] = 0;
@@ -139,6 +143,9 @@ extern "C" {
 // Deliberate first-party replacements for external helper symbols used by the
 // *compiled* module_manager.cpp object. All Java symbols are fail-closed stubs.
 void *libc_calloc(unsigned long long n, unsigned long long width) {
+    ++allocation_attempts;
+    if (fail_on_allocation_attempt != 0
+        && allocation_attempts == fail_on_allocation_attempt) return nullptr;
     void *result = std::calloc(static_cast<size_t>(n), static_cast<size_t>(width));
     if (result) ++allocations;
     return result;
@@ -415,10 +422,109 @@ int run_linked_native_manifest(const char *path, const char *record_path = nullp
     );
     return 0;
 }
+
+int run_allocator_fault_matrix() {
+    require(fail_on_allocation_attempt == 0,
+            "fault matrix must start with injection disabled");
+    reset_synthetic_modules();
+    Mgr baseline = {};
+    const std::size_t first_attempt = allocation_attempts;
+    require(create_module_manager(&baseline, state_setter) == 0,
+            "R198 baseline native constructor failed");
+    require(baseline.count == 66, "R198 baseline is not the corrected manager");
+    const std::size_t allocations_per_manager = allocation_attempts - first_attempt;
+    require(allocations_per_manager >= 32 && allocations_per_manager <= 80,
+            "R198 unexpected native manager allocation footprint");
+    destroy_module_manager(&baseline);
+    require(allocations == releases, "R198 baseline manager leaked allocations");
+
+    for (std::size_t failing_step = 1; failing_step <= allocations_per_manager; ++failing_step) {
+        reset_synthetic_modules();
+        Mgr manager = {};
+        const std::size_t prior_allocations = allocations;
+        const std::size_t prior_releases = releases;
+        fail_on_allocation_attempt = allocation_attempts + failing_step;
+        const int result = create_module_manager(&manager, state_setter);
+        // Failpoint is one-shot and therefore cannot affect destructor.
+        fail_on_allocation_attempt = 0;
+        require(result == 0x3ed, "R198 injected allocation failure not propagated");
+        require(manager.count == 66, "R198 partial manager count changed");
+        destroy_module_manager(&manager);
+        require(allocations - prior_allocations == releases - prior_releases,
+                "R198 failure path leaked already-allocated manager memory");
+        require(allocations == releases,
+                "R198 cumulative manager allocations/frees diverged after failure");
+
+        // A failed instance must not poison a fresh constructor.
+        Mgr recovered = {};
+        require(create_module_manager(&recovered, state_setter) == 0,
+                "R198 constructor did not recover after injected failure");
+        require(recovered.count == 66
+                && recovered.mods[17] == &modules[18],
+                "R198 recovered manager has incorrect compacted module list");
+        destroy_module_manager(&recovered);
+        require(allocations == releases,
+                "R198 recovery constructor/destructor leaked native allocations");
+    }
+    std::printf("R198_NATIVE_ALLOCATOR_FAULT_MATRIX_PASS positions=%zu"
+                " allocated=%zu freed=%zu\n",
+                allocations_per_manager, allocations, releases);
+    return 0;
+}
+
+int run_repeated_lifecycle() {
+    require(fail_on_allocation_attempt == 0, "R198 lifecycle started with injected failure");
+    static constexpr unsigned kCycles = 128;
+    for (unsigned cycle = 0; cycle < kCycles; ++cycle) {
+        reset_synthetic_modules();
+        modules[0].h[0] = {lifecycle_handler, reinterpret_cast<void *>(std::uintptr_t(10))};
+        modules[1].h[0] = {lifecycle_handler, reinterpret_cast<void *>(std::uintptr_t(30))};
+        Mgr manager = {};
+        require(create_module_manager(&manager, state_setter) == 0,
+                "R198 repeated constructor failed");
+        require(manager.count == 66
+                && manager.mods[17] == &modules[18]
+                && manager.reg[0].n == 2,
+                "R198 repeated constructor manager layout drift");
+        const unsigned before_callbacks = lifecycle_event_calls;
+        require(queue_module_toggle(&manager, &modules[0], 1)
+                && queue_module_toggle(&manager, &modules[1], 1),
+                "R198 repeated lifecycle enable rejected");
+        HCtx ctx = {};
+        ctx.module_manager = &manager;
+        int dummy_world = 1, dummy_player = 1;
+        ctx.world = &dummy_world;
+        ctx.player = &dummy_player;
+        apply_module_toggles(&ctx);
+        unsigned event0 = 0;
+        dispatch_event(&manager, &event0);
+        require(lifecycle_event_calls == before_callbacks + 2,
+                "R198 repeated enabled dispatch delivered incorrect callback count");
+        require(queue_module_toggle(&manager, &modules[0], 0),
+                "R198 repeated lifecycle disable rejected");
+        apply_module_toggles(&ctx);
+        dispatch_event(&manager, &event0);
+        require(lifecycle_event_calls == before_callbacks + 3,
+                "R198 repeated rebuilt list contains disabled callback");
+        destroy_module_manager(&manager);
+        require(allocations == releases,
+                "R198 native manager leaked during repeated lifecycle");
+    }
+    require(lifecycle_event_calls == kCycles * 3,
+            "R198 cumulative repeated callback deliveries drifted");
+    std::printf("R198_NATIVE_LIFECYCLE_PASS cycles=%u"
+                " callbacks=%u allocated=%zu freed=%zu\n",
+                kCycles, lifecycle_event_calls, allocations, releases);
+    return 0;
+}
 } // namespace
 
 int main(int argc, char **argv) {
     try {
+        if (argc == 2 && std::strcmp(argv[1], "--allocator-fault-matrix") == 0)
+            return run_allocator_fault_matrix();
+        if (argc == 2 && std::strcmp(argv[1], "--lifecycle-cycles") == 0)
+            return run_repeated_lifecycle();
         if (argc == 4 && std::strcmp(argv[1], "--native-records") == 0)
             return run_linked_native_manifest(argv[3], argv[2]);
         if (argc == 2) return run_linked_native_manifest(argv[1]);
