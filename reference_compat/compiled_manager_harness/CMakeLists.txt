@@ -49,3 +49,17 @@ if(DEFINED SLINKY_DESCRIPTOR_FIXTURE)
     COMMAND slinkywinky_r195_manager_acceptance "${SLINKY_DESCRIPTOR_FIXTURE}")
   set_tests_properties(r196_compiled_manager_real_linked_metadata PROPERTIES TIMEOUT 10)
 endif()
+# Private R197 fixture contains original linked Windows native addresses.
+# Generated locally, never checked into the public reference CI.
+if(DEFINED SLINKY_NATIVE_RECORD_FIXTURE)
+  if(NOT DEFINED SLINKY_DESCRIPTOR_FIXTURE
+      OR NOT EXISTS "${SLINKY_DESCRIPTOR_FIXTURE}"
+      OR NOT EXISTS "${SLINKY_NATIVE_RECORD_FIXTURE}")
+    message(FATAL_ERROR "R197 requires both local record and sanitized manifest files")
+  endif()
+  add_test(NAME r197_compiled_manager_private_native_record_layout
+    COMMAND slinkywinky_r195_manager_acceptance
+      --native-records "${SLINKY_NATIVE_RECORD_FIXTURE}" "${SLINKY_DESCRIPTOR_FIXTURE}")
+  set_tests_properties(r197_compiled_manager_private_native_record_layout
+    PROPERTIES TIMEOUT 10)
+endif()
