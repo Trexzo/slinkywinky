@@ -26,6 +26,9 @@ on:
       - 'tests/test_compiled_registration_66.py'
       - 'tools/extract_r196_linked_descriptor_manifest.py'
       - 'tests/test_r196_linked_descriptor_manifest.py'
+      - 'tools/export_r197_private_native_records.py'
+      - 'tests/test_r197_native_record_serializer.py'
+      - 'tools/run_r197_private_native_acceptance.ps1'
       - '.github/workflows/openslinky-reference-audit.yml'
 permissions:
   contents: read
@@ -59,6 +62,8 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_compiled_registration_66.py' -v
       - name: Linked native descriptor extractor tests (synthetic PE only)
         run: python3 -m unittest discover -s tests -p 'test_r196_linked_descriptor_manifest.py' -v
+      - name: Private native-record serializer regression tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_r197_native_record_serializer.py' -v
       - name: Native reference compiler availability (informational; no DLL build)
         run: python3 tools/probe_openslinky_native_toolchain.py --json-out native_toolchain_preflight.json
       - name: Static inventory (never run untrusted native code)
