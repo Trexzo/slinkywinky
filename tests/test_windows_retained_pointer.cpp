@@ -19,6 +19,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_keyboard_router.hpp"
 #include <array>
@@ -1170,6 +1171,251 @@ void verify_r193_closed_gui_drain(Context& context,const State& expected) {
     std::cout<<"R193_PENDING_MOUSE_CLICK_DROPPED_AND_RESTORE_ATTESTED_PASS\n";
 }
 
+// R196: exercise actual native retained GL11 multi-choice dispatch, not
+// merely the separate R134 model or source hit-test. No original input.
+void verify_r196_wgl_multiselect(Context& ctx,const State& expected) {
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    WglRetainedMenuPreview preview;
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_navigation().select_tab(MenuTab::Block));
+    REQUIRE(preview.fixture_navigation().focus_visible_row(42u));
+    REQUIRE(preview.apply(MenuNavAction::ExpandFocused));
+    const auto& all=recovered_widget_catalog();
+    std::size_t chosen=all.size();
+    for(std::size_t i=0;i<all.size();++i)
+        if(std::string_view(all[i].module)=="Auto Tool" &&
+           all[i].kind==RecoveredWidgetKind::MultiSelect &&
+           menu_source_multi_count(i)==4u) {chosen=i;break;}
+    REQUIRE(chosen<all.size());
+    const auto panel=menu_panel_geometry(
+        676,630,false,MenuPanelMode::CompactOverlay);
+    REQUIRE(panel);
+    const auto physical=[&](float x,float y) {
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    std::optional<std::array<int,2>> trigger;
+    for(unsigned page=0;page<10 && !trigger;++page) {
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* frame=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(frame && frame->tab==MenuTab::Block);
+        std::size_t row=frame->visible.size();
+        for(std::size_t i=0;i<frame->visible.size();++i)
+            if(frame->visible[i].catalog_index==42u){row=i;break;}
+        REQUIRE(row<frame->visible.size() &&
+                frame->visible[row].expanded);
+        std::array<const RecoveredWidget*,5> widgets{};
+        REQUIRE(recovered_widget_visible_page(
+            "Auto Tool",frame->visible[row].settings_offset,
+            static_cast<int>(frame->aim_preview_mode),
+            static_cast<int>(frame->target_preview_mode),widgets)>0);
+        for(std::size_t slot=0;slot<widgets.size();++slot) {
+            if(widgets[slot]!=&all[chosen])continue;
+            const auto card=menu_module_card_rect(
+                *frame,panel->logical_width(),row);
+            const auto column=menu_setting_column(card.x,card.width);
+            const float y=card.y+menu_row_body_height(*frame)+
+                menu_settings_control_offset(widgets,slot)+10.0f;
+            const auto point=physical(column.x+column.width*0.5f,y);
+            const auto hit=hit_test_menu(
+                *frame,MenuPanelMode::CompactOverlay,point[0],point[1]);
+            REQUIRE(hit && hit->kind==MenuHitKind::RecoveredMultiControl &&
+                    hit->catalog_index==42u &&
+                    hit->control_index==chosen);
+            trigger=point;
+        }
+        if(!trigger)REQUIRE(preview.apply(MenuNavAction::NextSettingsPage));
+    }
+    REQUIRE(trigger);
+    const auto original=preview.profile_snapshot(ctx.gl,ctx.dc,676,630);
+    REQUIRE(original);
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(preview.fixture_navigation());
+    REQUIRE(ledger.request(1960,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(1960,true,true,true));
+    REQUIRE(preview.fixture_begin_keyboard(1960,ledger,router));
+    REQUIRE(preview.fixture_pointer_event(
+        down,ctx.gl,ctx.dc,676,630,1960,ledger,router,
+        (*trigger)[0],(*trigger)[1],20000,true));
+    REQUIRE(preview.fixture_pointer_event(
+        up,ctx.gl,ctx.dc,676,630,1960,ledger,router,
+        (*trigger)[0],(*trigger)[1],20040,true));
+    REQUIRE(preview.preview_dropdown_open());
+    // A GUI state mutation invalidates old painted input.
+    REQUIRE(!preview.fixture_painted_frame(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* popupFrame=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(popupFrame && popupFrame->dropdown_preview &&
+            popupFrame->dropdown_preview->kind==
+                MenuDropdownKind::RecoveredMulti);
+    const auto popup=menu_dropdown_popup_geometry(
+        *popupFrame,panel->logical_width(),panel->logical_height());
+    REQUIRE(popup && popup->total_options==4u);
+    const auto second=physical(
+        popup->x+popup->width*0.5f,
+        popup->y+popup->row_height*1.5f);
+    const auto secondHit=hit_test_menu(
+        *popupFrame,MenuPanelMode::CompactOverlay,second[0],second[1]);
+    REQUIRE(secondHit &&
+            secondHit->kind==MenuHitKind::DropdownOption &&
+            secondHit->control_index==1u);
+    REQUIRE(preview.fixture_pointer_event(
+        down,ctx.gl,ctx.dc,676,630,1960,ledger,router,
+        second[0],second[1],23000,true));
+    REQUIRE(preview.fixture_pointer_event(
+        up,ctx.gl,ctx.dc,676,630,1960,ledger,router,
+        second[0],second[1],23040,true));
+    REQUIRE(preview.preview_dropdown_open()); // Multi stays open
+    REQUIRE(!preview.preview_enabled(42u));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* selected=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(selected && selected->recovered_multi_overrides[chosen] &&
+            *selected->recovered_multi_overrides[chosen]==2u);
+    const auto selectedPopup=menu_dropdown_popup_geometry(
+        *selected,panel->logical_width(),panel->logical_height());
+    REQUIRE(selectedPopup && selectedPopup->selected_mask==2u);
+    REQUIRE(preview.fixture_pointer_event(
+        down,ctx.gl,ctx.dc,676,630,1960,ledger,router,
+        second[0],second[1],25000,true));
+    REQUIRE(preview.fixture_pointer_event(
+        up,ctx.gl,ctx.dc,676,630,1960,ledger,router,
+        second[0],second[1],25040,true));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* deselected=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(deselected &&
+            deselected->recovered_multi_overrides[chosen].value_or(9u)==0u);
+    REQUIRE(preview.profile_snapshot(ctx.gl,ctx.dc,676,630)==original);
+    REQUIRE(ledger.tracked_released());
+    REQUIRE(preview.fixture_end_keyboard(ledger,router));
+    REQUIRE(preview.fixture_finish_restore(ledger,router,true,true,true));
+    REQUIRE(preview.close());
+    REQUIRE(!ledger.may_suppress_vanilla_event());
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R196_WGL_REAL_MULTI_POPUP_SELECTED_DESELECTED_PASS\n";
+}
+
+// R196: the REAL retained GL11 ClickGUI commits a range endpoint from
+// source-pinned geometry, keeping the original mouse-down handle. This
+// runs in a disposable WGL fixture, never through Minecraft's input queue.
+void verify_r196_wgl_range(Context& ctx,const State& expected) {
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto move=RetainedPointerPhase::Move;
+    constexpr auto up=RetainedPointerPhase::Up;
+    const auto& catalog=recovered_widget_catalog();
+    std::size_t rangeIndex=catalog.size();
+    for(std::size_t i=0;i<catalog.size();++i)
+        if(catalog[i].kind==RecoveredWidgetKind::Range &&
+           std::string_view(catalog[i].module)=="Aim Assist" &&
+           std::string_view(catalog[i].label)=="Range") {
+            rangeIndex=i;break;
+        }
+    REQUIRE(rangeIndex<catalog.size());
+    const auto& source=catalog[rangeIndex];
+    REQUIRE(source.min_value<source.example_value &&
+            source.example_value<source.example_other &&
+            source.example_other<source.max_value);
+    const auto panel=menu_panel_geometry(
+        676,630,false,MenuPanelMode::CompactOverlay);
+    REQUIRE(panel);
+    const auto physical=[&](float x,float y) {
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    for(unsigned handle=0;handle<2u;++handle) {
+        WglRetainedMenuPreview preview;
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        REQUIRE(preview.apply(MenuNavAction::ExpandFocused)); // Aim
+        std::optional<MenuNumericTrack> track;
+        for(unsigned page=0;page<10 && !track;++page) {
+            REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+            const auto* frame=preview.fixture_painted_frame(
+                ctx.gl,ctx.dc,676,630);
+            REQUIRE(frame && frame->tab==MenuTab::Combat);
+            track=menu_numeric_track_geometry(
+                *frame,panel->logical_width(),panel->logical_height(),
+                0u,rangeIndex);
+            if(!track)
+                REQUIRE(preview.apply(MenuNavAction::NextSettingsPage));
+        }
+        REQUIRE(track && track->width>30.0f);
+        const auto* frame=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(frame && frame->visible.front().expanded);
+        const float start=handle==0?
+            source.example_value:source.example_other;
+        const float ratio=(start-source.min_value)/
+            (source.max_value-source.min_value);
+        const auto first=physical(
+            track->x+track->width*ratio,
+            track->y+track->height*0.5f);
+        const auto last=physical(
+            handle==0?track->x+track->width-2.0f:
+                      track->x+2.0f,
+            track->y+track->height*0.5f);
+        const auto originalHit=hit_test_menu(
+            *frame,MenuPanelMode::CompactOverlay,first[0],first[1]);
+        REQUIRE(originalHit &&
+                originalHit->kind==MenuHitKind::RecoveredRangePreview &&
+                originalHit->control_index==rangeIndex &&
+                originalHit->sub_index==handle);
+        const auto original=preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(original);
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(preview.fixture_navigation());
+        const std::uint64_t epoch=1961+handle;
+        REQUIRE(ledger.request(epoch,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(epoch,true,true,true));
+        REQUIRE(preview.fixture_begin_keyboard(epoch,ledger,router));
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,676,630,epoch,
+            ledger,router,first[0],first[1],30000,true));
+        REQUIRE(preview.fixture_pointer_event(
+            move,ctx.gl,ctx.dc,676,630,epoch,
+            ledger,router,last[0],last[1],30050,true));
+        // Drag does not silently mutate the source value before Up.
+        const auto* heldFrame=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(heldFrame &&
+                !heldFrame->recovered_range_overrides[rangeIndex]);
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,676,630,epoch,
+            ledger,router,last[0],last[1],30070,true));
+        REQUIRE(!preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630)); // repaint after commit
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* committed=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(committed &&
+                committed->recovered_range_overrides[rangeIndex]);
+        const auto selected=*committed->recovered_range_overrides[rangeIndex];
+        const float expectedValue=handle==0?
+            source.example_other:source.example_value;
+        REQUIRE(std::fabs(selected.lower-expectedValue)<0.0001f &&
+                std::fabs(selected.upper-expectedValue)<0.0001f);
+        REQUIRE(preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630)==original);
+        REQUIRE(!preview.preview_enabled(0u));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.fixture_end_keyboard(ledger,router));
+        REQUIRE(preview.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(preview.close());
+        REQUIRE(!ledger.may_deliver_live_minecraft_event());
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(expected,snapshot());
+    }
+    std::cout<<"R196_WGL_RANGE_PRESSED_HANDLE_CAPTURE_AND_CLAMP_PASS\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -1181,6 +1427,8 @@ int main() {
         verify_r159_pointer_admission(context,before);
         verify_r192_joint_handoff(context,before);
         verify_r193_closed_gui_drain(context,before);
+        verify_r196_wgl_multiselect(context,before);
+        verify_r196_wgl_range(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
         return 0;

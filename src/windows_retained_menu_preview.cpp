@@ -207,6 +207,15 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
     return outcome;
 }
 
+const MenuRenderFrame* WglRetainedMenuPreview::fixture_painted_frame(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
+    if(!owner_thread() || !active_ || !last_drawn_frame_ ||
+       !context || !dc || context_!=context || dc_!=dc ||
+       width_!=width || height_!=height ||
+       wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
+       !exact_current_viewport(width,height))return nullptr;
+    return &*last_drawn_frame_;
+}
 bool WglRetainedMenuPreview::fixture_end_keyboard(
         MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router) {
     if(!owner_thread() || !active_ ||
@@ -401,6 +410,14 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.open_recovered_choice_preview(
                        hit->catalog_index,hit->control_index);
+        // R196: source-backed multiselect was rendered and hit-tested,
+        // but the retained WGL dispatch omitted its local popup action.
+        // R134's existing MenuState enforces source widget, current
+        // settings page, option count and inert preview-only selection.
+        case MenuHitKind::RecoveredMultiControl:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.open_recovered_multi_preview(
+                       hit->catalog_index,hit->control_index);
         case MenuHitKind::DropdownOption:
             if(hit->control_index>
                static_cast<std::size_t>(
@@ -411,6 +428,29 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    profile_.toggle_recovered_boolean(
                        hit->catalog_index,hit->control_index);
+        case MenuHitKind::RecoveredRangePreview: {
+            // R196: preserve the handle selected at mouse DOWN, even
+            // when dragging over the opposite endpoint. The R133 model
+            // quantizes/clamps without changing gameplay or profile data.
+            const auto panel=menu_panel_geometry(
+                width,height,frame.appearance.wide,mode);
+            if(!panel || panel->scale<=0.0f)return false;
+            const auto track=menu_numeric_track_geometry(
+                frame,panel->logical_width(),panel->logical_height(),
+                hit->catalog_index,hit->control_index);
+            const auto& catalog=recovered_widget_catalog();
+            if(!track || hit->control_index>=catalog.size() ||
+               hit->sub_index>1u)return false;
+            const float position=
+                (static_cast<float>(x)-panel->left)/panel->scale;
+            const auto value=menu_numeric_value_at_x(
+                catalog[hit->control_index],*track,position);
+            return value &&
+                navigation_.focus_visible_row(hit->catalog_index) &&
+                menu_.set_recovered_range_preview(
+                    hit->catalog_index,hit->control_index,
+                    hit->sub_index,*value);
+        }
         case MenuHitKind::RecoveredSliderPreview: {
             const auto panel=menu_panel_geometry(
                 width,height,frame.appearance.wide,mode);

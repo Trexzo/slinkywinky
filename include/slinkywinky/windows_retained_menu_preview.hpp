@@ -46,6 +46,11 @@ public:
     // The router is caller-owned to preserve the retained menu's binary
     // layout. It must be bound to THIS menu's actual navigation instance.
     MenuNavigation& fixture_navigation() noexcept {return navigation_;}
+    // R196 read-only disposable fixture receipt: exact WGL-painted source
+    // frame. Borrowed pointer expires on redraw, navigation or close.
+    // Never exposed to original Minecraft's JNI/event queue.
+    const MenuRenderFrame* fixture_painted_frame(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
     bool fixture_begin_keyboard(std::uint64_t epoch,
         MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router);
     MenuKeyOutcome fixture_keyboard_event(
