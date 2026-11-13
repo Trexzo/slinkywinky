@@ -39,6 +39,16 @@ enable_testing()
 add_test(NAME r195_actual_compiled_manager_synthetic_runtime
   COMMAND slinkywinky_r195_manager_acceptance)
 set_tests_properties(r195_actual_compiled_manager_synthetic_runtime PROPERTIES TIMEOUT 10)
+# R198 executes only the actual pinned manager COFF with first-party
+# allocator fault injection and synthetic repeated lifecycle callbacks.
+add_test(NAME r198_compiled_manager_allocation_failure_matrix
+  COMMAND slinkywinky_r195_manager_acceptance --allocator-fault-matrix)
+set_tests_properties(r198_compiled_manager_allocation_failure_matrix
+  PROPERTIES TIMEOUT 15)
+add_test(NAME r198_compiled_manager_repeated_lifecycle
+  COMMAND slinkywinky_r195_manager_acceptance --lifecycle-cycles)
+set_tests_properties(r198_compiled_manager_repeated_lifecycle
+  PROPERTIES TIMEOUT 15)
 # Optional local-only R196 acceptance. Fixture is produced from a linked,
 # verified DLL by the independent metadata extractor; CI has no third-party DLL.
 if(DEFINED SLINKY_DESCRIPTOR_FIXTURE)
