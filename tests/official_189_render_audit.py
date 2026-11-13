@@ -266,6 +266,27 @@ def main():
                                global_input.stdout[-1900:] +
                                global_input.stderr[-1900:])
         print(global_input.stdout.rstrip(), flush=True)
+        # R194: follow only exact declared method call targets upstream of
+        # R171 input sites across the pinned original Java 8 class corpus.
+        # Deliberately fail to certify virtual/interface/reflective coverage.
+        call_graph = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R194OriginalInputCallReachabilitySmoke",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=70)
+        if (call_graph.returncode != 0 or
+                "R194_EXACT_PINNED_JAR_GRAPH_PASS"
+                not in call_graph.stdout or
+                "R194_VIRTUAL_DISPATCH_UNRESOLVED_NEGATIVE_CONTROL_PASS"
+                not in call_graph.stdout or
+                "R194_GRAPH_SHA256 "
+                "f0b1cb8aee451b56302a0035ec92665829c774a251718b4e00f61852d9e3bdfd"
+                not in call_graph.stdout or
+                "R194_NOT_VIRTUAL_OR_HARDWARE_DISPATCH_PROOF"
+                not in call_graph.stdout):
+            raise RuntimeError("R194 original 1.8.9 declared-call reachability failed: "+
+                               call_graph.stdout[-2200:]+call_graph.stderr[-2200:])
+        print(call_graph.stdout.rstrip(), flush=True)
         # R173: exact-source GUI singleton getter and axu screen field,
         # plus same-count getter mutation negative control. No game attach.
         original_gui = subprocess.run(

@@ -617,6 +617,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCutSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R171VanillaJarInputSurface.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R194OriginalInputCallReachability.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R194OriginalInputCallReachabilitySmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R173OriginalGuiFieldAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardQueueOwnerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardPageRelaySmoke.java"
@@ -734,6 +736,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCutSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R171VanillaJarInputSurface.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R194OriginalInputCallReachability.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R194OriginalInputCallReachabilitySmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R173OriginalGuiFieldAudit.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalRendererWeaveAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/OriginalKeyboardLoopWeaveAudit.java"
@@ -767,6 +771,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R164OfflineInputCutSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R171VanillaJarInputSurface.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R171VanillaJarInputSurfaceSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R194OriginalInputCallReachability.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R194OriginalInputCallReachabilitySmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R173OriginalGuiFieldAudit.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardQueueOwnerSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/KeyboardPageRelaySmoke.java"
@@ -887,6 +893,14 @@ if(SLINKYWINKY_BUILD_ATTACH)
             -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r171_input_surface.cmake")
         set_tests_properties(r171_java8_whole_jar_input_surface_fixture
+          PROPERTIES TIMEOUT 30)
+        # R194: test-only declared-target transitive input graph, no JVM attach.
+        add_test(NAME r194_java8_original_input_call_reachability_fixture
+          COMMAND "${CMAKE_COMMAND}"
+            -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+            -DBUILD_ARTIFACT_DIR=$<TARGET_FILE_DIR:slinkywinky_loader>
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r194_input_reachability.cmake")
+        set_tests_properties(r194_java8_original_input_call_reachability_fixture
           PROPERTIES TIMEOUT 30)
         # R172: Java 8 synthetic receipt test, no original process and
         # no GUI/mouse or input owner hook. Production JNI stays read-only.
