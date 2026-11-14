@@ -338,6 +338,21 @@ if(BUILD_TESTING)
     r190_reject_safe_walk_event
     r190_reject_safe_walk_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R201: first-party offline Timer controller, pinned public callback
+  # slots frame event1/priority200 and toggle event5/priority0.
+  add_executable(slinkywinky_timer_bridge_test
+    tests/test_timer_bridge.cpp)
+  target_link_libraries(slinkywinky_timer_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r201_timer_frame_and_toggle_offline
+    COMMAND slinkywinky_timer_bridge_test)
+  add_test(NAME r201_fourteen_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/seventeen_modules_with_fourteen_decisions.tsv")
+  set_tests_properties(r201_timer_frame_and_toggle_offline
+    r201_fourteen_decision_coverage PROPERTIES TIMEOUT 15)
+
   # C++ std::thread owner contract requires explicit pthread linkage on
   # older Linux build images; Windows uses the native thread runtime.
   find_package(Threads REQUIRED)
