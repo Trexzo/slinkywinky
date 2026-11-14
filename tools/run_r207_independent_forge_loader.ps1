@@ -16,7 +16,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $expectedJar=if($R214LocalNoSlowAcceptance){
-  '29fab542a05bb4f818d7e35de11ed7bb08995f35c395c7f82231379d55f68b89'
+  '3296056e206ad6e797df9e06fc32e7cb251de5d0e9baef1cea6627edb34a9fe0'
 }elseif($R213LocalActionAcceptance){
   '45cfc71bd182c05393f79b718e5a7c330cf23ad2bdb137df69586c9921774bd2'
 }elseif($R209PlayerTickTest){
