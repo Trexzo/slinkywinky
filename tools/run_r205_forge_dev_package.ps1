@@ -36,15 +36,24 @@ $javap = Join-Path $javaHome 'bin/javap.exe'
 foreach ($exe in @($javac,$jar,$javap)) {
     if (-not (Test-Path -LiteralPath $exe)) {throw "R205 Java8 tool missing: $exe"}
 }
-# JDK8 prints its version to STDERR even on a zero exit status.
-# Capture it as a diagnostic, not a PowerShell terminating NativeCommandError.
-$preference = $ErrorActionPreference
-$ErrorActionPreference = 'Continue'
-try { $versionText = (& $javac -version 2>&1 | Out-String).Trim() }
-finally { $ErrorActionPreference = $preference }
-if ($LASTEXITCODE -ne 0 -or $versionText -notmatch 'javac 1[.]8[.]') {
-    throw "R205 requires JDK8 compiler, found: $versionText"
-}
+# JDK8 writes its version to STDERR. ProcessStartInfo captures output
+# without PowerShell wrapping the line as a nonterminating ErrorRecord.
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $javac
+$psi.Arguments = '-version'
+$psi.UseShellExecute = $false
+$psi.RedirectStandardError = $true
+$psi.RedirectStandardOutput = $true
+$versionProcess = [System.Diagnostics.Process]::Start($psi)
+try {
+    $versionText = ($versionProcess.StandardOutput.ReadToEnd() +
+        $versionProcess.StandardError.ReadToEnd()).Trim()
+    $versionProcess.WaitForExit()
+    if ($versionProcess.ExitCode -ne 0 -or
+        $versionText -notmatch '^javac 1[.]8[.]') {
+        throw "R205 requires JDK8 compiler, found: $versionText"
+    }
+} finally { $versionProcess.Dispose() }
 if (Test-Path -LiteralPath $OutputRoot) {
     throw 'Refusing to overwrite an existing R205 dev-only output directory'
 }
