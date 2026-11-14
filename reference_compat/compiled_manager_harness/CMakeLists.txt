@@ -11,6 +11,8 @@ endif()
 option(SLINKY_MANAGER_SOURCE_ONLY "Compile first-party harness source only" OFF)
 if(SLINKY_MANAGER_SOURCE_ONLY)
   add_library(slinkywinky_r195_harness_source OBJECT manager_acceptance.cpp)
+  target_include_directories(slinkywinky_r195_harness_source PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
   set_property(TARGET slinkywinky_r195_harness_source PROPERTY
     MSVC_RUNTIME_LIBRARY "MultiThreaded")
   target_compile_features(slinkywinky_r195_harness_source PRIVATE cxx_std_17)
@@ -25,6 +27,8 @@ add_executable(slinkywinky_r195_manager_acceptance
   manager_acceptance.cpp
   "${SLINKY_MANAGER_OBJECT}"
 )
+target_include_directories(slinkywinky_r195_manager_acceptance PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/../include")
 set_source_files_properties("${SLINKY_MANAGER_OBJECT}" PROPERTIES
   EXTERNAL_OBJECT TRUE GENERATED TRUE
 )
