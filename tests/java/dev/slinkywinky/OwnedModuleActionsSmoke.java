@@ -24,7 +24,8 @@ public final class OwnedModuleActionsSmoke {
             boolean allowed, boolean present, long generation,
             boolean slow, boolean replace, boolean jump) {
         return new OwnedModuleActions.Input(allowed, present, generation,
-            slow, replace, 1.0f, -0.5f, jump, jump, 0);
+            slow, replace, 1.0f, -0.5f, jump, jump, 0,
+            true /* controlled Port simulates post-slow/pre-consumption */);
     }
 
     public static void main(String[] args) throws Exception {
@@ -33,6 +34,17 @@ public final class OwnedModuleActionsSmoke {
         OwnedModuleActions.Result result=owner.apply(
             frame(false,true,1,true,true,true),mock);
         check(!result.admitted && mock.writes==0,"no opt-in must be read-only");
+        // R213: the real Forge PlayerTickEvent.END hook is too late
+        // for No Slow. Reject its movement write but still admit the
+        // independently owned zero-cooldown jump action.
+        result=owner.apply(new OwnedModuleActions.Input(
+            true,true,1,true,true,1.0f,-0.5f,
+            true,true,0 /* jump */,false /* late tick */),mock);
+        check(result.admitted && result.noSlowBlockedByPhase &&
+              !result.noSlowWritten && result.jumpTicksWritten &&
+              mock.forward==0.2f && mock.strafe==-0.1f &&
+              mock.jumpTicks==0,"late PlayerTick applied a No Slow write");
+        mock.jumpTicks=5;
         result=owner.apply(frame(true,true,1,true,true,true),mock);
         check(result.admitted && result.noSlowWritten && result.jumpTicksWritten,
               "admitted actions missing");
@@ -100,6 +112,7 @@ public final class OwnedModuleActionsSmoke {
         check(negative,"closed action boundary accepted another frame");
         System.out.println("R212_OWNED_MINECRAFT_ACTIONS_PASS " +
             "permission_gate=1 reversible_slow=1 zero_jump_delay=1 " +
-            "owner_guard=1 world_reentry=1 preserve_physical_input=1");
+            "owner_guard=1 world_reentry=1 preserve_physical_input=1 " +
+            "late_input_phase_refused=1");
     }
 }
