@@ -64,6 +64,28 @@ public final class ForgeModuleActionPort implements OwnedModuleActions.Port {
             "Unsupported Minecraft 1.8.9 jumpTicks mapping");
     }
 
+    /** Synthetic cooldown stimulus for one isolated R213 singleplayer
+     * acceptance only. Never part of module action Port or real gameplay.
+     * Fails closed outside the named TEMP gameDir and dummy identity.
+     */
+    static void setAcceptanceJumpTicks(Minecraft minecraft, int ticks) {
+        if (ticks != 5 || minecraft == null ||
+            !Boolean.getBoolean("slinkywinky.r213LocalActionAcceptance") ||
+            minecraft.mcDataDir == null ||
+            minecraft.getSession() == null ||
+            !"R213Offline".equals(minecraft.getSession().getUsername()) ||
+            !minecraft.mcDataDir.getAbsolutePath().replace('\\','/').contains(
+                "/slinkywinky-r213-independent-forge-") ||
+            minecraft.theWorld == null || minecraft.thePlayer == null ||
+            !minecraft.theWorld.isRemote || !minecraft.isSingleplayer())
+            throw new IllegalStateException("R213 cooldown fixture denied");
+        try {
+            JUMP_TICKS.setInt(minecraft.thePlayer,5);
+        } catch (IllegalAccessException error) {
+            throw new IllegalStateException("R213 cooldown fixture unavailable",error);
+        }
+    }
+
     private void assertCurrent() {
         if (mc.theWorld != world || mc.thePlayer != player ||
             mc.thePlayer == null || mc.thePlayer.movementInput != input)
