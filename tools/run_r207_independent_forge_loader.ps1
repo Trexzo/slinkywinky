@@ -12,11 +12,14 @@ param(
  [switch]$R209PlayerTickTest,
  [switch]$R213LocalActionAcceptance,
  [switch]$R214LocalNoSlowAcceptance,
- [switch]$R215VanillaInputTest
+ [switch]$R215VanillaInputTest,
+ [switch]$R216DisplacementTest
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-$expectedJar=if($R215VanillaInputTest){
+$expectedJar=if($R216DisplacementTest){
+  '220bec1b0adc806cf1db47fec1d8d659dcfee137efb913f81a477781e73fe038'
+}elseif($R215VanillaInputTest){
   '6620805e5f26438560e72a2f96280ca95f3d351323edde385ede37ed9b5e3915'
 }elseif($R214LocalNoSlowAcceptance){
   'aa7bb470c3c5996ed08fa16d8962abe4aed0e8ae3ca07c5909351904452d78d8'
@@ -29,7 +32,7 @@ $expectedJar=if($R215VanillaInputTest){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -41,10 +44,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest){
+if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R215VanillaInputTest){
+  $prefix=if($R216DisplacementTest){
+    '/slinkywinky-r216-independent-forge-[^/]+$'
+  }elseif($R215VanillaInputTest){
     '/slinkywinky-r215-independent-forge-[^/]+$'
   }elseif($R214LocalNoSlowAcceptance){
     '/slinkywinky-r214-independent-forge-[^/]+$'
@@ -177,9 +182,13 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R215VanillaInputTest){
-  # Same exact ASM hook, but use Minecraft's own vanilla
-  # MovementInputFromOptions rather than the R214 test subclass.
+if($R216DisplacementTest){
+  # Isolated real horizontal-displacement measurement on vanilla input.
+  # Earlier R215 pinned artifact and test mode stay untouched.
+  $argsList=@("-javaagent:$staged",
+    '-Dslinkywinky.r214NoSlowAgent=true',
+    '-Dslinkywinky.r216DisplacementTest=true')+$argsList
+}elseif($R215VanillaInputTest){
   $argsList=@("-javaagent:$staged",
     '-Dslinkywinky.r214NoSlowAgent=true',
     '-Dslinkywinky.r215VanillaInputTest=true')+$argsList
@@ -204,6 +213,7 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
  "R213_LOCAL_ACTION_ACCEPTANCE=$([bool]$R213LocalActionAcceptance)"
  "R214_EXPLICIT_POST_SLOW_AGENT=$([bool]$R214LocalNoSlowAcceptance)"
  "R215_VANILLA_INPUT_TEST=$([bool]$R215VanillaInputTest)"
+ "R216_DISPLACEMENT_TEST=$([bool]$R216DisplacementTest)"
  "MC_SHA256=$expectedVanilla"
  "LIBRARY_COUNT=$($libraryPaths.Count)"
  "NATIVE_ARCHIVES=$($nativePaths.Count)"
