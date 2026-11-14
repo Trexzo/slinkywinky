@@ -107,7 +107,7 @@ foreach ($entry in $entries) {
 $metadata = (& $javap -classpath $packageFile -verbose 'dev.slinkywinky.forge.ForgePreview' | Out-String)
 if ($LASTEXITCODE -ne 0 -or
     $metadata -notmatch 'major version: 52' -or
-    $metadata -notmatch 'net[.]minecraftforge[.]fml[.]common[.]Mod') {
+    $metadata -notmatch 'Lnet/minecraftforge/fml/common/Mod;') {
     throw 'R205 Java8 classfile version or Forge @Mod annotation was not verified'
 }
 $classesPacked = @($entries | Where-Object { $_ -like '*.class' })
