@@ -24,6 +24,11 @@ int main() {
     CHECK(p.open(0u));
     CHECK(p.close(false)==std::nullopt);
     CHECK(p.recent(0)==0x112233u); // closing black does not reinsert it
+    CHECK(p.open(0x555555u));
+    CHECK(p.select_recent(1) && p.current()==0u);
+    CHECK(p.hsl() && p.hsl()->lightness==0.0f);
+    CHECK(p.close(false)==std::nullopt);
+    CHECK(p.recent(0)==0x112233u);
     CHECK(!p.open(0x1000000u));
     CHECK(!MenuColorPopupPreview::parse_hex6("#abcdef"));
     CHECK(!MenuColorPopupPreview::parse_hex6("abcde"));
