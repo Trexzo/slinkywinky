@@ -726,7 +726,8 @@ public:
     bool bind_sprint(std::size_t id) {
         if (stopped_ || active_frame_ || id >= definitions_.size() ||
             definitions_[id].name != "Sprint" ||
-            definitions_[id].category != 1)
+            definitions_[id].category != 1 ||
+            definitions_[id].subscriptions.size() != 2)
             return false;
         bool update = false, movement = false;
         for (const auto& sub : definitions_[id].subscriptions) {
