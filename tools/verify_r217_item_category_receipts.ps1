@@ -97,12 +97,14 @@ for($i=0;$i -lt 6;$i++){
     $means.Add($mean)
     $blocks.Add($distance)
 }
+# Parenthesize each expression: Windows PowerShell treats an unparenthesized
+# comma after an indexed value as an array operand to division.
 $computed=@(
- $means[0]/$means[1],
- $means[2]/$means[1],
- $means[3]/$means[4],
- $means[5]/$means[4],
- $means[4]/$means[1]
+ ($means[0]/$means[1]),
+ ($means[2]/$means[1]),
+ ($means[3]/$means[4]),
+ ($means[5]/$means[4]),
+ ($means[4]/$means[1])
 )
 $expectedRatios=@([double]3.25,2.0,2.25,4.0,1.0)
 $tolerances=@([double]0.70,0.55,0.60,0.85,0.25)
