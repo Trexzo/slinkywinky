@@ -29,8 +29,8 @@ jobs:
         if: ${{ failure() && runner.os == 'Windows' }}
         shell: pwsh
         run: |
-          if (Test-Path -LiteralPath wgl-arraylist-ci.ppm) {
-            python tools/probe_wgl_arraylist_ppm.py wgl-arraylist-ci.ppm
+          if (Test-Path -LiteralPath build/wgl-arraylist-ci.ppm) {
+            python tools/probe_wgl_arraylist_ppm.py build/wgl-arraylist-ci.ppm
           } else {
             Write-Output 'R218_WGL_FRAME_NOT_CREATED; failing test may have been unrelated'
           }

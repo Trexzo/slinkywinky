@@ -22,6 +22,8 @@ branch does not edit its GUI-owned test or renderer.
   `(662,612)` and `(4,628)`.
 - Enable `SLINKYWINKY_R207_ARRAYLIST_PPM=wgl-arraylist-ci.ppm`
   for the normal CTest step in the existing Windows/Linux core workflow.
+  CTest writes the relative filename inside its build directory; the
+  reporter reads `build/wgl-arraylist-ci.ppm`.
 - On failing Windows jobs, report sampled RGB via a diagnostic step.
   **The original CTest failure is preserved**. No tolerance adjustment,
   test skipping, retries that mask failures, production code change,
