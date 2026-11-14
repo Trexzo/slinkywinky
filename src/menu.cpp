@@ -7,6 +7,8 @@
 #include "slinkywinky/menu_numeric_formats.hpp"
 #include <algorithm>
 #include <cmath>
+#include <mutex>
+#include <unordered_map>
 #include <set>
 #include <string_view>
 
@@ -40,8 +42,18 @@ unsigned recovered_choice_count(std::string_view options) noexcept {
 unsigned recovered_multi_count(std::string_view options) noexcept {
     return recovered_option_count(options,16u);
 }
+// R200 ABI-preserving owner storage. MenuState and WglRetainedMenuPreview
+// retain their exact compiled layout for the Java/native JNI agent.
+// Every model destruction erases its popup; map accesses are synchronized.
+std::mutex color_sidecar_mutex;
+std::unordered_map<const MenuState*,MenuColorPopupPreview>
+    color_sidecars;
 } // namespace
 
+MenuState::~MenuState() noexcept {
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    color_sidecars.erase(this);
+}
 const std::array<MenuModule,67>& official_module_catalog() noexcept {return catalog;}
 
 const char* menu_tab_name(MenuTab tab) noexcept {
@@ -63,6 +75,7 @@ std::size_t MenuState::tab_count(MenuTab tab) const noexcept {
 }
 bool MenuState::select(MenuTab tab) noexcept {
     if(tab==MenuTab::Count || tab==MenuTab::Unload)return false;
+    if(color_popup_owner())close_color_popup(false);
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
@@ -81,6 +94,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     return true;
 }
 bool MenuState::scroll_by(int delta) noexcept {
+    if(color_popup_owner())return false;
     const auto total=tab_count(selected_);
     if(total==0)return false;
     // Renderer has eight visible rows. Keep scrolling independent of module
@@ -102,6 +116,7 @@ bool MenuState::scroll_by(int delta) noexcept {
 }
 bool MenuState::scroll_by_visible(
         int delta,std::size_t visible_limit) noexcept {
+    if(color_popup_owner())return false;
     const auto total=tab_count(selected_);
     if(total==0u || visible_limit==0u || visible_limit>8u)
         return false;
@@ -495,12 +510,12 @@ bool MenuState::toggle_bind_hold(
 }
 
 bool MenuState::toggle_preview(std::size_t index) noexcept {
-    if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
+    if(color_popup_owner() || index>=catalog.size() || catalog[index].tab!=selected_)return false;
     enabled_[index]=!enabled_[index];
     return true;
 }
 bool MenuState::toggle_expanded(std::size_t index) noexcept {
-    if(index>=catalog.size() || catalog[index].tab!=selected_)return false;
+    if(color_popup_owner() || index>=catalog.size() || catalog[index].tab!=selected_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
@@ -536,7 +551,7 @@ bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
     return true;
 }
 bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
-    if((direction!=1&&direction!=-1) || index>=catalog.size() ||
+    if(color_popup_owner() || (direction!=1&&direction!=-1) || index>=catalog.size() ||
        catalog[index].tab!=selected_ || !expanded_[index])return false;
     const std::size_t count=recovered_widget_visible_count(
         catalog[index].name,static_cast<int>(aim_preview_mode_),
@@ -888,6 +903,110 @@ bool MenuState::erase_recovered_text_preview() noexcept {
     return true;
 }
 
+namespace {
+// Standalone read-only admission for the same source-visible color swatch
+// that the existing R136 setter already validates. Never mutates a setting.
+bool color_popup_target_visible(const MenuState& menu,
+                                std::size_t module,std::size_t widget) noexcept {
+    const auto& modules=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(module>=modules.size() || widget>=all.size() ||
+       modules[module].tab!=menu.tab() || !menu.expanded(module) ||
+       all[widget].kind!=RecoveredWidgetKind::Color ||
+       std::string_view(all[widget].module)!=modules[module].name ||
+       !menu_source_widget_color(widget))return false;
+    const auto rows=menu.page();
+    if(std::none_of(rows.begin(),rows.end(),[module](const MenuItem& row){
+           return row.catalog_index==module;}))return false;
+    std::array<const RecoveredWidget*,5> current{};
+    if(!recovered_widget_visible_page(
+        modules[module].name,menu.settings_offset(module),
+        static_cast<int>(menu.aim_preview_mode()),
+        static_cast<int>(menu.target_preview_mode()),current))
+        return false;
+    return std::find(current.begin(),current.end(),&all[widget])!=
+        current.end();
+}
+}
+std::optional<MenuColorPopupOwner> MenuState::color_popup_owner()
+        const noexcept {
+    if(!dropdown_preview_ ||
+       dropdown_preview_->kind!=MenuDropdownKind::ColorPicker)
+        return std::nullopt;
+    return MenuColorPopupOwner{dropdown_preview_->catalog_index,
+                               dropdown_preview_->widget_index};
+}
+std::optional<MenuColorPopupPreview> MenuState::color_popup_model() const {
+    if(!color_popup_owner())return std::nullopt;
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=color_sidecars.find(this);
+    if(it==color_sidecars.end() || !it->second.active())
+        return std::nullopt;
+    return it->second;
+}
+bool MenuState::open_recovered_color_popup(
+        std::size_t module,std::size_t widget) noexcept {
+    if(dropdown_preview_ || unload_confirmation_preview_ ||
+       profile_action_preview_ || bind_capture_index_ ||
+       numeric_drag_preview_ ||
+       !color_popup_target_visible(*this,module,widget))
+        return false;
+    const auto value=recovered_color_overrides_[widget].value_or(
+        *menu_source_widget_color(widget));
+    {
+        std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+        auto& picker=color_sidecars[this];
+        if(!picker.open(value))return false;
+    }
+    focused_text_widget_.reset();
+    numeric_hover_.reset();
+    bind_hover_row_.reset();
+    // Reuse existing modal descriptor; no MenuState, MenuRenderFrame or
+    // WglRetainedMenuPreview member/ABI changes are permitted.
+    dropdown_preview_=MenuDropdownPreview{
+        MenuDropdownKind::ColorPicker,module,0u,
+        settings_offsets_[module],widget,0u};
+    return true;
+}
+bool MenuState::set_color_popup_hsl_channel(
+        unsigned channel,float ratio) noexcept {
+    if(!color_popup_owner() || channel>=3u ||
+       !std::isfinite(ratio) || ratio<0.0f || ratio>1.0f)
+        return false;
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=color_sidecars.find(this);
+    if(it==color_sidecars.end() || !it->second.active())return false;
+    auto values=it->second.hsl();
+    if(!values)return false;
+    if(channel==0u)values->hue=ratio;
+    else if(channel==1u)values->saturation=ratio;
+    else values->lightness=ratio;
+    return it->second.set_hsl(*values);
+}
+bool MenuState::select_color_popup_recent(unsigned index) noexcept {
+    if(!color_popup_owner())return false;
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=color_sidecars.find(this);
+    return it!=color_sidecars.end() &&
+           it->second.select_recent(index);
+}
+bool MenuState::close_color_popup(bool apply) noexcept {
+    const auto owner=color_popup_owner();
+    if(!owner)return false;
+    std::optional<std::uint32_t> result;
+    {
+        std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+        const auto it=color_sidecars.find(this);
+        if(it==color_sidecars.end() || !it->second.active())return false;
+        result=it->second.close(apply);
+    }
+    dropdown_preview_.reset();
+    // Cancelling remembers the color but never commits a module setting.
+    if(!apply)return true;
+    return result && set_recovered_color_preview(
+        owner->catalog_index,owner->widget_index,*result);
+}
+
 std::optional<std::uint32_t> MenuState::recovered_color_override(
         std::size_t widget_index) const noexcept {
     if(widget_index>=recovered_color_overrides_.size())return std::nullopt;
@@ -1063,7 +1182,7 @@ bool MenuState::set_recovered_range_preview(
 }
 
 bool MenuState::open_unload_confirmation_preview() noexcept {
-    if(unload_confirmation_preview_)return false;
+    if(unload_confirmation_preview_ || color_popup_owner())return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
@@ -1084,6 +1203,8 @@ bool MenuState::close_unload_confirmation_preview() noexcept {
 }
 bool MenuState::close_preview_dropdown() noexcept {
     if(!dropdown_preview_)return false;
+    if(dropdown_preview_->kind==MenuDropdownKind::ColorPicker)
+        return close_color_popup(false);
     dropdown_preview_.reset();
     return true;
 }

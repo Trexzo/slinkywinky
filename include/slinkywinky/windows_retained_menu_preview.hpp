@@ -39,6 +39,9 @@ public:
     // cancel held preview gestures. Foreign-thread calls never mutate owner.
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
     bool apply(MenuNavAction action);
+    // R200: source-owned compact overlay scroll before color widget hit.
+    // Local preview navigation only; no OS wheel or live Minecraft hook.
+    bool scroll_visible(int delta,std::size_t visible_limit) noexcept;
     // R191: OFFLINE WGL fixture only. A synthetic R190 handoff ledger can
     // drive the SAME first-party retained GUI's keyboard navigation.
     // These are not hooked into Minecraft's input callback or original
@@ -50,6 +53,10 @@ public:
     // frame. Borrowed pointer expires on redraw, navigation or close.
     // Never exposed to original Minecraft's JNI/event queue.
     const MenuRenderFrame* fixture_painted_frame(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
+    // R200: read-only exact-WGL-owner observation of the local dialog;
+    // no Java/OS key capture or source-graphics mutation.
+    std::optional<std::uint32_t> fixture_color_popup_rgb(
         HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept;
     bool fixture_begin_keyboard(std::uint64_t epoch,
         MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router);

@@ -11,6 +11,7 @@
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
+#include "slinkywinky/menu_color_modal_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_visual_copy.hpp"
@@ -373,6 +374,14 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     HGLRC expected_context,HDC expected_dc,
                     MenuGL11Mode mode,
                     std::optional<std::size_t> focused_catalog_index) noexcept {
+    return draw_menu_gl11(frame,expected_context,expected_dc,mode,
+                          focused_catalog_index,nullptr);
+}
+bool draw_menu_gl11(const MenuRenderFrame& frame,
+                    HGLRC expected_context,HDC expected_dc,
+                    MenuGL11Mode mode,
+                    std::optional<std::size_t> focused_catalog_index,
+                    const MenuColorPopupPreview* color_popup) noexcept {
     // Never use a context inferred only from a PID. Require exact equality.
     if((mode!=MenuGL11Mode::StandalonePreview &&
         mode!=MenuGL11Mode::BoundedOverlay &&
@@ -443,6 +452,11 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
        (frame.control_motion && !menu_control_motion_valid(
             *frame.control_motion)))
         return false;
+    // A forged standalone frame cannot request the new color popup unless
+    // its extra first-party owner snapshot is explicitly supplied.
+    if(frame.dropdown_preview &&
+       frame.dropdown_preview->kind==MenuDropdownKind::ColorPicker &&
+       (!color_popup || !color_popup->active()))return false;
     ScopedFixedFunctionState state;
     if(!state.ready())return false;
     glDisable(GL_DEPTH_TEST);
@@ -902,7 +916,8 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     }
     // R127: draw the source-shaped dropdown *after* cards so it floats
     // above later columns. This is a preview-only, immutable frame surface.
-    if(frame.dropdown_preview) {
+    if(frame.dropdown_preview &&
+       frame.dropdown_preview->kind!=MenuDropdownKind::ColorPicker) {
         ScopedVisualAlpha popupFade(frame.control_motion?
             frame.control_motion->popup_opacity:1.0f);
         const auto popup=menu_dropdown_popup_geometry(frame,w,h);
@@ -955,6 +970,89 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                        popup->y+6.0f+(track-thumb)*ratio,
                        3.0f,thumb,1.5f);
         }
+    }
+    // R200: a real first-party GL11 modal layered above all source cards.
+    // Geometry is shared with pointer hit tests. No Windows ChooseColor
+    // dialog, JNI, Minecraft dispatch or external data is involved.
+    if(frame.dropdown_preview &&
+       frame.dropdown_preview->kind==MenuDropdownKind::ColorPicker) {
+        const auto layout=menu_color_modal_geometry(w,h);
+        if(!layout || !color_popup ||
+           !color_popup->active())return false;
+        const auto& picker=*color_popup;
+        const auto rgbValue=picker.current();
+        const auto slider=picker.hsl();
+        const auto hex=picker.hex6();
+        if(!rgbValue || !slider || !hex)return false;
+        rgba(0x090909u,195);
+        quad(0.0f,0.0f,w,h);
+        rgb(0x404040u);
+        round_rect(layout->outer.x-1.0f,layout->outer.y-1.0f,
+                   layout->outer.width+2.0f,layout->outer.height+2.0f,14.0f);
+        rgb(0x141414u);
+        round_rect(layout->outer.x,layout->outer.y,
+                   layout->outer.width,layout->outer.height,13.0f);
+        rgb(0xdddddd);
+        text("Color picker",layout->outer.x+18.0f,
+             layout->outer.y+14.0f,17.0f,layout->outer.width-36.0f);
+        rgb(*rgbValue);
+        round_rect(layout->preview.x,layout->preview.y,
+                   layout->preview.width,layout->preview.height,5.0f);
+        rgb(0x343434u);
+        round_rect(layout->hex.x,layout->hex.y,
+                   layout->hex.width,layout->hex.height,5.0f);
+        rgb(0xdddddd);
+        const std::string hexLabel="#"+*hex;
+        text(hexLabel,layout->hex.x+8.0f,layout->hex.y+4.0f,
+             15.0f,layout->hex.width-16.0f);
+        constexpr std::array<std::string_view,3> labels{{
+            "Hue","Saturation","Lightness"}};
+        for(unsigned row=0;row<3u;++row) {
+            const auto& bar=layout->hsl[row];
+            rgb(0xdddddd);
+            text(labels[row],bar.x,bar.y-20.0f,14.0f,bar.width);
+            const float pixels=bar.width/96.0f;
+            for(unsigned i=0;i<96u;++i) {
+                auto point=*slider;
+                const float factor=static_cast<float>(i)/95.0f;
+                if(row==0u)point.hue=factor;
+                else if(row==1u)point.saturation=factor;
+                else point.lightness=factor;
+                const auto color=MenuColorPopupPreview::hsl_to_rgb(point);
+                if(!color)return false;
+                rgb(*color);
+                quad(bar.x+static_cast<float>(i)*pixels,bar.y,
+                     pixels+0.5f,bar.height);
+            }
+            const float value=row==0u?slider->hue:
+                (row==1u?slider->saturation:slider->lightness);
+            rgb(0xffffffu);
+            quad(bar.x+bar.width*value-1.0f,bar.y-2.0f,
+                 2.0f,bar.height+4.0f);
+        }
+        rgb(0xdddddd);
+        text("Recently used",layout->recent[0].x,
+             layout->recent[0].y-17.0f,13.0f,
+             layout->outer.width-36.0f);
+        for(unsigned i=0;i<8u;++i) {
+            const auto recent=picker.recent(i);
+            if(!recent)return false;
+            const auto& tile=layout->recent[i];
+            rgb(*recent);
+            round_rect(tile.x,tile.y,tile.width,tile.height,4.0f);
+        }
+        rgb(0x323232u);
+        round_rect(layout->cancel.x,layout->cancel.y,
+                   layout->cancel.width,layout->cancel.height,5.0f);
+        rgb(frame.appearance.accent_rgb);
+        round_rect(layout->apply.x,layout->apply.y,
+                   layout->apply.width,layout->apply.height,5.0f);
+        rgb(0xdddddd);
+        text("Cancel",layout->cancel.x+10.0f,layout->cancel.y+3.0f,
+             13.0f,layout->cancel.width-15.0f);
+        rgb(0xffffffu);
+        text("Apply",layout->apply.x+14.0f,layout->apply.y+3.0f,
+             13.0f,layout->apply.width-18.0f);
     }
     // R128: the source-backed seventh tab displays only an inert modal.
     // The commercial client's unload operation is deliberately NOT wired.

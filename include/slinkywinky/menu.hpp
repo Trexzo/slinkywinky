@@ -1,4 +1,5 @@
 #pragma once
+#include "slinkywinky/menu_color_popup_preview.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -57,7 +58,8 @@ bool save_piercing_preview(const std::filesystem::path& file,
 
 // R127: a preview-only popup description; never a game/injector input route.
 enum class MenuDropdownKind : std::uint8_t {
-    AimMode, TargetMode, PiercingSort, RecoveredChoice, RecoveredMulti
+    AimMode, TargetMode, PiercingSort, RecoveredChoice, RecoveredMulti,
+    ColorPicker // R200: modal marker reuses existing frame slot/ABI
 };
 struct MenuDropdownPreview {
     MenuDropdownKind kind=MenuDropdownKind::AimMode;
@@ -181,6 +183,13 @@ inline bool operator!=(const MenuBindPreview& a,
     return !(a==b);
 }
 
+// R200: source-indexed, wholly in-memory modal ownership token.
+// A click can never choose a different module while the popup is open.
+struct MenuColorPopupOwner {
+    std::size_t catalog_index=0u;
+    std::size_t widget_index=0u;
+};
+
 struct MenuItem {
     std::size_t catalog_index=0;
     std::string title;
@@ -193,6 +202,9 @@ struct MenuItem {
 // The preview_enabled bits are UI demo flags, NEVER gameplay module state.
 class MenuState {
 public:
+    // R200: removes the separate popup sidecar without enlarging this
+    // original-JNI-facing model or its containing WGL retained object.
+    ~MenuState() noexcept;
     MenuTab tab() const noexcept {return selected_;}
     std::size_t scroll() const noexcept {return scroll_;}
     const MenuAppearance& appearance() const noexcept {return appearance_;}
@@ -337,6 +349,15 @@ public:
     recovered_color_overrides() const noexcept {
         return recovered_color_overrides_;
     }
+    // R200: actual retained WGL dialog uses only local source-indexed
+    // preview settings; no Minecraft input, JNI or game profile writes.
+    bool open_recovered_color_popup(std::size_t catalog_index,
+                                    std::size_t widget_index) noexcept;
+    bool set_color_popup_hsl_channel(unsigned channel,float ratio) noexcept;
+    bool select_color_popup_recent(unsigned index) noexcept;
+    bool close_color_popup(bool apply) noexcept;
+    std::optional<MenuColorPopupOwner> color_popup_owner() const noexcept;
+    std::optional<MenuColorPopupPreview> color_popup_model() const;
     // R137: inline text editing in first-party GUI preview only.
     // No Friends list or item registry mutations.
     bool focus_recovered_text_preview(

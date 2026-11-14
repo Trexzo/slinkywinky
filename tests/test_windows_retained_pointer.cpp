@@ -21,6 +21,8 @@
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
+#include "slinkywinky/menu_color_geometry.hpp"
+#include "slinkywinky/menu_color_modal_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_keyboard_router.hpp"
@@ -1555,6 +1557,164 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
     std::cout<<"R197_WGL_NATIVE_BIND_CHIP_FOCUS_AND_TEXT_FIELD_PASS\n";
 }
 
+// R200: actual retained GL11 color popup with native source hitbox,
+// modal-only click routing, HSL, recent swatches and Apply/Cancel. This
+// is still synthetic foreground input; Minecraft does not receive it.
+void verify_r200_native_color_popup(Context& ctx,const State& expected) {
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    const auto& widgets=recovered_widget_catalog();
+    std::size_t accent=widgets.size();
+    for(std::size_t i=0;i<widgets.size();++i)
+        if(widgets[i].kind==RecoveredWidgetKind::Color &&
+           std::string_view(widgets[i].module)=="GUI" &&
+           std::string_view(widgets[i].label)=="Accent color")accent=i;
+    REQUIRE(accent<widgets.size());
+    WglRetainedMenuPreview preview;
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_navigation().select_tab(MenuTab::Visual));
+    // R135's source-authenticated compact pane has only three rows.
+    // Full eight-row navigation alone left GUI's swatch clipped.
+    REQUIRE(preview.scroll_visible(5,3));
+    REQUIRE(preview.fixture_navigation().focus_visible_row(32u));
+    REQUIRE(preview.apply(MenuNavAction::ExpandFocused));
+    const auto panel=menu_panel_geometry(
+        676,630,false,MenuPanelMode::CompactOverlay);
+    REQUIRE(panel);
+    const auto xy=[&](float x,float y) {
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    std::optional<MenuColorSwatchRect> swatch;
+    for(unsigned page=0u;page<12u && !swatch;++page) {
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* frame=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(frame && frame->tab==MenuTab::Visual);
+        swatch=menu_color_swatch_geometry(
+            *frame,panel->logical_width(),panel->logical_height(),
+            32u,accent);
+        if(!swatch)REQUIRE(preview.apply(MenuNavAction::NextSettingsPage));
+    }
+    REQUIRE(swatch);
+    const auto point=xy(
+        swatch->x+swatch->width*0.5f,
+        swatch->y+swatch->height*0.5f);
+    const auto* source=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    const auto originalHit=source?hit_test_menu(
+        *source,MenuPanelMode::CompactOverlay,point[0],point[1]):
+        std::nullopt;
+    REQUIRE(originalHit &&
+            originalHit->kind==MenuHitKind::RecoveredColorSwatch &&
+            originalHit->catalog_index==32u &&
+            originalHit->control_index==accent);
+    const auto initialProfile=preview.profile_snapshot(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(initialProfile);
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(preview.fixture_navigation());
+    constexpr std::uint64_t epoch=2000u;
+    REQUIRE(ledger.request(epoch,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(epoch,true,true,true));
+    REQUIRE(preview.fixture_begin_keyboard(epoch,ledger,router));
+    const auto click=[&](const std::array<int,2>& at,
+                         std::uint64_t when) {
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,676,630,epoch,
+            ledger,router,at[0],at[1],when,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,676,630,epoch,
+            ledger,router,at[0],at[1],when+40u,true));
+    };
+    click(point,20000);
+    REQUIRE(!preview.fixture_painted_frame(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* popup=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(popup && popup->dropdown_preview &&
+            popup->dropdown_preview->kind==MenuDropdownKind::ColorPicker &&
+            popup->dropdown_preview->catalog_index==32u &&
+            popup->dropdown_preview->widget_index==accent);
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)==0x8B7CF6u);
+    REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    const auto background=xy(12.0f,menu_nav_y+10.0f);
+    REQUIRE(!hit_test_menu(*popup,MenuPanelMode::CompactOverlay,
+                           background[0],background[1]));
+    const auto modal=menu_color_modal_geometry(
+        panel->logical_width(),panel->logical_height());
+    REQUIRE(modal);
+    const auto hue=xy(modal->hsl[0].x+
+                      modal->hsl[0].width*0.333f,
+                      modal->hsl[0].y+modal->hsl[0].height*0.5f);
+    const auto hueHit=hit_test_menu(
+        *popup,MenuPanelMode::CompactOverlay,hue[0],hue[1]);
+    REQUIRE(hueHit && hueHit->kind==MenuHitKind::ColorPopupHsl &&
+            hueHit->control_index==0u);
+    click(hue,22000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)!=0x8B7CF6u);
+    const auto black=xy(
+        modal->recent[0].x+modal->recent[0].width*0.5f,
+        modal->recent[0].y+modal->recent[0].height*0.5f);
+    const auto* chooser=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    const auto blackHit=hit_test_menu(
+        *chooser,MenuPanelMode::CompactOverlay,black[0],black[1]);
+    REQUIRE(blackHit && blackHit->kind==MenuHitKind::ColorPopupRecent &&
+            blackHit->control_index==0u);
+    click(black,24000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)==0u);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,676,630)==initialProfile);
+    const auto apply=xy(
+        modal->apply.x+modal->apply.width*0.5f,
+        modal->apply.y+modal->apply.height*0.5f);
+    click(apply,26000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* committed=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(committed && !committed->dropdown_preview &&
+            committed->recovered_color_overrides[accent]==0u &&
+            committed->appearance.accent_rgb==0xF35D12u);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,676,630)==initialProfile);
+    click(point,28000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_color_popup_rgb(ctx.gl,ctx.dc,676,630)==0u);
+    const auto light=xy(modal->hsl[2].x+
+                        modal->hsl[2].width*0.99f,
+                        modal->hsl[2].y+modal->hsl[2].height*0.5f);
+    click(light,30000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_color_popup_rgb(ctx.gl,ctx.dc,676,630)!=0u);
+    const auto cancel=xy(
+        modal->cancel.x+modal->cancel.width*0.5f,
+        modal->cancel.y+modal->cancel.height*0.5f);
+    click(cancel,32000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* canceled=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(canceled && !canceled->dropdown_preview &&
+            canceled->recovered_color_overrides[accent]==0u);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,676,630)==initialProfile);
+    REQUIRE(ledger.tracked_released());
+    REQUIRE(preview.fixture_end_keyboard(ledger,router));
+    REQUIRE(preview.fixture_finish_restore(
+        ledger,router,true,true,true));
+    REQUIRE(preview.close());
+    REQUIRE(!ledger.may_suppress_vanilla_event());
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R200_NATIVE_WGL_COLOR_POPUP_HSL_RECENT_APPLY_CANCEL_PASS\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -1569,6 +1729,7 @@ int main() {
         verify_r196_wgl_multiselect(context,before);
         verify_r196_wgl_range(context,before);
         verify_r197_native_focus_receipts(context,before);
+        verify_r200_native_color_popup(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
         return 0;

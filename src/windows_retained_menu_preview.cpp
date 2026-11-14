@@ -3,6 +3,7 @@
 #endif
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_color_modal_geometry.hpp"
 #include <GL/gl.h>
 #include <cmath>
 #include <limits>
@@ -118,7 +119,7 @@ bool WglRetainedMenuPreview::draw(
     return true;
 }
 bool WglRetainedMenuPreview::apply(MenuNavAction action) {
-    if(!active_ || !owner_thread() ||
+    if(!active_ || !owner_thread() || menu_.color_popup_owner() ||
        accepted_actions_==std::numeric_limits<std::uint64_t>::max() ||
        refused_actions_==std::numeric_limits<std::uint64_t>::max())
         return false;
@@ -130,6 +131,19 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
         return false;
     }
     accepted_actions_++;
+    return true;
+}
+bool WglRetainedMenuPreview::scroll_visible(
+        int delta,std::size_t visible_limit) noexcept {
+    if(!owner_thread() || !active_ || menu_.color_popup_owner() ||
+       visible_limit==0u || visible_limit>8u)return false;
+    if(wglGetCurrentContext()!=context_ || wglGetCurrentDC()!=dc_ ||
+       !exact_current_viewport(width_,height_)) {
+        invalidate_painted_input();
+        return false;
+    }
+    if(!profile_.scroll_by_visible(delta,visible_limit))return false;
+    invalidate_painted_input();
     return true;
 }
 bool WglRetainedMenuPreview::fixture_begin_keyboard(
@@ -215,6 +229,14 @@ const MenuRenderFrame* WglRetainedMenuPreview::fixture_painted_frame(
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
        !exact_current_viewport(width,height))return nullptr;
     return &*last_drawn_frame_;
+}
+std::optional<std::uint32_t>
+WglRetainedMenuPreview::fixture_color_popup_rgb(
+        HGLRC context,HDC dc,unsigned width,unsigned height) const noexcept {
+    if(!fixture_painted_frame(context,dc,width,height))
+        return std::nullopt;
+    const auto picker=menu_.color_popup_model();
+    return picker?picker->current():std::nullopt;
 }
 bool WglRetainedMenuPreview::fixture_end_keyboard(
         MenuInputHandoffLedger& ledger,MenuKeyboardRouter& router) {
@@ -438,6 +460,38 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.focus_recovered_text_preview(
                        hit->catalog_index,hit->control_index);
+        // R200: source-pinned GL11 swatches now open the real first-party
+        // preview dialog. Modal hits are derived from the painted frame;
+        // no OS color chooser, Minecraft key or global profile is touched.
+        case MenuHitKind::RecoveredColorSwatch:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.open_recovered_color_popup(
+                       hit->catalog_index,hit->control_index);
+        case MenuHitKind::ColorPopupHsl: {
+            const auto panel=menu_panel_geometry(
+                width,height,frame.appearance.wide,mode);
+            if(!panel || panel->scale<=0.0f || hit->control_index>2u)
+                return false;
+            const auto modal=menu_color_modal_geometry(
+                panel->logical_width(),panel->logical_height());
+            if(!modal)return false;
+            const auto& bar=modal->hsl[hit->control_index];
+            if(bar.width<=0.0f)return false;
+            const float logicalX=(static_cast<float>(x)-panel->left)/
+                                 panel->scale;
+            const float value=std::clamp(
+                (logicalX-bar.x)/bar.width,0.0f,1.0f);
+            return menu_.set_color_popup_hsl_channel(
+                static_cast<unsigned>(hit->control_index),value);
+        }
+        case MenuHitKind::ColorPopupRecent:
+            return hit->control_index<8u &&
+                menu_.select_color_popup_recent(
+                    static_cast<unsigned>(hit->control_index));
+        case MenuHitKind::ColorPopupCancel:
+            return menu_.close_color_popup(false);
+        case MenuHitKind::ColorPopupApply:
+            return menu_.close_color_popup(true);
         case MenuHitKind::RecoveredBooleanPreview:
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    profile_.toggle_recovered_boolean(

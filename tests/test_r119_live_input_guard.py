@@ -68,6 +68,7 @@ class TestDormantOriginalKeyboardInput(unittest.TestCase):
             "fixture_end_keyboard(",
             "fixture_pointer_event(",
             "fixture_painted_frame(",
+            "fixture_color_popup_rgb(",
             "fixture_drain_release(",
             "fixture_finish_restore(",
             "MenuInputHandoffLedger",

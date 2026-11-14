@@ -7,6 +7,7 @@
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
+#include "slinkywinky/menu_color_modal_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
@@ -80,6 +81,36 @@ std::optional<MenuHit> hit_test_menu(
     const float y=static_cast<float>(
         client_y-static_cast<int>(panel->top))/panel->scale;
     const float w=panel->logical_width();
+    // R200: first-party color picker owns every pointer hit while open.
+    // Background nav, toggle, slider and module hits must not click through.
+    if(frame.dropdown_preview &&
+       frame.dropdown_preview->kind==MenuDropdownKind::ColorPicker) {
+        const auto& owner=*frame.dropdown_preview;
+        const auto& modules=official_module_catalog();
+        const auto& all=recovered_widget_catalog();
+        if(owner.catalog_index>=modules.size() ||
+           owner.widget_index>=all.size() ||
+           modules[owner.catalog_index].tab!=frame.tab ||
+           all[owner.widget_index].kind!=RecoveredWidgetKind::Color ||
+           std::string_view(all[owner.widget_index].module)!=
+                modules[owner.catalog_index].name)return std::nullopt;
+        const auto modal=menu_color_modal_geometry(
+            panel->logical_width(),panel->logical_height());
+        if(!modal)return std::nullopt;
+        if(modal->cancel.contains(x,y))
+            return MenuHit{MenuHitKind::ColorPopupCancel,frame.tab};
+        if(modal->apply.contains(x,y))
+            return MenuHit{MenuHitKind::ColorPopupApply,frame.tab};
+        for(unsigned i=0;i<3u;++i)
+            if(modal->hsl[i].contains(x,y))
+                return MenuHit{MenuHitKind::ColorPopupHsl,frame.tab,
+                               owner.catalog_index,i};
+        for(unsigned i=0;i<8u;++i)
+            if(modal->recent[i].contains(x,y))
+                return MenuHit{MenuHitKind::ColorPopupRecent,frame.tab,
+                               owner.catalog_index,i};
+        return std::nullopt;
+    }
     // R128: confirmation owns the entire pointer surface. Only the
     // recovered X and Continue button can be hit; no click-through.
     if(frame.profile_action_preview) {

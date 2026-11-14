@@ -74,7 +74,9 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
     // draw boundary; it never changes MenuRenderFrame's published layout.
     const auto focus=navigation?navigation->visible_focus():
                               std::optional<std::size_t>{};
-    return draw_menu_gl11(*frame,context_,dc_,mode,focus);
+    const auto picker=menu.color_popup_model();
+    return draw_menu_gl11(*frame,context_,dc_,mode,focus,
+                          picker?&*picker:nullptr);
 }
 bool WglMenuOverlayHost::close() noexcept {
     // No WGL or OpenGL calls here: allows shutdown if the context was

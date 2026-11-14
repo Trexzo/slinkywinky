@@ -42,6 +42,12 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     HGLRC expected_context,HDC expected_dc,
                     MenuGL11Mode mode,
                     std::optional<std::size_t> focused_catalog_index) noexcept;
+// R200: additional value-only optional dialog state; no class ABI change.
+bool draw_menu_gl11(const MenuRenderFrame& frame,
+                    HGLRC expected_context,HDC expected_dc,
+                    MenuGL11Mode mode,
+                    std::optional<std::size_t> focused_catalog_index,
+                    const MenuColorPopupPreview* color_popup) noexcept;
 
 } // namespace slinkywinky
 #endif
