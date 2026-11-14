@@ -39,6 +39,7 @@ enum class MenuHitKind : std::uint8_t {
     RecoveredMultiControl, // R134: source-global multiselect widget
     RecoveredColorSwatch, // R136: independent 24-bit RGB preview
     ColorPopupHsl, ColorPopupRecent, ColorPopupCancel, ColorPopupApply,
+    ColorPopupHexField,
     // R200: modal-only HSL bar, recent swatch and commit/cancel
     RecoveredTextField, // R137: local source-indexed UTF-8 edit field
     BindChip, BindHold, // R140: preview-only module key and HOLD widgets

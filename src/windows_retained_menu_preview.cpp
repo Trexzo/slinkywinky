@@ -20,6 +20,24 @@ bool exact_current_viewport(unsigned width,unsigned height) noexcept {
            viewport[2]==static_cast<GLint>(width) &&
            viewport[3]==static_cast<GLint>(height);
 }
+// R201: identical logical-position conversion for HSL held-move and
+// release. Only hit_test_menu can authorize the actual source modal track.
+std::optional<float> color_hsl_ratio_at(
+        const MenuRenderFrame& frame,MenuPanelMode mode,
+        unsigned width,unsigned height,std::size_t channel,int x) noexcept {
+    if(channel>2u)return std::nullopt;
+    const auto panel=menu_panel_geometry(
+        width,height,frame.appearance.wide,mode);
+    if(!panel || panel->scale<=0.0f)return std::nullopt;
+    const auto modal=menu_color_modal_geometry(
+        panel->logical_width(),panel->logical_height());
+    if(!modal)return std::nullopt;
+    const auto& bar=modal->hsl[channel];
+    if(bar.width<=0.0f)return std::nullopt;
+    const float logicalX=(static_cast<float>(x)-panel->left)/
+                         panel->scale;
+    return std::clamp((logicalX-bar.x)/bar.width,0.0f,1.0f);
+}
 }
 WglRetainedMenuPreview::WglRetainedMenuPreview()
     : profile_(menu_),navigation_(menu_,profile_),
@@ -197,6 +215,11 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
         invalidate_painted_input();
         return denied;
     }
+    // R201: the synthetic menu owner can edit color hex using paired
+    // rising LWJGL keys, without forwarding any event to Minecraft.
+    const bool rising=down &&
+        !ledger.tracked_down(InputHandoffDevice::Keyboard,lwjgl_key);
+    const bool colorModal=menu_.color_popup_owner().has_value();
     const auto route=ledger.simulate(
         {InputHandoffDevice::Keyboard,lwjgl_key,down},
         true,foreground_verified,!draining,true);
@@ -215,6 +238,13 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
         ledger.abort();
         invalidate_painted_input();
         return denied;
+    }
+    if(colorModal && rising) {
+        // The router already quarantined this event from ordinary
+        // navigation; only the source-bounded local color field may edit.
+        const bool handled=menu_.color_popup_key(lwjgl_key);
+        if(handled)invalidate_painted_input();
+        return {MenuKeyDelivery::MenuExclusive,false,handled};
     }
     if(outcome.action_applied)
         invalidate_painted_input();
@@ -393,8 +423,21 @@ bool WglRetainedMenuPreview::pointer(
     if(phase==RetainedPointerPhase::Down)
         return pointer_gesture_.press(
             frame,mode,x,y,monotonic_ms,true);
-    if(phase==RetainedPointerPhase::Move)
-        return pointer_gesture_.move(frame,mode,x,y,true);
+    if(phase==RetainedPointerPhase::Move) {
+        if(!pointer_gesture_.move(frame,mode,x,y,true))return false;
+        // R201: while a color HSL track remains the same verified modal
+        // hit, update its independent preview HSL on every held move.
+        // Other controls remain release-only and side effects are local.
+        const auto current=hit_test_menu(frame,mode,x,y);
+        if(current && current->kind==MenuHitKind::ColorPopupHsl) {
+            const auto ratio=color_hsl_ratio_at(
+                frame,mode,width,height,current->control_index,x);
+            return ratio &&
+                menu_.set_color_popup_hsl_channel(
+                    static_cast<unsigned>(current->control_index),*ratio);
+        }
+        return true;
+    }
     const auto hit=pointer_gesture_.release(
         frame,mode,x,y,monotonic_ms,true);
     if(!hit)return false;
@@ -467,22 +510,13 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.open_recovered_color_popup(
                        hit->catalog_index,hit->control_index);
+        case MenuHitKind::ColorPopupHexField:
+            return menu_.begin_color_popup_hex_edit();
         case MenuHitKind::ColorPopupHsl: {
-            const auto panel=menu_panel_geometry(
-                width,height,frame.appearance.wide,mode);
-            if(!panel || panel->scale<=0.0f || hit->control_index>2u)
-                return false;
-            const auto modal=menu_color_modal_geometry(
-                panel->logical_width(),panel->logical_height());
-            if(!modal)return false;
-            const auto& bar=modal->hsl[hit->control_index];
-            if(bar.width<=0.0f)return false;
-            const float logicalX=(static_cast<float>(x)-panel->left)/
-                                 panel->scale;
-            const float value=std::clamp(
-                (logicalX-bar.x)/bar.width,0.0f,1.0f);
-            return menu_.set_color_popup_hsl_channel(
-                static_cast<unsigned>(hit->control_index),value);
+            const auto ratio=color_hsl_ratio_at(
+                frame,mode,width,height,hit->control_index,x);
+            return ratio && menu_.set_color_popup_hsl_channel(
+                static_cast<unsigned>(hit->control_index),*ratio);
         }
         case MenuHitKind::ColorPopupRecent:
             return hit->control_index<8u &&

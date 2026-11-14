@@ -355,6 +355,8 @@ public:
                                     std::size_t widget_index) noexcept;
     bool set_color_popup_hsl_channel(unsigned channel,float ratio) noexcept;
     bool select_color_popup_recent(unsigned index) noexcept;
+    bool begin_color_popup_hex_edit() noexcept;
+    bool color_popup_key(unsigned lwjgl_key) noexcept;
     bool close_color_popup(bool apply) noexcept;
     std::optional<MenuColorPopupOwner> color_popup_owner() const noexcept;
     std::optional<MenuColorPopupPreview> color_popup_model() const;

@@ -26,6 +26,9 @@ public:
     MenuNavigation(MenuState& menu, MenuProfileBridge& profile);
     bool owns(const MenuState& menu,const MenuProfileBridge& profile) const noexcept;
     bool owner_thread() const noexcept;
+    // R201 modal input fence: keyboard arrows/tab/escape cannot bypass
+    // color-only mouse hit routing in the preview session.
+    bool color_modal_open() const noexcept;
     bool apply(MenuNavAction action);
     // Standalone preview mouse/tab controls also need to synchronize focus.
     bool select_tab(MenuTab tab);

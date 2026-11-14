@@ -23,6 +23,8 @@ public:
         open_=true;
         original_=current_=rgb;
         hsl_=rgb_to_hsl(rgb);
+        hex_editing_=false;
+        hex_buffer_.clear();
         return true;
     }
     bool active() const noexcept {return open_;}
@@ -56,6 +58,38 @@ public:
             result[static_cast<std::size_t>(5-i)]=
                 digits[(current_>>(4u*static_cast<unsigned>(i)))&0xFu];
         return result;
+    }
+    // R201: the displayed hex field supports bounded, first-party editing.
+    // Partial input never changes RGB. A sixth valid digit atomically
+    // refreshes RGB/HSL; Enter or field blur ends editing.
+    bool hex_editing() const noexcept {return open_ && hex_editing_;}
+    std::string_view hex_buffer() const noexcept {return hex_buffer_;}
+    bool begin_hex_edit() {
+        if(!open_ || hex_editing_)return false;
+        hex_buffer_.clear();
+        hex_editing_=true;
+        return true;
+    }
+    bool append_hex_digit(char c) noexcept {
+        if(!hex_editing_ || hex_buffer_.size()>=6u ||
+           !((c>='0' && c<='9') ||
+             (c>='a' && c<='f') || (c>='A' && c<='F')))
+            return false;
+        hex_buffer_.push_back(c>='A' && c<='F'?
+            static_cast<char>(c-'A'+'a'):c);
+        if(hex_buffer_.size()==6u)return set_hex6(hex_buffer_);
+        return true;
+    }
+    bool erase_hex_digit() noexcept {
+        if(!hex_editing_ || hex_buffer_.empty())return false;
+        hex_buffer_.pop_back();
+        return true;
+    }
+    bool end_hex_edit() noexcept {
+        if(!hex_editing_)return false;
+        hex_editing_=false;
+        hex_buffer_.clear();
+        return true;
     }
     bool set_hex6(std::string_view text) noexcept {
         if(!open_)return false;
@@ -126,6 +160,7 @@ public:
         // R199: preserve full-precision HSL slider state independently
         // from the 24-bit rounded swatch, as in both references.
         hsl_=desired;
+        if(hex_editing_)end_hex_edit();
         return true;
     }
     std::optional<std::uint32_t> recent(unsigned newest_first) const noexcept {
@@ -139,6 +174,7 @@ public:
         if(!rgb)return false;
         current_=*rgb;
         hsl_=rgb_to_hsl(current_);
+        if(hex_editing_)end_hex_edit();
         return true;
     }
     // The reference native popup records a unique recent color on close
@@ -147,6 +183,8 @@ public:
         if(!open_)return std::nullopt;
         const std::uint32_t result=current_;
         open_=false;
+        hex_editing_=false;
+        hex_buffer_.clear();
         bool seen=false;
         for(const auto& prior:history_)
             if(prior==result){seen=true;break;}
@@ -158,6 +196,8 @@ public:
     }
 private:
     bool open_=false;
+    bool hex_editing_=false;
+    std::string hex_buffer_{};
     std::uint32_t original_=0u,current_=0u;
     // Native and Java picker state keep these independent HSL floats.
     MenuPopupHsl hsl_{};

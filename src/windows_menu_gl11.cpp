@@ -1002,7 +1002,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         round_rect(layout->hex.x,layout->hex.y,
                    layout->hex.width,layout->hex.height,5.0f);
         rgb(0xdddddd);
-        const std::string hexLabel="#"+*hex;
+        const std::string hexLabel=picker.hex_editing()?
+            "#"+std::string(picker.hex_buffer())+"|":
+            "#"+*hex;
         text(hexLabel,layout->hex.x+8.0f,layout->hex.y+4.0f,
              15.0f,layout->hex.width-16.0f);
         constexpr std::array<std::string_view,3> labels{{

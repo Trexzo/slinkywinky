@@ -97,6 +97,8 @@ std::optional<MenuHit> hit_test_menu(
         const auto modal=menu_color_modal_geometry(
             panel->logical_width(),panel->logical_height());
         if(!modal)return std::nullopt;
+        if(modal->hex.contains(x,y))
+            return MenuHit{MenuHitKind::ColorPopupHexField,frame.tab};
         if(modal->cancel.contains(x,y))
             return MenuHit{MenuHitKind::ColorPopupCancel,frame.tab};
         if(modal->apply.contains(x,y))

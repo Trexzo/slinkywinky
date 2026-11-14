@@ -39,6 +39,29 @@ int main() {
     CHECK(p.hex6() && *p.hex6()=="8b7cf6");
     CHECK(!p.set_hex6("FFFFF") && p.current()==0x8B7CF6u);
     CHECK(p.set_hex6("ff0000") && p.current()==0xFF0000u);
+    // R201: source-constrained six-digit keyboard editing, no partial
+    // RGB changes, no invalid character or overflow, and safe blur.
+    CHECK(p.begin_hex_edit() && p.hex_editing());
+    CHECK(!p.begin_hex_edit());
+    CHECK(!p.append_hex_digit('g'));
+    CHECK(!p.append_hex_digit('#'));
+    CHECK(p.append_hex_digit('1'));
+    CHECK(p.append_hex_digit('A'));
+    CHECK(p.append_hex_digit('2'));
+    CHECK(p.append_hex_digit('b'));
+    CHECK(p.append_hex_digit('3'));
+    CHECK(p.current()==0xFF0000u);
+    CHECK(p.hex_buffer()=="1a2b3");
+    CHECK(p.append_hex_digit('c'));
+    CHECK(p.hex_buffer()=="1a2b3c" && p.current()==0x1A2B3Cu);
+    CHECK(!p.append_hex_digit('d'));
+    CHECK(p.erase_hex_digit() && p.hex_buffer()=="1a2b3");
+    CHECK(p.current()==0x1A2B3Cu);
+    CHECK(p.append_hex_digit('d') && p.current()==0x1A2B3Du);
+    CHECK(p.end_hex_edit() && !p.hex_editing());
+    CHECK(!p.erase_hex_digit());
+    CHECK(p.hex_buffer().empty());
+    CHECK(p.set_hex6("ff0000") && p.current()==0xFF0000u);
     CHECK(p.hsl() && std::fabs(p.hsl()->hue-0.0f)<0.0001f);
     CHECK(std::fabs(p.hsl()->saturation-1.0f)<0.0001f);
     CHECK(std::fabs(p.hsl()->lightness-0.5f)<0.0001f);

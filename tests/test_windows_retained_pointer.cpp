@@ -1640,6 +1640,8 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     REQUIRE(preview.fixture_color_popup_rgb(
         ctx.gl,ctx.dc,676,630)==0x8B7CF6u);
     REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    REQUIRE(!preview.fixture_navigation().apply(MenuNavAction::NextTab));
+    REQUIRE(preview.tab()==MenuTab::Visual);
     const auto background=xy(12.0f,menu_nav_y+10.0f);
     REQUIRE(!hit_test_menu(*popup,MenuPanelMode::CompactOverlay,
                            background[0],background[1]));
@@ -1653,7 +1655,23 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
         *popup,MenuPanelMode::CompactOverlay,hue[0],hue[1]);
     REQUIRE(hueHit && hueHit->kind==MenuHitKind::ColorPopupHsl &&
             hueHit->control_index==0u);
-    click(hue,22000);
+    // R201: the color model updates on held MOVE, not just button UP.
+    // A repaint during the drag retains the exact captured HSL channel.
+    const auto draggedHue=xy(
+        modal->hsl[0].x+modal->hsl[0].width*0.59f,
+        modal->hsl[0].y+modal->hsl[0].height*0.5f);
+    REQUIRE(preview.fixture_pointer_event(
+        down,ctx.gl,ctx.dc,676,630,epoch,
+        ledger,router,hue[0],hue[1],22000,true));
+    REQUIRE(preview.fixture_pointer_event(
+        RetainedPointerPhase::Move,ctx.gl,ctx.dc,676,630,epoch,
+        ledger,router,draggedHue[0],draggedHue[1],22060,true));
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)!=0x8B7CF6u);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(preview.fixture_pointer_event(
+        up,ctx.gl,ctx.dc,676,630,epoch,
+        ledger,router,draggedHue[0],draggedHue[1],22100,true));
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
     REQUIRE(preview.fixture_color_popup_rgb(
         ctx.gl,ctx.dc,676,630)!=0x8B7CF6u);
@@ -1704,6 +1722,75 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
             canceled->recovered_color_overrides[accent]==0u);
     REQUIRE(preview.profile_snapshot(
         ctx.gl,ctx.dc,676,630)==initialProfile);
+
+    // R201: open exactly the same source swatch and click the actual
+    // painted HEX field. The paired first-party keyboard ledger, not OS
+    // messages, owns all six digit events and releases.
+    click(point,34000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto hexField=xy(modal->hex.x+modal->hex.width*0.5f,
+                           modal->hex.y+modal->hex.height*0.5f);
+    const auto* beforeHex=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    const auto hexHit=hit_test_menu(
+        *beforeHex,MenuPanelMode::CompactOverlay,
+        hexField[0],hexField[1]);
+    REQUIRE(hexHit && hexHit->kind==MenuHitKind::ColorPopupHexField);
+    click(hexField,36000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto key=[&](unsigned code,bool edits) {
+        const auto pressed=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,676,630,epoch,ledger,router,code,true,true);
+        REQUIRE(pressed.delivery==MenuKeyDelivery::MenuExclusive &&
+                !pressed.request_close && pressed.action_applied==edits);
+        const auto released=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,676,630,epoch,ledger,router,code,false,true);
+        REQUIRE(released.delivery==MenuKeyDelivery::MenuExclusive &&
+                !released.request_close && !released.action_applied);
+        REQUIRE(!ledger.tracked_down(InputHandoffDevice::Keyboard,code));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    };
+    key(15u,false); // Tab cannot switch tabs while modal owns input
+    REQUIRE(preview.tab()==MenuTab::Visual);
+    key(2u,true);  // 1
+    key(30u,true); // a
+    key(3u,true);  // 2
+    key(48u,true); // b
+    key(4u,true);  // 3
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)==0u); // partial hex never changes RGB
+    key(46u,true); // c
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)==0x1A2B3Cu);
+    key(14u,true); // backspace
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)==0x1A2B3Cu);
+    key(32u,true); // d
+    REQUIRE(preview.fixture_color_popup_rgb(
+        ctx.gl,ctx.dc,676,630)==0x1A2B3Du);
+    key(28u,true); // Enter ends field edit, keeps popup
+    const auto* edited=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(edited && edited->dropdown_preview &&
+            edited->dropdown_preview->kind==MenuDropdownKind::ColorPicker);
+    click(apply,47000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    const auto* hexApplied=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(hexApplied && !hexApplied->dropdown_preview &&
+            hexApplied->recovered_color_overrides[accent]==0x1A2B3Du);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,676,630)==initialProfile);
+    // Esc without text focus closes the modal, NOT original Minecraft
+    // or even the top-level retained GUI. No original input is touched.
+    click(point,49000);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    key(1u,true);
+    REQUIRE(preview.tab()==MenuTab::Visual);
+    const auto* afterEscape=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    REQUIRE(afterEscape && !afterEscape->dropdown_preview &&
+            afterEscape->recovered_color_overrides[accent]==0x1A2B3Du);
     REQUIRE(ledger.tracked_released());
     REQUIRE(preview.fixture_end_keyboard(ledger,router));
     REQUIRE(preview.fixture_finish_restore(

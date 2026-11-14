@@ -990,6 +990,50 @@ bool MenuState::select_color_popup_recent(unsigned index) noexcept {
     return it!=color_sidecars.end() &&
            it->second.select_recent(index);
 }
+// R201: edits are held in the same ABI-neutral, source-locked color
+// sidecar used by R200. This is a simulated LWJGL key stream: no
+// original game's key queue, input ownership or OS text hook.
+bool MenuState::begin_color_popup_hex_edit() noexcept {
+    if(!color_popup_owner())return false;
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=color_sidecars.find(this);
+    return it!=color_sidecars.end() && it->second.begin_hex_edit();
+}
+bool MenuState::color_popup_key(unsigned key) noexcept {
+    if(!color_popup_owner())return false;
+    // Esc without a focused field cancels only the popup; never the menu.
+    // Enter outside the field applies only its local source RGB preview.
+    if(key==1u || key==28u) {
+        bool editing=false;
+        {
+            std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+            const auto it=color_sidecars.find(this);
+            if(it==color_sidecars.end() || !it->second.active())
+                return false;
+            editing=it->second.hex_editing();
+            if(editing)return it->second.end_hex_edit();
+        }
+        return close_color_popup(key==28u);
+    }
+    char c='\0';
+    switch(key) {
+        case 2u:c='1';break;case 3u:c='2';break;
+        case 4u:c='3';break;case 5u:c='4';break;
+        case 6u:c='5';break;case 7u:c='6';break;
+        case 8u:c='7';break;case 9u:c='8';break;
+        case 10u:c='9';break;case 11u:c='0';break;
+        case 30u:c='a';break;case 48u:c='b';break;
+        case 46u:c='c';break;case 32u:c='d';break;
+        case 18u:c='e';break;case 33u:c='f';break;
+        default:break;
+    }
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=color_sidecars.find(this);
+    if(it==color_sidecars.end() || !it->second.hex_editing())
+        return false;
+    if(key==14u)return it->second.erase_hex_digit();
+    return c!='\0' && it->second.append_hex_digit(c);
+}
 bool MenuState::close_color_popup(bool apply) noexcept {
     const auto owner=color_popup_owner();
     if(!owner)return false;

@@ -31,6 +31,9 @@ bool MenuNavigation::owns(const MenuState& menu,
 bool MenuNavigation::owner_thread() const noexcept {
     return thread_==std::this_thread::get_id();
 }
+bool MenuNavigation::color_modal_open() const noexcept {
+    return owner_thread() && menu_.color_popup_owner().has_value();
+}
 std::optional<std::size_t> MenuNavigation::visible_focus() const {
     if(!owner_thread() || !focused_ || !profile_.owns(menu_))
         return std::nullopt;
@@ -49,7 +52,8 @@ bool MenuNavigation::focused_visible(std::size_t* index) const {
     return true;
 }
 bool MenuNavigation::select_tab(MenuTab tab) {
-    if(menu_.unload_confirmation_preview() ||
+    if(menu_.color_popup_owner() ||
+       menu_.unload_confirmation_preview() ||
        !owner_thread() || !profile_.owns(menu_) ||
        tab==MenuTab::Count || tab==MenuTab::Unload)return false;
     if(!profile_.select(tab))return false;
@@ -59,7 +63,8 @@ bool MenuNavigation::select_tab(MenuTab tab) {
     return true;
 }
 bool MenuNavigation::focus_visible_row(std::size_t catalog_index) {
-    if(menu_.unload_confirmation_preview() ||
+    if(menu_.color_popup_owner() ||
+       menu_.unload_confirmation_preview() ||
        !owner_thread() || !profile_.owns(menu_))return false;
     const auto rows=menu_.page();
     const auto found=std::find_if(rows.begin(),rows.end(),
@@ -109,6 +114,7 @@ bool MenuNavigation::move_row(int direction) {
 }
 bool MenuNavigation::apply(MenuNavAction action) {
     if(!owner_thread() || !profile_.owns(menu_) ||
+       menu_.color_popup_owner() ||
        menu_.unload_confirmation_preview())return false;
     switch(action) {
         case MenuNavAction::NextTab: return switch_tab(1);
