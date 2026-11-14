@@ -45,7 +45,8 @@ int main() {
     CHECK(!first.request_focused_toggle(unrelated,navigation,feed));
     CHECK(menu.toggle_preview(25u)); // inert GUI preview, not an ack
     CHECK(menu.preview_enabled(25u));
-    CHECK(first.request_focused_toggle(menu,navigation,feed));
+    CHECK(!first.request_focused_toggle(menu,navigation,feed,999u));
+    CHECK(first.request_focused_toggle(menu,navigation,feed,10u));
     CHECK(!first.request_focused_toggle(menu,navigation,feed));
     const auto pending=first.view();
     CHECK(pending.phase==GuiModuleControlPhase::Pending &&

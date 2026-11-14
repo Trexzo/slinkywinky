@@ -140,7 +140,8 @@ bool WglRetainedMenuPreview::draw(
 bool WglRetainedMenuPreview::queue_focused_runtime_toggle(
         GuiModuleControlHandoff& handoff,
         const ModuleArrayListFeed& source,HGLRC context,HDC dc,
-        unsigned width,unsigned height) {
+        unsigned width,unsigned height,
+        std::uint64_t expected_source_sequence) {
     if(!owner_thread() || !active_ || !last_drawn_frame_ ||
        pointer_gesture_.pending() ||
        !context || !dc || context!=context_ || dc!=dc_ ||
@@ -149,7 +150,8 @@ bool WglRetainedMenuPreview::queue_focused_runtime_toggle(
        !exact_current_viewport(width,height))return false;
     // This method only queues a source-backed request. It cannot mutate
     // preview flags, activate game modules, or acknowledge itself.
-    return handoff.request_focused_toggle(menu_,navigation_,source);
+    return handoff.request_focused_toggle(
+        menu_,navigation_,source,expected_source_sequence);
 }
 bool WglRetainedMenuPreview::apply(MenuNavAction action) {
     if(!active_ || !owner_thread() || menu_.color_popup_owner() ||

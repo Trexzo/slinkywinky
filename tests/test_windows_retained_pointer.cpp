@@ -10,6 +10,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
+#include "slinkywinky/windows_gui_module_click_fixture.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
@@ -36,6 +37,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <thread>
+#include <memory>
 #ifdef SW_R91_TEST_JNI_OVERLAY
 #include <jni.h>
 extern "C" JNIEXPORT jboolean JNICALL
@@ -1838,6 +1840,98 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     std::cout<<"R202_NATIVE_WGL_SOURCE_X_HSL_HEX_ESCAPE_PASS\n";
 }
 
+// R211: an actual source-exact first-party toggle hit on an admitted
+// disposable WGL panel can enqueue Sprint without mutating preview state.
+// The handoff ledger and pointer events are entirely synthetic; no
+// Minecraft LWJGL/Win32 input interception is asserted here.
+void verify_r211_source_click_request(Context& ctx,const State& expected) {
+    auto menu=std::make_unique<WglRetainedMenuPreview>();
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(menu->fixture_navigation());
+    GuiModuleControlHandoff handoff;
+    ModuleArrayListFeed feed;
+    GuiModuleClickTransaction clicks;
+    ModuleArrayListSnapshot source;
+    source.source_sequence=211u;
+    source.world_generation=7u;
+    source.world_ready=true;
+    source.modules={{"Sprint",false,false,7u}};
+    REQUIRE(feed.publish(source));
+    REQUIRE(menu->draw(ctx.gl,ctx.dc,676,630));
+    REQUIRE(menu->apply(MenuNavAction::NextTab)); // Move
+    for(int i=0;i<8;++i)REQUIRE(menu->apply(MenuNavAction::NextRow));
+    REQUIRE(menu->focused_row() && *menu->focused_row()==25u);
+    // Compact viewport paints only the upper cards. Scroll Sprint into
+    // actually hit-testable pixels; keyboard focus alone is insufficient.
+    REQUIRE(menu->scroll_visible(5,3));
+    REQUIRE(menu->draw(ctx.gl,ctx.dc,676,630));
+    const auto* frame=menu->fixture_painted_frame(ctx.gl,ctx.dc,676,630);
+    REQUIRE(frame);
+    int x=-1,y=-1;
+    // Use exact painted hit testing, not a guessed viewport coordinate.
+    for(int row=0;row<630 && x<0;row+=2)
+        for(int col=0;col<676;col+=2) {
+            const auto hit=hit_test_menu(
+                *frame,MenuPanelMode::CompactOverlay,col,row);
+            if(hit && hit->kind==MenuHitKind::Toggle &&
+               hit->catalog_index==25u) {x=col;y=row;break;}
+        }
+    REQUIRE(x>=0 && y>=0);
+    REQUIRE(ledger.request(211u,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(211u,true,true,true));
+    REQUIRE(menu->fixture_begin_keyboard(211u,ledger,router));
+    auto event=[&](RetainedPointerPhase phase,int px,int py,
+                   std::uint64_t time) {
+        return clicks.fixture_event(phase,*menu,ledger,router,
+            handoff,feed,ctx.gl,ctx.dc,676,630,211u,
+            px,py,time,true);
+    };
+    REQUIRE(!event(RetainedPointerPhase::Up,x,y,21100u));
+    REQUIRE(!event(RetainedPointerPhase::Down,0,0,21200u));
+    REQUIRE(!handoff.view().request);
+    bool foreign=false;
+    std::thread other([&]{
+        foreign=event(RetainedPointerPhase::Down,x,y,21300u);
+    });
+    other.join();
+    REQUIRE(!foreign && !clicks.pending());
+    REQUIRE(event(RetainedPointerPhase::Down,x,y,21400u));
+    REQUIRE(clicks.pending() &&
+            ledger.tracked_down(InputHandoffDevice::Mouse,0));
+    REQUIRE(!handoff.view().request);
+    REQUIRE(event(RetainedPointerPhase::Up,x,y,21470u));
+    REQUIRE(!clicks.pending() && ledger.tracked_released());
+    const auto pending=handoff.view();
+    REQUIRE(pending.phase==GuiModuleControlPhase::Pending &&
+            pending.request && pending.request->enable);
+    REQUIRE(!menu->preview_enabled(25u));
+    REQUIRE(make_module_arraylist_display(*feed.latest())
+            ->active_names.empty());
+    // The request remains pending until the separate module owner acts.
+    REQUIRE(handoff.view().request &&
+            handoff.view().request->id==pending.request->id);
+    REQUIRE(ledger.phase()==InputHandoffPhase::MenuFixture);
+    // Change the admitted owner-state copy during the next held gesture.
+    // The pending request cannot be overwritten; the stale press is revoked.
+    REQUIRE(event(RetainedPointerPhase::Down,x,y,23000u));
+    source.source_sequence=212u;
+    REQUIRE(feed.publish(source));
+    REQUIRE(!event(RetainedPointerPhase::Up,x,y,23050u));
+    REQUIRE(ledger.phase()==InputHandoffPhase::Revoked);
+    REQUIRE(!clicks.pending());
+    REQUIRE(handoff.view().request &&
+            handoff.view().request->id==pending.request->id);
+    REQUIRE(!menu->preview_enabled(25u));
+    REQUIRE(menu->fixture_finish_restore(ledger,router,true,true,true));
+    REQUIRE(menu->close());
+    handoff.retire();
+    feed.retire();
+    REQUIRE(!ledger.may_deliver_live_minecraft_event());
+    REQUIRE(!ledger.may_suppress_vanilla_event());
+    same(expected,snapshot());
+    std::cout<<"R211_SOURCE_EXACT_WGL_FIXTURE_MOUSE_TO_PENDING_SPRINT_PASS\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -1853,6 +1947,7 @@ int main() {
         verify_r196_wgl_range(context,before);
         verify_r197_native_focus_receipts(context,before);
         verify_r200_native_color_popup(context,before);
+        verify_r211_source_click_request(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
         return 0;

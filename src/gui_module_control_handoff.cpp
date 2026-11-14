@@ -20,7 +20,8 @@ void GuiModuleControlHandoff::retire_locked() noexcept {
 }
 bool GuiModuleControlHandoff::request_focused_toggle(
         const MenuState& menu,const MenuNavigation& navigation,
-        const ModuleArrayListFeed& source) {
+        const ModuleArrayListFeed& source,
+        std::uint64_t expected_source_sequence) {
     if(std::this_thread::get_id()!=gui_owner_ ||
        !navigation.owns_menu(menu) || menu.color_popup_owner() ||
        menu.unload_confirmation_preview())
@@ -34,7 +35,9 @@ bool GuiModuleControlHandoff::request_focused_toggle(
     // A snapshot may be read off the module owner, but cannot be forged
     // from MenuState::preview_enabled or interpreted as an acknowledgement.
     const auto copy=source.latest();
-    if(!copy || !make_module_arraylist_display(*copy))return false;
+    if(!copy || !make_module_arraylist_display(*copy) ||
+       (expected_source_sequence &&
+        copy->source_sequence!=expected_source_sequence))return false;
     const auto it=std::find_if(copy->modules.begin(),copy->modules.end(),
         [](const ModuleArrayListState& row){
             return row.canonical_name=="Sprint";

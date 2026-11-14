@@ -44,7 +44,8 @@ public:
     // exclusive GUI gesture; never called by passive original input hooks.
     bool queue_focused_runtime_toggle(GuiModuleControlHandoff& handoff,
         const ModuleArrayListFeed& source,HGLRC context,HDC dc,
-        unsigned width,unsigned height);
+        unsigned width,unsigned height,
+        std::uint64_t expected_source_sequence=0);
     // R200: source-owned compact overlay scroll before color widget hit.
     // Local preview navigation only; no OS wheel or live Minecraft hook.
     bool scroll_visible(int delta,std::size_t visible_limit) noexcept;

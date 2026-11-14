@@ -952,8 +952,10 @@ int main() {
         REQUIRE(requestMenu->draw(context.gl,context.dc,676,630));
         REQUIRE(!requestMenu->queue_focused_runtime_toggle(
             requestHandoff,requestFeed,nullptr,context.dc,676,630));
+        REQUIRE(!requestMenu->queue_focused_runtime_toggle(
+            requestHandoff,requestFeed,context.gl,context.dc,676,630,49u));
         REQUIRE(requestMenu->queue_focused_runtime_toggle(
-            requestHandoff,requestFeed,context.gl,context.dc,676,630));
+            requestHandoff,requestFeed,context.gl,context.dc,676,630,50u));
         REQUIRE(requestHandoff.view().phase==
                 GuiModuleControlPhase::Pending);
         REQUIRE(requestHandoff.view().request &&

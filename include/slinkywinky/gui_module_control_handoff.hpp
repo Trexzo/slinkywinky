@@ -39,7 +39,8 @@ public:
     // Called only AFTER a separately authenticated GUI gesture, from the
     // painted menu's actual render owner. This API does NOT capture input.
     bool request_focused_toggle(const MenuState& menu,
-        const MenuNavigation& navigation,const ModuleArrayListFeed& source);
+        const MenuNavigation& navigation,const ModuleArrayListFeed& source,
+        std::uint64_t expected_source_sequence=0);
     // The caller must be the externally admitted game/module owner.
     // Its thread identity is pinned on first successful dequeue.
     std::optional<GuiModuleControlRequest> take_on_module_owner();
