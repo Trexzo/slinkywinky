@@ -36,7 +36,12 @@ $javap = Join-Path $javaHome 'bin/javap.exe'
 foreach ($exe in @($javac,$jar,$javap)) {
     if (-not (Test-Path -LiteralPath $exe)) {throw "R205 Java8 tool missing: $exe"}
 }
-$versionText = (& $javac -version 2>&1 | Out-String).Trim()
+# JDK8 prints its version to STDERR even on a zero exit status.
+# Capture it as a diagnostic, not a PowerShell terminating NativeCommandError.
+$preference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try { $versionText = (& $javac -version 2>&1 | Out-String).Trim() }
+finally { $ErrorActionPreference = $preference }
 if ($versionText -notmatch '^javac 1[.]8[.]') {
     throw "R205 requires JDK8 compiler, found: $versionText"
 }
@@ -64,8 +69,15 @@ New-Item -ItemType Directory -Path $OutputRoot | Out-Null
 $rootOutput = (Resolve-Path -LiteralPath $OutputRoot).Path
 $classes = Join-Path $rootOutput 'classes'
 New-Item -ItemType Directory -Path $classes | Out-Null
-& $javac '-source' '8' '-target' '8' '-cp' $cp '-d' $classes @sourcePaths
-if ($LASTEXITCODE -ne 0) { throw 'R205 Forge 1.8.9 Java8 source compilation failed' }
+# javac writes benign deprecated-API notes to STDERR. Capture these,
+# but still fail on every nonzero compiler exit code.
+$preference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    $javacOutput = (& $javac '-source' '8' '-target' '8' '-cp' $cp '-d' $classes @sourcePaths 2>&1 | Out-String)
+    $javacCode = $LASTEXITCODE
+} finally { $ErrorActionPreference = $preference }
+if ($javacCode -ne 0) { throw "R205 Forge 1.8.9 Java8 source compilation failed: $javacOutput" }
 
 $packageFile = Join-Path $rootOutput 'slinkywinky-forge189-r205-DEV-ONLY.jar'
 Push-Location $classes
