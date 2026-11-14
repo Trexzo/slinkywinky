@@ -59,6 +59,12 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
 bool WglMenuOverlayHost::draw(const MenuState& menu,
                               const MenuProfileBridge* profile,MenuGL11Mode mode,
                               const MenuNavigation* navigation) {
+    return draw(menu,profile,mode,navigation,std::nullopt);
+}
+bool WglMenuOverlayHost::draw(const MenuState& menu,
+                              const MenuProfileBridge* profile,MenuGL11Mode mode,
+                              const MenuNavigation* navigation,
+                              std::optional<bool> acknowledged_sprint) {
     if(!current())return false;
     // R70: refuse desynchronized host viewports BEFORE taking a numbered
     // frame snapshot. Context/size mismatches must not consume sequences.
@@ -68,8 +74,24 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
        viewport[2]!=static_cast<GLint>(width_) ||
        viewport[3]!=static_cast<GLint>(height_))
         return false;
-    const auto frame=session_.next(menu,profile,navigation);
+    auto frame=session_.next(menu,profile,navigation);
     if(!frame)return false;
+    // R217: the exact same first-party GL11 renderer receives a value-only
+    // owner-acknowledged presentation override BEFORE its single draw.
+    // Never mutate MenuState, MenuProfileBridge, input geometry or gameplay.
+    // Refuse a mismatched tab/row instead of painting a forged module flag.
+    if(acknowledged_sprint) {
+        if(mode!=MenuGL11Mode::CompactOverlay ||
+           frame->tab!=MenuTab::Move)return false;
+        bool found=false;
+        for(auto& item:frame->visible) {
+            if(item.catalog_index==25u && item.title=="Sprint") {
+                item.preview_enabled=*acknowledged_sprint;
+                found=true;
+            }
+        }
+        if(!found)return false;
+    }
     // R96 focus is captured as an immutable scalar at this owner-thread
     // draw boundary; it never changes MenuRenderFrame's published layout.
     const auto focus=navigation?navigation->visible_focus():

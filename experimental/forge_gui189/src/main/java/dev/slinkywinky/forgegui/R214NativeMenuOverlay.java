@@ -82,7 +82,17 @@ public final class R214NativeMenuOverlay implements AutoCloseable {
                    !previewFlag && colorDistance(rgb,requested?0xF35D12:0x404040)<=50;
         }
     }
-    public Visual visual() {assertOwner();return new Visual(nativeVisual());}
+    public Visual visual() {
+        assertOwner();
+        Visual value=new Visual(nativeVisual());
+        // One startup navigation draw is deliberately before Sprint focus;
+        // every later nativePaint is exactly one authoritative GL11 pass.
+        if(value.frames!=draws+1L)
+            throw new IllegalStateException(
+                "R217 duplicate/missing GL11 pass: native="+value.frames+
+                " JavaPaints="+draws);
+        return value;
+    }
     public R214NativeMenuOverlay(R213NativeSprintBridge.Ack initial) {
         if(initial==null || initial.id!=0 ||
            initial.generation!=0 || initial.requested || initial.active ||

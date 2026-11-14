@@ -39,6 +39,10 @@ public:
     // R185: rejected same-owner WGL paints revoke prior hit geometry and
     // cancel held preview gestures. Foreign-thread calls never mutate owner.
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
+    // R217: one-pass, render-only Sprint state in verified disposable Forge
+    // UI. Never writes to the local menu/profile or hit-test snapshot.
+    bool draw(HGLRC context,HDC dc,unsigned width,unsigned height,
+              std::optional<bool> acknowledged_sprint);
     bool apply(MenuNavAction action);
     // R210: opt-in source-focused request only, after a separately admitted
     // exclusive GUI gesture; never called by passive original input hooks.

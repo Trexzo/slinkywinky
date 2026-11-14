@@ -109,6 +109,12 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r216_forge_authoritative_switch_pixels.py"
         --selftest)
+    # R217: one startup navigation draw, then exactly one native GL11 menu
+    # draw per admitted Minecraft-owned GuiScreen frame.
+    add_test(NAME r217_forge189_single_pass_gl11_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r217_forge_one_pass_source_paint.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

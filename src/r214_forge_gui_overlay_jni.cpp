@@ -103,19 +103,8 @@ Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativePaint(
     HGLRC gl=nullptr;HDC dc=nullptr;
     if(!surface(width,height,gl,dc))return JNI_FALSE;
     try {
-        if(!session->menu.draw(gl,dc,width,height))return JNI_FALSE;
-        if(!session->configured) {
-            if(!session->menu.apply(MenuNavAction::NextTab))return JNI_FALSE;
-            for(int i=0;i<8;++i)
-                if(!session->menu.apply(MenuNavAction::NextRow))
-                    return JNI_FALSE;
-            // Sprint must be physically inside the compact menu viewport.
-            if(!session->menu.scroll_visible(5,3))return JNI_FALSE;
-            if(!session->menu.draw(gl,dc,width,height))return JNI_FALSE;
-            if(!session->menu.focused_row() ||
-                *session->menu.focused_row()!=25u)return JNI_FALSE;
-            session->configured=true;
-        }
+        // R217: require a source-exact accepted state BEFORE painting the
+        // menu, not in a second GL11 render pass after preview was drawn.
         const auto confirmed=session->feed.latest();
         if(!confirmed || confirmed->source_sequence!=session->sequence ||
            confirmed->world_generation!=session->generation ||
@@ -124,31 +113,45 @@ Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativePaint(
            confirmed->modules[0].world_generation!=session->generation ||
            confirmed->modules[0].active_in_world)
             return JNI_FALSE;
-        // R216: repaint an exact source-frame COPY for this admitted Forge
-        // session only. Never mutate MenuState, native profile or preview
-        // flags; render the PR2-acknowledged requested state exclusively.
+        if(!session->menu.draw(gl,dc,width,height,
+            session->configured ?
+                std::optional<bool>(confirmed->modules[0].requested_enabled) :
+                std::nullopt))return JNI_FALSE;
+        if(!session->configured) {
+            if(!session->menu.apply(MenuNavAction::NextTab))return JNI_FALSE;
+            for(int i=0;i<8;++i)
+                if(!session->menu.apply(MenuNavAction::NextRow))
+                    return JNI_FALSE;
+            // Sprint must be physically inside the compact menu viewport.
+            if(!session->menu.scroll_visible(5,3))return JNI_FALSE;
+            if(!session->menu.draw(gl,dc,width,height,
+                    confirmed->modules[0].requested_enabled))
+                return JNI_FALSE;
+            if(!session->menu.focused_row() ||
+                *session->menu.focused_row()!=25u)return JNI_FALSE;
+            session->configured=true;
+        }
+        // R217: input geometry is still generated from the unmodified
+        // source-frame snapshot; only the actual GL11 paint uses an
+        // acknowledged, presentation-only value in its single pass.
         const auto* painted=session->menu.fixture_painted_frame(
             gl,dc,static_cast<unsigned>(width),static_cast<unsigned>(height));
         if(!painted || !session->menu.focused_row() ||
            *session->menu.focused_row()!=25u)return JNI_FALSE;
-        MenuRenderFrame authoritative=*painted;
         const auto row=std::find_if(
-            authoritative.visible.begin(),authoritative.visible.end(),
+            painted->visible.begin(),painted->visible.end(),
             [](const MenuItem& item){return item.catalog_index==25u &&
                                      item.title=="Sprint";});
-        if(row==authoritative.visible.end())return JNI_FALSE;
-        row->preview_enabled=confirmed->modules[0].requested_enabled;
-        if(!draw_menu_gl11(authoritative,gl,dc,MenuGL11Mode::CompactOverlay,
-                           session->menu.focused_row()))
-            return JNI_FALSE;
+        if(row==painted->visible.end() || row->preview_enabled)
+            return JNI_FALSE; // preview must stay inert even when JNI ON
         const auto panel=menu_panel_geometry(
             static_cast<unsigned>(width),static_cast<unsigned>(height),
-            authoritative.appearance.wide,MenuPanelMode::CompactOverlay);
+            painted->appearance.wide,MenuPanelMode::CompactOverlay);
         if(!panel)return JNI_FALSE;
         const auto visibleIndex=static_cast<std::size_t>(
-            std::distance(authoritative.visible.begin(),row));
+            std::distance(painted->visible.begin(),row));
         const auto card=menu_module_card_rect(
-            authoritative,panel->logical_width(),visibleIndex);
+            *painted,panel->logical_width(),visibleIndex);
         // The switch's center track pixel is outside BOTH knob positions,
         // so it distinguishes source-accent ON from dark OFF.
         const float localX=card.x+card.width-menu_card_inner_padding-
@@ -224,6 +227,8 @@ Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativeAck(
             return JNI_FALSE;
         session->sequence=snapshot.source_sequence;
         session->generation=snapshot.world_generation;
+        // The old pixel receipt is now stale until the next native draw.
+        session->visual_valid=false;
         return JNI_TRUE;
     } catch(...) {return JNI_FALSE;}
 }

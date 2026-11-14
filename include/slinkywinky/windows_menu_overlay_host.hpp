@@ -30,6 +30,12 @@ public:
               MenuGL11Mode mode); // R93 ABI retained
     bool draw(const MenuState& menu,const MenuProfileBridge* profile,
               MenuGL11Mode mode,const MenuNavigation* navigation); // R96 focus
+    // R217: presentation-only acknowledged Sprint switch override.
+    // Caller must validate the source; no profile or gameplay write.
+    // The input-owner retained frame remains preview-only.
+    bool draw(const MenuState& menu,const MenuProfileBridge* profile,
+              MenuGL11Mode mode,const MenuNavigation* navigation,
+              std::optional<bool> acknowledged_sprint);
     // R208: render ONLY a validated owner-published module-state feed.
     // No ClickGUI preview flags and no synthetic active toggles.
     bool draw_active_modules(const ModuleArrayListFeed& feed);

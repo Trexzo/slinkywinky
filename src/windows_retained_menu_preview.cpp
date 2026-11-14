@@ -80,6 +80,11 @@ void WglRetainedMenuPreview::note_focus_sample(
 }
 bool WglRetainedMenuPreview::draw(
     HGLRC context,HDC dc,unsigned width,unsigned height) {
+    return draw(context,dc,width,height,std::nullopt);
+}
+bool WglRetainedMenuPreview::draw(
+    HGLRC context,HDC dc,unsigned width,unsigned height,
+    std::optional<bool> acknowledged_sprint) {
     // R185: foreign render callers must never mutate the pinned owner.
     if(!owner_thread())return false;
     // A refusal on the correct thread invalidates both the prior painted
@@ -108,7 +113,7 @@ bool WglRetainedMenuPreview::draw(
     bool rendered=false;
     try {
         rendered=host.draw(menu_,&profile_,MenuGL11Mode::CompactOverlay,
-                           &navigation_);
+                           &navigation_,acknowledged_sprint);
     } catch(...) {rendered=false;}
     const bool closed=host.close(); // same admitted graphics owner
     if(!rendered || !closed)return refuse_paint();

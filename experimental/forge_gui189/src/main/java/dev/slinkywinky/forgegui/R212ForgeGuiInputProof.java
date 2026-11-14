@@ -224,6 +224,9 @@ public final class R212ForgeGuiInputProof {
             visual.sequence+" requested="+visual.requested+
             " rgb="+String.format("%06X",visual.rgb)+
             " preview=false frames="+visual.frames);
+        System.out.println("R217_SINGLE_PASS_GL11_ACKNOWLEDGED_SWITCH_PASS seq="+
+            visual.sequence+" calls="+nativeGl11.paintedFrames()+
+            " nativeFrames="+visual.frames+" extra=1");
     }
     private void requestedFromOwnedScreen(ProbeScreen source,
                                           R214NativeMenuOverlay.Request exactFromMouse) {
