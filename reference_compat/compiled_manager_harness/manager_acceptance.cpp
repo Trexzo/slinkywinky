@@ -1,6 +1,8 @@
 // R195 independent synthetic harness; links a separately compiled COFF object.
 // No third-party source, original DLL, JNI JVM, Minecraft or injector involved.
 #include <array>
+#include <vector>
+#include "slinkywinky/native_toggle_owner_gate.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -518,53 +520,63 @@ int run_repeated_lifecycle() {
     return 0;
 }
 
+// R200: this independently authored adapter is the only R199 harness path
+// into the actual compiled native queue/apply functions. Shared admission,
+// owner-thread, generation and lifetime rules live in the reusable header.
 struct GuardedToggleQueue {
-    struct Pending { Module *module; unsigned char enabled; };
+    static constexpr std::uint64_t kGeneration = 199;
     Mgr *manager = nullptr;
-    std::array<Pending, 66> deferred = {};
-    unsigned deferred_count = 0;
-    bool applying = false;
+    HCtx *current_context = nullptr;
+    slinkywinky::reference_compat::NativeToggleOwnerGate gate;
 
-    explicit GuardedToggleQueue(Mgr *mgr) : manager(mgr) {}
+    explicit GuardedToggleQueue(Mgr *mgr)
+        : manager(mgr),
+          gate(kGeneration, registered_modules(mgr),
+               [this](void *key, bool enabled) {
+                   return queue_module_toggle(manager, static_cast<Module *>(key),
+                                              static_cast<unsigned char>(enabled));
+               },
+               [](void *key) {
+                   return static_cast<Module *>(key)->enabled == 1;
+               },
+               [this]() {
+                   if (!current_context ||
+                       current_context->module_manager != manager) return false;
+                   apply_module_toggles(current_context);
+                   return true;
+               }) {}
+
+    static std::vector<void *> registered_modules(Mgr *mgr) {
+        require(mgr && mgr->count == 66 && mgr->mods,
+                "R200 guard requires the actual corrected compiled 66-entry manager");
+        std::vector<void *> keys;
+        keys.reserve(66);
+        for (unsigned i = 0; i < 66; ++i)
+            keys.push_back(mgr->mods[i]);
+        return keys;
+    }
 
     bool enqueue(Module *module, unsigned char enabled) {
-        if (!module || enabled > 1) return false;
-        // Reject pointers outside the actual compacted 66 descriptor identities.
-        // The upstream compiled queue admission does not verify membership.
-        bool is_registered = false;
-        for (unsigned i = 0; i < manager->count && i < 66; ++i)
-            if (manager->mods[i] == module) { is_registered = true; break; }
-        if (!is_registered) return false;
-        for (unsigned i = 0; i < manager->en_count; ++i)
-            if (manager->en_list[i] == module) return enabled == 1;
-        for (unsigned i = 0; i < manager->dis_count; ++i)
-            if (manager->dis_list[i] == module) return enabled == 0;
-        for (unsigned i = 0; i < deferred_count; ++i)
-            if (deferred[i].module == module)
-                return deferred[i].enabled == enabled;
-        if (applying) {
-            if (deferred_count == deferred.size()) return false;
-            deferred[deferred_count++] = {module, enabled};
-            return true;
-        }
-        return queue_module_toggle(manager, module, enabled);
+        if (enabled > 1) return false;
+        return gate.submit(kGeneration, module, enabled != 0);
     }
 
-    void apply(HCtx *ctx) {
-        require(ctx && ctx->module_manager == manager,
-                "R199 guard received the wrong native manager context");
-        require(!applying, "R199 nested apply is forbidden by first-party guard");
-        applying = true;
-        apply_module_toggles(ctx);
-        applying = false;
-        const unsigned n = deferred_count;
-        deferred_count = 0;
-        for (unsigned i = 0; i < n; ++i) {
-            require(enqueue(deferred[i].module, deferred[i].enabled),
-                    "R199 guarded deferred toggle was rejected");
-            deferred[i] = {};
+    bool apply(HCtx *ctx) {
+        if (!ctx || current_context || ctx->module_manager != manager) return false;
+        current_context = ctx;
+        try {
+            bool ok = gate.apply(kGeneration, ctx->world != nullptr,
+                               ctx->player != nullptr);
+            current_context = nullptr;
+            return ok;
+        } catch (...) {
+            current_context = nullptr;
+            throw;
         }
     }
+
+    std::size_t deferred_count() const noexcept { return gate.deferred_count(); }
+    bool stop() noexcept { return gate.shutdown(); }
 };
 
 GuardedToggleQueue *active_guard = nullptr;
@@ -582,7 +594,7 @@ void synthetic_reentrant_callback(void *event) {
                     "R199 guarded reentrant enable rejected");
             require(active_guard->enqueue(&modules[1], 1),
                     "R199 guarded duplicate reentrant request was not idempotent");
-            require(active_guard->deferred_count == 1,
+            require(active_guard->deferred_count() == 1,
                     "R199 guarded reentrant request queued more than once");
         } else {
             require(queue_module_toggle(e->ctx->module_manager, &modules[1], 1),
@@ -667,7 +679,7 @@ int run_first_party_toggle_guard_acceptance() {
             "R199 guard admitted excluded source index 17");
     require(!guarded.enqueue(&modules[0], 0),
             "R199 guard accepted contradictory pending disable");
-    guarded.apply(&ctx);
+    require(guarded.apply(&ctx), "R200 owner-gated apply failed");
     require(modules[0].enabled == 1 && delivered_toggle == 1,
             "R199 guarded enable emitted repeated notification");
     for (int i = 0; i < 3; ++i)
@@ -678,6 +690,7 @@ int run_first_party_toggle_guard_acceptance() {
     require(modules[0].enabled == 0 && released_owners == 1
             && delivered_toggle == 2,
             "R199 guarded disable emitted duplicate release or notifications");
+    require(guarded.stop(), "R200 failed to stop owner gate before manager destruction");
     destroy_module_manager(&manager);
     require(allocations == releases, "R199 guarded duplicate fixture leaked allocations");
 
@@ -692,7 +705,7 @@ int run_first_party_toggle_guard_acceptance() {
     active_guard = &deferrer;
     HCtx ctx2 = synthetic_ready_context(&managed, &world, &player);
     require(deferrer.enqueue(&modules[0], 1), "R199 initial guarded enable rejected");
-    deferrer.apply(&ctx2);
+    require(deferrer.apply(&ctx2), "R200 deferred owner-gated apply failed");
     require(reentrant_once && reentrant_notification_count == 1
             && managed.en_count == 1
             && modules[0].enabled == 1 && modules[1].enabled == 0,
@@ -703,6 +716,7 @@ int run_first_party_toggle_guard_acceptance() {
             && !has_queued_modules(&managed),
             "R199 guarded event-5 deferred enable not applied next frame");
     active_guard = nullptr;
+    require(deferrer.stop(), "R200 failed to stop deferred owner gate before manager destruction");
     destroy_module_manager(&managed);
     require(allocations == releases,
             "R199 first-party guarded native manager leaked allocations");
