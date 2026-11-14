@@ -125,6 +125,69 @@ Java_dev_slinkywinky_SprintObservationProbe_nativeObserve(
     }
 }
 
+// R210: stable first-party module-control JNI ABI; no Minecraft actions.
+// All control requests are enforced by the session's original owner thread.
+extern "C" JNIEXPORT void JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeSetEnabled(
+    JNIEnv* env, jclass, jlong id, jboolean enable) {
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it = g_sessions.find(id);
+    if (it == g_sessions.end() ||
+        !it->second->request_module({"Sprint", enable == JNI_TRUE})) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Sprint module state request rejected or foreign thread");
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeSetSettings(
+    JNIEnv* env, jclass, jlong id, jint mask) {
+    if (mask < 0 || mask > 15) {
+        throw_java(env, "java/lang/IllegalArgumentException",
+                   "Unsupported Sprint settings bitmask");
+        return;
+    }
+    slinkywinky::reference_compat::SprintSettings settings;
+    settings.while_in_gui = (mask & 1) != 0;
+    settings.while_using_item = (mask & 2) != 0;
+    settings.while_backwards = (mask & 4) != 0;
+    settings.while_sideways = (mask & 8) != 0;
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it = g_sessions.find(id);
+    if (it == g_sessions.end() || !it->second->configure_sprint(settings)) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Sprint settings rejected or foreign thread");
+    }
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeControlState(
+    JNIEnv* env, jclass, jlong id) {
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it = g_sessions.find(id);
+    if (it == g_sessions.end()) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Unknown Sprint module-control session");
+        return nullptr;
+    }
+    const auto state = it->second->control_state();
+    if (!state) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Sprint state read refused from foreign or stopped thread");
+        return nullptr;
+    }
+    const jlong values[5] = {
+        static_cast<jlong>(slinkywinky::kModuleControlContractVersion),
+        state->requested_enabled ? 1 : 0,
+        state->active_in_world ? 1 : 0,
+        state->settings_override ? 1 : 0,
+        static_cast<jlong>(state->world_generation)
+    };
+    jlongArray out = env->NewLongArray(5);
+    if (out) env->SetLongArrayRegion(out, 0, 5, values);
+    return out;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_dev_slinkywinky_SprintObservationProbe_nativeClose(JNIEnv* env, jclass, jlong id) {
     std::lock_guard<std::mutex> lock(g_sessions_mutex);
