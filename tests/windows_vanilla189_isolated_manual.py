@@ -16,6 +16,8 @@ import sys
 import time
 import zipfile
 
+from r206_original_input_readiness import classify_passive_original
+
 PINNED_CLIENT_SHA256 = "14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298"
 R176_HOVER_MARKER="R176_ORIGINAL_WINDOW_PASSIVE_HOVER_RECEIPT_PASS"
 R176_HOVER_REGEX=re.compile(
@@ -656,6 +658,27 @@ def main():
                         read_log(),args.require_focus_cycle_source_hit)
                     os_counts=verify_r183_original_window_focus(
                         read_log(),args.require_exact_os_focus_cycle)
+                    # R206: meaningful original foreground focus is not
+                    # exclusive live input. Preserve this hard distinction
+                    # using only the restored R99 report and exact source
+                    # read-only hover counters from this ORIGINAL JVM.
+                    readiness=classify_passive_original(
+                        evidence,foreground=fg,numeric=num,bind=bind,
+                        exact=exact,source_draws=eligible,
+                        os_focus=os_counts)
+                    if (readiness.input_exclusivity_certified or
+                            readiness.interactive_gui_verified or
+                            readiness.gameplay_modules_verified or
+                            readiness.original_click_delivery!="disabled"):
+                        raise RuntimeError(
+                            "R206 original passive evidence wrongly promoted")
+                    print(
+                        "R206_ORIGINAL_PASSIVE_INPUT_SCOPE_PASS "+
+                        "foreground="+str(readiness.foreground_samples)+
+                        " exact_hover="+str(readiness.exact_source_hover_samples)+
+                        " source_hover="+
+                        str(readiness.source_hover_observed).lower()+
+                        " click=disabled gui_interactive=false",flush=True)
                     if args.require_exact_os_focus_cycle:
                         print("R183_ORIGINAL_VANILLA_EXACT_OS_FOCUS_RECOVERY_PASS "+
                               "foreground="+str(os_counts[0])+" background="+str(os_counts[1])+

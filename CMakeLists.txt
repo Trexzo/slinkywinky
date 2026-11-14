@@ -882,6 +882,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r183_original_window_focus.py")
         set_tests_properties(r183_original_exact_os_focus_marker_negatives
           PROPERTIES TIMEOUT 25)
+        # R206: foreground observations and even exact cursor hover
+        # may not silently promote R99 render receipts into live input.
+        add_test(NAME r206_original_read_only_input_scope_negatives
+          COMMAND "${Python3_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r206_original_input_readiness.py")
+        set_tests_properties(r206_original_read_only_input_scope_negatives
+          PROPERTIES TIMEOUT 25)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
