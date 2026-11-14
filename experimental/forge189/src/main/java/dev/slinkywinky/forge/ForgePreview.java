@@ -48,6 +48,10 @@ public final class ForgePreview {
     private EntityPlayerSP r214FixturePlayer;
     private long r214DiagnosticClientTicks, r214PreLivingItemUseRequests;
     private int r214Phase, r214PhaseCount;
+    private final double[] r216PhaseDistance = new double[3];
+    private final int[] r216PhaseSamples = new int[3];
+    private double r216LastX, r216LastZ;
+    private boolean r216PositionReady;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -81,8 +85,11 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
+    private static final boolean R216_DISPLACEMENT_TEST =
+        Boolean.getBoolean("slinkywinky.r216DisplacementTest");
     private static final boolean R215_VANILLA_INPUT_TEST =
-        Boolean.getBoolean("slinkywinky.r215VanillaInputTest");
+        Boolean.getBoolean("slinkywinky.r215VanillaInputTest") ||
+        R216_DISPLACEMENT_TEST;
     private static final boolean R214_LOCAL_NO_SLOW_TEST =
         Boolean.getBoolean("slinkywinky.r214LocalNoSlowAcceptance") ||
         R215_VANILLA_INPUT_TEST;
@@ -117,14 +124,17 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
             final String tempDir = System.getProperty("java.io.tmpdir").replace('\\','/');
-            final String prefix=R215_VANILLA_INPUT_TEST ?
+            final String prefix=R216_DISPLACEMENT_TEST ?
+                "/slinkywinky-r216-independent-forge-" :
+                R215_VANILLA_INPUT_TEST ?
                 "/slinkywinky-r215-independent-forge-" :
                 R214_LOCAL_NO_SLOW_TEST ?
                 "/slinkywinky-r214-independent-forge-" :
                 R213_LOCAL_ACTION_ACCEPTANCE ?
                 "/slinkywinky-r213-independent-forge-" :
                 "/slinkywinky-r212-independent-forge-";
-            final String username=R215_VANILLA_INPUT_TEST ?
+            final String username=R216_DISPLACEMENT_TEST ?
+                "R216Offline" : R215_VANILLA_INPUT_TEST ?
                 "R215Offline" : R214_LOCAL_NO_SLOW_TEST ?
                 "R214Offline" : R213_LOCAL_ACTION_ACCEPTANCE ?
                 "R213Offline" : "R212Offline";
@@ -139,7 +149,9 @@ public final class ForgePreview {
                     "R212 game actions require a named TEMP-only offline test");
             }
             System.out.println("[SlinkyWinkyPreview] " +
-                (R215_VANILLA_INPUT_TEST ?
+                (R216_DISPLACEMENT_TEST ?
+                    "R216_DISPLACEMENT_ISOLATION_GATE_PASS" :
+                    R215_VANILLA_INPUT_TEST ?
                     "R215_VANILLA_INPUT_ISOLATION_GATE_PASS" :
                     R214_LOCAL_NO_SLOW_TEST ?
                     "R214_ACTION_ISOLATION_GATE_PASS" :
@@ -292,13 +304,15 @@ public final class ForgePreview {
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R215_VANILLA_INPUT_TEST ? "R215_LOCAL_WORLD_REQUESTED" :
+                (R216_DISPLACEMENT_TEST ? "R216_LOCAL_WORLD_REQUESTED" :
+                    R215_VANILLA_INPUT_TEST ? "R215_LOCAL_WORLD_REQUESTED" :
                     R214_LOCAL_NO_SLOW_TEST ? "R214_LOCAL_WORLD_REQUESTED" :
                     R213_LOCAL_ACTION_ACCEPTANCE ? "R213_LOCAL_WORLD_REQUESTED" :
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R215_VANILLA_INPUT_TEST ?
+            final String worldName = R216_DISPLACEMENT_TEST ?
+                "R216-local-only" : R215_VANILLA_INPUT_TEST ?
                 "R215-local-only" : R214_LOCAL_NO_SLOW_TEST ?
                 "R214-local-only" : R213_LOCAL_ACTION_ACCEPTANCE ?
                 "R213-local-only" :
@@ -336,7 +350,9 @@ public final class ForgePreview {
                 if(r214ReceiptEmitted) {
                     stop();
                     System.out.println("[SlinkyWinkyPreview] " +
-                        (R215_VANILLA_INPUT_TEST ?
+                        (R216_DISPLACEMENT_TEST ?
+                            "R216_DISPLACEMENT_AND_ACTION_CLEANUP_PASS" :
+                            R215_VANILLA_INPUT_TEST ?
                             "R215_VANILLA_INPUT_CLEANUP_PASS" :
                             "R214_INPUT_FIXTURE_AND_ACTION_CLEANUP_PASS"));
                 } else {
@@ -379,7 +395,9 @@ public final class ForgePreview {
                 0,new ItemStack(Items.bow));
             r214InputFixtureArmed=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R215_VANILLA_INPUT_TEST ?
+                (R216_DISPLACEMENT_TEST ?
+                    "R216_REAL_MOVEMENT_INPUT_ATTACHED synthetic_binding=forward" :
+                    R215_VANILLA_INPUT_TEST ?
                     "R215_REAL_MOVEMENT_INPUT_ATTACHED synthetic_binding=forward" :
                     "R214_LOCAL_INPUT_FIXTURE_ARMED deterministic_moveForward=1.0"));
         }
@@ -417,10 +435,13 @@ public final class ForgePreview {
         final Minecraft mc=Minecraft.getMinecraft();
         if(player!=mc.thePlayer || mc.theWorld==null || !mc.theWorld.isRemote ||
            !mc.isSingleplayer() || mc.getSession()==null ||
-           !(R215_VANILLA_INPUT_TEST ?
+           !(R216_DISPLACEMENT_TEST ?
+               "R216Offline" : R215_VANILLA_INPUT_TEST ?
                "R215Offline" : "R214Offline").equals(
                    mc.getSession().getUsername()) ||
            !mc.mcDataDir.getAbsolutePath().replace('\\','/').contains(
+               R216_DISPLACEMENT_TEST ?
+               "/slinkywinky-r216-independent-forge-" :
                R215_VANILLA_INPUT_TEST ?
                "/slinkywinky-r215-independent-forge-" :
                "/slinkywinky-r214-independent-forge-")) return;
@@ -481,9 +502,18 @@ public final class ForgePreview {
                    Math.abs(port.readForward()-0.2f)>0.0001f)
                     throw new IllegalStateException("R214 disabled No Slow wrote input");
             }
+            // Each R216 window measures actual player posX/posZ change
+            // from one REAL onLivingUpdate callback to the next. Initial
+            // frames after each toggle are discarded to avoid residual
+            // movement momentum skewing the comparison.
+            if(R216_DISPLACEMENT_TEST)
+                sampleR216ActualDisplacement(player);
             ++r214PhaseCount;
             if(r214HookFirstMs==0) r214HookFirstMs=System.currentTimeMillis();
-            if(r214PhaseCount>=10){
+            if(R216_DISPLACEMENT_TEST) {
+                if(r214PhaseCount>=45)
+                    completeR216DisplacementPhase();
+            } else if(r214PhaseCount>=10){
                 if(r214Phase==0){
                     System.out.println("[SlinkyWinkyPreview] " +
                         "R214_NO_SLOW_ENABLED_INPUT_0P2_TO_1P0_PASS samples=10");
@@ -527,6 +557,82 @@ public final class ForgePreview {
                 failure);
             stop();
             throw new IllegalStateException("R214 local No Slow acceptance failed",failure);
+        }
+    }
+
+    /** R216: on the actual game player update, sample horizontal
+     * displacement between player positions, not only input fields.
+     * Exactly one local synthetic forward-key stimulus is maintained.
+     * 12 warmup callbacks after each native toggle, then 33 samples.
+     */
+    private void sampleR216ActualDisplacement(EntityPlayerSP player) {
+        final double x=player.posX;
+        final double z=player.posZ;
+        if(!Double.isFinite(x) || !Double.isFinite(z) ||
+           player.capabilities.isFlying || !player.onGround ||
+           player.isInWater() || player.isInLava())
+            throw new IllegalStateException(
+                "R216 cannot measure airborne or non-finite movement");
+        if(r216PositionReady && r214PhaseCount>=12) {
+            final double distance=Math.hypot(x-r216LastX,z-r216LastZ);
+            if(!Double.isFinite(distance) || distance>1.0)
+                throw new IllegalStateException("R216 teleport/collision data rejected");
+            r216PhaseDistance[r214Phase]+=distance;
+            ++r216PhaseSamples[r214Phase];
+        }
+        r216LastX=x;
+        r216LastZ=z;
+        r216PositionReady=true;
+    }
+
+    private void completeR216DisplacementPhase() {
+        final int phase=r214Phase;
+        final int n=r216PhaseSamples[phase];
+        if(n!=33 || r214PhaseCount!=45)
+            throw new IllegalStateException("R216 incomplete 45-tick displacement");
+        final double average=r216PhaseDistance[phase]/n;
+        if(!Double.isFinite(average) || average<=0)
+            throw new IllegalStateException("R216 no positive real-world displacement");
+        System.out.println("[SlinkyWinkyPreview] " +
+            "R216_PHASE_DISPLACEMENT phase="+
+            (phase==0?"enabled":phase==1?"disabled":"reenabled")+
+            " samples="+n+
+            " horizontalBlocks="+r216PhaseDistance[phase]+
+            " meanBlocksPerTick="+average+
+            " moduleWrites="+r214HookWrites);
+        if(phase==0){
+            sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,false);
+            r214Phase=1;
+            r214PhaseCount=0;
+        }else if(phase==1){
+            sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
+            r214Phase=2;
+            r214PhaseCount=0;
+        }else{
+            final double first=r216PhaseDistance[0]/r216PhaseSamples[0];
+            final double vanilla=r216PhaseDistance[1]/r216PhaseSamples[1];
+            final double last=r216PhaseDistance[2]/r216PhaseSamples[2];
+            final double ratio1=first/vanilla;
+            final double ratio2=last/vanilla;
+            final double repeat=last/first;
+            if(!Double.isFinite(ratio1) || !Double.isFinite(ratio2) ||
+               ratio1<1.75 || ratio2<1.75 || repeat<0.55 ||
+               repeat>1.45)
+                throw new IllegalStateException(
+                    "R216 native module did not measurably change game displacement"+
+                    " ratio1="+ratio1+" ratio2="+ratio2+" repeat="+repeat);
+            r214ReceiptEmitted=true;
+            System.out.println("[SlinkyWinkyPreview] " +
+                "R216_REAL_WORLD_DISPLACEMENT_ACCEPTANCE_PASS "+
+                "samplesPerPhase=33 callbacks="+r214HookAdmitted+
+                " ownedFieldWrites="+r214HookWrites+
+                " enabledMean="+first+" disabledMean="+vanilla+
+                " reenabledMean="+last+
+                " enabledToDisabledRatio="+ratio1+
+                " reenabledToDisabledRatio="+ratio2+
+                " repeatRatio="+repeat+
+                " inputClass=MovementInputFromOptions"+
+                " source=synthetic_local_keybind");
         }
     }
 
