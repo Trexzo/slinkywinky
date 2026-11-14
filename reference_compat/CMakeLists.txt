@@ -366,6 +366,36 @@ if(BUILD_TESTING)
     r201_reject_timer_wrong_frame_priority
     r201_reject_timer_missing_toggle PROPERTIES WILL_FAIL TRUE)
 
+  # R202: Keep Sprint's three first-party offline combat-phase decisions,
+  # cross-checked against the Java and two byte-identical C++ candidates.
+  add_executable(slinkywinky_keep_sprint_bridge_test
+    tests/test_keep_sprint_bridge.cpp)
+  target_link_libraries(slinkywinky_keep_sprint_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r202_keep_sprint_three_phase_offline
+    COMMAND slinkywinky_keep_sprint_bridge_test)
+  add_test(NAME r202_fifteen_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/eighteen_modules_with_fifteen_decisions.tsv")
+  add_test(NAME r202_reject_keep_sprint_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_wrong_category.tsv")
+  add_test(NAME r202_reject_keep_sprint_wrong_attack_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_wrong_attack_priority.tsv")
+  add_test(NAME r202_reject_keep_sprint_missing_post
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_missing_post.tsv")
+  add_test(NAME r202_reject_keep_sprint_wrong_update_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_wrong_update_priority.tsv")
+  set_tests_properties(
+    r202_reject_keep_sprint_wrong_category
+    r202_reject_keep_sprint_wrong_attack_priority
+    r202_reject_keep_sprint_missing_post
+    r202_reject_keep_sprint_wrong_update_priority PROPERTIES WILL_FAIL TRUE)
+
   # C++ std::thread owner contract requires explicit pthread linkage on
   # older Linux build images; Windows uses the native thread runtime.
   find_package(Threads REQUIRED)
