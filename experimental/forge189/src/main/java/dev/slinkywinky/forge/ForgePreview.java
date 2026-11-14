@@ -48,8 +48,10 @@ public final class ForgePreview {
     private EntityPlayerSP r214FixturePlayer;
     private long r214DiagnosticClientTicks, r214PreLivingItemUseRequests;
     private int r214Phase, r214PhaseCount;
-    private final double[] r216PhaseDistance = new double[3];
-    private final int[] r216PhaseSamples = new int[3];
+    // Six category windows for R217, with the original R216 3-state
+    // measurement preserved exactly in its first three entries.
+    private final double[] r216PhaseDistance = new double[6];
+    private final int[] r216PhaseSamples = new int[6];
     private double r216LastX, r216LastZ;
     private boolean r216PositionReady;
     private int r216GroundWarmupCalls;
@@ -86,8 +88,11 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
+    private static final boolean R217_ITEM_CATEGORIES_TEST =
+        Boolean.getBoolean("slinkywinky.r217ItemCategoriesTest");
     private static final boolean R216_DISPLACEMENT_TEST =
-        Boolean.getBoolean("slinkywinky.r216DisplacementTest");
+        Boolean.getBoolean("slinkywinky.r216DisplacementTest") ||
+        R217_ITEM_CATEGORIES_TEST;
     private static final boolean R215_VANILLA_INPUT_TEST =
         Boolean.getBoolean("slinkywinky.r215VanillaInputTest") ||
         R216_DISPLACEMENT_TEST;
@@ -125,7 +130,9 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
             final String tempDir = System.getProperty("java.io.tmpdir").replace('\\','/');
-            final String prefix=R216_DISPLACEMENT_TEST ?
+            final String prefix=R217_ITEM_CATEGORIES_TEST ?
+                "/slinkywinky-r217-independent-forge-" :
+                R216_DISPLACEMENT_TEST ?
                 "/slinkywinky-r216-independent-forge-" :
                 R215_VANILLA_INPUT_TEST ?
                 "/slinkywinky-r215-independent-forge-" :
@@ -134,7 +141,8 @@ public final class ForgePreview {
                 R213_LOCAL_ACTION_ACCEPTANCE ?
                 "/slinkywinky-r213-independent-forge-" :
                 "/slinkywinky-r212-independent-forge-";
-            final String username=R216_DISPLACEMENT_TEST ?
+            final String username=R217_ITEM_CATEGORIES_TEST ?
+                "R217Offline" : R216_DISPLACEMENT_TEST ?
                 "R216Offline" : R215_VANILLA_INPUT_TEST ?
                 "R215Offline" : R214_LOCAL_NO_SLOW_TEST ?
                 "R214Offline" : R213_LOCAL_ACTION_ACCEPTANCE ?
@@ -150,7 +158,9 @@ public final class ForgePreview {
                     "R212 game actions require a named TEMP-only offline test");
             }
             System.out.println("[SlinkyWinkyPreview] " +
-                (R216_DISPLACEMENT_TEST ?
+                (R217_ITEM_CATEGORIES_TEST ?
+                    "R217_CATEGORIES_ISOLATION_GATE_PASS" :
+                    R216_DISPLACEMENT_TEST ?
                     "R216_DISPLACEMENT_ISOLATION_GATE_PASS" :
                     R215_VANILLA_INPUT_TEST ?
                     "R215_VANILLA_INPUT_ISOLATION_GATE_PASS" :
@@ -259,7 +269,10 @@ public final class ForgePreview {
                 moduleActions=new OwnedModuleActions();
                 sprintProbe.setModuleEnabled(SprintObservationProbe.NO_JUMP_DELAY,true);
                 sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
-                sprintProbe.setNoSlowSettings(1.0f,1.0f,1.0f);
+                if(R217_ITEM_CATEGORIES_TEST)
+                    sprintProbe.setNoSlowSettings(1.0f,0.65f,0.45f);
+                else
+                    sprintProbe.setNoSlowSettings(1.0f,1.0f,1.0f);
                 if(R214_LOCAL_NO_SLOW_TEST)
                     sprintProbe.setModuleEnabled(
                         SprintObservationProbe.NO_JUMP_DELAY,false);
@@ -305,14 +318,16 @@ public final class ForgePreview {
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R216_DISPLACEMENT_TEST ? "R216_LOCAL_WORLD_REQUESTED" :
+                (R217_ITEM_CATEGORIES_TEST ? "R217_LOCAL_WORLD_REQUESTED" :
+                    R216_DISPLACEMENT_TEST ? "R216_LOCAL_WORLD_REQUESTED" :
                     R215_VANILLA_INPUT_TEST ? "R215_LOCAL_WORLD_REQUESTED" :
                     R214_LOCAL_NO_SLOW_TEST ? "R214_LOCAL_WORLD_REQUESTED" :
                     R213_LOCAL_ACTION_ACCEPTANCE ? "R213_LOCAL_WORLD_REQUESTED" :
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R216_DISPLACEMENT_TEST ?
+            final String worldName = R217_ITEM_CATEGORIES_TEST ?
+                "R217-local-only" : R216_DISPLACEMENT_TEST ?
                 "R216-local-only" : R215_VANILLA_INPUT_TEST ?
                 "R215-local-only" : R214_LOCAL_NO_SLOW_TEST ?
                 "R214-local-only" : R213_LOCAL_ACTION_ACCEPTANCE ?
@@ -351,7 +366,9 @@ public final class ForgePreview {
                 if(r214ReceiptEmitted) {
                     stop();
                     System.out.println("[SlinkyWinkyPreview] " +
-                        (R216_DISPLACEMENT_TEST ?
+                        (R217_ITEM_CATEGORIES_TEST ?
+                            "R217_CATEGORY_ACTION_CLEANUP_PASS" :
+                            R216_DISPLACEMENT_TEST ?
                             "R216_DISPLACEMENT_AND_ACTION_CLEANUP_PASS" :
                             R215_VANILLA_INPUT_TEST ?
                             "R215_VANILLA_INPUT_CLEANUP_PASS" :
@@ -393,10 +410,13 @@ public final class ForgePreview {
             }
             mc.thePlayer.inventory.currentItem=0;
             mc.thePlayer.inventory.setInventorySlotContents(
-                0,new ItemStack(Items.bow));
+                0,new ItemStack(R217_ITEM_CATEGORIES_TEST ?
+                    Items.diamond_sword : Items.bow));
             r214InputFixtureArmed=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R216_DISPLACEMENT_TEST ?
+                (R217_ITEM_CATEGORIES_TEST ?
+                    "R217_REAL_MOVEMENT_INPUT_ATTACHED synthetic_binding=forward" :
+                    R216_DISPLACEMENT_TEST ?
                     "R216_REAL_MOVEMENT_INPUT_ATTACHED synthetic_binding=forward" :
                     R215_VANILLA_INPUT_TEST ?
                     "R215_REAL_MOVEMENT_INPUT_ATTACHED synthetic_binding=forward" :
@@ -408,10 +428,14 @@ public final class ForgePreview {
             !(mc.thePlayer.movementInput instanceof MovementInputFromOptions) :
             !(mc.thePlayer.movementInput instanceof R214TestMovementInput)))
             throw new IllegalStateException("R214/R215 local fixture player replaced");
-        ItemStack bow=mc.thePlayer.getHeldItem();
-        if(bow!=null && bow.getItem()==Items.bow &&
+        ItemStack item=mc.thePlayer.getHeldItem();
+        if(item!=null &&
+           (R217_ITEM_CATEGORIES_TEST ?
+               (r214Phase<3 ? item.getItem()==Items.diamond_sword :
+                                item.getItem()==Items.apple) :
+               item.getItem()==Items.bow) &&
            !mc.thePlayer.isUsingItem())
-            mc.thePlayer.setItemInUse(bow,bow.getMaxItemUseDuration());
+            mc.thePlayer.setItemInUse(item,item.getMaxItemUseDuration());
     }
 
     private long nextR214MonotonicMs() {
@@ -436,11 +460,14 @@ public final class ForgePreview {
         final Minecraft mc=Minecraft.getMinecraft();
         if(player!=mc.thePlayer || mc.theWorld==null || !mc.theWorld.isRemote ||
            !mc.isSingleplayer() || mc.getSession()==null ||
-           !(R216_DISPLACEMENT_TEST ?
+           !(R217_ITEM_CATEGORIES_TEST ?
+               "R217Offline" : R216_DISPLACEMENT_TEST ?
                "R216Offline" : R215_VANILLA_INPUT_TEST ?
                "R215Offline" : "R214Offline").equals(
                    mc.getSession().getUsername()) ||
            !mc.mcDataDir.getAbsolutePath().replace('\\','/').contains(
+               R217_ITEM_CATEGORIES_TEST ?
+               "/slinkywinky-r217-independent-forge-" :
                R216_DISPLACEMENT_TEST ?
                "/slinkywinky-r216-independent-forge-" :
                R215_VANILLA_INPUT_TEST ?
@@ -479,7 +506,8 @@ public final class ForgePreview {
                 throw new IllegalStateException("R214 native world frame refused");
             final boolean active=sprintProbe.moduleState(
                 SprintObservationProbe.NO_SLOW).activeInWorld;
-            final boolean expectedActive=r214Phase!=1;
+            final boolean expectedActive=R217_ITEM_CATEGORIES_TEST ?
+                (r214Phase % 3 != 1) : r214Phase!=1;
             if(active!=expectedActive ||
                proposed.noSlowEvaluated!=expectedActive ||
                proposed.replaceInput!=expectedActive)
@@ -493,10 +521,17 @@ public final class ForgePreview {
                Math.abs(beforeForward-0.2f)>0.0001f)
                 throw new IllegalStateException("R214 vanilla 0.2 source not observed");
             ++r214HookAdmitted;
+            final float expectedMovement=R217_ITEM_CATEGORIES_TEST ?
+                r217ExpectedForward() : 1.0f;
+            if(R217_ITEM_CATEGORIES_TEST &&
+               item!=(r214Phase<3?276:260))
+                throw new IllegalStateException(
+                    "R217 native category item ID not the selected test item");
             if(expectedActive){
                 if(!applied.noSlowWritten ||
-                   Math.abs(port.readForward()-1.0f)>0.0001f)
-                    throw new IllegalStateException("R214 active No Slow failed real field");
+                   Math.abs(port.readForward()-expectedMovement)>0.0001f)
+                    throw new IllegalStateException(
+                        "R214/R217 active No Slow failed real multiplier field");
                 ++r214HookWrites;
             }else{
                 if(applied.noSlowWritten ||
@@ -513,8 +548,12 @@ public final class ForgePreview {
             ++r214PhaseCount;
             if(r214HookFirstMs==0) r214HookFirstMs=System.currentTimeMillis();
             if(R216_DISPLACEMENT_TEST) {
-                if(r214PhaseCount>=45)
-                    completeR216DisplacementPhase();
+                if(r214PhaseCount>=45) {
+                    if(R217_ITEM_CATEGORIES_TEST)
+                        completeR217CategoryPhase(player);
+                    else
+                        completeR216DisplacementPhase();
+                }
             } else if(r214PhaseCount>=10){
                 if(r214Phase==0){
                     System.out.println("[SlinkyWinkyPreview] " +
@@ -665,10 +704,14 @@ public final class ForgePreview {
         if(mc.theWorld==null || mc.thePlayer==null ||
            event.entityLiving!=mc.thePlayer || !mc.theWorld.isRemote ||
            !mc.isSingleplayer()) return;
-        ItemStack bow=mc.thePlayer.getHeldItem();
-        if(bow==null || bow.getItem()!=Items.bow)
-            throw new IllegalStateException("R214 local item-use fixture lost bow");
-        mc.thePlayer.setItemInUse(bow,bow.getMaxItemUseDuration());
+        ItemStack held=mc.thePlayer.getHeldItem();
+        if(held==null || (R217_ITEM_CATEGORIES_TEST ?
+             (r214Phase<3 ? held.getItem()!=Items.diamond_sword :
+                              held.getItem()!=Items.apple) :
+             held.getItem()!=Items.bow))
+            throw new IllegalStateException(
+                "R214/R217 local item-use fixture lost selected item");
+        mc.thePlayer.setItemInUse(held,held.getMaxItemUseDuration());
         if(R215_VANILLA_INPUT_TEST) {
             KeyBinding.setKeyBindState(
                 mc.gameSettings.keyBindForward.getKeyCode(),true);
