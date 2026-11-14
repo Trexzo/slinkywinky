@@ -3,6 +3,7 @@
 // Consumes the existing runtime's real ObservationFrame wire shape; it never
 // writes to Minecraft, key bindings, packets, a native DLL or the OS.
 #include "slinkywinky/module_execution_bridge.hpp"
+#include "slinkywinky/module_control_contract.hpp"
 #include "slinkywinky/observation.hpp"
 #include <cstdint>
 #include <memory>
@@ -33,6 +34,43 @@ public:
     SprintObservationPreview(const SprintObservationPreview&) = delete;
     SprintObservationPreview& operator=(const SprintObservationPreview&) = delete;
 
+    // Game-thread-owned control entry point for an eventual ClickGUI adapter.
+    // The selection survives absent-world frames and generation transitions.
+    bool request_module(slinkywinky::ModuleControlRequest request) {
+        if (stopped_ || std::this_thread::get_id() != owner_ ||
+            request.canonical_name != "Sprint")
+            return false;
+        if (requested_enabled_ == request.enable) return true;
+        if (bridge_) {
+            if (!bridge_->request(0, request.enable) ||
+                !bridge_->apply(true, true))
+                return false;
+            bridge_->reset_sprint_world_state();
+        }
+        requested_enabled_ = request.enable;
+        return true;
+    }
+
+    bool configure_sprint(SprintSettings settings) noexcept {
+        if (stopped_ || std::this_thread::get_id() != owner_) return false;
+        settings_ = settings;
+        settings_override_ = true;
+        return true;
+    }
+
+    std::optional<slinkywinky::ModuleControlState> control_state() const noexcept {
+        if (stopped_ || std::this_thread::get_id() != owner_)
+            return std::nullopt;
+        slinkywinky::ModuleControlState state;
+        state.canonical_name = "Sprint";
+        state.requested_enabled = requested_enabled_;
+        state.active_in_world =
+            bridge_ && requested_enabled_ && bridge_->enabled(0);
+        state.settings_override = settings_override_;
+        state.world_generation = generation_;
+        return state;
+    }
+
     SprintObservedDecision observe(const SprintObservedTick& sample) {
         SprintObservedDecision result;
         if (stopped_ || std::this_thread::get_id() != owner_ ||
@@ -56,12 +94,14 @@ public:
             generation_ = generation;
             if (player) start_session();
         }
-        if (player) {
+        if (player && requested_enabled_) {
             if (!bridge_) return result;
             ExecutionFrame update_frame;
             update_frame.event = kSprintPlayerUpdateEvent;
             update_frame.world_present = update_frame.player_present = true;
-            update_frame.sprint_update = SprintUpdatePayload{sample.update, {}, 0};
+            SprintUpdateInput update_input = sample.update;
+            if (settings_override_) update_input.settings = settings_;
+            update_frame.sprint_update = SprintUpdatePayload{update_input, {}, 0};
             if (!bridge_->dispatch(update_frame) ||
                 update_frame.sprint_update->executions != 1) {
                 shutdown();
@@ -70,8 +110,10 @@ public:
             ExecutionFrame movement_frame;
             movement_frame.event = kSprintMovementInputEvent;
             movement_frame.world_present = movement_frame.player_present = true;
+            SprintMovementInput movement_input = sample.movement;
+            if (settings_override_) movement_input.settings = settings_;
             movement_frame.sprint_movement =
-                SprintMovementPayload{sample.movement, {}, 0};
+                SprintMovementPayload{movement_input, {}, 0};
             if (!bridge_->dispatch(movement_frame) ||
                 movement_frame.sprint_movement->executions != 1) {
                 shutdown();
@@ -79,14 +121,16 @@ public:
             }
             result.update = update_frame.sprint_update->decision;
             result.movement = movement_frame.sprint_movement->decision;
-        } else {
-            // No-player frames admit observation only. Session generation
-            // changes were required by ObservationLedger before we got here.
+        } else if (!player) {
+            // Inactive worlds retire event subscriptions, but preserve the
+            // user's explicit module selection and settings for next login.
             if (bridge_) {
                 bridge_->stop();
                 bridge_.reset();
             }
         }
+        // When disabled in a valid world the observation is still admitted,
+        // but no callback runs and every proposal remains its default.
         ledger_.commit(sample.observation);
         const auto snapshot = ledger_.snapshot();
         result.admitted = true;
@@ -105,6 +149,7 @@ public:
             bridge_.reset();
         }
         generation_ = 0;
+        requested_enabled_ = false;
         return true;
     }
     bool stopped() const noexcept { return stopped_; }
@@ -119,16 +164,20 @@ private:
             {"Sprint", 1,
              {{kSprintPlayerUpdateEvent, 100},
               {kSprintMovementInputEvent, 100}}, false});
-        if (!bridge_->bind_sprint(id) ||
-            !bridge_->request(id, true) ||
-            !bridge_->apply(true, true))
-            throw std::logic_error("R204 failed to configure offline Sprint session");
+        if (!bridge_->bind_sprint(id))
+            throw std::logic_error("R210 failed to bind Sprint module");
+        if (requested_enabled_ &&
+            (!bridge_->request(id, true) || !bridge_->apply(true, true)))
+            throw std::logic_error("R210 failed to restore Sprint selection");
     }
 
     const std::thread::id owner_;
     slinkywinky::ObservationLedger ledger_;
     std::unique_ptr<ModuleExecutionBridge> bridge_;
     std::uint64_t generation_ = 0;
+    SprintSettings settings_{};
+    bool requested_enabled_ = true; // Preserve R204–R209 default; UI may override.
+    bool settings_override_ = false;
     bool stopped_ = false;
 };
 
