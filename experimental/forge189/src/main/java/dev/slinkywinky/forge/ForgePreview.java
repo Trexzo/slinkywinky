@@ -691,6 +691,100 @@ public final class ForgePreview {
         }
     }
 
+    // These six stage values come from first-party native NoSlowSettings:
+    // 0 sword 65%, 1 sword vanilla, 2 sword 40%, 3 apple 45%,
+    // 4 apple vanilla, 5 apple 80%. Item IDs are checked at the actual
+    // hooked player-update before allowing a proposal to write.
+    private float r217ExpectedForward() {
+        switch(r214Phase){
+            case 0: return 0.65f;
+            case 1: return 0.2f;
+            case 2: return 0.4f;
+            case 3: return 0.45f;
+            case 4: return 0.2f;
+            case 5: return 0.8f;
+            default: throw new IllegalStateException(
+                "R217 invalid native category stage: "+r214Phase);
+        }
+    }
+
+    private void completeR217CategoryPhase(EntityPlayerSP player) {
+        final int phase=r214Phase;
+        if(phase<0 || phase>=6 || r214PhaseCount!=45 ||
+           r216PhaseSamples[phase]!=33)
+            throw new IllegalStateException("R217 incomplete category movement window");
+        final double mean=r216PhaseDistance[phase]/33.0;
+        if(!Double.isFinite(mean) || mean<=0)
+            throw new IllegalStateException("R217 nonpositive game displacement");
+        System.out.println("[SlinkyWinkyPreview] " +
+            "R217_CATEGORY_DISPLACEMENT item="+(phase<3?"sword":"apple")+
+            " phase="+(phase%3==0?"enabled":phase%3==1?"disabled":"reconfigured")+
+            " multiplier="+r217ExpectedForward()+
+            " itemId="+(phase<3?276:260)+
+            " samples=33 horizontalBlocks="+r216PhaseDistance[phase]+
+            " meanBlocksPerTick="+mean);
+        if(phase==5) {
+            final double[] avg=new double[6];
+            for(int i=0;i<6;i++)
+                avg[i]=r216PhaseDistance[i]/r216PhaseSamples[i];
+            final double sword65=avg[0]/avg[1];
+            final double sword40=avg[2]/avg[1];
+            final double apple45=avg[3]/avg[4];
+            final double apple80=avg[5]/avg[4];
+            final double vanilla=avg[4]/avg[1];
+            if(Math.abs(sword65-3.25)>0.70 ||
+               Math.abs(sword40-2.0)>0.55 ||
+               Math.abs(apple45-2.25)>0.60 ||
+               Math.abs(apple80-4.0)>0.85 ||
+               Math.abs(vanilla-1.0)>0.25)
+                throw new IllegalStateException(
+                    "R217 natural in-world movement category/multiplier mismatch"+
+                    " sword65="+sword65+" sword40="+sword40+
+                    " apple45="+apple45+" apple80="+apple80+
+                    " vanillaCrossItem="+vanilla);
+            r214ReceiptEmitted=true;
+            System.out.println("[SlinkyWinkyPreview] " +
+                "R217_REAL_SWORD_CONSUMABLE_DISPLACEMENT_PASS "+
+                "samplesPerPhase=33 callbacks="+r214HookAdmitted+
+                " ownedFieldWrites="+r214HookWrites+
+                " sword65Ratio="+sword65+
+                " sword40Ratio="+sword40+
+                " apple45Ratio="+apple45+
+                " apple80Ratio="+apple80+
+                " vanillaCrossItemRatio="+vanilla+
+                " movementClass=MovementInputFromOptions"+
+                " keySource=synthetic_local_binding");
+            return;
+        }
+
+        // Native module settings and selection are changed using the
+        // exact owner-thread JNI control interface, never a GUI demo
+        // field. Changing held items is restricted to the test inventory.
+        final int next=phase+1;
+        if(next==1 || next==4)
+            sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,false);
+        else if(next==2) {
+            sprintProbe.setNoSlowSettings(1.0f,0.4f,0.45f);
+            sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
+        } else if(next==3) {
+            // The previous frame is still processing the diamond sword;
+            // use the new apple only for the following native callback.
+            player.stopUsingItem();
+            player.inventory.setInventorySlotContents(0,
+                new ItemStack(Items.apple));
+            sprintProbe.setNoSlowSettings(1.0f,0.4f,0.45f);
+            sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
+        } else if(next==5) {
+            sprintProbe.setNoSlowSettings(1.0f,0.4f,0.8f);
+            sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
+        }
+        r214Phase=next;
+        r214PhaseCount=0;
+        System.out.println("[SlinkyWinkyPreview] R217_CATEGORY_NEXT_PHASE "+
+            "stage="+next+" item="+(next<3?"sword":"apple")+
+            " requestedMultiplier="+r217ExpectedForward());
+    }
+
     // Forge LivingUpdateEvent is BEFORE player onLivingUpdate, so it is
     // unsuitable for applying No Slow. It IS valid for the isolated R214
     // fixture to make the player use a local bow immediately before the
