@@ -34,6 +34,16 @@ jobs:
           } else {
             Write-Output 'R218_WGL_FRAME_NOT_CREATED; failing test may have been unrelated'
           }
+      - name: R219 inspect disposable WGL channel depths (read-only)
+        if: ${{ failure() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          cmake -S tools/r219_wgl_probe -B build-r219-wgl -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-r219-wgl --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./build-r219-wgl/Release/r219_wgl_probe.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: R102 read-only original-window identity negative controls
         run: python -m unittest discover -s tests -p test_windows_r102_window_evidence.py -v
       - name: Demo smoke test
