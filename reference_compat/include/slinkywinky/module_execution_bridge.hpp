@@ -18,6 +18,7 @@
 #include "slinkywinky/safe_walk_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
+#include "slinkywinky/sprint_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -145,6 +146,18 @@ struct KeepSprintUpdatePayload {
     unsigned executions = 0;
 };
 
+struct SprintUpdatePayload {
+    SprintUpdateInput input{};
+    SprintUpdateDecision decision{};
+    unsigned executions = 0;
+};
+
+struct SprintMovementPayload {
+    SprintMovementInput input{};
+    SprintMovementDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -167,6 +180,8 @@ struct ExecutionFrame {
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
     std::optional<KeepSprintPostPayload> keep_sprint_post{};
     std::optional<KeepSprintUpdatePayload> keep_sprint_update{};
+    std::optional<SprintUpdatePayload> sprint_update{};
+    std::optional<SprintMovementPayload> sprint_movement{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -706,6 +721,50 @@ public:
         return false;
     }
 
+    // R203 pinned native Sprint: movement category 1, player update 17/100
+    // and movement input 21/100. Validate the *pair* before binding either.
+    bool bind_sprint(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Sprint" ||
+            definitions_[id].category != 1)
+            return false;
+        bool update = false, movement = false;
+        for (const auto& sub : definitions_[id].subscriptions) {
+            if (sub.event == kSprintPlayerUpdateEvent && sub.priority == 100)
+                update = true;
+            if (sub.event == kSprintMovementInputEvent && sub.priority == 100)
+                movement = true;
+        }
+        if (!update || !movement ||
+            callbacks_[id][kSprintPlayerUpdateEvent] ||
+            callbacks_[id][kSprintMovementInputEvent])
+            return false;
+        const bool first = bind(id, kSprintPlayerUpdateEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.sprint_update) return;
+                auto& p = *frame.sprint_update;
+                ++p.executions;
+                p.decision = sprint_.on_player_update(p.input);
+            });
+        const bool second = bind(id, kSprintMovementInputEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.sprint_movement) return;
+                auto& p = *frame.sprint_movement;
+                ++p.executions;
+                p.decision = sprint_.on_movement_input(p.input);
+            });
+        if (!first || !second)
+            throw std::logic_error("validated Sprint callback pair failed");
+        return true;
+    }
+
+    bool bind_sprint_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Sprint")
+                return bind_sprint(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -776,6 +835,10 @@ public:
             return false;
         if (frame.keep_sprint_update && frame.event != kKeepSprintUpdateEvent)
             return false;
+        if (frame.sprint_update && frame.event != kSprintPlayerUpdateEvent)
+            return false;
+        if (frame.sprint_movement && frame.event != kSprintMovementInputEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -797,7 +860,9 @@ public:
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_post.has_value()) +
-            static_cast<unsigned>(frame.keep_sprint_update.has_value());
+            static_cast<unsigned>(frame.keep_sprint_update.has_value()) +
+            static_cast<unsigned>(frame.sprint_update.has_value()) +
+            static_cast<unsigned>(frame.sprint_movement.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -811,9 +876,17 @@ public:
         const bool combined_attack_post =
             typed_count == 2 && frame.event == kKeepSprintPostEvent &&
             frame.item_use_fix && frame.keep_sprint_post;
+        // Event17 can contain all three update policies together;
+        // event21 contains No Slow and Sprint's movement proposals.
         const bool combined_player_update =
-            typed_count == 2 && frame.event == kKeepSprintUpdateEvent &&
-            frame.jump_delay && frame.keep_sprint_update;
+            typed_count >= 2 && typed_count <= 3 &&
+            frame.event == kSprintPlayerUpdateEvent &&
+            (static_cast<unsigned>(frame.jump_delay.has_value()) +
+             static_cast<unsigned>(frame.keep_sprint_update.has_value()) +
+             static_cast<unsigned>(frame.sprint_update.has_value()) == typed_count);
+        const bool combined_movement_sprint =
+            typed_count == 2 && frame.event == kSprintMovementInputEvent &&
+            frame.no_slow && frame.sprint_movement;
         const bool combined_outgoing_packet =
             typed_count == 2 && frame.event == kOutgoingPacketEvent &&
             frame.ping_fix && frame.no_item_release;
@@ -822,6 +895,7 @@ public:
             frame.no_use_delay && frame.anti_debuff;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
             !combined_attack_post && !combined_player_update &&
+            !combined_movement_sprint &&
             !combined_outgoing_packet && !combined_late_tick)
             return false;
         if (combined_outgoing_packet) {
@@ -836,6 +910,18 @@ public:
             if (ping_class == PingPacketClass::s00_server_keepalive)
                 return false;
         }
+        if (frame.no_slow && frame.sprint_movement) {
+            const auto& no_slow = frame.no_slow->input;
+            const auto& sprint = frame.sprint_movement->input;
+            if (no_slow.forward != sprint.forward ||
+                no_slow.strafe != sprint.strafe ||
+                no_slow.using_item != sprint.using_item)
+                return false;
+        }
+        if (frame.keep_sprint_update && frame.sprint_update &&
+            frame.keep_sprint_update->input.player_present !=
+                frame.sprint_update->input.player_present)
+            return false;
         if (frame.null_move && frame.instant_stop) {
             const auto& a = frame.instant_stop->input;
             const auto& b = frame.null_move->input;
@@ -917,6 +1003,14 @@ public:
             frame.keep_sprint_update->decision = {};
             frame.keep_sprint_update->executions = 0;
         }
+        if (frame.sprint_update) {
+            frame.sprint_update->decision = {};
+            frame.sprint_update->executions = 0;
+        }
+        if (frame.sprint_movement) {
+            frame.sprint_movement->decision = {};
+            frame.sprint_movement->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -940,6 +1034,7 @@ public:
     void reset_item_use_fix_world_state() noexcept { item_use_fix_.reset(); }
     void reset_no_item_release_world_state() noexcept { no_item_release_.reset(); }
     void reset_keep_sprint_world_state() noexcept { keep_sprint_.reset(); }
+    void reset_sprint_world_state() noexcept { sprint_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -952,6 +1047,7 @@ public:
         item_use_fix_.reset();
         no_item_release_.reset();
         keep_sprint_.reset();
+        sprint_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -979,6 +1075,7 @@ private:
     SafeWalkController safe_walk_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
+    SprintController sprint_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
