@@ -93,6 +93,11 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r213_forge_gui_native_receipt.py"
         --selftest)
+    # R214: real WGL GL11 menu + PR2 JNI source receipt negative controls.
+    add_test(NAME r214_forge189_wgl_native_gui_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r214_forge_gl11_native_bridge_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)
@@ -546,6 +551,17 @@ if(WIN32)
   target_link_libraries(slinkywinky_hud_ipc PUBLIC slinkywinky_core)
   if(SLINKYWINKY_BUILD_JNI)
     target_link_libraries(slinkywinky_jni PRIVATE slinkywinky_hud_ipc slinkywinky_menu_gl11 opengl32)
+    # R214: separate, test-only Forge GUI bridge; DO NOT merge with the
+    # real PR2 slinkywinky_jni.dll or load in the original injector.
+    if(BUILD_TESTING)
+      add_library(slinkywinky_r214_gui_overlay SHARED
+        src/r214_forge_gui_overlay_jni.cpp)
+      target_include_directories(slinkywinky_r214_gui_overlay PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include ${JNI_INCLUDE_DIRS})
+      target_compile_features(slinkywinky_r214_gui_overlay PRIVATE cxx_std_17)
+      target_link_libraries(slinkywinky_r214_gui_overlay PRIVATE
+        slinkywinky_menu_gl11 slinkywinky_core opengl32 gdi32 user32)
+    endif()
   endif()
   if(BUILD_TESTING)
     add_executable(slinkywinky_hud_ipc_tests tests/test_windows_hud_ipc.cpp)

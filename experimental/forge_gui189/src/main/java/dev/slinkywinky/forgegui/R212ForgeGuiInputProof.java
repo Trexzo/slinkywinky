@@ -33,6 +33,7 @@ public final class R212ForgeGuiInputProof {
     private long lastRequestId;
     private boolean requestedSprint;
     private R213NativeSprintBridge nativeSprint;
+    private R214NativeMenuOverlay nativeGl11;
 
     @Mod.EventHandler public void initialize(FMLInitializationEvent unused) {
         FMLCommonHandler.instance().bus().register(this);
@@ -73,6 +74,14 @@ public final class R212ForgeGuiInputProof {
                     if(initial.requested || initial.active || initial.id!=0)
                         throw new IllegalStateException("R213 initial native state");
                     System.out.println("R213_REAL_NATIVE_SPRINT_INITIAL_OFF_PASS");
+                    if(Boolean.getBoolean("slinkywinky.r214NativeGuiOverlay")) {
+                        nativeGl11=new R214NativeMenuOverlay(initial);
+                        R214NativeMenuOverlay.View v=nativeGl11.view();
+                        if(v.sourceSequence!=1 || v.requested || v.active ||
+                           v.activeRows!=0)
+                            throw new IllegalStateException("R214 source initial mismatch");
+                        System.out.println("R214_NATIVE_GL11_SOURCE_INITIAL_OFF_PASS");
+                    }
                 }
                 screen=new ProbeScreen(this,savedScreen);
                 mc.displayGuiScreen(screen);
@@ -81,6 +90,8 @@ public final class R212ForgeGuiInputProof {
                 System.out.println("R212_REAL_FORGE_GUI_SCREEN_INSTALLED");
                 stage=1;
             } else if(stage==1 && ticks>=12) {
+                if(nativeGl11!=null && nativeGl11.paintedFrames()==0)
+                    throw new IllegalStateException("R214 GL11 menu never painted");
                 if(mc.currentScreen!=screen || screen.actionCount()!=0)
                     throw new IllegalStateException("R212 synthetic click precondition");
                 screen.disposableInvokeVanillaMouseClicked();
@@ -116,6 +127,15 @@ public final class R212ForgeGuiInputProof {
                     R213NativeSprintBridge.Ack ack=nativeSprint.snapshot();
                     if(ack.id!=3 || !ack.requested || ack.active)
                         throw new IllegalStateException("R213 native final state");
+                    if(nativeGl11!=null) {
+                        R214NativeMenuOverlay.View v=nativeGl11.view();
+                        if(v.sourceSequence!=4 || !v.requested || v.active ||
+                           v.activeRows!=0 || v.drawCount<1)
+                            throw new IllegalStateException("R214 final native source mismatch");
+                        nativeGl11.close();
+                        nativeGl11=null;
+                        System.out.println("R214_NATIVE_GL11_GUI_AND_FEED_CLOSED_PASS");
+                    }
                     nativeSprint.close();
                     nativeSprint=null;
                     System.out.println("R213_REAL_JNI_SPRINT_OWNER_CLOSE_PASS");
@@ -160,8 +180,26 @@ public final class R212ForgeGuiInputProof {
         final long nextId=lastRequestId+1;
         final boolean target=!requestedSprint;
         if(nativeSprint!=null) {
+            R214NativeMenuOverlay.Request exact=null;
+            if(nativeGl11!=null) {
+                final Minecraft mc=Minecraft.getMinecraft();
+                exact=nativeGl11.request(mc.displayWidth,mc.displayHeight);
+                if(exact.id!=nextId || exact.enable!=target ||
+                   exact.observedSequence!=nextId)
+                    throw new IllegalStateException("R214 painted source request mismatch");
+            }
             R213NativeSprintBridge.Ack ack=nativeSprint.request(
                 nextId,"Sprint",target);
+            if(nativeGl11!=null) {
+                nativeGl11.acknowledge(exact,ack);
+                R214NativeMenuOverlay.View v=nativeGl11.view();
+                if(v.sourceSequence!=nextId+1 || v.requested!=target ||
+                   v.active || v.activeRows!=0 || v.drawCount<1)
+                    throw new IllegalStateException("R214 native renderer source mismatch");
+                System.out.println("R214_REAL_GL11_MENU_TO_JNI_TO_ARRAYLIST_FEED_PASS id="+
+                    nextId+" requested="+v.requested+" active="+v.active+
+                    " activeRows="+v.activeRows+" frames="+v.drawCount);
+            }
             if(ack.id!=nextId || ack.requested!=target || ack.active)
                 throw new IllegalStateException("R213 native acknowledgement mismatch");
             requestedSprint=ack.requested;
@@ -222,6 +260,10 @@ public final class R212ForgeGuiInputProof {
         }
         @Override public void drawScreen(int mouseX,int mouseY,float partial) {
             drawDefaultBackground();
+            if(host.nativeGl11!=null) {
+                if(!host.nativeGl11.paint(mc.displayWidth,mc.displayHeight))
+                    throw new IllegalStateException("R214 actual WGL menu paint refused");
+            }
             drawCenteredString(fontRendererObj,
                 "R212 Minecraft-owned GUI input proof (NO GAME ACTIONS)",
                 width/2,height/2-56,0xEEEEEE);

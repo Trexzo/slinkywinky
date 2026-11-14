@@ -24,9 +24,11 @@ compileJava.options.encoding = 'UTF-8'
 
 // The acceptance profile can only be enabled by an explicit process env;
 // normal builds and normal Forge mod loading remain inert.
-def nativeProof = System.getenv('SLINKYWINKY_R213_NATIVE_TEST') == '1'
+def gl11Proof = System.getenv('SLINKYWINKY_R214_GL11_TEST') == '1'
+def nativeProof = System.getenv('SLINKYWINKY_R213_NATIVE_TEST') == '1' || gl11Proof
 def autoProof = System.getenv('SLINKYWINKY_R212_GUI_AUTO_TEST') == '1' || nativeProof
 def nativeDllDir = null
+def gl11DllDir = null
 if (nativeProof) {
     def javaRoot = System.getenv('SLINKYWINKY_R213_PR2_JAVA_SOURCE')
     def dllRoot = System.getenv('SLINKYWINKY_R213_PR2_JNI_DIR')
@@ -35,6 +37,11 @@ if (nativeProof) {
         throw new GradleException('R213 requires explicit real PR2 source and JNI, no mock fallback')
     sourceSets.main.java.srcDir(javaRoot)
     nativeDllDir = dllRoot
+}
+if (gl11Proof) {
+    gl11DllDir = System.getenv('SLINKYWINKY_R214_GL11_JNI_DIR')
+    if (!gl11DllDir || !new File(gl11DllDir, 'slinkywinky_r214_gui_overlay.dll').isFile())
+        throw new GradleException('R214 requires Chat 1 native GL11 bridge DLL, not a mock')
 }
 def manualProof = System.getenv('SLINKYWINKY_R212_GUI_MANUAL_TEST') == '1'
 if (autoProof && manualProof)
@@ -51,7 +58,9 @@ if (autoProof || manualProof) {
             systemProperty 'slinkywinky.r212GuiAutoProof',autoProof.toString()
             systemProperty 'slinkywinky.r212GuiManualProof',manualProof.toString()
             systemProperty 'slinkywinky.r213NativeSprintBridge',nativeProof.toString()
-            if (nativeProof) systemProperty 'java.library.path',nativeDllDir
+            systemProperty 'slinkywinky.r214NativeGuiOverlay',gl11Proof.toString()
+            if (nativeProof) systemProperty 'java.library.path',
+                nativeDllDir + (gl11Proof ? File.pathSeparator + gl11DllDir : '')
             systemProperty 'java.awt.headless','false'
         }
     }
