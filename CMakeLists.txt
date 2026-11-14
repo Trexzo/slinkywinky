@@ -136,6 +136,16 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME native_recovered_color_preview_safety
     COMMAND slinkywinky_recovered_color_preview_tests)
+  # R198: portable source-informed 6-digit hex, HSL, and eight-recent
+  # color-picker state. Completely independent of Minecraft, WGL, JNI.
+  add_executable(slinkywinky_color_popup_model_tests
+    tests/test_menu_color_popup_preview.cpp)
+  target_include_directories(slinkywinky_color_popup_model_tests
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(slinkywinky_color_popup_model_tests
+    PRIVATE cxx_std_17)
+  add_test(NAME r198_native_color_popup_hex_hsl_recent_fixture
+    COMMAND slinkywinky_color_popup_model_tests)
   add_executable(slinkywinky_recovered_text_preview_tests
     tests/test_recovered_text_preview.cpp)
   target_link_libraries(slinkywinky_recovered_text_preview_tests
