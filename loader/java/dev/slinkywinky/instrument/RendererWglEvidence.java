@@ -26,6 +26,13 @@ public final class RendererWglEvidence {
     private static native boolean nativeArmRetainedPreview();
     private static native boolean nativeDrawRetainedPreview(
         long context,long dc,int width,int height);
+    // R209 internal owner-render callback publication entry. Not called by
+    // the read-only acceptance or menu preview, and not a gameplay toggle.
+    // A future admitted module manager must supply REAL active flags.
+    private static native boolean nativePublishRetainedModuleArrayList(
+        long context,long dc,int width,int height,
+        long sourceSequence,long worldGeneration,boolean worldReady,
+        String[] canonicalNames,boolean[] requested,boolean[] active);
     private static native boolean nativeRetainedPreviewAction(int action);
     private static native int[] nativeRetainedPreviewSnapshot();
     // Owner-thread, pinned-WGL, read-only actual native configuration.
@@ -48,6 +55,7 @@ public final class RendererWglEvidence {
     // A null pointer observation never becomes an OS background fact.
     private static native int[] nativeReadExactWindowFocusEvidence(
         long context,long dc,int width,int height);
+    private static native boolean nativeEndRetainedPreview();
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
     private static native int nativePollOperatorMenu(long context,long dc);

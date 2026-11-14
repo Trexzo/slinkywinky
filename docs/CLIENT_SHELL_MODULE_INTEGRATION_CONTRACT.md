@@ -57,3 +57,14 @@ The candidate UI inventory has **67 descriptors**, whereas the C++ native manage
 ## Immediate acceptance target
 
 Integrate **one verified module** (e.g. Sprint only if Chat 2 proves actual in-world effect and teardown) through the complete request/ack/state/render lifecycle above, before expanding to the remaining 66 descriptors. Keep the other branch unchanged until it is ready for an explicit integration commit.
+
+## R209 Chat 1 concrete Java/JNI consumer boundary
+
+Chat 1 now has the **render-side** publication slot in `RendererWglEvidence`:
+`nativePublishRetainedModuleArrayList(context, dc, width, height, sourceSequence, worldGeneration, worldReady, canonicalNames, requested, active)`.
+
+It is private, disabled in the existing production read-only acceptance schedule, and refused without a previously painted exact retained WGL owner session. Arrays represent **one complete state**, length <=66, with distinct canonical source names, requested and independently admitted `active_in_world` flags. R208's feed rejects replay/contradiction/world-generation regression; the next render callback paints the active rows from the same retained JNI session. Menu preview toggles are never a publisher. Session teardown retires the feed. A new Attach session needs a new feed and a new strictly-increasing sequence epoch.
+
+**Chat 2 handoff:** The native module manager must produce actual owner-thread `ModuleControlState` activation, not synthetic labels. The final cross-branch adapter should copy all current states to this value-only entry, retire records on world loss/disable/unload, and never call into Minecraft during GL painting. If module-owner and WGL-render-owner threads differ, do not bypass the current owner check; coordinate a bounded copy-only handoff and call the JNI publisher from the admitted render boundary. No game pointers or direct shared callbacks should cross this interface.
+
+R209's Java 8/JNI pixel test was completed with a disposable WGL fixture and no original Minecraft process. It is not yet proof of Chat 2 runtime publication or real module effect.

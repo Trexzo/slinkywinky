@@ -84,6 +84,49 @@ bool setup() {
     return probe->open();
 }
 }
+// R209: disposable fixture-only WGL handles and actual framebuffer pixels.
+// These methods are not included in the production injected JNI library.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeR209Handles(
+    JNIEnv* env,jclass) {
+    if(!enabled() || !env || !state.rc || !state.dc ||
+       wglGetCurrentContext()!=state.rc ||
+       wglGetCurrentDC()!=state.dc)return nullptr;
+    const jlong pair[2]={
+        static_cast<jlong>(reinterpret_cast<std::uintptr_t>(state.rc)),
+        static_cast<jlong>(reinterpret_cast<std::uintptr_t>(state.dc))};
+    auto result=env->NewLongArray(2);
+    if(result)env->SetLongArrayRegion(result,0,2,pair);
+    return result;
+}
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeR209ClearFrame(
+    JNIEnv*,jclass) {
+    if(!enabled() || !state.rc || !state.dc ||
+       wglGetCurrentContext()!=state.rc ||
+       wglGetCurrentDC()!=state.dc)return JNI_FALSE;
+    glClearColor(0.f,0.f,0.f,0.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    return glGetError()==GL_NO_ERROR?JNI_TRUE:JNI_FALSE;
+}
+extern "C" JNIEXPORT jint JNICALL
+Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeR209Pixel(
+    JNIEnv*,jclass,jint x,jint y) {
+    if(!enabled() || !state.rc || !state.dc ||
+       wglGetCurrentContext()!=state.rc ||
+       wglGetCurrentDC()!=state.dc ||
+       x<0 || x>=640 || y<0 || y>=480)return -1;
+    GLint saved=0;
+    glGetIntegerv(GL_READ_BUFFER,&saved);
+    glReadBuffer(GL_BACK);
+    GLubyte rgb[3]{};
+    glReadPixels(x,y,1,1,GL_RGB,GL_UNSIGNED_BYTE,rgb);
+    const GLenum status=glGetError();
+    glReadBuffer(static_cast<GLenum>(saved));
+    if(status!=GL_NO_ERROR || glGetError()!=GL_NO_ERROR)return -1;
+    return static_cast<jint>((rgb[0]<<16)|(rgb[1]<<8)|rgb[2]);
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_attach_R76WglJvmSmoke_nativeBegin(JNIEnv*,jclass) {
     // A duplicate request must never tear down the active owner context.

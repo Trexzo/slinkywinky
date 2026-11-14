@@ -18,6 +18,9 @@ public final class R76WglJvmSmoke {
     private static native boolean nativeUseAlternate();
     private static native boolean nativeReturnOriginal();
     private static native boolean nativeFinish();
+    private static native long[] nativeR209Handles();
+    private static native boolean nativeR209ClearFrame();
+    private static native int nativeR209Pixel(int x,int y);
 
     /** R77: permitted only for a disposable, system-classloader Java 8 fixture.
      * JNI calls here are never part of the shipped Minecraft instrumentation JAR.
@@ -51,6 +54,10 @@ public final class R76WglJvmSmoke {
     static boolean r78ChangeViewport() {r78Gate();return nativeMismatchViewport();}
     static boolean r78Switch() {r78Gate();return nativeUseAlternate();}
     static boolean r78Return() {r78Gate();return nativeReturnOriginal();}
+
+    static long[] r209Handles() {r78Gate();return nativeR209Handles();}
+    static boolean r209ClearFrame() {r78Gate();return nativeR209ClearFrame();}
+    static int r209Pixel(int x,int y) {r78Gate();return nativeR209Pixel(x,y);}
 
     private static void require(boolean ok,String why) {
         if(!ok)throw new AssertionError(why);

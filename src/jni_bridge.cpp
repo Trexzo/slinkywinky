@@ -30,6 +30,9 @@
 #include <unordered_map>
 #include <memory>
 #include <thread>
+#include <vector>
+#include <string>
+#include <utility>
 #include <cstdio>
 
 namespace {
@@ -601,7 +604,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseManualVisibility(
 static jboolean drawValidatedMenuOverlay(
     jlong expectedContext,jlong expectedDc,jint width,jint height,
     slinkywinky::MenuGL11Mode mode,
-    slinkywinky::WglRetainedMenuPreview* retained=nullptr) {
+    slinkywinky::WglRetainedMenuPreview* retained=nullptr,
+    const slinkywinky::ModuleArrayListFeed* module_feed=nullptr) {
     if(expectedContext==0 || expectedDc==0 ||
        width<320 || width>8192 || height<240 || height>8192)
         return JNI_FALSE;
@@ -629,6 +633,16 @@ static jboolean drawValidatedMenuOverlay(
             return JNI_FALSE;
         drawn=retained->draw(context,dc,static_cast<unsigned>(width),
                              static_cast<unsigned>(height));
+        // R209: only admitted authoritative runtime-state publications can
+        // create ArrayList rows. No published snapshot -> no synthetic HUD.
+        if(drawn && module_feed && module_feed->latest()) {
+            slinkywinky::WglMenuOverlayHost hud_host;
+            if(!hud_host.open(context,dc,static_cast<unsigned>(width),
+                              static_cast<unsigned>(height)))return JNI_FALSE;
+            const bool painted=hud_host.draw_active_modules(*module_feed);
+            const bool released=hud_host.close();
+            drawn=painted && released;
+        }
         // The retained model is long-lived, but each frame's WGL host is
         // opened and closed on the original render owner inside draw().
     } else {
@@ -703,6 +717,7 @@ namespace {
 std::mutex retained_preview_mutex;
 bool retained_preview_armed=false;
 std::unique_ptr<slinkywinky::WglRetainedMenuPreview> retained_preview;
+std::unique_ptr<slinkywinky::ModuleArrayListFeed> retained_module_feed;
 std::array<HANDLE,11> operator_events{}; // 0..8 commands, 9..10 acknowledgments
 bool operator_armed=false;
 unsigned operator_commands_processed=0;
@@ -737,8 +752,10 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
     // original Minecraft WGL render thread. This model MUST be constructed
     // only on the first admitted original-owner draw callback.
     try {
-        if(!retained_preview)
+        if(!retained_preview) {
             retained_preview=std::make_unique<slinkywinky::WglRetainedMenuPreview>();
+            retained_module_feed=std::make_unique<slinkywinky::ModuleArrayListFeed>();
+        }
         // R175: only the exact admitted original Minecraft foreground
         // HWND/WGL owner can supply an untrusted physical hover hint.
         // Click delivery remains entirely disabled. The *first* frame
@@ -786,11 +803,95 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                 return JNI_FALSE;
         }
         return drawValidatedMenuOverlay(context,dc,width,height,
-            slinkywinky::MenuGL11Mode::CompactOverlay,retained_preview.get());
+            slinkywinky::MenuGL11Mode::CompactOverlay,retained_preview.get(),
+            retained_module_feed.get());
     } catch(...) {
         return JNI_FALSE;
     }
 }
+// R209: only the admitted original render owner can publish a complete
+// copy-only module-manager snapshot. This entry cannot activate modules,
+// intercept input, or infer active state from the ClickGUI preview flags.
+// Chat 2 owns the authoritative module manager and publication cadence.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePublishRetainedModuleArrayList(
+    JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height,
+    jlong sourceSequence,jlong worldGeneration,jboolean worldReady,
+    jobjectArray canonicalNames,jbooleanArray requested,jbooleanArray active) {
+    if(!env || !context || !dc || width<320 || width>8192 ||
+       height<240 || height>8192)return JNI_FALSE;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !retained_preview->active() || !retained_preview->owner_thread() ||
+       !retained_module_feed || retained_module_feed->retired())
+        return JNI_FALSE;
+    const HGLRC gl=reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context));
+    const HDC hdc=reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc));
+    // Bind the publisher to the same original-game WGL context as the
+    // retained menu: foreign workers/frames must not submit state.
+    if(!retained_preview->source_hover_evidence(
+            gl,hdc,static_cast<unsigned>(width),static_cast<unsigned>(height)))
+        return JNI_FALSE;
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewport);
+    if(viewport[0]!=0 || viewport[1]!=0 ||
+       viewport[2]!=width || viewport[3]!=height)return JNI_FALSE;
+    const auto refuse=[&]() noexcept {
+        retained_module_feed->retire(); // Never leave stale active rows.
+        return JNI_FALSE;
+    };
+    if(sourceSequence<=0 || worldGeneration<0 || !canonicalNames ||
+       !requested || !active ||
+       (worldReady!=JNI_TRUE && worldReady!=JNI_FALSE))
+        return refuse();
+    const jsize count=env->GetArrayLength(canonicalNames);
+    if(env->ExceptionCheck() || count<0 || count>66 ||
+       env->GetArrayLength(requested)!=count ||
+       env->GetArrayLength(active)!=count || env->ExceptionCheck())
+        return refuse();
+    try {
+        std::vector<jboolean> req(static_cast<std::size_t>(count));
+        std::vector<jboolean> act(static_cast<std::size_t>(count));
+        if(count) {
+            env->GetBooleanArrayRegion(requested,0,count,req.data());
+            env->GetBooleanArrayRegion(active,0,count,act.data());
+            if(env->ExceptionCheck())return refuse();
+        }
+        slinkywinky::ModuleArrayListSnapshot snapshot;
+        snapshot.contract_version=1u;
+        snapshot.source_sequence=static_cast<std::uint64_t>(sourceSequence);
+        snapshot.world_generation=static_cast<std::uint64_t>(worldGeneration);
+        snapshot.world_ready=worldReady==JNI_TRUE;
+        snapshot.modules.reserve(static_cast<std::size_t>(count));
+        for(jsize i=0;i<count;++i) {
+            jstring item=static_cast<jstring>(
+                env->GetObjectArrayElement(canonicalNames,i));
+            if(env->ExceptionCheck() || !item)return refuse();
+            const jsize len=env->GetStringUTFLength(item);
+            if(env->ExceptionCheck() || len<1 || len>48) {
+                env->DeleteLocalRef(item);
+                return refuse();
+            }
+            const char* chars=env->GetStringUTFChars(item,nullptr);
+            if(!chars || env->ExceptionCheck()) {
+                env->DeleteLocalRef(item);
+                return refuse();
+            }
+            slinkywinky::ModuleArrayListState row;
+            row.canonical_name.assign(chars,static_cast<std::size_t>(len));
+            env->ReleaseStringUTFChars(item,chars);
+            env->DeleteLocalRef(item);
+            row.requested_enabled=req[static_cast<std::size_t>(i)]==JNI_TRUE;
+            row.active_in_world=act[static_cast<std::size_t>(i)]==JNI_TRUE;
+            row.world_generation=snapshot.world_generation;
+            if(req[static_cast<std::size_t>(i)]>1u ||
+               act[static_cast<std::size_t>(i)]>1u)return refuse();
+            snapshot.modules.push_back(std::move(row));
+        }
+        return retained_module_feed->publish(snapshot)?JNI_TRUE:JNI_FALSE;
+    }catch(...) {return refuse();}
+}
+
 // R176: exact original WGL owner counter-only hover evidence. The return
 // value cannot be used as a click input token and is never a profile write.
 extern "C" JNIEXPORT jintArray JNICALL
@@ -1013,6 +1114,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
     // R81 must already have drained all source-pinned WGL callbacks. The
     // persistent model retains no GL host between frames.
     close_operator_events();
+    if(retained_module_feed)retained_module_feed->retire();
+    retained_module_feed.reset();
     retained_preview.reset();
     retained_preview_armed=false;
     operator_armed=false;
@@ -1049,6 +1152,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
            !retained_preview->close())return JNI_FALSE;
         retained_preview.reset();
     }
+    if(retained_module_feed)retained_module_feed->retire();
+    retained_module_feed.reset();
     retained_preview_armed=false;
     return JNI_TRUE;
 }
@@ -1059,6 +1164,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview
     JNIEnv*,jclass) {
     std::lock_guard<std::mutex> lock(retained_preview_mutex);
     if(!retained_preview_armed || operator_armed)return JNI_FALSE;
+    if(retained_module_feed)retained_module_feed->retire();
+    retained_module_feed.reset();
     retained_preview.reset();
     retained_preview_armed=false;
     return JNI_TRUE;
