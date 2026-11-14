@@ -261,6 +261,90 @@ Java_dev_slinkywinky_SprintObservationProbe_nativeControlState(
     return out;
 }
 
+namespace {
+bool extract_module_name(JNIEnv* env, jstring name, std::string& out) {
+    if (!name || env->GetStringLength(name) > 32) {
+        throw_java(env, "java/lang/IllegalArgumentException",
+                   "Null or oversized module name");
+        return false;
+    }
+    const char* utf8 = env->GetStringUTFChars(name, nullptr);
+    if (!utf8) return false;
+    out.assign(utf8);
+    env->ReleaseStringUTFChars(name, utf8);
+    if (out != "Sprint" && out != "No Jump Delay" && out != "No Slow") {
+        throw_java(env, "java/lang/IllegalArgumentException",
+                   "Unknown canonical module name");
+        return false;
+    }
+    return true;
+}
+} // namespace
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeSetModuleEnabled(
+    JNIEnv* env, jclass, jlong id, jstring name, jboolean enable) {
+    std::string module;
+    if (!extract_module_name(env, name, module)) return;
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it = g_sessions.find(id);
+    if (it == g_sessions.end() ||
+        !it->second->request_module({module, enable == JNI_TRUE})) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Native module toggle refused or foreign owner thread");
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeSetNoSlowSettings(
+    JNIEnv* env, jclass, jlong id,
+    jfloat bow, jfloat sword, jfloat consumable) {
+    if (!std::isfinite(bow) || !std::isfinite(sword) ||
+        !std::isfinite(consumable) ||
+        bow < 0.0f || sword < 0.0f || consumable < 0.0f) {
+        throw_java(env, "java/lang/IllegalArgumentException",
+                   "No Slow multipliers must be finite and nonnegative");
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it = g_sessions.find(id);
+    if (it == g_sessions.end() ||
+        !it->second->configure_no_slow({bow,sword,consumable})) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "No Slow settings refused or foreign owner thread");
+    }
+}
+
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeModuleControlState(
+    JNIEnv* env, jclass, jlong id, jstring name) {
+    std::string module;
+    if (!extract_module_name(env, name, module)) return nullptr;
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it = g_sessions.find(id);
+    if (it == g_sessions.end()) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Unknown native module-control session");
+        return nullptr;
+    }
+    const auto state = it->second->control_state(module);
+    if (!state) {
+        throw_java(env, "java/lang/IllegalStateException",
+                   "Module state refused or foreign owner thread");
+        return nullptr;
+    }
+    const jlong data[5] = {
+        static_cast<jlong>(slinkywinky::kModuleControlContractVersion),
+        state->requested_enabled ? 1 : 0,
+        state->active_in_world ? 1 : 0,
+        state->settings_override ? 1 : 0,
+        static_cast<jlong>(state->world_generation)
+    };
+    jlongArray out = env->NewLongArray(5);
+    if (out) env->SetLongArrayRegion(out, 0, 5, data);
+    return out;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_dev_slinkywinky_SprintObservationProbe_nativeClose(JNIEnv* env, jclass, jlong id) {
     std::lock_guard<std::mutex> lock(g_sessions_mutex);
