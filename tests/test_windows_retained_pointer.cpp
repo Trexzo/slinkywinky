@@ -20,6 +20,8 @@
 #include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
+#include "slinkywinky/menu_text_geometry.hpp"
+#include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_keyboard_router.hpp"
 #include <array>
@@ -1416,6 +1418,143 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
     std::cout<<"R196_WGL_RANGE_PRESSED_HANDLE_CAPTURE_AND_CLAMP_PASS\n";
 }
 
+// R197: exercise the real retained GL11 hit-to-preview bridges for the
+// reconstructed bind chip and text field, under synthetic WGL input only.
+// This does NOT deliver OS keyboard input or register a Minecraft keybind.
+void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    const auto panel=menu_panel_geometry(
+        676,630,false,MenuPanelMode::CompactOverlay);
+    REQUIRE(panel);
+    const auto xy=[&](float x,float y) {
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    {
+        WglRetainedMenuPreview preview;
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* painted=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(painted && painted->tab==MenuTab::Combat &&
+                painted->visible.front().catalog_index==0u);
+        const auto& initialBind=painted->bind_previews[0u];
+        const auto chips=menu_bind_chip_geometry(
+            *painted,panel->logical_width(),panel->logical_height(),
+            0u,0u,menu_bind_code_label(initialBind.code),false);
+        REQUIRE(chips);
+        const auto point=xy(chips->key.x+chips->key.width*0.5f,
+                            chips->key.y+chips->key.height*0.5f);
+        const auto hit=hit_test_menu(
+            *painted,MenuPanelMode::CompactOverlay,point[0],point[1]);
+        REQUIRE(hit && hit->kind==MenuHitKind::BindChip &&
+                hit->catalog_index==0u);
+        const auto nativeProfile=preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(nativeProfile);
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(preview.fixture_navigation());
+        REQUIRE(ledger.request(1970,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(1970,true,true,true));
+        REQUIRE(preview.fixture_begin_keyboard(1970,ledger,router));
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,676,630,1970,
+            ledger,router,point[0],point[1],10000,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,676,630,1970,
+            ledger,router,point[0],point[1],10040,true));
+        REQUIRE(!preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630)); // must repaint after click
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* waiting=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(waiting && waiting->bind_capture_index==0u &&
+                waiting->bind_previews[0u].code==initialBind.code);
+        REQUIRE(preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630)==nativeProfile);
+        REQUIRE(!preview.preview_enabled(0u));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.fixture_end_keyboard(ledger,router));
+        REQUIRE(preview.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(preview.close());
+        REQUIRE(!ledger.may_suppress_vanilla_event());
+    }
+    {
+        const auto& source=recovered_widget_catalog();
+        std::size_t textIndex=source.size();
+        for(std::size_t i=0;i<source.size();++i)
+            if(source[i].kind==RecoveredWidgetKind::Text &&
+               std::string_view(source[i].module)=="Auto Tool" &&
+               std::string_view(source[i].auxiliary)=="Search item") {
+                textIndex=i;break;
+            }
+        REQUIRE(textIndex<source.size());
+        WglRetainedMenuPreview preview;
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        REQUIRE(preview.fixture_navigation().select_tab(MenuTab::Block));
+        REQUIRE(preview.fixture_navigation().focus_visible_row(42u));
+        REQUIRE(preview.apply(MenuNavAction::ExpandFocused));
+        std::optional<MenuTextFieldRect> field;
+        for(unsigned page=0;page<10 && !field;++page) {
+            REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+            const auto* painted=preview.fixture_painted_frame(
+                ctx.gl,ctx.dc,676,630);
+            REQUIRE(painted && painted->tab==MenuTab::Block);
+            field=menu_text_field_geometry(
+                *painted,panel->logical_width(),panel->logical_height(),
+                42u,textIndex);
+            if(!field)
+                REQUIRE(preview.apply(MenuNavAction::NextSettingsPage));
+        }
+        REQUIRE(field && field->width>30.0f);
+        const auto point=xy(field->x+field->width*0.5f,
+                            field->y+field->height*0.5f);
+        const auto* painted=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        const auto hit=painted?hit_test_menu(
+            *painted,MenuPanelMode::CompactOverlay,point[0],point[1]):
+            std::nullopt;
+        REQUIRE(hit && hit->kind==MenuHitKind::RecoveredTextField &&
+                hit->catalog_index==42u &&
+                hit->control_index==textIndex);
+        const auto nativeProfile=preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(nativeProfile);
+        MenuInputHandoffLedger ledger;
+        MenuKeyboardRouter router(preview.fixture_navigation());
+        REQUIRE(ledger.request(1971,true,true,true,true));
+        REQUIRE(ledger.confirm_fixture(1971,true,true,true));
+        REQUIRE(preview.fixture_begin_keyboard(1971,ledger,router));
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,676,630,1971,
+            ledger,router,point[0],point[1],20000,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,676,630,1971,
+            ledger,router,point[0],point[1],20040,true));
+        REQUIRE(!preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* focused=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(focused && focused->focused_text_widget==textIndex &&
+                focused->recovered_text_overrides.empty());
+        REQUIRE(preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630)==nativeProfile);
+        REQUIRE(!preview.preview_enabled(42u));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.fixture_end_keyboard(ledger,router));
+        REQUIRE(preview.fixture_finish_restore(
+            ledger,router,true,true,true));
+        REQUIRE(preview.close());
+        REQUIRE(!ledger.may_deliver_live_minecraft_event());
+    }
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R197_WGL_NATIVE_BIND_CHIP_FOCUS_AND_TEXT_FIELD_PASS\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -1429,6 +1568,7 @@ int main() {
         verify_r193_closed_gui_drain(context,before);
         verify_r196_wgl_multiselect(context,before);
         verify_r196_wgl_range(context,before);
+        verify_r197_native_focus_receipts(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());
         return 0;
