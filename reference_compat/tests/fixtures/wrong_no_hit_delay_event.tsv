@@ -1,0 +1,9 @@
+id	name	category	initially_enabled	event_priorities
+0	Reach	0	0	8:0
+1	No Jump Delay	1	0	17:100
+2	Null Move	1	0	16:100
+3	Instant Stop	1	0	16:200
+4	No Slow	1	0	21:200
+5	No Hit Delay	4	0	13:0
+6	Synthetic Observer	2	1	14:100
+7	No Hurt Cam	2	0	

@@ -1,0 +1,500 @@
+cmake_minimum_required(VERSION 3.20)
+project(slinkywinky_reference_compat VERSION 0.1 LANGUAGES CXX)
+
+# Entirely independent test target. Existing SlinkyWinky runtime CMake
+# remains untouched while the parallel R-series branch is active.
+add_library(slinkywinky_reference_event_model INTERFACE)
+target_compile_features(slinkywinky_reference_event_model INTERFACE cxx_std_17)
+target_include_directories(slinkywinky_reference_event_model INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+if(MSVC)
+  target_compile_options(slinkywinky_reference_event_model INTERFACE /W4 /WX)
+else()
+  target_compile_options(slinkywinky_reference_event_model INTERFACE -Wall -Wextra -Wpedantic -Werror)
+endif()
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(slinkywinky_reference_event_replay_test tests/test_event_replay.cpp)
+  target_link_libraries(slinkywinky_reference_event_replay_test PRIVATE slinkywinky_reference_event_model)
+  add_test(NAME r174_native_event_replay COMMAND slinkywinky_reference_event_replay_test)
+  add_executable(slinkywinky_event_fixture_runner tools/run_candidate_event_fixture.cpp)
+  target_link_libraries(slinkywinky_event_fixture_runner PRIVATE slinkywinky_reference_event_model)
+  add_test(NAME r175_synthetic_event_fixture COMMAND slinkywinky_event_fixture_runner
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules.tsv")
+  # R176: exact same offline lifecycle oracle can consume a private candidate
+  # fixture locally; CI only uses invented synthetic data.
+  add_executable(slinkywinky_event_lifecycle_test tools/audit_candidate_lifecycle.cpp)
+  target_link_libraries(slinkywinky_event_lifecycle_test PRIVATE slinkywinky_reference_event_model)
+  add_test(NAME r176_lifecycle_synthetic COMMAND slinkywinky_event_lifecycle_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules.tsv")
+  add_test(NAME r176_reject_duplicate_subscription COMMAND slinkywinky_event_lifecycle_test
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/duplicate_subscription.tsv")
+  set_tests_properties(r176_reject_duplicate_subscription PROPERTIES WILL_FAIL TRUE)
+  # R177: compile the existing first-party ReachController itself, not a copy
+  # of upstream C++ or a mock. No game/JNI/Java runtime is linked.
+  add_library(slinkywinky_reference_firstparty_core STATIC ../src/core.cpp)
+  target_include_directories(slinkywinky_reference_firstparty_core PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_compile_features(slinkywinky_reference_firstparty_core PUBLIC cxx_std_17)
+  add_executable(slinkywinky_module_execution_bridge_test
+    tests/test_module_execution_bridge.cpp)
+  target_link_libraries(slinkywinky_module_execution_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r177_reach_callback_bridge
+    COMMAND slinkywinky_module_execution_bridge_test)
+  # R178: full 66-module metadata -> bridge coverage with a synthetic fixture.
+  # Private candidate metadata is supplied only on the user's local machine.
+  add_executable(slinkywinky_implementation_coverage_audit
+    tools/audit_implementation_coverage.cpp)
+  target_link_libraries(slinkywinky_implementation_coverage_audit PRIVATE
+    slinkywinky_reference_event_model slinkywinky_reference_firstparty_core)
+  add_test(NAME r178_synthetic_implementation_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/three_modules_with_reach.tsv")
+  add_test(NAME r178_reject_duplicate_catalog_entry
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/duplicate_subscription.tsv")
+  add_test(NAME r178_reject_wrong_reach_slot
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/reach_wrong_slot.tsv")
+  set_tests_properties(r178_reject_duplicate_catalog_entry
+    r178_reject_wrong_reach_slot PROPERTIES WILL_FAIL TRUE)
+  # R179: two independent module decisions through one metadata-backed router.
+  add_executable(slinkywinky_no_jump_delay_bridge_test
+    tests/test_no_jump_delay_bridge.cpp)
+  target_link_libraries(slinkywinky_no_jump_delay_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r179_no_jump_delay_bridge COMMAND slinkywinky_no_jump_delay_bridge_test)
+  add_test(NAME r179_two_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/four_modules_with_two_decisions.tsv")
+  add_test(NAME r179_reject_wrong_jump_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_jump_event.tsv")
+  add_test(NAME r179_reject_wrong_jump_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_jump_category.tsv")
+  set_tests_properties(r179_reject_wrong_jump_event
+    r179_reject_wrong_jump_category PROPERTIES WILL_FAIL TRUE)
+  # R180: independent opposite-key policy and three-binding manifest.
+  add_executable(slinkywinky_null_move_bridge_test
+    tests/test_null_move_bridge.cpp)
+  target_link_libraries(slinkywinky_null_move_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r180_null_move_bridge COMMAND slinkywinky_null_move_bridge_test)
+  add_test(NAME r180_three_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/five_modules_with_three_decisions.tsv")
+  add_test(NAME r180_reject_wrong_null_move_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_null_move_event.tsv")
+  add_test(NAME r180_reject_wrong_null_move_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_null_move_category.tsv")
+  set_tests_properties(r180_reject_wrong_null_move_event
+    r180_reject_wrong_null_move_category PROPERTIES WILL_FAIL TRUE)
+  # R181: test native event-16 priority 200 Instant Stop before 100 Null Move,
+  # with a single shared offline movement frame. No JVM/game process needed.
+  add_executable(slinkywinky_instant_stop_bridge_test
+    tests/test_instant_stop_bridge.cpp)
+  target_link_libraries(slinkywinky_instant_stop_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r181_instant_stop_and_null_move
+    COMMAND slinkywinky_instant_stop_bridge_test)
+  add_test(NAME r181_four_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/six_modules_with_four_decisions.tsv")
+  add_test(NAME r181_reject_wrong_instant_stop_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_instant_stop_event.tsv")
+  add_test(NAME r181_reject_wrong_instant_stop_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_instant_stop_category.tsv")
+  add_test(NAME r181_reject_wrong_instant_stop_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_instant_stop_priority.tsv")
+  set_tests_properties(r181_reject_wrong_instant_stop_event
+    r181_reject_wrong_instant_stop_category
+    r181_reject_wrong_instant_stop_priority PROPERTIES WILL_FAIL TRUE)
+  # R182: independent No Slow scaling, and complete five-policy catalog audit.
+  add_executable(slinkywinky_no_slow_bridge_test
+    tests/test_no_slow_bridge.cpp)
+  target_link_libraries(slinkywinky_no_slow_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r182_no_slow_bridge COMMAND slinkywinky_no_slow_bridge_test)
+  add_test(NAME r182_five_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/seven_modules_with_five_decisions.tsv")
+  add_test(NAME r182_reject_wrong_no_slow_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_event.tsv")
+  add_test(NAME r182_reject_wrong_no_slow_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_category.tsv")
+  add_test(NAME r182_reject_wrong_no_slow_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_slow_priority.tsv")
+  set_tests_properties(r182_reject_wrong_no_slow_event
+    r182_reject_wrong_no_slow_category
+    r182_reject_wrong_no_slow_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R183: two-mode No Hit Delay attack callback and six-policy catalog.
+  add_executable(slinkywinky_no_hit_delay_bridge_test
+    tests/test_no_hit_delay_bridge.cpp)
+  target_link_libraries(slinkywinky_no_hit_delay_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r183_no_hit_delay_bridge COMMAND slinkywinky_no_hit_delay_bridge_test)
+  add_test(NAME r183_six_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/eight_modules_with_six_decisions.tsv")
+  add_test(NAME r183_reject_wrong_no_hit_delay_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_hit_delay_event.tsv")
+  add_test(NAME r183_reject_wrong_no_hit_delay_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_hit_delay_category.tsv")
+  add_test(NAME r183_reject_wrong_no_hit_delay_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_hit_delay_priority.tsv")
+  set_tests_properties(r183_reject_wrong_no_hit_delay_event
+    r183_reject_wrong_no_hit_delay_category
+    r183_reject_wrong_no_hit_delay_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R184: stateful No Use Delay late-tick policy and seven-decision coverage.
+  add_executable(slinkywinky_no_use_delay_bridge_test
+    tests/test_no_use_delay_bridge.cpp)
+  target_link_libraries(slinkywinky_no_use_delay_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r184_no_use_delay_bridge COMMAND slinkywinky_no_use_delay_bridge_test)
+  add_test(NAME r184_seven_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/nine_modules_with_seven_decisions.tsv")
+  add_test(NAME r184_reject_wrong_no_use_delay_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_use_delay_event.tsv")
+  add_test(NAME r184_reject_wrong_no_use_delay_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_use_delay_category.tsv")
+  add_test(NAME r184_reject_wrong_no_use_delay_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_use_delay_priority.tsv")
+  set_tests_properties(r184_reject_wrong_no_use_delay_event
+    r184_reject_wrong_no_use_delay_category
+    r184_reject_wrong_no_use_delay_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R185: paired Item Use Fix before/after events (14/15) and catalog.
+  add_executable(slinkywinky_item_use_fix_bridge_test
+    tests/test_item_use_fix_bridge.cpp)
+  target_link_libraries(slinkywinky_item_use_fix_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r185_item_use_fix_bridge COMMAND slinkywinky_item_use_fix_bridge_test)
+  add_test(NAME r185_eight_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/ten_modules_with_eight_decisions.tsv")
+  add_test(NAME r185_reject_item_use_wrong_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_item_use_fix_event.tsv")
+  add_test(NAME r185_reject_item_use_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_item_use_fix_category.tsv")
+  add_test(NAME r185_reject_item_use_wrong_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_item_use_fix_priority.tsv")
+  add_test(NAME r185_reject_missing_after_callback
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/missing_item_use_fix_after.tsv")
+  set_tests_properties(r185_reject_item_use_wrong_event
+    r185_reject_item_use_wrong_category
+    r185_reject_item_use_wrong_priority
+    r185_reject_missing_after_callback PROPERTIES WILL_FAIL TRUE)
+
+  # R186: metadata-backed incoming/outgoing Ping Fix (events 2 and 3).
+  add_executable(slinkywinky_ping_fix_bridge_test
+    tests/test_ping_fix_bridge.cpp)
+  target_link_libraries(slinkywinky_ping_fix_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r186_ping_fix_bridge COMMAND slinkywinky_ping_fix_bridge_test)
+  add_test(NAME r186_nine_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/eleven_modules_with_nine_decisions.tsv")
+  add_test(NAME r186_reject_ping_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_category.tsv")
+  add_test(NAME r186_reject_ping_wrong_receive
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_receive_event.tsv")
+  add_test(NAME r186_reject_ping_wrong_send
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_send_event.tsv")
+  add_test(NAME r186_reject_ping_wrong_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_ping_fix_priority.tsv")
+  add_test(NAME r186_reject_ping_missing_receive
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/missing_ping_fix_receive.tsv")
+  set_tests_properties(r186_reject_ping_wrong_category
+    r186_reject_ping_wrong_receive
+    r186_reject_ping_wrong_send
+    r186_reject_ping_wrong_priority
+    r186_reject_ping_missing_receive PROPERTIES WILL_FAIL TRUE)
+
+  # R187: No Item Release one-shot state and shared packet event-3 routing.
+  add_executable(slinkywinky_no_item_release_bridge_test
+    tests/test_no_item_release_bridge.cpp)
+  target_link_libraries(slinkywinky_no_item_release_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r187_no_item_release_bridge COMMAND slinkywinky_no_item_release_bridge_test)
+  add_test(NAME r187_ten_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twelve_modules_with_ten_decisions.tsv")
+  add_test(NAME r187_reject_no_item_release_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_item_release_category.tsv")
+  add_test(NAME r187_reject_no_item_release_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_item_release_event.tsv")
+  add_test(NAME r187_reject_no_item_release_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_no_item_release_priority.tsv")
+  set_tests_properties(r187_reject_no_item_release_category
+    r187_reject_no_item_release_event
+    r187_reject_no_item_release_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R188: visual Anti Debuff independent pure policy and event-18 coexistence.
+  add_executable(slinkywinky_anti_debuff_bridge_test
+    tests/test_anti_debuff_bridge.cpp)
+  target_link_libraries(slinkywinky_anti_debuff_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r188_anti_debuff_bridge COMMAND slinkywinky_anti_debuff_bridge_test)
+  add_test(NAME r188_eleven_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/thirteen_modules_with_eleven_decisions.tsv")
+  add_test(NAME r188_reject_anti_debuff_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_anti_debuff_category.tsv")
+  add_test(NAME r188_reject_anti_debuff_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_anti_debuff_event.tsv")
+  add_test(NAME r188_reject_anti_debuff_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_anti_debuff_priority.tsv")
+  set_tests_properties(r188_reject_anti_debuff_category
+    r188_reject_anti_debuff_event
+    r188_reject_anti_debuff_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R189: pure Fast Accel motion decision and 20-tick friction oracle.
+  add_executable(slinkywinky_fast_accel_bridge_test
+    tests/test_fast_accel_bridge.cpp)
+  target_link_libraries(slinkywinky_fast_accel_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r189_fast_accel_bridge COMMAND slinkywinky_fast_accel_bridge_test)
+  add_test(NAME r189_twelve_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/fifteen_modules_with_twelve_decisions.tsv")
+  add_test(NAME r189_reject_fast_accel_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_fast_accel_category.tsv")
+  add_test(NAME r189_reject_fast_accel_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_fast_accel_event.tsv")
+  add_test(NAME r189_reject_fast_accel_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_fast_accel_priority.tsv")
+  set_tests_properties(r189_reject_fast_accel_category
+    r189_reject_fast_accel_event
+    r189_reject_fast_accel_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R190: Safe Walk event-0 guard/motion proposal and metadata drift tests.
+  add_executable(slinkywinky_safe_walk_bridge_test
+    tests/test_safe_walk_bridge.cpp)
+  target_link_libraries(slinkywinky_safe_walk_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  add_test(NAME r190_thirteen_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sixteen_modules_with_thirteen_decisions.tsv")
+  add_test(NAME r190_reject_safe_walk_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_safe_walk_category.tsv")
+  add_test(NAME r190_reject_safe_walk_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_safe_walk_event.tsv")
+  add_test(NAME r190_reject_safe_walk_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wrong_safe_walk_priority.tsv")
+  set_tests_properties(r190_reject_safe_walk_category
+    r190_reject_safe_walk_event
+    r190_reject_safe_walk_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R201: first-party offline Timer controller, pinned public callback
+  # slots frame event1/priority200 and toggle event5/priority0.
+  add_executable(slinkywinky_timer_bridge_test
+    tests/test_timer_bridge.cpp)
+  target_link_libraries(slinkywinky_timer_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r201_timer_frame_and_toggle_offline
+    COMMAND slinkywinky_timer_bridge_test)
+  add_test(NAME r201_fourteen_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/seventeen_modules_with_fourteen_decisions.tsv")
+  set_tests_properties(r201_timer_frame_and_toggle_offline
+    r201_fourteen_decision_coverage PROPERTIES TIMEOUT 15)
+  # Metadata rejection controls guard the exact reference category/slots.
+  add_test(NAME r201_reject_timer_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r201_timer_wrong_category.tsv")
+  add_test(NAME r201_reject_timer_wrong_frame_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r201_timer_wrong_frame_priority.tsv")
+  add_test(NAME r201_reject_timer_missing_toggle
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r201_timer_missing_toggle.tsv")
+  set_tests_properties(r201_reject_timer_wrong_category
+    r201_reject_timer_wrong_frame_priority
+    r201_reject_timer_missing_toggle PROPERTIES WILL_FAIL TRUE)
+
+  # R202: Keep Sprint's three first-party offline combat-phase decisions,
+  # cross-checked against the Java and two byte-identical C++ candidates.
+  add_executable(slinkywinky_keep_sprint_bridge_test
+    tests/test_keep_sprint_bridge.cpp)
+  target_link_libraries(slinkywinky_keep_sprint_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r202_keep_sprint_three_phase_offline
+    COMMAND slinkywinky_keep_sprint_bridge_test)
+  add_test(NAME r202_fifteen_decision_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/eighteen_modules_with_fifteen_decisions.tsv")
+  add_test(NAME r202_reject_keep_sprint_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_wrong_category.tsv")
+  add_test(NAME r202_reject_keep_sprint_wrong_attack_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_wrong_attack_priority.tsv")
+  add_test(NAME r202_reject_keep_sprint_missing_post
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_missing_post.tsv")
+  add_test(NAME r202_reject_keep_sprint_wrong_update_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r202_keep_sprint_wrong_update_priority.tsv")
+  set_tests_properties(
+    r202_reject_keep_sprint_wrong_category
+    r202_reject_keep_sprint_wrong_attack_priority
+    r202_reject_keep_sprint_missing_post
+    r202_reject_keep_sprint_wrong_update_priority PROPERTIES WILL_FAIL TRUE)
+
+  # R203: source-matched Sprint update + movement input decisions (17,21).
+  # All data-only; no original JNI player/key interaction is executed.
+  add_executable(slinkywinky_sprint_bridge_test
+    tests/test_sprint_bridge.cpp)
+  target_link_libraries(slinkywinky_sprint_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r203_sprint_update_and_movement_offline
+    COMMAND slinkywinky_sprint_bridge_test)
+  add_test(NAME r203_sixteen_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/nineteen_modules_with_sixteen_decisions.tsv")
+  add_test(NAME r203_reject_sprint_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_wrong_category.tsv")
+  add_test(NAME r203_reject_sprint_wrong_update_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_wrong_update_priority.tsv")
+  add_test(NAME r203_reject_sprint_wrong_movement_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_wrong_movement_priority.tsv")
+  add_test(NAME r203_reject_sprint_missing_movement
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_missing_movement.tsv")
+  add_test(NAME r203_reject_sprint_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_extra_subscription.tsv")
+  set_tests_properties(
+    r203_reject_sprint_wrong_category
+    r203_reject_sprint_wrong_update_priority
+    r203_reject_sprint_wrong_movement_priority
+    r203_reject_sprint_missing_movement
+    r203_reject_sprint_extra_subscription
+    PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(
+    r203_sprint_update_and_movement_offline
+    r203_sixteen_policy_coverage PROPERTIES TIMEOUT 15)
+
+  # R204: real read-only ObservationFrame ABI and session-generation
+  # admission drive source-matched Sprint callbacks without any JNI writes.
+  add_executable(slinkywinky_sprint_observation_preview_test
+    tests/test_sprint_observation_preview.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/observation.cpp")
+  target_include_directories(slinkywinky_sprint_observation_preview_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_link_libraries(slinkywinky_sprint_observation_preview_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r204_sprint_native_observation_preview
+    COMMAND slinkywinky_sprint_observation_preview_test)
+  set_tests_properties(r204_sprint_native_observation_preview
+    PROPERTIES TIMEOUT 15)
+
+  # C++ std::thread owner contract requires explicit pthread linkage on
+  # older Linux build images; Windows uses the native thread runtime.
+  find_package(Threads REQUIRED)
+  # R210: first GUI-to-native module control contract. This exercises
+  # persistent owner-thread Sprint enable/disable and settings across real
+  # ObservationLedger world sessions without GUI demo flags or game writes.
+  add_executable(slinkywinky_module_control_integration_test
+    tests/test_module_control_integration.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/observation.cpp")
+  target_include_directories(slinkywinky_module_control_integration_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_link_libraries(slinkywinky_module_control_integration_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core
+    Threads::Threads)
+  add_test(NAME r210_native_module_control_integration
+    COMMAND slinkywinky_module_control_integration_test)
+  set_tests_properties(r210_native_module_control_integration
+    PROPERTIES TIMEOUT 15)
+
+  # R211: three canonical modules share one owner/session and typed
+  # native callback routing. Pure source-only test; no actual game writes.
+  add_executable(slinkywinky_three_module_control_test
+    tests/test_three_module_control.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/observation.cpp")
+  target_include_directories(slinkywinky_three_module_control_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_link_libraries(slinkywinky_three_module_control_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core
+    Threads::Threads)
+  add_test(NAME r211_three_module_control_integration
+    COMMAND slinkywinky_three_module_control_test)
+  set_tests_properties(r211_three_module_control_integration
+    PROPERTIES TIMEOUT 15)
+
+  # R200: reusable first-party native toggle owner fence. The test uses
+  # invented module identities and a synthetic native enqueue/apply adapter.
+  # It compiles on both Windows and Linux and never loads upstream code.
+  add_executable(slinkywinky_native_toggle_owner_gate_test
+    tests/test_native_toggle_owner_gate.cpp)
+  target_link_libraries(slinkywinky_native_toggle_owner_gate_test PRIVATE
+    slinkywinky_reference_event_model Threads::Threads)
+  add_test(NAME r200_native_toggle_owner_thread_and_lifecycle
+    COMMAND slinkywinky_native_toggle_owner_gate_test)
+  set_tests_properties(r200_native_toggle_owner_thread_and_lifecycle
+    PROPERTIES TIMEOUT 15)
+
+endif()

@@ -1,0 +1,4 @@
+id	name	category	initially_enabled	event_priorities
+0	Sample A	0	0	0:100,5:0
+1	Sample B	1	0	0:-3,1:0
+2	Sample C	2	0	
