@@ -20,6 +20,16 @@ packaged JAR, DLL, EXE, injector or Minecraft client was executed:
 - Older C++ archive `slinky-main (1)(1).zip`: SHA-256
   `073b77d2bb77ce5cccf9eff57aa940eb558d425083cae4acd744a837d9e228b1`.
 
+A broader source-only cross-reference shows that **all 66 C++ per-module
+logic .cpp files are byte-identical** between those two archived C++
+variants. The Java archive contains Java module classes matching the
+names of those same **66/66 logic modules**, plus separate Java
+NoHurtCamModule and SpeedModule classes. C++ No Hurt Cam is defined as
+a header-only/engine-side descriptor rather than one of the 66
+per-module .cpp implementations. A matching module name is only a
+coverage/indexing signal, not an algorithmic-equivalence proof.
+The Java and C++ directory/category naming is also not identical.
+
 The **Timer C++ source file** in both C++ archive versions is exactly
 2,665 bytes and has matching SHA-256
 `038600db8fd8683d76d24c39089ddfe7da2eafc1fccb5ec6a880cf950aefb723`.
