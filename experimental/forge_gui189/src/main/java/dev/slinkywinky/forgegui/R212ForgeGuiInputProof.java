@@ -12,6 +12,7 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.lwjgl.input.Keyboard;
+import org.lwjgl.opengl.Display;
 
 /**
  * R212: real Minecraft 1.8.9's OWN GuiScreen dispatcher, as an independently
@@ -34,6 +35,10 @@ public final class R212ForgeGuiInputProof {
     private boolean requestedSprint;
     private R213NativeSprintBridge nativeSprint;
     private R214NativeMenuOverlay nativeGl11;
+    private static boolean sourceMouseMode() {
+        return Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ||
+               Boolean.getBoolean("slinkywinky.r215SourceMouseManual");
+    }
 
     @Mod.EventHandler public void initialize(FMLInitializationEvent unused) {
         FMLCommonHandler.instance().bus().register(this);
@@ -94,29 +99,38 @@ public final class R212ForgeGuiInputProof {
                     throw new IllegalStateException("R214 GL11 menu never painted");
                 if(mc.currentScreen!=screen || screen.actionCount()!=0)
                     throw new IllegalStateException("R212 synthetic click precondition");
-                screen.disposableInvokeVanillaMouseClicked();
+                if(Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
+                    screen.disposableInvokePaintedNativeToggle();
+                else screen.disposableInvokeVanillaMouseClicked();
                 if(lastRequestId!=1L || !requestedSprint ||
                    screen.actionCount()!=1 ||
                    mc.currentScreen!=screen)
                     throw new IllegalStateException("R212 vanilla mouse dispatch");
                 System.out.println("R212_REAL_FORGE_GUI_BUTTON_ACTION_REQUESTED");
                 stage=2;
-            } else if(stage==2 && nativeSprint!=null && ticks>=14) {
-                screen.disposableInvokeVanillaMouseClicked();
+            } else if(stage==2 && nativeSprint!=null && ticks>=
+                      (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 30 : 14)) {
+                if(Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
+                    screen.disposableInvokePaintedNativeToggle();
+                else screen.disposableInvokeVanillaMouseClicked();
                 if(lastRequestId!=2 || requestedSprint ||
                    screen.actionCount()!=2 || !screen.showsNativeAck(2,false,false))
                     throw new IllegalStateException("R213 native disable/GUI state");
                 System.out.println("R213_REAL_JNI_SPRINT_DISABLE_AND_RENDER_RECEIPT_PASS");
                 stage=3;
-            } else if(stage==3 && nativeSprint!=null && ticks>=16) {
-                screen.disposableInvokeVanillaMouseClicked();
+            } else if(stage==3 && nativeSprint!=null && ticks>=
+                      (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 50 : 16)) {
+                if(Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
+                    screen.disposableInvokePaintedNativeToggle();
+                else screen.disposableInvokeVanillaMouseClicked();
                 if(lastRequestId!=3 || !requestedSprint ||
                    screen.actionCount()!=3 || !screen.showsNativeAck(3,true,false))
                     throw new IllegalStateException("R213 native reenable/GUI state");
                 System.out.println("R213_REAL_JNI_SPRINT_REENABLE_AND_RENDER_RECEIPT_PASS");
                 stage=4;
             } else if((stage==2 && nativeSprint==null && ticks>=16) ||
-                      (stage==4 && nativeSprint!=null && ticks>=20)) {
+                      (stage==4 && nativeSprint!=null && ticks>=
+                          (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 70 : 20))) {
                 // ESC is sent to the OWN screen's real vanilla key handler.
                 // This is a scripted in-process invocation, NOT physical input.
                 screen.disposableInvokeVanillaEscape();
@@ -145,7 +159,8 @@ public final class R212ForgeGuiInputProof {
                 stage=5;
                 System.out.println(
                     "R212_FORGE189_OWN_GUIScreen_MOUSE_AND_ESCAPE_PASS");
-            } else if(stage==5 && ticks>=24) {
+            } else if(stage==5 && ticks>=
+                (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 74 : 24)) {
                 // Stop ONLY the isolated test client after the vanilla
                 // previous screen is restored. No external PID kill or
                 // other running Minecraft instance is touched.
@@ -158,6 +173,14 @@ public final class R212ForgeGuiInputProof {
             // title screen; all physical clicks/keys remain Minecraft-owned.
             if(stage==0 && ticks>=8 && mc.currentScreen instanceof GuiMainMenu) {
                 savedScreen=mc.currentScreen;
+                if(Boolean.getBoolean("slinkywinky.r215SourceMouseManual")) {
+                    nativeSprint=new R213NativeSprintBridge();
+                    R213NativeSprintBridge.Ack initial=nativeSprint.snapshot();
+                    if(initial.requested || initial.active)
+                        throw new IllegalStateException("R215 manual initial owner state");
+                    nativeGl11=new R214NativeMenuOverlay(initial);
+                    System.out.println("R215_MANUAL_GL11_SOURCE_MOUSE_READY");
+                }
                 screen=new ProbeScreen(this,savedScreen);
                 mc.displayGuiScreen(screen);
                 if(mc.currentScreen!=screen)
@@ -165,14 +188,26 @@ public final class R212ForgeGuiInputProof {
                 stage=1;
                 System.out.println("R212_MANUAL_OWNED_GUI_READY");
             } else if(stage==1 && mc.currentScreen!=screen) {
+                if(nativeGl11!=null) {
+                    nativeGl11.close();
+                    nativeGl11=null;
+                }
+                if(nativeSprint!=null) {
+                    nativeSprint.close();
+                    nativeSprint=null;
+                }
                 screen=null;
                 finished=true;
                 System.out.println("R212_MANUAL_GUI_CLOSED_VANILLA_RESTORED");
+            } else if(stage==1 && sourceMouseMode() &&
+                      nativeGl11!=null && !Display.isActive()) {
+                nativeGl11.cancelMouse();
             }
         }
     }
 
-    private void requestedFromOwnedScreen(ProbeScreen source) {
+    private void requestedFromOwnedScreen(ProbeScreen source,
+                                          R214NativeMenuOverlay.Request exactFromMouse) {
         if(Thread.currentThread()!=clientOwner ||
            source==null || source!=screen ||
            Minecraft.getMinecraft().currentScreen!=source)
@@ -183,7 +218,10 @@ public final class R212ForgeGuiInputProof {
             R214NativeMenuOverlay.Request exact=null;
             if(nativeGl11!=null) {
                 final Minecraft mc=Minecraft.getMinecraft();
-                exact=nativeGl11.request(mc.displayWidth,mc.displayHeight);
+                if(sourceMouseMode() && exactFromMouse==null)
+                    throw new IllegalStateException("R215 native painted hit required");
+                exact=exactFromMouse!=null ? exactFromMouse :
+                    nativeGl11.request(mc.displayWidth,mc.displayHeight);
                 if(exact.id!=nextId || exact.enable!=target ||
                    exact.observedSequence!=nextId)
                     throw new IllegalStateException("R214 painted source request mismatch");
@@ -196,6 +234,10 @@ public final class R212ForgeGuiInputProof {
                 if(v.sourceSequence!=nextId+1 || v.requested!=target ||
                    v.active || v.activeRows!=0 || v.drawCount<1)
                     throw new IllegalStateException("R214 native renderer source mismatch");
+                if(exactFromMouse!=null)
+                    System.out.println("R215_EXACT_SOURCE_PAIRED_MOUSE_ACK_PASS id="+
+                        nextId+" requested="+v.requested+" active="+v.active+
+                        " activeRows="+v.activeRows+" frames="+v.drawCount);
                 System.out.println("R214_REAL_GL11_MENU_TO_JNI_TO_ARRAYLIST_FEED_PASS id="+
                     nextId+" requested="+v.requested+" active="+v.active+
                     " activeRows="+v.activeRows+" frames="+v.drawCount);
@@ -225,6 +267,8 @@ public final class R212ForgeGuiInputProof {
         private GuiButton sprint;
         private int actions;
         private R213NativeSprintBridge.Ack nativeAck;
+        private boolean sourcePressed;
+        private long lastPointerClock;
 
         ProbeScreen(R212ForgeGuiInputProof host,GuiScreen previous) {
             this.host=host;
@@ -235,20 +279,67 @@ public final class R212ForgeGuiInputProof {
             buttonList.clear();
             sprint=new GuiButton(212, width/2-110, height/2-18,
                                  220,24,"Sprint | request ONLY");
+            if(sourceMouseMode())sprint.visible=false;
             buttonList.add(sprint);
-            buttonList.add(new GuiButton(213,width/2-110,
-                                 height/2+16,220,24,"Close / restore vanilla"));
+            if(sourceMouseMode())
+                buttonList.add(new GuiButton(213,width-125,
+                    height-26,120,20,"Close / restore"));
+            else
+                buttonList.add(new GuiButton(213,width/2-110,
+                    height/2+16,220,24,"Close / restore vanilla"));
         }
         private boolean owned() {
             return owner==Thread.currentThread() &&
                    mc!=null && mc.currentScreen==this;
+        }
+        private long nextPointerTime() {
+            long now=System.nanoTime()/1000000L;
+            if(now<=lastPointerClock)now=lastPointerClock+1;
+            lastPointerClock=now;
+            return now;
+        }
+        private int rawX(int x) {return (int)((long)x*mc.displayWidth/width);}
+        private int rawY(int y) {return (int)((long)y*mc.displayHeight/height);}
+        @Override protected void mouseClicked(int x,int y,int button)
+                throws IOException {
+            if(sourceMouseMode() && host.nativeGl11!=null && button==0) {
+                if(!owned())throw new IllegalStateException("R215 mouse owner lost");
+                if(host.nativeGl11.mouseDown(mc.displayWidth,mc.displayHeight,
+                    rawX(x),rawY(y),nextPointerTime())) {
+                    sourcePressed=true;
+                    return;
+                }
+            }
+            super.mouseClicked(x,y,button);
+        }
+        @Override protected void mouseReleased(int x,int y,int button) {
+            if(sourceMouseMode() && sourcePressed && host.nativeGl11!=null) {
+                if(!owned())throw new IllegalStateException("R215 release owner lost");
+                sourcePressed=false;
+                R214NativeMenuOverlay.Request req=button==0 ?
+                    host.nativeGl11.mouseUp(mc.displayWidth,mc.displayHeight,
+                        rawX(x),rawY(y),nextPointerTime()) : null;
+                if(button!=0)host.nativeGl11.cancelMouse();
+                if(req!=null) {
+                    actions++;
+                    host.requestedFromOwnedScreen(this,req);
+                }
+                return;
+            }
+            super.mouseReleased(x,y,button);
+        }
+        @Override public void onGuiClosed() {
+            if(host.nativeGl11!=null && sourceMouseMode())
+                host.nativeGl11.cancelMouse();
+            sourcePressed=false;
+            super.onGuiClosed();
         }
         @Override protected void actionPerformed(GuiButton button)
                 throws IOException {
             if(!owned())throw new IllegalStateException("R212 lost screen owner");
             if(button==sprint && button.id==212) {
                 actions++;
-                host.requestedFromOwnedScreen(this);
+                host.requestedFromOwnedScreen(this,null);
             } else if(button!=null && button.id==213)
                 mc.displayGuiScreen(previous);
         }
@@ -264,14 +355,16 @@ public final class R212ForgeGuiInputProof {
                 if(!host.nativeGl11.paint(mc.displayWidth,mc.displayHeight))
                     throw new IllegalStateException("R214 actual WGL menu paint refused");
             }
+            final int statusY=sourceMouseMode()?height-55:height/2-56;
             drawCenteredString(fontRendererObj,
-                "R212 Minecraft-owned GUI input proof (NO GAME ACTIONS)",
-                width/2,height/2-56,0xEEEEEE);
+                "R215 Minecraft-owned source mouse | NO GAME ACTIONS",
+                width/2,statusY,0xEEEEEE);
             drawCenteredString(fontRendererObj,
-                nativeAck==null ? "GUI request preview only; no active runtime state" :
-                "JNI ACK #"+nativeAck.id+" | runtime active="+nativeAck.active+
-                    " (title screen has no world)",
-                width/2,height/2-38,0xAAAAAA);
+                nativeAck==null ? "No acknowledged native state yet" :
+                "PR2 JNI ACK #"+nativeAck.id+
+                    " Sprint requested="+nativeAck.requested+
+                    " active="+nativeAck.active+" (no world)",
+                width/2,statusY+16,0xAAAAAA);
             super.drawScreen(mouseX,mouseY,partial);
         }
         void showNativeAck(R213NativeSprintBridge.Ack ack) {
@@ -298,6 +391,34 @@ public final class R212ForgeGuiInputProof {
             try {
                 mouseClicked(sprint.xPosition+sprint.width/2,
                              sprint.yPosition+sprint.height/2,0);
+            } catch(IOException e) {throw new IllegalStateException(e);}
+        }
+        void disposableInvokePaintedNativeToggle() {
+            if(!owned() || host.nativeGl11==null || !sourceMouseMode())
+                throw new IllegalStateException("R215 painted source test absent");
+            int[] px=host.nativeGl11.fixtureSourceTogglePoint(
+                mc.displayWidth,mc.displayHeight);
+            int sx=(int)(((long)px[0]*width+mc.displayWidth/2)/mc.displayWidth);
+            int sy=(int)(((long)px[1]*height+mc.displayHeight/2)/mc.displayHeight);
+            try {
+                if(actions==0) {
+                    // Orphan release and non-target down may not request.
+                    mouseReleased(sx,sy,0);
+                    mouseClicked(0,0,0);
+                    mouseReleased(sx,sy,0);
+                    if(actions!=0 || host.lastRequestId!=0)
+                        throw new IllegalStateException("R215 orphan/non-target accepted");
+                    // Wrong release location cancels a genuine held press.
+                    mouseClicked(sx,sy,0);
+                    mouseReleased(0,0,0);
+                    if(actions!=0 || host.lastRequestId!=0)
+                        throw new IllegalStateException("R215 mismatched release accepted");
+                    System.out.println("R215_SOURCE_MOUSE_NEGATIVE_EDGES_REFUSED_PASS");
+                }
+                mouseClicked(sx,sy,0);
+                mouseReleased(sx,sy,0);
+                if(!showsNativeAck(actions,host.requestedSprint,false))
+                    throw new IllegalStateException("R215 real source toggle not acknowledged");
             } catch(IOException e) {throw new IllegalStateException(e);}
         }
         void disposableInvokeVanillaEscape() {

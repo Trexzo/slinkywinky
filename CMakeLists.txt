@@ -98,6 +98,11 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r214_forge_gl11_native_bridge_receipt.py"
         --selftest)
+    # R215: source-painted GL11 Sprint mouse down/up + JNI ack receipts.
+    add_test(NAME r215_forge189_source_mouse_pair_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r215_forge_source_mouse_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

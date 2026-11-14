@@ -18,6 +18,12 @@ public final class R214NativeMenuOverlay implements AutoCloseable {
         long worldGeneration,boolean requested,boolean active);
     private static native long[] nativeView();
     private static native boolean nativeClose();
+    private static native int[] nativeTogglePoint(int width,int height);
+    private static native boolean nativeMouseDown(int width,int height,
+                                                int x,int y,long timeMs);
+    private static native long[] nativeMouseUp(int width,int height,
+                                               int x,int y,long timeMs);
+    private static native boolean nativeMouseCancel();
     private final Thread owner=Thread.currentThread();
     private boolean closed;
     private int draws;
@@ -69,6 +75,32 @@ public final class R214NativeMenuOverlay implements AutoCloseable {
     public Request request(int width,int height) {
         assertOwner();
         return new Request(nativeRequest(width,height));
+    }
+    /** R215: only after the EXACT native painted GL11 switch receives
+     * both Minecraft-owned mouse button edges; a null release is DENIED.
+     */
+    public boolean mouseDown(int width,int height,int x,int y,long ms) {
+        assertOwner();
+        return nativeMouseDown(width,height,x,y,ms);
+    }
+    public Request mouseUp(int width,int height,int x,int y,long ms) {
+        assertOwner();
+        long[] edge=nativeMouseUp(width,height,x,y,ms);
+        return edge==null?null:new Request(edge);
+    }
+    public void cancelMouse() {assertOwner();nativeMouseCancel();}
+    /** Scripted *in-process* acceptance coordinates from actual source
+     * painted geometry; physical mouse events never call this method.
+     */
+    public int[] fixtureSourceTogglePoint(int width,int height) {
+        assertOwner();
+        if(!Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
+            throw new IllegalStateException("Fixture coordinates not admitted");
+        int[] pixel=nativeTogglePoint(width,height);
+        if(pixel==null || pixel.length!=2 ||
+           pixel[0]<0 || pixel[0]>=width || pixel[1]<0 || pixel[1]>=height)
+            throw new IllegalStateException("Painted source Sprint toggle absent");
+        return pixel;
     }
     public void acknowledge(Request request,R213NativeSprintBridge.Ack ack) {
         assertOwner();

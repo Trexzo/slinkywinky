@@ -24,9 +24,11 @@ compileJava.options.encoding = 'UTF-8'
 
 // The acceptance profile can only be enabled by an explicit process env;
 // normal builds and normal Forge mod loading remain inert.
-def gl11Proof = System.getenv('SLINKYWINKY_R214_GL11_TEST') == '1'
+def mouseAutoProof = System.getenv('SLINKYWINKY_R215_SOURCE_MOUSE_TEST') == '1'
+def mouseManualProof = System.getenv('SLINKYWINKY_R215_MANUAL_MOUSE') == '1'
+def gl11Proof = System.getenv('SLINKYWINKY_R214_GL11_TEST') == '1' || mouseAutoProof || mouseManualProof
 def nativeProof = System.getenv('SLINKYWINKY_R213_NATIVE_TEST') == '1' || gl11Proof
-def autoProof = System.getenv('SLINKYWINKY_R212_GUI_AUTO_TEST') == '1' || nativeProof
+def autoProof = System.getenv('SLINKYWINKY_R212_GUI_AUTO_TEST') == '1' || (nativeProof && !mouseManualProof)
 def nativeDllDir = null
 def gl11DllDir = null
 if (nativeProof) {
@@ -43,7 +45,9 @@ if (gl11Proof) {
     if (!gl11DllDir || !new File(gl11DllDir, 'slinkywinky_r214_gui_overlay.dll').isFile())
         throw new GradleException('R214 requires Chat 1 native GL11 bridge DLL, not a mock')
 }
-def manualProof = System.getenv('SLINKYWINKY_R212_GUI_MANUAL_TEST') == '1'
+def manualProof = System.getenv('SLINKYWINKY_R212_GUI_MANUAL_TEST') == '1' || mouseManualProof
+if (mouseAutoProof && mouseManualProof)
+    throw new GradleException('R215 requires either scripted or manual input, not both')
 if (autoProof && manualProof)
     throw new GradleException('Choose only one R212 GUI proof mode')
 if (autoProof || manualProof) {
@@ -59,6 +63,8 @@ if (autoProof || manualProof) {
             systemProperty 'slinkywinky.r212GuiManualProof',manualProof.toString()
             systemProperty 'slinkywinky.r213NativeSprintBridge',nativeProof.toString()
             systemProperty 'slinkywinky.r214NativeGuiOverlay',gl11Proof.toString()
+            systemProperty 'slinkywinky.r215SourceMouseAuto',mouseAutoProof.toString()
+            systemProperty 'slinkywinky.r215SourceMouseManual',mouseManualProof.toString()
             if (nativeProof) systemProperty 'java.library.path',
                 nativeDllDir + (gl11Proof ? File.pathSeparator + gl11DllDir : '')
             systemProperty 'java.awt.headless','false'
