@@ -73,10 +73,15 @@ inline std::optional<MenuColorModalGeometry> menu_color_modal_geometry(
     for(unsigned i=0;i<3u;++i)
         out.hsl[i]=r(18.0f,101.0f+53.0f*i,
                      width-36.0f,15.0f); // R203 source font_size_15
-    const float recentWidth=(width-36.0f-7.0f*6.0f)/8.0f;
+    // R205: native candidate gui_popups.cpp uses begin_content(...,12)
+    // and `sz=(row_width-56)*0.125`, `step=sz+8` for eight swatches.
+    // Keep this one geometry for both GL11 paint and mouse hit testing.
+    const float recentContentWidth=width-24.0f;
+    const float recentWidth=(recentContentWidth-56.0f)*0.125f;
     for(unsigned i=0;i<8u;++i)
-        out.recent[i]=r(18.0f+i*(recentWidth+6.0f),
-                        255.0f,recentWidth,25.0f); // R203 source row_height_25
+        out.recent[i]=r(12.0f+static_cast<float>(i)*
+                        (recentWidth+8.0f),255.0f,
+                        recentWidth,25.0f); // source row_height_25
     // Native candidate gui_popups.cpp has one 20px title-row cross,
     // not the synthetic Apply/Cancel footer added in R200.
     out.close=r(width-38.0f,12.0f,20.0f,20.0f);

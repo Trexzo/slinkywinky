@@ -19,6 +19,24 @@ int main() {
     // rows and 25px recent colors, no synthetic footer.
     for(const auto& h:dialog->hsl)CHECK(h.height==15.0f);
     for(const auto& h:dialog->recent)CHECK(h.height==25.0f);
+    // R205 source: 12px content inset, (inner_width - 56)/8
+    // colored swatch widths, and 8px gaps with no slot overlap.
+    CHECK(std::fabs(dialog->recent[0].x-
+          (dialog->outer.x+12.0f))<0.0001f);
+    const float sourceSlotWidth=(dialog->outer.width-24.0f-56.0f)/8.0f;
+    for(unsigned i=0u;i<8u;++i) {
+        const auto& swatch=dialog->recent[i];
+        CHECK(std::fabs(swatch.width-sourceSlotWidth)<0.0001f);
+        if(i>0u) {
+            const auto& previous=dialog->recent[i-1u];
+            CHECK(std::fabs(swatch.x-(previous.x+
+                  previous.width)-8.0f)<0.0001f);
+        }
+    }
+    CHECK(std::fabs(
+        dialog->outer.x+dialog->outer.width-
+        (dialog->recent[7].x+dialog->recent[7].width)-
+        12.0f)<0.0001f);
     // R204 source-shaped quarter-circle gradient clipping. The first
     // and last hue sectors round only their OUTER ends, while middle
     // segments remain full-height. Mouse hitboxes remain rectangular.
