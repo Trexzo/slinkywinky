@@ -47,6 +47,9 @@ public final class ForgePreview {
     private long r208WorldClientTicks, r208WorldPlayerTicks, r208FirstWorldMs;
     private long r209LastSampleMs, r209MinGapMs=Long.MAX_VALUE, r209MaxGapMs;
     private boolean r209TickReceipt;
+    private long r213InWorldTicks;
+    private boolean r213JumpEnabledVerified, r213JumpDisabledVerified,
+                    r213JumpReenabledVerified;
     private static final boolean RENDER_PROBE = Boolean.getBoolean("slinkywinky.renderProbe");
     // R204 opt-in only. This reports Sprint proposals, never applies them.
     private static final boolean SPRINT_OBSERVATION =
@@ -66,8 +69,11 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
+    private static final boolean R213_LOCAL_ACTION_ACCEPTANCE =
+        Boolean.getBoolean("slinkywinky.r213LocalActionAcceptance");
     private static final boolean R212_ACTION_TEST =
-        Boolean.getBoolean("slinkywinky.r212ActionTest");
+        Boolean.getBoolean("slinkywinky.r212ActionTest") ||
+        R213_LOCAL_ACTION_ACCEPTANCE;
     // Test-only: create a local world only in a named TEMP game directory.
     private static final boolean R208_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r208LocalWorldTest") ||
@@ -94,15 +100,23 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
             final String tempDir = System.getProperty("java.io.tmpdir").replace('\\','/');
+            final String prefix=R213_LOCAL_ACTION_ACCEPTANCE ?
+                "/slinkywinky-r213-independent-forge-" :
+                "/slinkywinky-r212-independent-forge-";
+            final String username=R213_LOCAL_ACTION_ACCEPTANCE ?
+                "R213Offline" : "R212Offline";
             if (!SPRINT_OBSERVATION || R208_LOCAL_WORLD_TEST ||
                 !gameDir.startsWith(tempDir) ||
-                !gameDir.contains("/slinkywinky-r212-independent-forge-") ||
+                !gameDir.contains(prefix) ||
                 mc.getSession() == null ||
-                !"R212Offline".equals(mc.getSession().getUsername())) {
+                !username.equals(mc.getSession().getUsername())) {
                 throw new IllegalStateException(
                     "R212 game actions require a named TEMP-only offline test");
             }
-            System.out.println("[SlinkyWinkyPreview] R212_ACTION_ISOLATION_GATE_PASS");
+            System.out.println("[SlinkyWinkyPreview] " +
+                (R213_LOCAL_ACTION_ACCEPTANCE ?
+                    "R213_ACTION_ISOLATION_GATE_PASS" :
+                    "R212_ACTION_ISOLATION_GATE_PASS"));
         }
         if (R208_LOCAL_WORLD_TEST) {
             final Minecraft mc = Minecraft.getMinecraft();
@@ -214,18 +228,20 @@ public final class ForgePreview {
             sampleReadOnlySprint(mc,absent);
             System.out.println("[SlinkyWinkyPreview] R209_WORLD_ABSENCE_OBSERVED");
         }
-        if (!R208_LOCAL_WORLD_TEST) return;
+        if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
-                                        "R208_LOCAL_WORLD_REQUESTED"));
+                (R213_LOCAL_ACTION_ACCEPTANCE ? "R213_LOCAL_WORLD_REQUESTED" :
+                    R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
+                                            "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName =
+            final String worldName = R213_LOCAL_ACTION_ACCEPTANCE ?
+                "R213-local-only" :
                 R209_PLAYER_TICK_TEST ? "R209-local-only" : "R208-local-only";
-            mc.launchIntegratedServer(worldName, "Isolated Sprint diagnostic",
+            mc.launchIntegratedServer(worldName, "Isolated module diagnostic",
                 new WorldSettings(209L, WorldSettings.GameType.CREATIVE,
                     false, false, WorldType.FLAT));
         }
@@ -237,7 +253,7 @@ public final class ForgePreview {
                     (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
                                             "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
-            if (!enabled) startPreview(); // decision-only observer
+            if (!enabled) startPreview(); // R213 is explicitly gated action test
         }
     }
 
@@ -309,13 +325,69 @@ public final class ForgePreview {
         frame.yaw=mc.thePlayer.rotationYaw;
         frame.pitch=mc.thePlayer.rotationPitch;
         try {
-            if(R212_ACTION_TEST) sampleOwnedModuleActions(mc,frame);
-            else sampleReadOnlySprint(mc,frame);
+            if(R212_ACTION_TEST) {
+                if(R213_LOCAL_ACTION_ACCEPTANCE)
+                    prepareR213JumpFixture(mc);
+                sampleOwnedModuleActions(mc,frame);
+                if(R213_LOCAL_ACTION_ACCEPTANCE)
+                    verifyR213JumpFixture(mc);
+            } else sampleReadOnlySprint(mc,frame);
         } catch (RuntimeException | LinkageError problem) {
             try {stop();} catch (RuntimeException ignored) { }
             status="Preview stopped after player-tick JNI failure";
             if(R209_PLAYER_TICK_TEST)
                 System.err.println("[SlinkyWinkyPreview] R209_PLAYER_TICK_FAIL "+problem);
+        }
+    }
+
+    // R213's acceptance manipulates only the freshly created TEMP
+    // singleplayer player's private cooldown as a controlled fixture.
+    // This proves the live Forge field write, not natural repeated jumping.
+    private void prepareR213JumpFixture(Minecraft mc) {
+        ++r213InWorldTicks;
+        if(r213InWorldTicks==5 || r213InWorldTicks==10 ||
+           r213InWorldTicks==15) {
+            final ForgeModuleActionPort port=new ForgeModuleActionPort(mc);
+            if(r213InWorldTicks==10)
+                sprintProbe.setModuleEnabled(
+                    SprintObservationProbe.NO_JUMP_DELAY,false);
+            else if(r213InWorldTicks==15)
+                sprintProbe.setModuleEnabled(
+                    SprintObservationProbe.NO_JUMP_DELAY,true);
+            port.writeJumpTicks(0); // known safe baseline, no jump input
+            // A positive fixture uses the private Field through the
+            // same explicitly versioned game port only in R213.
+            ForgeModuleActionPort.setAcceptanceJumpTicks(mc,5);
+        }
+    }
+
+    private void verifyR213JumpFixture(Minecraft mc) {
+        if(r213InWorldTicks!=5 && r213InWorldTicks!=10 &&
+           r213InWorldTicks!=15) return;
+        final ForgeModuleActionPort port=new ForgeModuleActionPort(mc);
+        final int observed=port.readJumpTicks();
+        if(r213InWorldTicks==5 && observed==0){
+            r213JumpEnabledVerified=true;
+            System.out.println("[SlinkyWinkyPreview] R213_JUMP_ENABLED_ZERO_PASS");
+        } else if(r213InWorldTicks==10 && observed==5){
+            r213JumpDisabledVerified=true;
+            System.out.println("[SlinkyWinkyPreview] R213_JUMP_DISABLED_NO_WRITE_PASS");
+        } else if(r213InWorldTicks==15 && observed==0){
+            r213JumpReenabledVerified=true;
+            System.out.println("[SlinkyWinkyPreview] R213_JUMP_REENABLED_ZERO_PASS");
+        } else {
+            throw new IllegalStateException(
+                "R213 live cooldown mismatch tick="+r213InWorldTicks+
+                " observed="+observed);
+        }
+        if(r213InWorldTicks==15) {
+            if(!r213JumpEnabledVerified || !r213JumpDisabledVerified ||
+               !r213JumpReenabledVerified)
+                throw new IllegalStateException("R213 incomplete action receipt");
+            System.out.println("[SlinkyWinkyPreview] " +
+                "R213_LOCAL_JUMP_ACTION_ACCEPTANCE_PASS " +
+                "enabled_zero=1 disabled_preserved=1 reenabled_zero=1 " +
+                "no_slow_phase=blocked_late_tick");
         }
     }
 
@@ -366,11 +438,16 @@ public final class ForgePreview {
                 slow.activeInWorld, decision.replaceInput,
                 decision.proposedForward, decision.proposedStrafe,
                 jump.activeInWorld, decision.hasJumpTicks,
-                decision.proposedJumpTicks),port);
+                decision.proposedJumpTicks,
+                false /* Forge PlayerTick.END is too late for No Slow */),port);
         if(!applied.admitted)
             throw new IllegalStateException("R212 admitted local action rejected");
-        status="R212 LOCAL ACTION TEST | jump="+applied.jumpTicksWritten+
-            " slow="+applied.noSlowWritten+" | no packets or keys";
+        if(applied.noSlowWritten)
+            throw new IllegalStateException("R213 unverified No Slow phase wrote game input");
+        status="R212/213 LOCAL TEST | jump="+applied.jumpTicksWritten+
+            " slow="+applied.noSlowWritten+
+            " lateSlowBlocked="+applied.noSlowBlockedByPhase+
+            " | no packets or keys";
     }
 
     /**
