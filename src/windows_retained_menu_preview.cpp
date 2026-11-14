@@ -424,6 +424,20 @@ bool WglRetainedMenuPreview::pointer(
                    std::numeric_limits<unsigned>::max()))return false;
             return menu_.select_preview_dropdown_option(
                 static_cast<unsigned>(hit->control_index));
+        // R197: the original reconstructed WGL menu already draws and
+        // hit-tests bound key chips and source-indexed text fields. Route
+        // their clicks into the existing INERT first-party preview model.
+        // This does not register a bind with Minecraft or capture OS keys.
+        case MenuHitKind::BindChip:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.begin_bind_capture(hit->catalog_index);
+        case MenuHitKind::BindHold:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.toggle_bind_hold(hit->catalog_index);
+        case MenuHitKind::RecoveredTextField:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.focus_recovered_text_preview(
+                       hit->catalog_index,hit->control_index);
         case MenuHitKind::RecoveredBooleanPreview:
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    profile_.toggle_recovered_boolean(
