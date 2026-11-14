@@ -11,11 +11,14 @@ param(
  [switch]$R208LocalWorldTest,
  [switch]$R209PlayerTickTest,
  [switch]$R213LocalActionAcceptance,
- [switch]$R214LocalNoSlowAcceptance
+ [switch]$R214LocalNoSlowAcceptance,
+ [switch]$R215VanillaInputTest
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-$expectedJar=if($R214LocalNoSlowAcceptance){
+$expectedJar=if($R215VanillaInputTest){
+  '6620805e5f26438560e72a2f96280ca95f3d351323edde385ede37ed9b5e3915'
+}elseif($R214LocalNoSlowAcceptance){
   'aa7bb470c3c5996ed08fa16d8962abe4aed0e8ae3ca07c5909351904452d78d8'
 }elseif($R213LocalActionAcceptance){
   '45cfc71bd182c05393f79b718e5a7c330cf23ad2bdb137df69586c9921774bd2'
@@ -26,7 +29,7 @@ $expectedJar=if($R214LocalNoSlowAcceptance){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -38,10 +41,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance){
+if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R214LocalNoSlowAcceptance){
+  $prefix=if($R215VanillaInputTest){
+    '/slinkywinky-r215-independent-forge-[^/]+$'
+  }elseif($R214LocalNoSlowAcceptance){
     '/slinkywinky-r214-independent-forge-[^/]+$'
   }elseif($R213LocalActionAcceptance){
     '/slinkywinky-r213-independent-forge-[^/]+$'
@@ -172,9 +177,14 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R214LocalNoSlowAcceptance){
-  # Agent comes from exact-hash-pinned JAR staged into fresh TEMP mods.
-  # Default Forge preview never carries this instrumentation flag.
+if($R215VanillaInputTest){
+  # Same exact ASM hook, but use Minecraft's own vanilla
+  # MovementInputFromOptions rather than the R214 test subclass.
+  $argsList=@("-javaagent:$staged",
+    '-Dslinkywinky.r214NoSlowAgent=true',
+    '-Dslinkywinky.r215VanillaInputTest=true')+$argsList
+}elseif($R214LocalNoSlowAcceptance){
+  # Earlier R214 test remains unchanged and hash pinned.
   $argsList=@("-javaagent:$staged",
     '-Dslinkywinky.r214NoSlowAgent=true',
     '-Dslinkywinky.r214LocalNoSlowAcceptance=true')+$argsList
@@ -193,6 +203,7 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
  "PLAYER_TICK_TEST=$([bool]$R209PlayerTickTest)"
  "R213_LOCAL_ACTION_ACCEPTANCE=$([bool]$R213LocalActionAcceptance)"
  "R214_EXPLICIT_POST_SLOW_AGENT=$([bool]$R214LocalNoSlowAcceptance)"
+ "R215_VANILLA_INPUT_TEST=$([bool]$R215VanillaInputTest)"
  "MC_SHA256=$expectedVanilla"
  "LIBRARY_COUNT=$($libraryPaths.Count)"
  "NATIVE_ARCHIVES=$($nativePaths.Count)"
