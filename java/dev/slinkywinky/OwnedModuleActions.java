@@ -25,6 +25,7 @@ public final class OwnedModuleActions {
 
     public static final class Input {
         public final boolean allowActions, playerReady;
+        public final boolean postSlowPreConsumeVerified;
         public final long worldGeneration;
         public final boolean noSlowActive, replaceInput, jumpDelayActive, hasJumpTicks;
         public final float proposedForward, proposedStrafe;
@@ -34,7 +35,23 @@ public final class OwnedModuleActions {
                 long worldGeneration, boolean noSlowActive, boolean replaceInput,
                 float proposedForward, float proposedStrafe,
                 boolean jumpDelayActive, boolean hasJumpTicks, int proposedJumpTicks) {
+            this(allowActions, playerReady, worldGeneration, noSlowActive,
+                replaceInput, proposedForward, proposedStrafe,
+                jumpDelayActive, hasJumpTicks, proposedJumpTicks, false);
+        }
+
+        /**
+         * Only an instrumented hook *after* vanilla scales movementInput and
+         * *before* the game consumes it may set postSlowPreConsumeVerified.
+         * Forge 1.8.9 PlayerTickEvent.END is TOO LATE and must pass false.
+         */
+        public Input(boolean allowActions, boolean playerReady,
+                long worldGeneration, boolean noSlowActive, boolean replaceInput,
+                float proposedForward, float proposedStrafe,
+                boolean jumpDelayActive, boolean hasJumpTicks, int proposedJumpTicks,
+                boolean postSlowPreConsumeVerified) {
             this.allowActions = allowActions;
+            this.postSlowPreConsumeVerified = postSlowPreConsumeVerified;
             this.playerReady = playerReady;
             this.worldGeneration = worldGeneration;
             this.noSlowActive = noSlowActive;
@@ -49,10 +66,13 @@ public final class OwnedModuleActions {
 
     public static final class Result {
         public final boolean admitted, noSlowWritten, jumpTicksWritten;
-        Result(boolean admitted, boolean noSlowWritten, boolean jumpTicksWritten) {
+        public final boolean noSlowBlockedByPhase;
+        Result(boolean admitted, boolean noSlowWritten, boolean jumpTicksWritten,
+                boolean noSlowBlockedByPhase) {
             this.admitted = admitted;
             this.noSlowWritten = noSlowWritten;
             this.jumpTicksWritten = jumpTicksWritten;
+            this.noSlowBlockedByPhase = noSlowBlockedByPhase;
         }
     }
 
@@ -74,7 +94,7 @@ public final class OwnedModuleActions {
             throw new IllegalArgumentException("Invalid bounded module action proposal");
         if (!input.allowActions || !input.playerReady) {
             release(port);
-            return new Result(false, false, false);
+            return new Result(false, false, false, false);
         }
         Object world = port.worldIdentity();
         Object player = port.playerIdentity();
@@ -97,7 +117,11 @@ public final class OwnedModuleActions {
 
         boolean wroteMovement = false;
         boolean wroteJump = false;
-        if (input.noSlowActive && input.replaceInput) {
+        final boolean blockedSlow =
+            input.noSlowActive && input.replaceInput &&
+            !input.postSlowPreConsumeVerified;
+        if (input.noSlowActive && input.replaceInput &&
+            input.postSlowPreConsumeVerified) {
             final float currentForward = port.readForward();
             final float currentStrafe = port.readStrafe();
             if (!Float.isFinite(currentForward) || !Float.isFinite(currentStrafe))
@@ -127,7 +151,7 @@ public final class OwnedModuleActions {
                 wroteJump = true;
             }
         }
-        return new Result(true, wroteMovement, wroteJump);
+        return new Result(true, wroteMovement, wroteJump, blockedSlow);
     }
 
     /** Release only on the admitted owner thread; never update a new world. */
