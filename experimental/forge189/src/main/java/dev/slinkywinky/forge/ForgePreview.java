@@ -3,6 +3,7 @@ package dev.slinkywinky.forge;
 import dev.slinkywinky.GameHost;
 import dev.slinkywinky.HostSettings;
 import dev.slinkywinky.NativeEngine;
+import dev.slinkywinky.OwnedModuleActions;
 import dev.slinkywinky.SprintObservationProbe;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
@@ -10,6 +11,7 @@ import net.minecraft.world.WorldSettings;
 import net.minecraft.world.WorldType;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemAxe;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSword;
@@ -32,6 +34,7 @@ public final class ForgePreview {
     private KeyBinding toggle;
     private GameHost host;
     private SprintObservationProbe sprintProbe;
+    private OwnedModuleActions moduleActions;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -60,6 +63,10 @@ public final class ForgePreview {
     // this tick boundary, NOT misrepresented as original native event21.
     private static final boolean R209_PLAYER_TICK_TEST =
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
+    // R212 is a deliberately separate, TEMP-only local singleplayer test.
+    // Default Forge preview remains read-only, including normal F9 toggle.
+    private static final boolean R212_ACTION_TEST =
+        Boolean.getBoolean("slinkywinky.r212ActionTest");
     // Test-only: create a local world only in a named TEMP game directory.
     private static final boolean R208_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r208LocalWorldTest") ||
@@ -81,6 +88,20 @@ public final class ForgePreview {
         FMLCommonHandler.instance().bus().register(this);
         MinecraftForge.EVENT_BUS.register(this);
         System.out.println("[SlinkyWinkyPreview] initialized - read-only");
+        if (R212_ACTION_TEST) {
+            final Minecraft mc = Minecraft.getMinecraft();
+            final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
+            final String tempDir = System.getProperty("java.io.tmpdir").replace('\\','/');
+            if (!SPRINT_OBSERVATION || R208_LOCAL_WORLD_TEST ||
+                !gameDir.startsWith(tempDir) ||
+                !gameDir.contains("/slinkywinky-r212-independent-forge-") ||
+                mc.getSession() == null ||
+                !"R212Offline".equals(mc.getSession().getUsername())) {
+                throw new IllegalStateException(
+                    "R212 game actions require a named TEMP-only offline test");
+            }
+            System.out.println("[SlinkyWinkyPreview] R212_ACTION_ISOLATION_GATE_PASS");
+        }
         if (R208_LOCAL_WORLD_TEST) {
             final Minecraft mc = Minecraft.getMinecraft();
             final String home = mc.mcDataDir.getAbsolutePath().replace('\\', '/');
@@ -125,8 +146,17 @@ public final class ForgePreview {
     private void stop() {
         enabled=false;
         try {
+            // Restore only still-owned local movement fields before closing
+            // the session. If the player has gone, stale objects are never written.
+            if (moduleActions != null) {
+                try {
+                    moduleActions.close(
+                        ForgeModuleActionPort.currentOrNull(Minecraft.getMinecraft()));
+                } finally { moduleActions=null; }
+            }
             if(sprintProbe!=null) sprintProbe.close();
         } finally {
+            moduleActions=null;
             sprintProbe=null;
             sprintWorld=sprintPlayer=null;
             sprintGeneration=1;
@@ -140,6 +170,14 @@ public final class ForgePreview {
         try {
             host=new GameHost(new NativeEngine(new int[]{1,2,3,4}),readonlyActions);
             if(SPRINT_OBSERVATION) sprintProbe=new SprintObservationProbe();
+            if(R212_ACTION_TEST) {
+                if(sprintProbe==null)
+                    throw new IllegalStateException("R212 native module observer unavailable");
+                moduleActions=new OwnedModuleActions();
+                sprintProbe.setModuleEnabled(SprintObservationProbe.NO_JUMP_DELAY,true);
+                sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
+                sprintProbe.setNoSlowSettings(1.0f,1.0f,1.0f);
+            }
             enabled=true;
             observations=0;
             sprintGeneration=1;
@@ -163,6 +201,8 @@ public final class ForgePreview {
         final Minecraft mc=Minecraft.getMinecraft();
         if (enabled && sprintProbe!=null && mc.thePlayer==null &&
             (sprintWorld!=null || sprintPlayer!=null)) {
+            if(R212_ACTION_TEST && moduleActions!=null)
+                moduleActions.release(ForgeModuleActionPort.currentOrNull(mc));
             // PlayerTickEvent does not fire after a disconnect. Admit one
             // absent-player observation and retire the native session.
             GameHost.Frame absent=new GameHost.Frame();
@@ -267,13 +307,68 @@ public final class ForgePreview {
         frame.yaw=mc.thePlayer.rotationYaw;
         frame.pitch=mc.thePlayer.rotationPitch;
         try {
-            sampleReadOnlySprint(mc,frame);
+            if(R212_ACTION_TEST) sampleOwnedModuleActions(mc,frame);
+            else sampleReadOnlySprint(mc,frame);
         } catch (RuntimeException | LinkageError problem) {
             try {stop();} catch (RuntimeException ignored) { }
             status="Preview stopped after player-tick JNI failure";
             if(R209_PLAYER_TICK_TEST)
                 System.err.println("[SlinkyWinkyPreview] R209_PLAYER_TICK_FAIL "+problem);
         }
+    }
+
+    /**
+     * R212: an isolated, explicitly opt-in local action trial.
+     * No live anti-cheat/server integration, synthetic keys or packets.
+     * Full actions are only permitted in a local offline test profile.
+     * Forge PlayerTickEvent.END is not authenticated original native
+     * event-21 timing and still requires separate gameplay acceptance.
+     */
+    private void sampleOwnedModuleActions(Minecraft mc, GameHost.Frame frame) {
+        if(!R212_ACTION_TEST || moduleActions==null || sprintProbe==null ||
+           mc.theWorld==null || mc.thePlayer==null || !mc.isSingleplayer())
+            throw new IllegalStateException("R212 action test lacks a local world");
+        if(sprintWorld!=frame.worldToken || sprintPlayer!=frame.playerToken){
+            sprintWorld=frame.worldToken;
+            sprintPlayer=frame.playerToken;
+            ++sprintGeneration;
+        }
+        final ForgeModuleActionPort port=new ForgeModuleActionPort(mc);
+        final boolean using=mc.thePlayer.isUsingItem();
+        final ItemStack held=mc.thePlayer.getHeldItem();
+        final int itemId=held==null ? -1 : Item.getIdFromItem(held.getItem());
+        final int[] flags={3,frame.guiOpen?1:0,frame.sprinting?1:0,
+            using?1:0,SPRINT_GUI?1:0,SPRINT_ITEM?1:0,
+            SPRINT_BACK?1:0,SPRINT_SIDE?1:0};
+        final float[] movement={
+            mc.thePlayer.movementInput.moveForward,
+            mc.thePlayer.movementInput.moveStrafe,
+            mc.thePlayer.capabilities.getWalkSpeed()};
+        final int[] context={1,Math.max(0,port.readJumpTicks()),
+            using?1:0,held!=null?1:0,itemId};
+        final SprintObservationProbe.ModuleDecision decision =
+            sprintProbe.observeModules(
+                new long[]{frame.monotonicMs,sprintGeneration},flags,
+                new double[]{frame.eyeX,frame.eyeY,frame.eyeZ,0,0,0},
+                new float[]{frame.yaw,frame.pitch},movement,context,
+                new float[]{1,1,1});
+        if(!decision.sprint.admitted || !decision.sprint.worldReady)
+            throw new IllegalStateException("R212 native module frame rejected");
+        final SprintObservationProbe.ControlState jump =
+            sprintProbe.moduleState(SprintObservationProbe.NO_JUMP_DELAY);
+        final SprintObservationProbe.ControlState slow =
+            sprintProbe.moduleState(SprintObservationProbe.NO_SLOW);
+        final OwnedModuleActions.Result applied=moduleActions.apply(
+            new OwnedModuleActions.Input(
+                true, true, sprintGeneration,
+                slow.activeInWorld, decision.replaceInput,
+                decision.proposedForward, decision.proposedStrafe,
+                jump.activeInWorld, decision.hasJumpTicks,
+                decision.proposedJumpTicks),port);
+        if(!applied.admitted)
+            throw new IllegalStateException("R212 admitted local action rejected");
+        status="R212 LOCAL ACTION TEST | jump="+applied.jumpTicksWritten+
+            " slow="+applied.noSlowWritten+" | no packets or keys";
     }
 
     /**
