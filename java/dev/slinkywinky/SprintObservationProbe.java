@@ -13,6 +13,9 @@ public final class SprintObservationProbe implements AutoCloseable {
         long handle, long[] clocks, int[] flags,
         double[] coordinates, float[] rotation, float[] movement);
     private static native void nativeClose(long handle);
+    private static native void nativeSetEnabled(long handle, boolean enabled);
+    private static native void nativeSetSettings(long handle, int mask);
+    private static native long[] nativeControlState(long handle);
 
     public static final class Decision {
         public final boolean admitted, worldReady, sessionTransition;
@@ -39,6 +42,64 @@ public final class SprintObservationProbe implements AutoCloseable {
             proposedSpeed = values[7];
             proposeSetSprinting = values[8] != 0;
         }
+    }
+
+    // Canonical name is shared with the native module manager and
+    // the first-party module_control_contract.hpp, not the GUI demo flag.
+    public static final String MODULE_NAME = "Sprint";
+
+    public static final class ControlState {
+        public final boolean requestedEnabled, activeInWorld, settingsOverride;
+        public final long worldGeneration;
+
+        private ControlState(long[] values) {
+            if (values == null || values.length != 5 || values[0] != 1 ||
+                values[4] < 0)
+                throw new IllegalStateException("Unsupported native module-control contract");
+            for (int i = 1; i <= 3; ++i)
+                if (values[i] != 0 && values[i] != 1)
+                    throw new IllegalStateException("Malformed native module state");
+            requestedEnabled = values[1] == 1;
+            activeInWorld = values[2] == 1;
+            settingsOverride = values[3] == 1;
+            worldGeneration = values[4];
+        }
+    }
+
+    /**
+     * Owner-thread-only request. A GUI must use the state() snapshot,
+     * never assume a button click itself enabled a native module.
+     */
+    public synchronized void setEnabled(boolean enabled) {
+        assertOwner();
+        assertOpen();
+        nativeSetEnabled(handle, enabled);
+    }
+
+    /**
+     * Canonical Sprint controls: in GUI, using an item, backward,
+     * sideways. These replace older passive/preview-only flag values.
+     * Neither this method nor any native policy directly changes the game.
+     */
+    public synchronized void setSettings(
+            boolean inGui, boolean usingItem,
+            boolean backwards, boolean sideways) {
+        assertOwner();
+        assertOpen();
+        final int mask = (inGui ? 1 : 0) | (usingItem ? 2 : 0) |
+                         (backwards ? 4 : 0) | (sideways ? 8 : 0);
+        nativeSetSettings(handle, mask);
+    }
+
+    public synchronized ControlState state() {
+        assertOwner();
+        assertOpen();
+        return new ControlState(nativeControlState(handle));
+    }
+
+    private void assertOpen() {
+        if (handle == 0)
+            throw new IllegalStateException("Sprint module-control session closed");
     }
 
     private final Thread owner = Thread.currentThread();
