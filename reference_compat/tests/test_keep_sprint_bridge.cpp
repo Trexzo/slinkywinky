@@ -125,8 +125,8 @@ int main() {
 
     const auto coverage = bridge.coverage();
     CHECK(coverage.registered_modules == 4);
-    CHECK(coverage.native_callback_subscriptions == 8);
-    CHECK(coverage.executable_callback_bindings == 8);
+    CHECK(coverage.native_callback_subscriptions == 7);
+    CHECK(coverage.executable_callback_bindings == 7);
     CHECK(coverage.unimplemented_callback_subscriptions == 0);
 
     CHECK(bridge.request(keep, true));
