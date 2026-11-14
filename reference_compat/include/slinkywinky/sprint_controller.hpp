@@ -89,11 +89,15 @@ public:
             return out;
         }
 
+        // Bound the float domain *before* conversion. Use a runtime value
+        // for the final cast so MSVC does not diagnose speculative constant
+        // overflow when the negative test inlines FLT_MAX.
         const double proposed = static_cast<double>(input.speed) * 1.3;
         if (!std::isfinite(proposed) ||
-            std::abs(proposed) > std::numeric_limits<float>::max())
+            std::abs(proposed) > static_cast<double>(std::numeric_limits<float>::max()))
             return out;
-        out.proposed_speed = static_cast<float>(proposed);
+        const volatile double bounded = proposed;
+        out.proposed_speed = static_cast<float>(bounded);
         out.propose_set_sprinting = true;
         return out;
     }
