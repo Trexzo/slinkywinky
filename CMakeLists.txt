@@ -88,6 +88,11 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r212_forge_gui_input_receipt.py"
         --selftest)
+    # R213: exact real PR2 JNI state receipt sanity, no DLL/game in CI.
+    add_test(NAME r213_forge189_real_native_control_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r213_forge_gui_native_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

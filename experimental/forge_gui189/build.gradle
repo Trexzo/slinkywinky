@@ -24,7 +24,18 @@ compileJava.options.encoding = 'UTF-8'
 
 // The acceptance profile can only be enabled by an explicit process env;
 // normal builds and normal Forge mod loading remain inert.
-def autoProof = System.getenv('SLINKYWINKY_R212_GUI_AUTO_TEST') == '1'
+def nativeProof = System.getenv('SLINKYWINKY_R213_NATIVE_TEST') == '1'
+def autoProof = System.getenv('SLINKYWINKY_R212_GUI_AUTO_TEST') == '1' || nativeProof
+def nativeDllDir = null
+if (nativeProof) {
+    def javaRoot = System.getenv('SLINKYWINKY_R213_PR2_JAVA_SOURCE')
+    def dllRoot = System.getenv('SLINKYWINKY_R213_PR2_JNI_DIR')
+    if (!javaRoot || !new File(javaRoot, 'dev/slinkywinky/SprintObservationProbe.java').isFile() ||
+        !dllRoot || !new File(dllRoot, 'slinkywinky_jni.dll').isFile())
+        throw new GradleException('R213 requires explicit real PR2 source and JNI, no mock fallback')
+    sourceSets.main.java.srcDir(javaRoot)
+    nativeDllDir = dllRoot
+}
 def manualProof = System.getenv('SLINKYWINKY_R212_GUI_MANUAL_TEST') == '1'
 if (autoProof && manualProof)
     throw new GradleException('Choose only one R212 GUI proof mode')
@@ -39,6 +50,8 @@ if (autoProof || manualProof) {
             systemProperty 'slinkywinky.r212GuiInputProof','true'
             systemProperty 'slinkywinky.r212GuiAutoProof',autoProof.toString()
             systemProperty 'slinkywinky.r212GuiManualProof',manualProof.toString()
+            systemProperty 'slinkywinky.r213NativeSprintBridge',nativeProof.toString()
+            if (nativeProof) systemProperty 'java.library.path',nativeDllDir
             systemProperty 'java.awt.headless','false'
         }
     }
