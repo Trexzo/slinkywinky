@@ -251,6 +251,45 @@ static ExecutionFrame timer_toggle(bool matches, bool enabled) {
     return frame;
 }
 
+static ExecutionFrame keep_sprint_before_frame() {
+    ExecutionFrame frame;
+    frame.event = kKeepSprintAttackEvent;
+    frame.world_present = frame.player_present = true;
+    KeepSprintAttackPayload payload;
+    payload.input.phase_active = true;
+    payload.input.in_game = true;
+    payload.input.player_present = true;
+    payload.input.sprinting = true;
+    payload.input.chance_succeeded = true;
+    payload.input.motion = {0.8, 0.25, -0.4};
+    frame.keep_sprint_attack = payload;
+    return frame;
+}
+
+static ExecutionFrame keep_sprint_post_frame() {
+    ExecutionFrame frame;
+    frame.event = kKeepSprintPostEvent;
+    frame.world_present = frame.player_present = true;
+    KeepSprintPostPayload payload;
+    payload.input.phase_active = true;
+    payload.input.player_present = true;
+    payload.input.on_ground = true;
+    payload.input.ticks_existed = 100;
+    payload.input.last_attacker_time = 100;
+    payload.input.require_on_ground = true;
+    payload.input.motion_multiplier = 0.5f;
+    frame.keep_sprint_post = payload;
+    return frame;
+}
+
+static ExecutionFrame keep_sprint_update_frame() {
+    ExecutionFrame frame;
+    frame.event = kKeepSprintUpdateEvent;
+    frame.world_present = frame.player_present = true;
+    frame.keep_sprint_update = KeepSprintUpdatePayload{{true}, {}, 0};
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -394,6 +433,13 @@ int main(int argc, char** argv) {
         if (has_timer)
             require(bridge.bind_timer_from_catalog(),
                     "Timer native frame1/priority200 and toggle5/priority0 pair failed");
+        std::size_t keep_sprint_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Keep Sprint") keep_sprint_id = i;
+        const bool has_keep_sprint = keep_sprint_id < manifest.modules.size();
+        if (has_keep_sprint)
+            require(bridge.bind_keep_sprint_from_catalog(),
+                    "Keep Sprint source event14/15/17 priority0 triplet rejected");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -406,22 +452,24 @@ int main(int argc, char** argv) {
                                                (has_anti_debuff ? 1u : 0u) +
                                                (has_fast_accel ? 1u : 0u) +
                                                (has_safe_walk ? 1u : 0u) +
-                                               (has_timer ? 2u : 0u);
+                                               (has_timer ? 2u : 0u) +
+                                               (has_keep_sprint ? 3u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
                 "callback coverage drift");
         require(c.modules_with_executable_bindings ==
                     expected_bindings - (has_item_use_fix ? 1u : 0u) -
-                    (has_ping_fix ? 1u : 0u) - (has_timer ? 1u : 0u) &&
-                c.executable_callback_bindings == expected_bindings,
+                    (has_ping_fix ? 1u : 0u) - (has_timer ? 1u : 0u) -
+                    (has_keep_sprint ? 2u : 0u) &&                c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
                 c.native_callback_subscriptions, "callback coverage does not reconcile");
         require(c.implemented_per_event[kReachQueryEvent] == 1,
                 "Reach callback not routed through event 8");
-        require(c.implemented_per_event[kPlayerUpdateEvent] == (has_jump ? 1u : 0u),
-                "No Jump Delay callback not routed through event 17");
+        require(c.implemented_per_event[kPlayerUpdateEvent] ==
+                    (has_jump ? 1u : 0u) + (has_keep_sprint ? 1u : 0u),
+                "No Jump Delay / Keep Sprint callbacks not routed through event 17");
         require(c.implemented_per_event[kMovementTickEvent] ==
                     (has_null_move ? 1u : 0u) + (has_instant_stop ? 1u : 0u),
                 "Movement callbacks not routed through event 16");
@@ -440,10 +488,12 @@ int main(int argc, char** argv) {
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u),
                 "No Use Delay / Anti Debuff shared event 18 inventory mismatch");
         require(c.implemented_per_event[kItemUseFixBeforeEvent] ==
-                    (has_no_hit_delay ? 1u : 0u) + (has_item_use_fix ? 1u : 0u),
+                    (has_no_hit_delay ? 1u : 0u) + (has_item_use_fix ? 1u : 0u) +
+                    (has_keep_sprint ? 1u : 0u),
                 "Shared event 14 module binding inventory mismatch");
-        require(c.implemented_per_event[kItemUseFixAfterEvent] == (has_item_use_fix ? 1u : 0u),
-                "Item Use Fix after callback not routed through event 15");
+        require(c.implemented_per_event[kItemUseFixAfterEvent] ==
+                    (has_item_use_fix ? 1u : 0u) + (has_keep_sprint ? 1u : 0u),
+                "Item Use Fix / Keep Sprint after callbacks not routed through event 15");
         require(c.implemented_per_event[kIncomingPacketEvent] == (has_ping_fix ? 1u : 0u),
                 "Ping Fix incoming event 2 not routed");
         require(c.implemented_per_event[kOutgoingPacketEvent] ==
@@ -1003,17 +1053,61 @@ int main(int argc, char** argv) {
                     "Disabled Timer frame callback still executed");
         }
 
+        if (has_keep_sprint) {
+            require(bridge.request(keep_sprint_id, true),
+                    "Keep Sprint enable rejected");
+            require(!bridge.apply(false, true),
+                    "Keep Sprint bypassed world admission");
+            require(bridge.apply(true, true),
+                    "Keep Sprint enable failed");
+            auto prior = keep_sprint_before_frame();
+            require(bridge.dispatch(prior) && prior.keep_sprint_attack &&
+                    prior.keep_sprint_attack->executions == 1 &&
+                    prior.keep_sprint_attack->decision.armed,
+                    "Keep Sprint attack pre-phase did not arm");
+            auto restore = keep_sprint_post_frame();
+            require(bridge.dispatch(restore) && restore.keep_sprint_post &&
+                    restore.keep_sprint_post->executions == 1 &&
+                    restore.keep_sprint_post->decision.proposed_motion &&
+                    std::abs(restore.keep_sprint_post->decision.proposed_motion->x - 0.4) < 1e-9 &&
+                    std::abs(restore.keep_sprint_post->decision.proposed_motion->y - 0.25) < 1e-9 &&
+                    std::abs(restore.keep_sprint_post->decision.proposed_motion->z + 0.2) < 1e-9,
+                    "Keep Sprint post-phase failed horizontal motion restoration");
+            auto update = keep_sprint_update_frame();
+            require(bridge.dispatch(update) && update.keep_sprint_update &&
+                    update.keep_sprint_update->executions == 1 &&
+                    update.keep_sprint_update->decision.propose_set_sprinting,
+                    "Keep Sprint player update failed to reapply sprint");
+            update = keep_sprint_update_frame();
+            require(bridge.dispatch(update) && update.keep_sprint_update &&
+                    !update.keep_sprint_update->decision.propose_set_sprinting,
+                    "Keep Sprint repeated player update reapplied sprint");
+            bridge.reset_keep_sprint_world_state();
+            restore = keep_sprint_post_frame();
+            require(bridge.dispatch(restore) && restore.keep_sprint_post &&
+                    !restore.keep_sprint_post->decision.proposed_motion,
+                    "Keep Sprint retained motion after world reset");
+            require(bridge.request(keep_sprint_id, false),
+                    "Keep Sprint disable rejected");
+            require(bridge.apply(true, true), "Keep Sprint disable failed");
+            prior = keep_sprint_before_frame();
+            require(bridge.dispatch(prior) && prior.keep_sprint_attack &&
+                    prior.keep_sprint_attack->executions == 0,
+                    "Disabled Keep Sprint callback still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
-                    has_timer && c.registered_modules == 66 &&
+                    has_timer && has_keep_sprint &&
+                    c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 14 &&
-                    c.executable_callback_bindings == 17 &&
-                    c.unimplemented_callback_subscriptions == 154,
+                    c.modules_with_executable_bindings == 15 &&
+                    c.executable_callback_bindings == 20 &&
+                    c.unimplemented_callback_subscriptions == 151,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
