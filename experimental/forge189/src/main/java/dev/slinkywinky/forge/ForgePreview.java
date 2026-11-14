@@ -44,6 +44,7 @@ public final class ForgePreview {
     private boolean r214InputFixtureArmed, r214ReceiptEmitted;
     private MovementInput r214OriginalInput;
     private EntityPlayerSP r214FixturePlayer;
+    private long r214DiagnosticClientTicks;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -299,6 +300,21 @@ public final class ForgePreview {
             }
             if (!enabled) startPreview(); // explicitly gated local action tests
             if(R214_LOCAL_NO_SLOW_TEST && enabled) {
+                if(++r214DiagnosticClientTicks==20 ||
+                   r214DiagnosticClientTicks==60) {
+                    final ItemStack item=mc.thePlayer.getHeldItem();
+                    System.out.println("[SlinkyWinkyPreview] R214_PLAYER_STATE_DIAGNOSTIC " +
+                        "tick="+r214DiagnosticClientTicks+
+                        " paused="+mc.isGamePaused()+
+                        " pauseOnLostFocus="+mc.gameSettings.pauseOnLostFocus+
+                        " focus="+mc.inGameHasFocus+
+                        " screen="+(mc.currentScreen==null?"none":
+                            mc.currentScreen.getClass().getSimpleName())+
+                        " usingItem="+mc.thePlayer.isUsingItem()+
+                        " itemId="+(item==null?-1:Item.getIdFromItem(item.getItem()))+
+                        " forward="+mc.thePlayer.movementInput.moveForward+
+                        " movementClass="+mc.thePlayer.movementInput.getClass().getSimpleName());
+                }
                 if(r214ReceiptEmitted) {
                     stop();
                     System.out.println("[SlinkyWinkyPreview] " +
