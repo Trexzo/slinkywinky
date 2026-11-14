@@ -155,6 +155,112 @@ public final class SprintObservationProbeSmoke {
             "toggle=1 settings=1 state=1 world_transition=1 wrong_thread=1 " +
             "gameplay_writes=0");
 
+        // R211: real Java8 -> JNI -> same native owner bridge with three
+        // independent toggles and typed event17/21 data-only proposals.
+        try (SprintObservationProbe session = new SprintObservationProbe()) {
+            SprintObservationProbe.ControlState[] initial = session.moduleStates();
+            check(initial.length == 3 &&
+                  SprintObservationProbe.NO_JUMP_DELAY.equals(initial[0].moduleName) &&
+                  SprintObservationProbe.NO_SLOW.equals(initial[1].moduleName) &&
+                  SprintObservationProbe.MODULE_NAME.equals(initial[2].moduleName),
+                  "canonical module-state snapshot order");
+            check(!initial[0].requestedEnabled && !initial[1].requestedEnabled &&
+                  initial[2].requestedEnabled && !initial[2].activeInWorld,
+                  "initial native selection state incorrect");
+            session.setModuleEnabled(SprintObservationProbe.NO_JUMP_DELAY, true);
+            session.setModuleEnabled(SprintObservationProbe.NO_SLOW, true);
+            session.setNoSlowSettings(0.8f, 0.4f, 0.6f);
+            final long[] clock = {6000, 40};
+            final int[] inWorldFlags = {3, 0, 1, 1, 0, 0, 1, 1};
+            final int[] item = {1, 10, 1, 1, 261};
+            final float[] movement = {-0.2f, 0.1f, 0.1f};
+            final float[] passive = {1.0f, 1.0f, 1.0f};
+            SprintObservationProbe.ModuleDecision active =
+                session.observeModules(clock, inWorldFlags, new double[6],
+                                       new float[2], movement, item, passive);
+            check(active.sprint.admitted && active.sprint.worldReady &&
+                  active.hasJumpTicks && active.proposedJumpTicks == 0 &&
+                  active.noSlowEvaluated && active.replaceInput &&
+                  Math.abs(active.proposedStrafe - 0.4f) < 0.00001f &&
+                  Math.abs(active.proposedForward + 0.8f) < 0.00001f,
+                  "shared event17/event21 module decisions not routed");
+            check(session.moduleState(SprintObservationProbe.NO_JUMP_DELAY).activeInWorld &&
+                  session.moduleState(SprintObservationProbe.NO_SLOW).activeInWorld &&
+                  session.moduleState("No Slow").settingsOverride,
+                  "native module activation/settings acknowledgement missing");
+
+            session.setModuleEnabled(SprintObservationProbe.NO_SLOW, false);
+            clock[0] = 6001;
+            active = session.observeModules(clock, inWorldFlags, new double[6],
+                                            new float[2], movement, item, passive);
+            check(active.hasJumpTicks && !active.noSlowEvaluated &&
+                  !session.moduleState("No Slow").activeInWorld,
+                  "No Slow disable did not preserve independent Jump state");
+            session.setModuleEnabled(SprintObservationProbe.MODULE_NAME, false);
+            clock[0] = 6002;
+            active = session.observeModules(clock, inWorldFlags, new double[6],
+                                            new float[2], movement, item, passive);
+            check(active.hasJumpTicks && !active.sprint.proposedKeyPressed,
+                  "Jump callback was lost or disabled Sprint still proposed");
+
+            session.setModuleEnabled(SprintObservationProbe.NO_SLOW, true);
+            session.setNoSlowSettings(0.5f, 0.4f, 0.6f);
+            clock[0] = 6003;
+            active = session.observeModules(clock, inWorldFlags, new double[6],
+                                            new float[2], movement, item, passive);
+            check(active.noSlowEvaluated && active.replaceInput &&
+                  Math.abs(active.proposedStrafe - 0.25f) < 0.00001f &&
+                  Math.abs(active.proposedForward + 0.5f) < 0.00001f,
+                  "live No Slow settings update not reflected in native decisions");
+
+            boolean invalidContext = false;
+            try {
+                session.observeModules(new long[]{6004,40}, inWorldFlags,
+                    new double[6], new float[2], movement,
+                    new int[]{1,10,0,1,261}, passive);
+            } catch (IllegalArgumentException expected) {
+                invalidContext = true;
+            }
+            check(invalidContext, "contradictory item-use flags admitted");
+            boolean invalidName = false;
+            try { session.setModuleEnabled("Fake Module", true); }
+            catch (IllegalArgumentException expected) { invalidName = true; }
+            check(invalidName, "invalid module name admitted");
+            boolean invalidMultiplier = false;
+            try { session.setNoSlowSettings(Float.NaN, 1.0f, 1.0f); }
+            catch (IllegalArgumentException expected) { invalidMultiplier = true; }
+            check(invalidMultiplier, "nonfinite No Slow multiplier admitted");
+            final boolean[] foreignDenied = {false};
+            Thread foreign = new Thread(() -> {
+                try { session.setModuleEnabled("No Slow", false); }
+                catch (IllegalStateException expected) { foreignDenied[0] = true; }
+            });
+            foreign.start();
+            foreign.join();
+            check(foreignDenied[0] && session.moduleState("No Slow").activeInWorld,
+                  "foreign thread mutated module state");
+
+            active = session.observeModules(
+                new long[]{6004,41}, new int[8],
+                new double[6], new float[2], new float[3],
+                new int[]{0,0,0,0,-1}, passive);
+            check(active.sprint.admitted && !active.sprint.worldReady &&
+                  !session.moduleState("No Slow").activeInWorld &&
+                  session.moduleState("No Slow").requestedEnabled,
+                  "world exit lost requested selection or retained active handler");
+            active = session.observeModules(
+                new long[]{6005,42}, inWorldFlags,
+                new double[6], new float[2], movement, item, passive);
+            check(active.sprint.admitted && active.sprint.sessionTransition &&
+                  active.hasJumpTicks && active.noSlowEvaluated &&
+                  session.moduleState("No Slow").activeInWorld &&
+                  !session.moduleState("Sprint").activeInWorld,
+                  "world reentry did not restore exact three-module selection");
+        }
+        System.out.println("R211_JAVA8_THREE_MODULE_CONTROL_PASS " +
+            "toggles=3 native_callbacks=4 typed_events=17,21 " +
+            "settings=1 world_reentry=1 wrong_thread=1 actions=0");
+
         System.out.println("R204_JAVA8_NATIVE_SPRINT_OBSERVATION_ROUNDTRIP_PASS " +
             "session=1 clock=1 wrong_thread=1 zero_game_actions=1");
     }
