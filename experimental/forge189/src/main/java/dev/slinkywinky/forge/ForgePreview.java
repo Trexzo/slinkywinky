@@ -5,6 +5,9 @@ import dev.slinkywinky.HostSettings;
 import dev.slinkywinky.NativeEngine;
 import dev.slinkywinky.SprintObservationProbe;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiMainMenu;
+import net.minecraft.world.WorldSettings;
+import net.minecraft.world.WorldType;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemAxe;
@@ -35,6 +38,9 @@ public final class ForgePreview {
     private String status="F9: enable read-only preview";
     private long observations;
     private long renderProbeFrames;
+    private boolean r208WorldRequested, r208WorldReady, r208ObservationReceipt;
+    private int r208MenuTicks;
+    private long r208WorldClientTicks, r208WorldRenderFrames, r208FirstWorldMs;
     private static final boolean RENDER_PROBE = Boolean.getBoolean("slinkywinky.renderProbe");
     // R204 opt-in only. This reports Sprint proposals, never applies them.
     private static final boolean SPRINT_OBSERVATION =
@@ -47,6 +53,9 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.sprint.allowBackwards");
     private static final boolean SPRINT_SIDE =
         Boolean.getBoolean("slinkywinky.sprint.allowSideways");
+    // Test-only: create a local singleplayer world in a brand-new TEMP gameDir.
+    private static final boolean R208_LOCAL_WORLD_TEST =
+        Boolean.getBoolean("slinkywinky.r208LocalWorldTest");
     private final GameHost.Actions readonlyActions=new GameHost.Actions() {
         @Override public void apply(NativeEngine.Decision decision) {
             ++observations;
@@ -64,6 +73,20 @@ public final class ForgePreview {
         FMLCommonHandler.instance().bus().register(this);
         MinecraftForge.EVENT_BUS.register(this);
         System.out.println("[SlinkyWinkyPreview] initialized - read-only");
+        if (R208_LOCAL_WORLD_TEST) {
+            final Minecraft mc = Minecraft.getMinecraft();
+            final String home = mc.mcDataDir.getAbsolutePath().replace('\\', '/');
+            final String temp = System.getProperty("java.io.tmpdir").replace('\\', '/');
+            if (!SPRINT_OBSERVATION || !home.startsWith(temp) ||
+                !home.contains("/slinkywinky-r208-independent-forge-") ||
+                mc.getSession() == null ||
+                !"R208Offline".equals(mc.getSession().getUsername())) {
+                throw new IllegalStateException(
+                    "R208 local world test requires TEMP gameDir, dummy offline " +
+                    "identity and the read-only Sprint observer");
+            }
+            System.out.println("[SlinkyWinkyPreview] R208_ISOLATION_GATE_PASS");
+        }
         // Diagnostic only: enable with -Dslinkywinky.startupProbe=true in an isolated
         // Forge 1.8.9 development JVM. It never issues game actions or packets.
         if (Boolean.getBoolean("slinkywinky.startupProbe")) {
@@ -99,24 +122,50 @@ public final class ForgePreview {
         }
     }
 
+    private void startPreview() {
+        try {
+            host=new GameHost(new NativeEngine(new int[]{1,2,3,4}),readonlyActions);
+            if(SPRINT_OBSERVATION) sprintProbe=new SprintObservationProbe();
+            enabled=true;
+            observations=0;
+            sprintGeneration=1;
+            sprintWorld=sprintPlayer=null;
+            status="PREVIEW ONLY | collecting frames";
+        } catch(LinkageError | RuntimeException error) {
+            try { stop(); } catch(RuntimeException ignored) { /* no game actions */ }
+            status="Unavailable: native JNI library missing or incompatible";
+            if (R208_LOCAL_WORLD_TEST)
+                System.err.println("[SlinkyWinkyPreview] R208_PREVIEW_START_FAIL " + error);
+        }
+    }
+
     @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END) return;
         if(toggle.isPressed()) {
             if(enabled) {stop();status="F9: enable read-only preview";}
-            else {
-                try {
-                    host=new GameHost(new NativeEngine(new int[]{1,2,3,4}),readonlyActions);
-                    if(SPRINT_OBSERVATION)
-                        sprintProbe=new SprintObservationProbe();
-                    enabled=true;observations=0;
-                    sprintGeneration=1;
-                    sprintWorld=sprintPlayer=null;
-                    status="PREVIEW ONLY | collecting frames";
-                } catch(LinkageError | RuntimeException error) {
-                    try { stop(); } catch(RuntimeException ignored) { /* no game actions */ }
-                    status="Unavailable: native JNI library missing or incompatible";
-                }
+            else startPreview();
+        }
+
+        if (!R208_LOCAL_WORLD_TEST) return;
+        final Minecraft mc=Minecraft.getMinecraft();
+        if (!r208WorldRequested &&
+            mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
+            ++r208MenuTicks >= 30) {
+            r208WorldRequested=true;
+            System.out.println("[SlinkyWinkyPreview] R208_LOCAL_WORLD_REQUESTED");
+            // Explicit opt-in creates a save only inside the isolated TEMP
+            // gameDir. Normal preview does not create worlds.
+            mc.launchIntegratedServer("R208-local-only", "R208 local diagnostic",
+                new WorldSettings(208L, WorldSettings.GameType.CREATIVE,
+                    false, false, WorldType.FLAT));
+        }
+        if (mc.theWorld!=null && mc.thePlayer!=null && mc.isSingleplayer()) {
+            ++r208WorldClientTicks;
+            if (!r208WorldReady) {
+                r208WorldReady=true;
+                System.out.println("[SlinkyWinkyPreview] R208_LOCAL_WORLD_PLAYER_READY_PASS");
             }
+            if (!enabled) startPreview(); // decision-only observer
         }
     }
 
@@ -198,6 +247,20 @@ public final class ForgePreview {
             throw new IllegalStateException("Native Sprint observation frame rejected");
         status += " | sprintPreview key="+decision.proposedKeyPressed+
             " speedProposal="+(decision.hasSpeed ? decision.proposedSpeed : "none");
+        if (R208_LOCAL_WORLD_TEST && playerReady && mc.isSingleplayer()) {
+            if (r208FirstWorldMs==0) r208FirstWorldMs=frame.monotonicMs;
+            ++r208WorldRenderFrames;
+            if (!r208ObservationReceipt && r208WorldRenderFrames>=32) {
+                r208ObservationReceipt=true;
+                System.out.println("[SlinkyWinkyPreview] " +
+                    "R208_IN_WORLD_SPRINT_JNI_OBSERVATION_PASS" +
+                    " renderSamples="+r208WorldRenderFrames +
+                    " clientTicks="+r208WorldClientTicks +
+                    " elapsedMs="+(frame.monotonicMs-r208FirstWorldMs) +
+                    " latestKeyProposal="+decision.proposedKeyPressed +
+                    " latestSpeedProposal="+decision.hasSpeed);
+            }
+        }
         // Intentionally NO KeyBinding.setKeyBindState(), setSprinting(),
         // player motion writes, game packet sends, or synthetic input.
     }
