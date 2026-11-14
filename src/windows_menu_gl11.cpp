@@ -124,6 +124,62 @@ void color_popup_knob(float x,float y,float radius,
     }
     glEnd();
 }
+// R204: GL1.1 source-informed gradient with 5px quarter-circle
+// clipping at the outer bar edges. Hue is six separately interpolated
+// horizontal segments; S/L use NanoVG's diagonal full-bar gradient
+// vector (x,y)->(x+w,y+h), approximated by per-vertex RGB interpolation.
+// No stencil/depth/texture state, no GL11 client ABI changes.
+bool color_popup_rounded_gradient(
+        const MenuColorModalRect& bar,float t0,float t1,
+        std::uint32_t from,std::uint32_t to,
+        bool diagonal) noexcept {
+    if(bar.width<=0.0f || bar.height<=0.0f ||
+       t0<0.0f || t1>1.0f || t0>=t1)return false;
+    const float start=bar.x+bar.width*t0;
+    const float width=bar.width*(t1-t0);
+    const int slices=std::max(
+        1,static_cast<int>(std::ceil(width/1.25f)));
+    const float denominator=bar.width*bar.width+
+                            bar.height*bar.height;
+    auto tint=[&](float x,float y) noexcept {
+        const float t=std::clamp(diagonal?
+            (((x-bar.x)*bar.width+
+              (y-bar.y)*bar.height)/denominator):
+            ((x-start)/width),0.0f,1.0f);
+        auto lerp=[t](unsigned a,unsigned b) noexcept {
+            return static_cast<std::uint32_t>(
+                std::lround(static_cast<float>(a)+
+                    (static_cast<float>(b)-static_cast<float>(a))*t));
+        };
+        const auto red=lerp((from>>16u)&255u,(to>>16u)&255u);
+        const auto green=lerp((from>>8u)&255u,(to>>8u)&255u);
+        const auto blue=lerp(from&255u,to&255u);
+        rgb((red<<16u)|(green<<8u)|blue);
+    };
+    glShadeModel(GL_SMOOTH);
+    glBegin(GL_QUADS);
+    for(int i=0;i<slices;++i) {
+        const float x0=start+width*static_cast<float>(i)/
+                             static_cast<float>(slices);
+        const float x1=start+width*static_cast<float>(i+1)/
+                             static_cast<float>(slices);
+        const auto s0=menu_color_bar_span(bar,x0);
+        const auto s1=menu_color_bar_span(bar,x1);
+        // The parent panel has already passed strict finite geometry.
+        // All x positions here lie in the logical modal bar rectangle.
+        if(!s0 || !s1){glEnd();return false;}
+        tint(x0,s0->top);
+        glVertex2f(x0,s0->top);
+        tint(x0,s0->bottom);
+        glVertex2f(x0,s0->bottom);
+        tint(x1,s1->bottom);
+        glVertex2f(x1,s1->bottom);
+        tint(x1,s1->top);
+        glVertex2f(x1,s1->top);
+    }
+    glEnd();
+    return true;
+}
 // Legacy glyphs remain a deterministic fallback if a Windows font isn't
 // available; the default is grayscale Segoe UI supplied by the local OS.
 void text(std::string_view label,float x,float y,
@@ -1052,12 +1108,12 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             const auto& bar=layout->hsl[row];
             rgb(0xdddddd);
             text(labels[row],bar.x,bar.y-20.0f,14.0f,bar.width);
-            // R202: source gui_popups.cpp draws the hue gradient in
-            // exactly six interpolated RGBA sectors; saturation and
-            // lightness have one full-width gradient each. GL11 vertex
-            // color interpolation avoids the former 96 flat color bands.
+            // R204: the candidate native NanoVG uses a 5px quarter-
+            // round at the hue bar's first/last sectors; Saturation and
+            // Lightness use the same rounded, diagonally-graded tracks.
+            // The shared vertical-span model clips only the color fill,
+            // not the original source-indexed rectangular hit surface.
             const unsigned segments=row==0u?6u:1u;
-            glShadeModel(GL_SMOOTH);
             for(unsigned i=0;i<segments;++i) {
                 auto a=*slider;
                 auto b=*slider;
@@ -1070,17 +1126,10 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                 else {a.lightness=0.0f;b.lightness=1.0f;}
                 const auto c0=MenuColorPopupPreview::hsl_to_rgb(a);
                 const auto c1=MenuColorPopupPreview::hsl_to_rgb(b);
-                if(!c0 || !c1)return false;
-                const float x0=bar.x+bar.width*left;
-                const float x1=bar.x+bar.width*right;
-                glBegin(GL_QUADS);
-                rgb(*c0);
-                glVertex2f(x0,bar.y);
-                glVertex2f(x0,bar.y+bar.height);
-                rgb(*c1);
-                glVertex2f(x1,bar.y+bar.height);
-                glVertex2f(x1,bar.y);
-                glEnd();
+                if(!c0 || !c1 ||
+                   !color_popup_rounded_gradient(
+                       bar,left,right,*c0,*c1,row!=0u))
+                    return false;
             }
             // Native source uses a colored circular slider marker,
             // radius 10px, with a 2px #404040 outline.

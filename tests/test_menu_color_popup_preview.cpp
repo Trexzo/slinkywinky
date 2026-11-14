@@ -19,6 +19,26 @@ int main() {
     // rows and 25px recent colors, no synthetic footer.
     for(const auto& h:dialog->hsl)CHECK(h.height==15.0f);
     for(const auto& h:dialog->recent)CHECK(h.height==25.0f);
+    // R204 source-shaped quarter-circle gradient clipping. The first
+    // and last hue sectors round only their OUTER ends, while middle
+    // segments remain full-height. Mouse hitboxes remain rectangular.
+    const MenuColorModalRect bar{10.0f,20.0f,100.0f,15.0f};
+    const auto left=menu_color_bar_span(bar,10.0f);
+    const auto edge=menu_color_bar_span(bar,12.5f);
+    const auto middle=menu_color_bar_span(bar,60.0f);
+    const auto right=menu_color_bar_span(bar,110.0f);
+    CHECK(left && edge && middle && right);
+    CHECK(left->top==25.0f && left->bottom==30.0f);
+    CHECK(edge->top>20.0f && edge->top<25.0f);
+    CHECK(edge->bottom>30.0f && edge->bottom<35.0f);
+    CHECK(middle->top==20.0f && middle->bottom==35.0f);
+    CHECK(right->top==25.0f && right->bottom==30.0f);
+    CHECK(!menu_color_bar_span(bar,9.9f));
+    CHECK(!menu_color_bar_span(bar,110.1f));
+    CHECK(!menu_color_bar_span(bar,
+        std::numeric_limits<float>::quiet_NaN()));
+    CHECK(!menu_color_bar_span({10.0f,20.0f,0.0f,15.0f},10.0f));
+    CHECK(!menu_color_bar_span(bar,60.0f,-1.0f));
     const auto center=[](const MenuColorModalRect& r) {
         return std::array<float,2>{r.x+r.width*0.5f,
                                    r.y+r.height*0.5f};

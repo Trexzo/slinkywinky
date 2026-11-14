@@ -14,6 +14,36 @@ struct MenuColorModalRect {
         return px>=x && px<x+width && py>=y && py<y+height;
     }
 };
+// R204 renderer-neutral rounded-gradient clip. The candidate NanoVG
+// popup rounds the *outer* ends of its six-sector hue bar and both
+// HSL gradient bars by 5px. This span describes the vertical interior
+// at a logical x, without touching the full rectangular mouse hitbox.
+struct MenuColorModalSpan {
+    float top=0.0f,bottom=0.0f;
+};
+inline std::optional<MenuColorModalSpan> menu_color_bar_span(
+        const MenuColorModalRect& bar,float x,
+        float source_radius=5.0f) noexcept {
+    if(!std::isfinite(bar.x) || !std::isfinite(bar.y) ||
+       !std::isfinite(bar.width) || !std::isfinite(bar.height) ||
+       !std::isfinite(x) || !std::isfinite(source_radius) ||
+       bar.width<=0.0f || bar.height<=0.0f ||
+       source_radius<0.0f || x<bar.x || x>bar.x+bar.width)
+        return std::nullopt;
+    const float radius=std::min(
+        source_radius,0.5f*std::min(bar.width,bar.height));
+    if(radius==0.0f)
+        return MenuColorModalSpan{bar.y,bar.y+bar.height};
+    const float edge=std::min(x-bar.x,bar.x+bar.width-x);
+    if(edge>=radius)
+        return MenuColorModalSpan{bar.y,bar.y+bar.height};
+    const float d=radius-edge;
+    const float quarter=std::sqrt(
+        std::max(0.0f,radius*radius-d*d));
+    return MenuColorModalSpan{
+        bar.y+radius-quarter,
+        bar.y+bar.height-radius+quarter};
+}
 struct MenuColorModalGeometry {
     MenuColorModalRect outer{},preview{},hex{};
     std::array<MenuColorModalRect,3> hsl{};
