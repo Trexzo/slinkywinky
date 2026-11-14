@@ -4,6 +4,7 @@
 // actual runtime and rendered ArrayList state must come from the
 // validated owner-thread snapshot, never MenuState.preview_enabled.
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 namespace slinkywinky {
@@ -16,7 +17,9 @@ struct ModuleControlRequest {
 };
 
 struct ModuleControlState {
-    std::string_view canonical_name{};
+    // Owning text: safe to copy into a cross-thread HUD snapshot or a
+    // persistent ArrayList row after the request buffer has been released.
+    std::string canonical_name{};
     bool requested_enabled = false;
     bool active_in_world = false;
     bool settings_override = false;
