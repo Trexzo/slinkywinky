@@ -18,7 +18,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 $expectedJar=if($R216DisplacementTest){
-  '220bec1b0adc806cf1db47fec1d8d659dcfee137efb913f81a477781e73fe038'
+  'a4ef40b697019fdc209e31ee7b6e6453eb6326e952add4533033d05ad70ae08d'
 }elseif($R215VanillaInputTest){
   '6620805e5f26438560e72a2f96280ca95f3d351323edde385ede37ed9b5e3915'
 }elseif($R214LocalNoSlowAcceptance){
