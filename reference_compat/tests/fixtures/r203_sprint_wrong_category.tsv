@@ -1,0 +1,20 @@
+id	name	category	initially_enabled	event_priorities
+0	Reach	0	0	8:0
+1	No Jump Delay	1	0	17:100
+2	Null Move	1	0	16:100
+3	Instant Stop	1	0	16:200
+4	No Slow	1	0	21:200
+5	No Hit Delay	4	0	14:0
+6	No Use Delay	4	0	18:0
+7	Item Use Fix	4	0	14:0,15:0
+8	Ping Fix	4	0	2:-1000,3:-1000
+9	No Item Release	4	0	3:0
+10	Synthetic Observer	2	1	3:100
+11	No Hurt Cam	2	0	
+12	Anti Debuff	2	0	18:0
+13	Fast Accel	1	0	22:0
+14	Unimplemented Fly Handler	1	0	22:-100
+15	Safe Walk	1	0	0:0
+16	Timer	4	0	1:200,5:0
+17	Keep Sprint	1	0	14:0,15:0,17:0
+18	Sprint	2	0	17:100,21:100
