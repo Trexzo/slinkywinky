@@ -124,5 +124,41 @@ int main(){
                 unsigned(dark[2]));
         }
     }
+    // R221: keep the translucent background on normal alpha blending,
+    // then isolate the opaque-accent path. Using GL_ONE/GL_ZERO should
+    // preserve the same framebuffer value as disabling GL_BLEND only
+    // for the accent, while leaving translucent UI backgrounds intact.
+    for(int opaqueMode=0;opaqueMode<3;++opaqueMode){
+        glEnable(GL_BLEND);
+        glDisable(GL_DITHER);
+        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glColor4ub(0x10,0x10,0x14,180);
+        glBegin(GL_QUADS);
+        glVertex2f(660,8);glVertex2f(670,8);
+        glVertex2f(670,27);glVertex2f(660,27);
+        glEnd();
+        // 0: legacy alpha blend on opaque accent;
+        // 1: GL_BLEND on, use exact one/zero factors for opaque accent;
+        // 2: GL_BLEND off for opaque accent.
+        if(opaqueMode==1)
+            glBlendFunc(GL_ONE,GL_ZERO);
+        else if(opaqueMode==2)
+            glDisable(GL_BLEND);
+        glColor4ub(0xF3,0x5D,0x12,255);
+        glBegin(GL_QUADS);
+        glVertex2f(665,17);glVertex2f(669,17);
+        glVertex2f(669,20);glVertex2f(665,20);
+        glEnd();
+        std::array<GLubyte,3> accent{};
+        std::array<GLubyte,3> dark{};
+        glReadPixels(666,612,1,1,GL_RGB,GL_UNSIGNED_BYTE,accent.data());
+        glReadPixels(662,612,1,1,GL_RGB,GL_UNSIGNED_BYTE,dark.data());
+        if(glGetError()!=GL_NO_ERROR)return fail("r221-sample");
+        std::printf("R221_OPAQUE_MODE=%d ACCENT=%02X%02X%02X DARK=%02X%02X%02X\n",
+            opaqueMode,unsigned(accent[0]),unsigned(accent[1]),
+            unsigned(accent[2]),unsigned(dark[0]),unsigned(dark[1]),
+            unsigned(dark[2]));
+    }
     return 0;
 }
