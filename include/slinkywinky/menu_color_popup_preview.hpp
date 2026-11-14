@@ -22,6 +22,7 @@ public:
         if(open_ || rgb>0xFFFFFFu)return false;
         open_=true;
         original_=current_=rgb;
+        hsl_=rgb_to_hsl(rgb);
         return true;
     }
     bool active() const noexcept {return open_;}
@@ -61,6 +62,7 @@ public:
         const auto parsed=parse_hex6(text);
         if(!parsed)return false;
         current_=*parsed;
+        hsl_=rgb_to_hsl(current_);
         return true;
     }
     static MenuPopupHsl rgb_to_hsl(std::uint32_t rgb) noexcept {
@@ -81,7 +83,7 @@ public:
     }
     std::optional<MenuPopupHsl> hsl() const noexcept {
         if(!open_)return std::nullopt;
-        return rgb_to_hsl(current_);
+        return hsl_;
     }
     static std::optional<std::uint32_t> hsl_to_rgb(
             MenuPopupHsl hsl) noexcept {
@@ -121,6 +123,9 @@ public:
         const auto rgb=hsl_to_rgb(desired);
         if(!rgb)return false;
         current_=*rgb;
+        // R199: preserve full-precision HSL slider state independently
+        // from the 24-bit rounded swatch, as in both references.
+        hsl_=desired;
         return true;
     }
     std::optional<std::uint32_t> recent(unsigned newest_first) const noexcept {
@@ -133,6 +138,7 @@ public:
         const auto rgb=recent(newest_first);
         if(!rgb)return false;
         current_=*rgb;
+        hsl_=rgb_to_hsl(current_);
         return true;
     }
     // The reference native popup records a unique recent color on close
@@ -153,6 +159,8 @@ public:
 private:
     bool open_=false;
     std::uint32_t original_=0u,current_=0u;
+    // Native and Java picker state keep these independent HSL floats.
+    MenuPopupHsl hsl_{};
     // R199: source .data reserves 96 zero bytes: eight RGB float triples.
     // Java also allocates new float[8][3]. All history cells begin black;
     // a closing black color is therefore an existing duplicate.
