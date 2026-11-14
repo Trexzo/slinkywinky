@@ -396,6 +396,44 @@ if(BUILD_TESTING)
     r202_reject_keep_sprint_missing_post
     r202_reject_keep_sprint_wrong_update_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R203: source-matched Sprint update + movement input decisions (17,21).
+  # All data-only; no original JNI player/key interaction is executed.
+  add_executable(slinkywinky_sprint_bridge_test
+    tests/test_sprint_bridge.cpp)
+  target_link_libraries(slinkywinky_sprint_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r203_sprint_update_and_movement_offline
+    COMMAND slinkywinky_sprint_bridge_test)
+  add_test(NAME r203_sixteen_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/nineteen_modules_with_sixteen_decisions.tsv")
+  add_test(NAME r203_reject_sprint_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_wrong_category.tsv")
+  add_test(NAME r203_reject_sprint_wrong_update_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_wrong_update_priority.tsv")
+  add_test(NAME r203_reject_sprint_wrong_movement_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_wrong_movement_priority.tsv")
+  add_test(NAME r203_reject_sprint_missing_movement
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_missing_movement.tsv")
+  add_test(NAME r203_reject_sprint_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r203_sprint_extra_subscription.tsv")
+  set_tests_properties(
+    r203_reject_sprint_wrong_category
+    r203_reject_sprint_wrong_update_priority
+    r203_reject_sprint_wrong_movement_priority
+    r203_reject_sprint_missing_movement
+    r203_reject_sprint_extra_subscription
+    PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(
+    r203_sprint_update_and_movement_offline
+    r203_sixteen_policy_coverage PROPERTIES TIMEOUT 15)
+
   # C++ std::thread owner contract requires explicit pthread linkage on
   # older Linux build images; Windows uses the native thread runtime.
   find_package(Threads REQUIRED)
