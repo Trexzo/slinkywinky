@@ -49,14 +49,19 @@ R219_WGL_REQUESTED_ACCENT=F35D12 DRAWN_ACCENT=F35D12
 The local source-exact R207 WGL test also **PASS** with exact accent
 F35D12, as described in R218.
 
+## R219 GitHub outcome
+
+Both GitHub Windows Debug and Release reported **8/8/8 RGB bits** and
+rendered the standalone opaque F35D12 swatch exactly. Therefore the earlier
+hypothesis of a lower-precision framebuffer format is not supported.
+The original GUI-owned renderer still produced F05B10. The follow-up
+R220 audit isolates blending and dithering without modifying that renderer.
+
 ## Pending
 
-- Check the GitHub runner's R219 output in both Debug and Release.
-- If it reports lower-precision RGB, PR #1 GUI owner should make its
-  WGL/JNI pixel readback assertions precision-aware, preserving structural,
-  visibility, order, and negative tests.
-- If GitHub reports 8/8/8, investigate compositing, dither, blend state
-  and OpenGL implementation differences before changing assertions.
+- Review the GitHub runner's R220 blend/dither differential in both builds.
+- Investigate compositing, dither, blend state and OpenGL software
+  implementation differences before changing any GUI-owned assertions.
 - PR #1 was informed via comment; this commit changes **only PR #2**.
 
 R219 does **not** increase the independently implemented modules

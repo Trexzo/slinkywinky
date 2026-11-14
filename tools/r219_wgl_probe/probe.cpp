@@ -93,5 +93,36 @@ int main(){
         red,green,blue,alpha,depth);
     std::printf("R219_WGL_REQUESTED_ACCENT=F35D12 DRAWN_ACCENT=%02X%02X%02X\n",
         unsigned(rgb[0]),unsigned(rgb[1]),unsigned(rgb[2]));
+    // R220: isolate the two remaining suspects without touching the GUI
+    // renderer. Draw a translucent row plus an opaque accent into the
+    // fixture's backbuffer, using the same fixed-function blend factors.
+    // The probe reports measurements only: no test expectation is relaxed.
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    for(int dither=0;dither<2;++dither){
+        for(int blend=0;blend<2;++blend){
+            if(dither)glEnable(GL_DITHER);else glDisable(GL_DITHER);
+            if(blend)glEnable(GL_BLEND);else glDisable(GL_BLEND);
+            glClear(GL_COLOR_BUFFER_BIT);
+            glColor4ub(0x10,0x10,0x14,180);
+            glBegin(GL_QUADS);
+            glVertex2f(660,8);glVertex2f(670,8);
+            glVertex2f(670,27);glVertex2f(660,27);
+            glEnd();
+            glColor4ub(0xF3,0x5D,0x12,255);
+            glBegin(GL_QUADS);
+            glVertex2f(665,17);glVertex2f(669,17);
+            glVertex2f(669,20);glVertex2f(665,20);
+            glEnd();
+            std::array<GLubyte,3> accent{};
+            std::array<GLubyte,3> dark{};
+            glReadPixels(666,612,1,1,GL_RGB,GL_UNSIGNED_BYTE,accent.data());
+            glReadPixels(662,612,1,1,GL_RGB,GL_UNSIGNED_BYTE,dark.data());
+            if(glGetError()!=GL_NO_ERROR)return fail("r220-sample");
+            std::printf("R220_BLEND=%d DITHER=%d ACCENT=%02X%02X%02X DARK=%02X%02X%02X\n",
+                blend,dither,unsigned(accent[0]),unsigned(accent[1]),
+                unsigned(accent[2]),unsigned(dark[0]),unsigned(dark[1]),
+                unsigned(dark[2]));
+        }
+    }
     return 0;
 }
