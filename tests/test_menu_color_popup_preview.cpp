@@ -41,6 +41,14 @@ int main() {
            p.current()==0x00FF00u);
     CHECK(p.set_hsl({2.0f/3.0f,1.0f,0.5f}) &&
            p.current()==0x0000FFu);
+    // R199: keep precise HSL slider position separate from rounded RGB.
+    const MenuPopupHsl fine{0.172345f,0.456789f,0.623457f};
+    CHECK(p.set_hsl(fine));
+    CHECK(p.hsl() && p.hsl()->hue==fine.hue &&
+          p.hsl()->saturation==fine.saturation &&
+          p.hsl()->lightness==fine.lightness);
+    CHECK(p.set_hex6("0000ff"));
+    CHECK(p.hsl() && std::fabs(p.hsl()->hue-2.0f/3.0f)<0.0001f);
     CHECK(!p.set_hsl({
         std::numeric_limits<float>::quiet_NaN(),0.5f,0.5f}));
     CHECK(!p.set_hsl({0.5f,1.1f,0.5f}));
