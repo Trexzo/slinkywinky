@@ -82,6 +82,12 @@ if(BUILD_TESTING)
     # R160: any premature live keyboard/mouse queue activation fails CI.
     add_test(NAME r160_no_unverified_live_input_hook
       COMMAND "${Python3_EXECUTABLE}" -u "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r119_live_input_guard.py")
+    # R212: validate the live Forge GUI receipt's exact lifecycle and
+    # negative controls without launching game processes in normal CI.
+    add_test(NAME r212_forge189_gui_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r212_forge_gui_input_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

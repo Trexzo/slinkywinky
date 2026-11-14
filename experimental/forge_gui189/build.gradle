@@ -1,0 +1,45 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://maven.minecraftforge.net/' }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.1-SNAPSHOT'
+    }
+}
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+sourceCompatibility = targetCompatibility = '1.8'
+version = '0.1.0-input-proof'
+group = 'dev.slinkywinky'
+archivesBaseName = 'slinkywinky-gui189-input-proof'
+
+minecraft {
+    version = '1.8.9-11.15.1.2318-1.8.9'
+    mappings = 'stable_22'
+    runDir = 'run'
+    makeObfSourceJar = false
+}
+compileJava.options.encoding = 'UTF-8'
+
+// The acceptance profile can only be enabled by an explicit process env;
+// normal builds and normal Forge mod loading remain inert.
+def autoProof = System.getenv('SLINKYWINKY_R212_GUI_AUTO_TEST') == '1'
+def manualProof = System.getenv('SLINKYWINKY_R212_GUI_MANUAL_TEST') == '1'
+if (autoProof && manualProof)
+    throw new GradleException('Choose only one R212 GUI proof mode')
+if (autoProof || manualProof) {
+    def isolated = System.getenv('SLINKYWINKY_R212_GUI_GAME_DIR')
+    if (!isolated || !isolated.replace('\\','/').toLowerCase().contains('/temp/slinkywinky-r212-gui-'))
+        throw new GradleException('R212 requires a uniquely named TEMP-only game directory')
+    minecraft.runDir = isolated
+    afterEvaluate {
+        runClient {
+            args '--username','R212GuiOffline'
+            systemProperty 'slinkywinky.r212GuiInputProof','true'
+            systemProperty 'slinkywinky.r212GuiAutoProof',autoProof.toString()
+            systemProperty 'slinkywinky.r212GuiManualProof',manualProof.toString()
+            systemProperty 'java.awt.headless','false'
+        }
+    }
+}
