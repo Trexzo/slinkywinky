@@ -229,6 +229,28 @@ static ExecutionFrame safe_walk_frame(bool in_game = true,
     return frame;
 }
 
+static ExecutionFrame timer_frame() {
+    ExecutionFrame frame;
+    frame.event = kTimerFrameEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    TimerFramePayload payload;
+    payload.input.in_game = true;
+    payload.input.player_present = true;
+    payload.input.settings.speed = 1.5f;
+    frame.timer_frame = payload;
+    return frame;
+}
+
+static ExecutionFrame timer_toggle(bool matches, bool enabled) {
+    ExecutionFrame frame;
+    frame.event = kTimerToggleEvent;
+    frame.world_present = true;
+    frame.player_present = true;
+    frame.timer_toggle = TimerTogglePayload{{matches, enabled}, {}, 0};
+    return frame;
+}
+
 static std::string coverage_json(const ExecutionCoverage& c,
                                  bool checked_candidate_catalog) {
     return "{\n"
@@ -365,6 +387,13 @@ int main(int argc, char** argv) {
         if (has_safe_walk)
             require(bridge.bind_safe_walk_from_catalog(),
                     "Safe Walk exists but candidate event0/category1/priority0 binding failed");
+        std::size_t timer_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Timer") timer_id = i;
+        const bool has_timer = timer_id < manifest.modules.size();
+        if (has_timer)
+            require(bridge.bind_timer_from_catalog(),
+                    "Timer native frame1/priority200 and toggle5/priority0 pair failed");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -376,14 +405,15 @@ int main(int argc, char** argv) {
                                                (has_no_item_release ? 1u : 0u) +
                                                (has_anti_debuff ? 1u : 0u) +
                                                (has_fast_accel ? 1u : 0u) +
-                                               (has_safe_walk ? 1u : 0u);
+                                               (has_safe_walk ? 1u : 0u) +
+                                               (has_timer ? 2u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
                 "callback coverage drift");
         require(c.modules_with_executable_bindings ==
                     expected_bindings - (has_item_use_fix ? 1u : 0u) -
-                    (has_ping_fix ? 1u : 0u) &&
+                    (has_ping_fix ? 1u : 0u) - (has_timer ? 1u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -401,6 +431,10 @@ int main(int argc, char** argv) {
                 "Fast Accel callback not routed through event 22");
         require(c.implemented_per_event[kSafeWalkEvent] == (has_safe_walk ? 1u : 0u),
                 "Safe Walk callback not routed through event 0");
+        require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
+                "Timer frame callback not routed through event 1");
+        require(c.implemented_per_event[kTimerToggleEvent] == (has_timer ? 1u : 0u),
+                "Timer toggle callback not routed through event 5");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u),
@@ -421,7 +455,8 @@ int main(int argc, char** argv) {
                 event != kNoHitDelayEvent && event != kNoUseDelayEvent &&
                 event != kItemUseFixAfterEvent &&
                 event != kIncomingPacketEvent && event != kOutgoingPacketEvent &&
-                event != kFastAccelEvent && event != kSafeWalkEvent)
+                event != kFastAccelEvent && event != kSafeWalkEvent &&
+                event != kTimerFrameEvent && event != kTimerToggleEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -945,17 +980,40 @@ int main(int argc, char** argv) {
                     "Disabled Safe Walk callback still executed");
         }
 
+        if (has_timer) {
+            require(bridge.request(timer_id, true), "Timer enable rejected");
+            require(!bridge.apply(false, true), "Timer bypassed world gate");
+            require(bridge.apply(true, true), "Timer enable failed");
+            auto tick = timer_frame();
+            require(bridge.dispatch(tick) && tick.timer_frame &&
+                    tick.timer_frame->executions == 1 &&
+                    tick.timer_frame->decision.conditions_met &&
+                    tick.timer_frame->decision.proposed_speed == 1.5f,
+                    "Timer offline frame speed callback mismatch");
+            auto notice = timer_toggle(true, false);
+            require(bridge.dispatch(notice) && notice.timer_toggle &&
+                    notice.timer_toggle->executions == 1 &&
+                    notice.timer_toggle->decision.proposed_speed == 1.0f,
+                    "Timer offline disable-reset callback mismatch");
+            require(bridge.request(timer_id, false), "Timer disable request rejected");
+            require(bridge.apply(true, true), "Timer disable failed");
+            tick = timer_frame();
+            require(bridge.dispatch(tick) && tick.timer_frame &&
+                    tick.timer_frame->executions == 0,
+                    "Disabled Timer frame callback still executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
-                    c.registered_modules == 66 &&
+                    has_timer && c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 13 &&
-                    c.executable_callback_bindings == 15 &&
-                    c.unimplemented_callback_subscriptions == 156,
+                    c.modules_with_executable_bindings == 14 &&
+                    c.executable_callback_bindings == 17 &&
+                    c.unimplemented_callback_subscriptions == 154,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
