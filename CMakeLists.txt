@@ -103,6 +103,12 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r215_forge_source_mouse_receipt.py"
         --selftest)
+    # R216: verify actual native GL11 source-switch pixels only after PR2
+    # state acknowledgements, without starting Minecraft in normal CI.
+    add_test(NAME r216_forge189_authoritative_switch_pixel_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r216_forge_authoritative_switch_pixels.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

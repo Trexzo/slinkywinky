@@ -11,6 +11,9 @@
 #include "slinkywinky/module_arraylist.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/menu_visual_geometry.hpp"
+#include "slinkywinky/windows_menu_gl11.hpp"
+#include <cmath>
 #include "slinkywinky/menu.hpp"
 #include <algorithm>
 #include <string_view>
@@ -40,6 +43,11 @@ struct Session {
     std::uint64_t generation=0;
     bool configured=false;
     bool closed=false;
+    bool visual_valid=false;
+    std::uint64_t visual_sequence=0;
+    std::uint64_t visual_frame=0;
+    bool visual_requested=false;
+    std::uint32_t visual_rgb=0;
 };
 thread_local std::unique_ptr<Session> session;
 bool owned() noexcept {
@@ -108,12 +116,66 @@ Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativePaint(
                 *session->menu.focused_row()!=25u)return JNI_FALSE;
             session->configured=true;
         }
-        if(!session->feed.latest())return JNI_FALSE;
+        const auto confirmed=session->feed.latest();
+        if(!confirmed || confirmed->source_sequence!=session->sequence ||
+           confirmed->world_generation!=session->generation ||
+           confirmed->modules.size()!=1u ||
+           confirmed->modules[0].canonical_name!="Sprint" ||
+           confirmed->modules[0].world_generation!=session->generation ||
+           confirmed->modules[0].active_in_world)
+            return JNI_FALSE;
+        // R216: repaint an exact source-frame COPY for this admitted Forge
+        // session only. Never mutate MenuState, native profile or preview
+        // flags; render the PR2-acknowledged requested state exclusively.
+        const auto* painted=session->menu.fixture_painted_frame(
+            gl,dc,static_cast<unsigned>(width),static_cast<unsigned>(height));
+        if(!painted || !session->menu.focused_row() ||
+           *session->menu.focused_row()!=25u)return JNI_FALSE;
+        MenuRenderFrame authoritative=*painted;
+        const auto row=std::find_if(
+            authoritative.visible.begin(),authoritative.visible.end(),
+            [](const MenuItem& item){return item.catalog_index==25u &&
+                                     item.title=="Sprint";});
+        if(row==authoritative.visible.end())return JNI_FALSE;
+        row->preview_enabled=confirmed->modules[0].requested_enabled;
+        if(!draw_menu_gl11(authoritative,gl,dc,MenuGL11Mode::CompactOverlay,
+                           session->menu.focused_row()))
+            return JNI_FALSE;
+        const auto panel=menu_panel_geometry(
+            static_cast<unsigned>(width),static_cast<unsigned>(height),
+            authoritative.appearance.wide,MenuPanelMode::CompactOverlay);
+        if(!panel)return JNI_FALSE;
+        const auto visibleIndex=static_cast<std::size_t>(
+            std::distance(authoritative.visible.begin(),row));
+        const auto card=menu_module_card_rect(
+            authoritative,panel->logical_width(),visibleIndex);
+        // The switch's center track pixel is outside BOTH knob positions,
+        // so it distinguishes source-accent ON from dark OFF.
+        const float localX=card.x+card.width-menu_card_inner_padding-
+                           menu_switch_width+20.0f;
+        const float localY=card.y+menu_card_inner_padding+10.0f;
+        const int px=static_cast<int>(
+            std::lround(panel->left+panel->scale*localX));
+        const int topY=static_cast<int>(
+            std::lround(panel->top+panel->scale*localY));
+        if(px<0 || px>=width || topY<0 || topY>=height)
+            return JNI_FALSE;
+        GLubyte rgba[4]{};
+        glReadPixels(px,height-1-topY,1,1,GL_RGBA,GL_UNSIGNED_BYTE,rgba);
+        if(glGetError()!=GL_NO_ERROR)return JNI_FALSE;
+        const std::uint32_t rgb=(std::uint32_t(rgba[0])<<16) |
+            (std::uint32_t(rgba[1])<<8) | std::uint32_t(rgba[2]);
         WglMenuOverlayHost hud;
         if(!hud.open(gl,dc,width,height))return JNI_FALSE;
-        const bool painted=hud.draw_active_modules(session->feed);
+        const bool drawn=hud.draw_active_modules(session->feed);
         const bool closed=hud.close();
-        return (painted && closed)?JNI_TRUE:JNI_FALSE;
+        if(!drawn || !closed)return JNI_FALSE;
+        session->visual_sequence=confirmed->source_sequence;
+        session->visual_frame=session->menu.drawn_frames();
+        session->visual_requested=confirmed->modules[0].requested_enabled;
+        session->visual_rgb=rgb;
+        session->visual_valid=true;
+        return JNI_TRUE;
     } catch(...) {return JNI_FALSE;}
 }
 extern "C" JNIEXPORT jlongArray JNICALL
@@ -184,6 +246,22 @@ Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativeView(
             static_cast<jlong>(display->active_names.size()),
             static_cast<jlong>(session->menu.drawn_frames())});
     } catch(...) {return nullptr;}
+}
+// R216 test-only exact GL11 framebuffer receipt after rendering an
+// owner-verified, PR2-acknowledged Sprint switch; no preview edits.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativeVisual(
+    JNIEnv* env,jclass) {
+    if(!owned() || !session->visual_valid ||
+       !session->feed.latest() ||
+       session->visual_sequence>session->sequence)
+        return nullptr;
+    return packed(env,{
+        static_cast<jlong>(session->visual_sequence),
+        session->visual_requested?1L:0L,
+        static_cast<jlong>(session->visual_rgb),
+        static_cast<jlong>(session->visual_frame),
+        session->menu.preview_enabled(25u)?1L:0L});
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_forgegui_R214NativeMenuOverlay_nativeClose(

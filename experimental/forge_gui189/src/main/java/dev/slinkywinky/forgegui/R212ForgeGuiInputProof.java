@@ -97,6 +97,7 @@ public final class R212ForgeGuiInputProof {
             } else if(stage==1 && ticks>=12) {
                 if(nativeGl11!=null && nativeGl11.paintedFrames()==0)
                     throw new IllegalStateException("R214 GL11 menu never painted");
+                assertAuthoritativeSwitchVisual(1,false);
                 if(mc.currentScreen!=screen || screen.actionCount()!=0)
                     throw new IllegalStateException("R212 synthetic click precondition");
                 if(Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
@@ -110,6 +111,7 @@ public final class R212ForgeGuiInputProof {
                 stage=2;
             } else if(stage==2 && nativeSprint!=null && ticks>=
                       (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 30 : 14)) {
+                assertAuthoritativeSwitchVisual(2,true);
                 if(Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
                     screen.disposableInvokePaintedNativeToggle();
                 else screen.disposableInvokeVanillaMouseClicked();
@@ -120,6 +122,7 @@ public final class R212ForgeGuiInputProof {
                 stage=3;
             } else if(stage==3 && nativeSprint!=null && ticks>=
                       (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 50 : 16)) {
+                assertAuthoritativeSwitchVisual(3,false);
                 if(Boolean.getBoolean("slinkywinky.r215SourceMouseAuto"))
                     screen.disposableInvokePaintedNativeToggle();
                 else screen.disposableInvokeVanillaMouseClicked();
@@ -131,6 +134,7 @@ public final class R212ForgeGuiInputProof {
             } else if((stage==2 && nativeSprint==null && ticks>=16) ||
                       (stage==4 && nativeSprint!=null && ticks>=
                           (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 70 : 20))) {
+                assertAuthoritativeSwitchVisual(4,true);
                 // ESC is sent to the OWN screen's real vanilla key handler.
                 // This is a scripted in-process invocation, NOT physical input.
                 screen.disposableInvokeVanillaEscape();
@@ -206,6 +210,21 @@ public final class R212ForgeGuiInputProof {
         }
     }
 
+    private void assertAuthoritativeSwitchVisual(long expectedSequence,
+                                                  boolean expectedRequested) {
+        if(!Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ||
+           nativeGl11==null)return;
+        R214NativeMenuOverlay.Visual visual=nativeGl11.visual();
+        if(!visual.matches(expectedSequence,expectedRequested))
+            throw new IllegalStateException("R216 source-painted switch pixel mismatch seq="+
+                visual.sequence+" requested="+visual.requested+
+                " rgb="+Integer.toHexString(visual.rgb)+
+                " preview="+visual.previewFlag);
+        System.out.println("R216_GL11_ACKNOWLEDGED_SPRINT_SWITCH_PIXEL_PASS seq="+
+            visual.sequence+" requested="+visual.requested+
+            " rgb="+String.format("%06X",visual.rgb)+
+            " preview=false frames="+visual.frames);
+    }
     private void requestedFromOwnedScreen(ProbeScreen source,
                                           R214NativeMenuOverlay.Request exactFromMouse) {
         if(Thread.currentThread()!=clientOwner ||

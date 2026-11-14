@@ -17,6 +17,7 @@ public final class R214NativeMenuOverlay implements AutoCloseable {
     private static native boolean nativeAck(long id,long sourceSequence,
         long worldGeneration,boolean requested,boolean active);
     private static native long[] nativeView();
+    private static native long[] nativeVisual();
     private static native boolean nativeClose();
     private static native int[] nativeTogglePoint(int width,int height);
     private static native boolean nativeMouseDown(int width,int height,
@@ -56,6 +57,32 @@ public final class R214NativeMenuOverlay implements AutoCloseable {
                 throw new IllegalStateException("Inert module displayed active");
         }
     }
+    /** R216: an actual GL11 switch-track framebuffer sample, taken only
+     * after a successful render from a source-sequenced native acknowledgement.
+     * The fifth field proves the local preview flag remains unchanged.
+     */
+    public static final class Visual {
+        public final long sequence,frames;
+        public final boolean requested,previewFlag;
+        public final int rgb;
+        Visual(long[] a) {
+            if(a==null || a.length!=5 || a[0]<=0 || a[1]<0 || a[1]>1 ||
+               a[2]<0 || a[2]>0xFFFFFF || a[3]<=0 || a[4]<0 || a[4]>1)
+                throw new IllegalStateException("R216 GL11 pixel receipt invalid");
+            sequence=a[0];requested=a[1]==1;rgb=(int)a[2];
+            frames=a[3];previewFlag=a[4]==1;
+        }
+        private static int colorDistance(int a,int b) {
+            return Math.abs(((a>>16)&255)-((b>>16)&255))+
+                   Math.abs(((a>>8)&255)-((b>>8)&255))+
+                   Math.abs((a&255)-(b&255));
+        }
+        public boolean matches(long sequence,boolean requested) {
+            return this.sequence==sequence && this.requested==requested &&
+                   !previewFlag && colorDistance(rgb,requested?0xF35D12:0x404040)<=50;
+        }
+    }
+    public Visual visual() {assertOwner();return new Visual(nativeVisual());}
     public R214NativeMenuOverlay(R213NativeSprintBridge.Ack initial) {
         if(initial==null || initial.id!=0 ||
            initial.generation!=0 || initial.requested || initial.active ||
