@@ -1628,6 +1628,18 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
             up,ctx.gl,ctx.dc,676,630,epoch,
             ledger,router,at[0],at[1],when+40u,true));
     };
+    const auto key=[&](unsigned code,bool edits) {
+        const auto pressed=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,676,630,epoch,ledger,router,code,true,true);
+        REQUIRE(pressed.delivery==MenuKeyDelivery::MenuExclusive &&
+                !pressed.request_close && pressed.action_applied==edits);
+        const auto released=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,676,630,epoch,ledger,router,code,false,true);
+        REQUIRE(released.delivery==MenuKeyDelivery::MenuExclusive &&
+                !released.request_close && !released.action_applied);
+        REQUIRE(!ledger.tracked_down(InputHandoffDevice::Keyboard,code));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    };
     click(point,20000);
     REQUIRE(!preview.fixture_painted_frame(ctx.gl,ctx.dc,676,630));
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
@@ -1648,6 +1660,15 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     const auto modal=menu_color_modal_geometry(
         panel->logical_width(),panel->logical_height());
     REQUIRE(modal);
+    // R202: the removed synthetic footer has NO clickable actions.
+    // This guards against a silent reintroduction of fake Apply/Cancel.
+    for(const float footerX:{
+            modal->outer.x+40.0f,
+            modal->outer.x+modal->outer.width-40.0f}) {
+        const auto footer=xy(footerX,modal->outer.y+285.0f);
+        REQUIRE(!hit_test_menu(*popup,MenuPanelMode::CompactOverlay,
+                               footer[0],footer[1]));
+    }
     const auto hue=xy(modal->hsl[0].x+
                       modal->hsl[0].width*0.333f,
                       modal->hsl[0].y+modal->hsl[0].height*0.5f);
@@ -1690,10 +1711,17 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
         ctx.gl,ctx.dc,676,630)==0u);
     REQUIRE(preview.profile_snapshot(
         ctx.gl,ctx.dc,676,630)==initialProfile);
-    const auto apply=xy(
-        modal->apply.x+modal->apply.width*0.5f,
-        modal->apply.y+modal->apply.height*0.5f);
-    click(apply,26000);
+    // R202 source close X is the sole visible exit and *commits*
+    // the current local selection. Synthetic Apply footer is removed.
+    const auto close=xy(
+        modal->close.x+modal->close.width*0.5f,
+        modal->close.y+modal->close.height*0.5f);
+    const auto* beforeClose=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,676,630);
+    const auto closeHit=hit_test_menu(
+        *beforeClose,MenuPanelMode::CompactOverlay,close[0],close[1]);
+    REQUIRE(closeHit && closeHit->kind==MenuHitKind::ColorPopupClose);
+    click(close,26000);
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
     const auto* committed=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,676,630);
@@ -1711,10 +1739,9 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     click(light,30000);
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
     REQUIRE(preview.fixture_color_popup_rgb(ctx.gl,ctx.dc,676,630)!=0u);
-    const auto cancel=xy(
-        modal->cancel.x+modal->cancel.width*0.5f,
-        modal->cancel.y+modal->cancel.height*0.5f);
-    click(cancel,32000);
+    // Escape is a first-party safe local cancel; candidate source's
+    // clicked close X instead commits. Never close the main GUI.
+    key(1u,true);
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
     const auto* canceled=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,676,630);
@@ -1738,18 +1765,6 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     REQUIRE(hexHit && hexHit->kind==MenuHitKind::ColorPopupHexField);
     click(hexField,36000);
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
-    const auto key=[&](unsigned code,bool edits) {
-        const auto pressed=preview.fixture_keyboard_event(
-            ctx.gl,ctx.dc,676,630,epoch,ledger,router,code,true,true);
-        REQUIRE(pressed.delivery==MenuKeyDelivery::MenuExclusive &&
-                !pressed.request_close && pressed.action_applied==edits);
-        const auto released=preview.fixture_keyboard_event(
-            ctx.gl,ctx.dc,676,630,epoch,ledger,router,code,false,true);
-        REQUIRE(released.delivery==MenuKeyDelivery::MenuExclusive &&
-                !released.request_close && !released.action_applied);
-        REQUIRE(!ledger.tracked_down(InputHandoffDevice::Keyboard,code));
-        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
-    };
     key(15u,false); // Tab cannot switch tabs while modal owns input
     REQUIRE(preview.tab()==MenuTab::Visual);
     key(2u,true);  // 1
@@ -1773,7 +1788,7 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
         ctx.gl,ctx.dc,676,630);
     REQUIRE(edited && edited->dropdown_preview &&
             edited->dropdown_preview->kind==MenuDropdownKind::ColorPicker);
-    click(apply,47000);
+    click(close,47000);
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
     const auto* hexApplied=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,676,630);
@@ -1799,7 +1814,7 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     REQUIRE(!ledger.may_suppress_vanilla_event());
     REQUIRE(glGetError()==GL_NO_ERROR);
     same(expected,snapshot());
-    std::cout<<"R200_NATIVE_WGL_COLOR_POPUP_HSL_RECENT_APPLY_CANCEL_PASS\n";
+    std::cout<<"R202_NATIVE_WGL_SOURCE_X_HSL_HEX_ESCAPE_PASS\n";
 }
 
 int main() {

@@ -97,6 +97,33 @@ void round_rect(float x,float y,float w,float h,float radius) noexcept {
     glVertex2f(x+w-r,y);
     glEnd();
 }
+// R202: source candidate renders a 10px colored HSL knob with
+// a thin dark outline. Fixed-function GL11, no textures or allocations.
+void color_popup_knob(float x,float y,float radius,
+                      std::uint32_t center) noexcept {
+    constexpr float tau=6.2831853071795864769f;
+    constexpr unsigned steps=32u;
+    rgb(center);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(x,y);
+    for(unsigned i=0;i<=steps;++i) {
+        const float angle=tau*static_cast<float>(i)/
+                          static_cast<float>(steps);
+        glVertex2f(x+radius*std::cos(angle),
+                   y+radius*std::sin(angle));
+    }
+    glEnd();
+    rgb(0x404040u);
+    glLineWidth(2.0f);
+    glBegin(GL_LINE_LOOP);
+    for(unsigned i=0;i<steps;++i) {
+        const float angle=tau*static_cast<float>(i)/
+                          static_cast<float>(steps);
+        glVertex2f(x+radius*std::cos(angle),
+                   y+radius*std::sin(angle));
+    }
+    glEnd();
+}
 // Legacy glyphs remain a deterministic fallback if a Windows font isn't
 // available; the default is grayscale Segoe UI supplied by the local OS.
 void text(std::string_view label,float x,float y,
@@ -992,9 +1019,21 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         rgb(0x141414u);
         round_rect(layout->outer.x,layout->outer.y,
                    layout->outer.width,layout->outer.height,13.0f);
+        // R202 native gui_popups.cpp: title row ends in a 20px
+        // X. Closing that X commits the chosen local color preview.
         rgb(0xdddddd);
         text("Color picker",layout->outer.x+18.0f,
-             layout->outer.y+14.0f,17.0f,layout->outer.width-36.0f);
+             layout->outer.y+14.0f,16.0f,layout->outer.width-58.0f);
+        rgb(0x999999u);
+        const auto& cross=layout->close;
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glVertex2f(cross.x+4.0f,cross.y+4.0f);
+        glVertex2f(cross.x+cross.width-4.0f,
+                   cross.y+cross.height-4.0f);
+        glVertex2f(cross.x+cross.width-4.0f,cross.y+4.0f);
+        glVertex2f(cross.x+4.0f,cross.y+cross.height-4.0f);
+        glEnd();
         rgb(*rgbValue);
         round_rect(layout->preview.x,layout->preview.y,
                    layout->preview.width,layout->preview.height,5.0f);
@@ -1013,24 +1052,45 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             const auto& bar=layout->hsl[row];
             rgb(0xdddddd);
             text(labels[row],bar.x,bar.y-20.0f,14.0f,bar.width);
-            const float pixels=bar.width/96.0f;
-            for(unsigned i=0;i<96u;++i) {
-                auto point=*slider;
-                const float factor=static_cast<float>(i)/95.0f;
-                if(row==0u)point.hue=factor;
-                else if(row==1u)point.saturation=factor;
-                else point.lightness=factor;
-                const auto color=MenuColorPopupPreview::hsl_to_rgb(point);
-                if(!color)return false;
-                rgb(*color);
-                quad(bar.x+static_cast<float>(i)*pixels,bar.y,
-                     pixels+0.5f,bar.height);
+            // R202: source gui_popups.cpp draws the hue gradient in
+            // exactly six interpolated RGBA sectors; saturation and
+            // lightness have one full-width gradient each. GL11 vertex
+            // color interpolation avoids the former 96 flat color bands.
+            const unsigned segments=row==0u?6u:1u;
+            glShadeModel(GL_SMOOTH);
+            for(unsigned i=0;i<segments;++i) {
+                auto a=*slider;
+                auto b=*slider;
+                const float left=static_cast<float>(i)/
+                                 static_cast<float>(segments);
+                const float right=static_cast<float>(i+1u)/
+                                  static_cast<float>(segments);
+                if(row==0u){a.hue=left;b.hue=right;}
+                else if(row==1u){a.saturation=0.0f;b.saturation=1.0f;}
+                else {a.lightness=0.0f;b.lightness=1.0f;}
+                const auto c0=MenuColorPopupPreview::hsl_to_rgb(a);
+                const auto c1=MenuColorPopupPreview::hsl_to_rgb(b);
+                if(!c0 || !c1)return false;
+                const float x0=bar.x+bar.width*left;
+                const float x1=bar.x+bar.width*right;
+                glBegin(GL_QUADS);
+                rgb(*c0);
+                glVertex2f(x0,bar.y);
+                glVertex2f(x0,bar.y+bar.height);
+                rgb(*c1);
+                glVertex2f(x1,bar.y+bar.height);
+                glVertex2f(x1,bar.y);
+                glEnd();
             }
+            // Native source uses a colored circular slider marker,
+            // radius 10px, with a 2px #404040 outline.
             const float value=row==0u?slider->hue:
                 (row==1u?slider->saturation:slider->lightness);
-            rgb(0xffffffu);
-            quad(bar.x+bar.width*value-1.0f,bar.y-2.0f,
-                 2.0f,bar.height+4.0f);
+            const auto picked=MenuColorPopupPreview::hsl_to_rgb(*slider);
+            if(!picked)return false;
+            color_popup_knob(bar.x+10.0f+
+                             (bar.width-20.0f)*value,
+                             bar.y+bar.height*0.5f,10.0f,*picked);
         }
         rgb(0xdddddd);
         text("Recently used",layout->recent[0].x,
@@ -1040,21 +1100,15 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             const auto recent=picker.recent(i);
             if(!recent)return false;
             const auto& tile=layout->recent[i];
+            // Source: 5px rounded swatch with hover-like grey border.
+            rgb(0x404040u);
+            round_rect(tile.x-1.0f,tile.y-1.0f,
+                       tile.width+2.0f,tile.height+2.0f,5.0f);
             rgb(*recent);
-            round_rect(tile.x,tile.y,tile.width,tile.height,4.0f);
+            round_rect(tile.x,tile.y,tile.width,tile.height,5.0f);
         }
-        rgb(0x323232u);
-        round_rect(layout->cancel.x,layout->cancel.y,
-                   layout->cancel.width,layout->cancel.height,5.0f);
-        rgb(frame.appearance.accent_rgb);
-        round_rect(layout->apply.x,layout->apply.y,
-                   layout->apply.width,layout->apply.height,5.0f);
-        rgb(0xdddddd);
-        text("Cancel",layout->cancel.x+10.0f,layout->cancel.y+3.0f,
-             13.0f,layout->cancel.width-15.0f);
-        rgb(0xffffffu);
-        text("Apply",layout->apply.x+14.0f,layout->apply.y+3.0f,
-             13.0f,layout->apply.width-18.0f);
+        // R202: no invented footer buttons. Original candidate's
+        // color picker closes through its common title-bar X only.
     }
     // R128: the source-backed seventh tab displays only an inert modal.
     // The commercial client's unload operation is deliberately NOT wired.

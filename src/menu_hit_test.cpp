@@ -99,10 +99,8 @@ std::optional<MenuHit> hit_test_menu(
         if(!modal)return std::nullopt;
         if(modal->hex.contains(x,y))
             return MenuHit{MenuHitKind::ColorPopupHexField,frame.tab};
-        if(modal->cancel.contains(x,y))
-            return MenuHit{MenuHitKind::ColorPopupCancel,frame.tab};
-        if(modal->apply.contains(x,y))
-            return MenuHit{MenuHitKind::ColorPopupApply,frame.tab};
+        if(modal->close.contains(x,y))
+            return MenuHit{MenuHitKind::ColorPopupClose,frame.tab};
         for(unsigned i=0;i<3u;++i)
             if(modal->hsl[i].contains(x,y))
                 return MenuHit{MenuHitKind::ColorPopupHsl,frame.tab,

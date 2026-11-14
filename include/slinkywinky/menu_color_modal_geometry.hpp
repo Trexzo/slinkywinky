@@ -18,7 +18,7 @@ struct MenuColorModalGeometry {
     MenuColorModalRect outer{},preview{},hex{};
     std::array<MenuColorModalRect,3> hsl{};
     std::array<MenuColorModalRect,8> recent{};
-    MenuColorModalRect cancel{},apply{};
+    MenuColorModalRect close{}; // R202: source-pinned popup title cross
 };
 inline std::optional<MenuColorModalGeometry> menu_color_modal_geometry(
         float logical_width,float logical_height) noexcept {
@@ -28,8 +28,10 @@ inline std::optional<MenuColorModalGeometry> menu_color_modal_geometry(
         return std::nullopt;
     MenuColorModalGeometry out;
     const float width=std::min(360.0f,logical_width-28.0f);
-    const float height=std::min(312.0f,logical_height-24.0f);
-    const float yScale=height/312.0f;
+    // R202: remove R200's unused 18–32px footer reservation.
+    // Still approximate; authenticated full-modal dimensions unknown.
+    const float height=std::min(294.0f,logical_height-24.0f);
+    const float yScale=height/294.0f;
     const float left=(logical_width-width)*0.5f;
     const float top=(logical_height-height)*0.5f;
     const auto r=[left,top,yScale](float x,float y,float w,float h){
@@ -45,8 +47,9 @@ inline std::optional<MenuColorModalGeometry> menu_color_modal_geometry(
     for(unsigned i=0;i<8u;++i)
         out.recent[i]=r(18.0f+i*(recentWidth+6.0f),
                         260.0f,recentWidth,20.0f);
-    out.cancel=r(18.0f,285.0f,76.0f,21.0f);
-    out.apply=r(width-94.0f,285.0f,76.0f,21.0f);
+    // Native candidate gui_popups.cpp has one 20px title-row cross,
+    // not the synthetic Apply/Cancel footer added in R200.
+    out.close=r(width-38.0f,12.0f,20.0f,20.0f);
     return out;
 }
 } // namespace slinkywinky

@@ -522,9 +522,9 @@ bool WglRetainedMenuPreview::pointer(
             return hit->control_index<8u &&
                 menu_.select_color_popup_recent(
                     static_cast<unsigned>(hit->control_index));
-        case MenuHitKind::ColorPopupCancel:
-            return menu_.close_color_popup(false);
-        case MenuHitKind::ColorPopupApply:
+        // R202: source gui_popups.cpp close cross calls
+        // set_popup_open(gui,true); only the local preview is committed.
+        case MenuHitKind::ColorPopupClose:
             return menu_.close_color_popup(true);
         case MenuHitKind::RecoveredBooleanPreview:
             return navigation_.focus_visible_row(hit->catalog_index) &&

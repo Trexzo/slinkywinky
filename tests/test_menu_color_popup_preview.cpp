@@ -1,4 +1,5 @@
 #include "slinkywinky/menu_color_popup_preview.hpp"
+#include "slinkywinky/menu_color_modal_geometry.hpp"
 #include <stdexcept>
 #define CHECK(x) do { if(!(x)) throw std::runtime_error("R198 failed at " + std::to_string(__LINE__) + ": " #x); } while(false)
 #include <cmath>
@@ -9,6 +10,27 @@ using namespace slinkywinky;
 // Portable, standalone original-reference *behavior* fixture. No game,
 // DLL injection, graphics context, OS color chooser or live input.
 int main() {
+    // R202: source-backed title cross must not intersect hex editing,
+    // HSL bars or eight history swatches. There is no footer button.
+    const auto dialog=menu_color_modal_geometry(420.0f,380.0f);
+    CHECK(dialog.has_value());
+    CHECK(dialog->outer.height==294.0f);
+    const auto center=[](const MenuColorModalRect& r) {
+        return std::array<float,2>{r.x+r.width*0.5f,
+                                   r.y+r.height*0.5f};
+    };
+    const auto x=center(dialog->close);
+    CHECK(dialog->close.contains(x[0],x[1]));
+    CHECK(!dialog->hex.contains(x[0],x[1]));
+    CHECK(!dialog->outer.contains(-1.0f,-1.0f));
+    for(const auto& r:dialog->hsl)
+        CHECK(!r.contains(x[0],x[1]));
+    for(const auto& r:dialog->recent)
+        CHECK(!r.contains(x[0],x[1]));
+    CHECK(!menu_color_modal_geometry(300.0f,380.0f));
+    CHECK(!menu_color_modal_geometry(420.0f,270.0f));
+    CHECK(!menu_color_modal_geometry(
+        std::numeric_limits<float>::quiet_NaN(),380.0f));
     MenuColorPopupPreview p;
     CHECK(!p.active() && !p.current() && !p.close(true));
     // R199: both supplied references initialize eight BLACK swatches.

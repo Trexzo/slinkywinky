@@ -38,7 +38,7 @@ enum class MenuHitKind : std::uint8_t {
     RecoveredChoiceControl, // R131: source-global dropdown widget
     RecoveredMultiControl, // R134: source-global multiselect widget
     RecoveredColorSwatch, // R136: independent 24-bit RGB preview
-    ColorPopupHsl, ColorPopupRecent, ColorPopupCancel, ColorPopupApply,
+    ColorPopupHsl, ColorPopupRecent, ColorPopupClose,
     ColorPopupHexField,
     // R200: modal-only HSL bar, recent swatch and commit/cancel
     RecoveredTextField, // R137: local source-indexed UTF-8 edit field
