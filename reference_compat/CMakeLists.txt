@@ -469,6 +469,22 @@ if(BUILD_TESTING)
   set_tests_properties(r210_native_module_control_integration
     PROPERTIES TIMEOUT 15)
 
+  # R211: three canonical modules share one owner/session and typed
+  # native callback routing. Pure source-only test; no actual game writes.
+  add_executable(slinkywinky_three_module_control_test
+    tests/test_three_module_control.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/observation.cpp")
+  target_include_directories(slinkywinky_three_module_control_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_link_libraries(slinkywinky_three_module_control_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core
+    Threads::Threads)
+  add_test(NAME r211_three_module_control_integration
+    COMMAND slinkywinky_three_module_control_test)
+  set_tests_properties(r211_three_module_control_integration
+    PROPERTIES TIMEOUT 15)
+
   # R200: reusable first-party native toggle owner fence. The test uses
   # invented module identities and a synthetic native enqueue/apply adapter.
   # It compiles on both Windows and Linux and never loads upstream code.
