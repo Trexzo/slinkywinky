@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include "slinkywinky/menu_render.hpp"
+#include "slinkywinky/module_arraylist.hpp"
 #include <optional>
 
 namespace slinkywinky {
@@ -48,6 +49,14 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     MenuGL11Mode mode,
                     std::optional<std::size_t> focused_catalog_index,
                     const MenuColorPopupPreview* color_popup) noexcept;
+
+// R207 first-party enabled-module ArrayList renderer. This is an opt-in
+// owner-thread HUD draw of a verified runtime-snapshot *copy*; the JNI
+// live game callback is NOT connected yet. No direct MenuState preview.
+bool draw_module_arraylist_gl11(const ModuleArrayListSnapshot& snapshot,
+    HGLRC expected_context,HDC expected_dc,
+    unsigned viewport_width,unsigned viewport_height,
+    std::uint32_t accent_rgb=0xF35D12u) noexcept;
 
 } // namespace slinkywinky
 #endif

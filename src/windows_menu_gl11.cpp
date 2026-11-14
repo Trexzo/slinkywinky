@@ -1263,4 +1263,92 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     // selection or app-managed caches; state restoration is GL1.1 only.
     return true;
 }
+// R207: real first-party WGL ArrayList drawing path, isolated from both
+// the menu's demo enable flags and unverified Minecraft live hooks.
+// Chat 2's ModuleControlState version-1 owner snapshot is the intended
+// future source; this renderer takes only a bounded copy of that state.
+bool draw_module_arraylist_gl11(
+        const ModuleArrayListSnapshot& snapshot,
+        HGLRC expected_context,HDC expected_dc,
+        unsigned viewport_width,unsigned viewport_height,
+        std::uint32_t accent_rgb) noexcept {
+    if(!expected_context || !expected_dc ||
+       viewport_width<320u || viewport_width>8192u ||
+       viewport_height<240u || viewport_height>8192u ||
+       accent_rgb>0xFFFFFFu ||
+       wglGetCurrentContext()!=expected_context ||
+       wglGetCurrentDC()!=expected_dc)
+        return false;
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewport);
+    if(viewport[0]!=0 || viewport[1]!=0 ||
+       viewport[2]!=static_cast<GLint>(viewport_width) ||
+       viewport[3]!=static_cast<GLint>(viewport_height))
+        return false;
+    std::optional<ModuleArrayListDisplay> display;
+    try {display=make_module_arraylist_display(snapshot);}
+    catch(...) {return false;}
+    if(!display)return false;
+    if(display->active_names.empty())return true;
+    struct Label {
+        std::string_view name{};
+        float width=0.0f;
+    };
+    std::array<Label,66> labels{};
+    if(display->active_names.size()>labels.size())return false;
+    for(std::size_t i=0;i<display->active_names.size();++i) {
+        const auto& name=display->active_names[i];
+        const float measured=measure_menu_system_text(name,14.0f);
+        labels[i]={name,measured>0.0f?measured:
+                    static_cast<float>(name.size())*9.0f};
+        if(!std::isfinite(labels[i].width) ||
+           labels[i].width<=0.0f ||
+           labels[i].width>static_cast<float>(viewport_width)-36.0f)
+            return false;
+    }
+    std::sort(labels.begin(),labels.begin()+display->active_names.size(),
+        [](const Label& a,const Label& b){
+            return a.width==b.width?a.name<b.name:a.width>b.width;
+        });
+    ScopedFixedFunctionState state;
+    if(!state.ready())return false;
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_ALPHA_TEST);
+    glDisable(GL_FOG);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0,static_cast<GLdouble>(viewport_width),
+            static_cast<GLdouble>(viewport_height),0,-1,1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glMatrixMode(GL_TEXTURE);
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    const std::size_t limit=std::min<std::size_t>(
+        display->active_names.size(),(viewport_height-12u)/20u);
+    const float right=static_cast<float>(viewport_width)-8.0f;
+    for(std::size_t i=0;i<limit;++i) {
+        const auto& label=labels[i];
+        const float rowY=8.0f+static_cast<float>(i)*20.0f;
+        const float rowW=label.width+17.0f;
+        const float rowX=right-rowW;
+        rgba(0x101014u,180u);
+        quad(rowX,rowY,rowW,19.0f);
+        rgb(accent_rgb);
+        quad(right-3.0f,rowY,3.0f,19.0f);
+        rgb(0xFFFFFFu);
+        text(label.name,rowX+7.0f,rowY+2.0f,14.0f,
+             label.width+2.0f);
+    }
+    // The first-party renderer deliberately does NOT pretend a
+    // requested-only menu toggle is active. No input, control or command
+    // generation occurs here, including during drawing and unload.
+    return true;
+}
 } // namespace slinkywinky

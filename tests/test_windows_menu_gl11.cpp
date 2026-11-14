@@ -271,6 +271,39 @@ int main() {
         const auto frame=admitted.next(menu);
         REQUIRE(frame.has_value());
         const State before=snapshot();
+        // R207: the real GL11 HUD painter receives a copied runtime
+        // ACTIVE snapshot, never the ClickGUI's preview_enabled flags.
+        ModuleArrayListSnapshot arraylist;
+        arraylist.contract_version=1u;
+        arraylist.source_sequence=77u;
+        arraylist.world_generation=9u;
+        arraylist.world_ready=true;
+        arraylist.modules={
+            {"Sprint",true,true,9u},
+            {"Timer",true,false,9u},
+            {"Keep Sprint",true,true,9u}
+        };
+        REQUIRE(!draw_module_arraylist_gl11(
+            arraylist,nullptr,context.dc,676u,630u));
+        const auto rows=make_module_arraylist_display(arraylist);
+        REQUIRE(rows && rows->active_names.size()==2u);
+        REQUIRE(std::find(rows->active_names.begin(),rows->active_names.end(),
+                          "Timer")==rows->active_names.end());
+        REQUIRE(draw_module_arraylist_gl11(
+            arraylist,context.gl,context.dc,676u,630u));
+        same(before,snapshot());
+        if(const char* output=std::getenv("SLINKYWINKY_R207_ARRAYLIST_PPM"))
+            REQUIRE(save_gl_framebuffer_ppm(output));
+        const auto paintedArraylistAccent=readback(666,612);
+        REQUIRE(paintedArraylistAccent[0]==0xF3u &&
+                paintedArraylistAccent[1]==0x5Du &&
+                paintedArraylistAccent[2]==0x12u);
+        auto invalidArraylist=arraylist;
+        invalidArraylist.modules[0].canonical_name="Unknown";
+        REQUIRE(!draw_module_arraylist_gl11(
+            invalidArraylist,context.gl,context.dc,676u,630u));
+        same(before,snapshot());
+        std::cout<<"R207_ACTUAL_WGL_RUNTIME_ARRAYLIST_ROWS_AND_GL_RESTORE_PASS\n";
         REQUIRE(!draw_menu_gl11(*frame,nullptr,context.dc));
         REQUIRE(!draw_menu_gl11(*frame,context.gl,nullptr));
         REQUIRE(!draw_menu_gl11(*frame,context.gl,
