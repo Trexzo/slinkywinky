@@ -52,6 +52,7 @@ public final class ForgePreview {
     private final int[] r216PhaseSamples = new int[3];
     private double r216LastX, r216LastZ;
     private boolean r216PositionReady;
+    private int r216GroundWarmupCalls;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -506,8 +507,9 @@ public final class ForgePreview {
             // from one REAL onLivingUpdate callback to the next. Initial
             // frames after each toggle are discarded to avoid residual
             // movement momentum skewing the comparison.
-            if(R216_DISPLACEMENT_TEST)
-                sampleR216ActualDisplacement(player);
+            if(R216_DISPLACEMENT_TEST &&
+               !sampleR216ActualDisplacement(player))
+                return; // Spawn still falling: do not count as a movement tick.
             ++r214PhaseCount;
             if(r214HookFirstMs==0) r214HookFirstMs=System.currentTimeMillis();
             if(R216_DISPLACEMENT_TEST) {
@@ -565,14 +567,27 @@ public final class ForgePreview {
      * Exactly one local synthetic forward-key stimulus is maintained.
      * 12 warmup callbacks after each native toggle, then 33 samples.
      */
-    private void sampleR216ActualDisplacement(EntityPlayerSP player) {
+    private boolean sampleR216ActualDisplacement(EntityPlayerSP player) {
         final double x=player.posX;
         final double z=player.posZ;
         if(!Double.isFinite(x) || !Double.isFinite(z) ||
-           player.capabilities.isFlying || !player.onGround ||
+           player.capabilities.isFlying ||
            player.isInWater() || player.isInLava())
             throw new IllegalStateException(
-                "R216 cannot measure airborne or non-finite movement");
+                "R216 cannot measure flying, liquid, or non-finite movement");
+        if(!player.onGround) {
+            if(r214PhaseCount!=0 || r216PositionReady)
+                throw new IllegalStateException(
+                    "R216 player left the ground during displacement window");
+            if(++r216GroundWarmupCalls>80)
+                throw new IllegalStateException(
+                    "R216 spawn never reached a stable grounded state");
+            return false;
+        }
+        if(!r216PositionReady)
+            System.out.println("[SlinkyWinkyPreview] "+
+                "R216_GROUNDED_MEASUREMENT_STARTED fallTicks="+
+                r216GroundWarmupCalls);
         if(r216PositionReady && r214PhaseCount>=12) {
             final double distance=Math.hypot(x-r216LastX,z-r216LastZ);
             if(!Double.isFinite(distance) || distance>1.0)
@@ -583,6 +598,7 @@ public final class ForgePreview {
         r216LastX=x;
         r216LastZ=z;
         r216PositionReady=true;
+        return true;
     }
 
     private void completeR216DisplacementPhase() {
