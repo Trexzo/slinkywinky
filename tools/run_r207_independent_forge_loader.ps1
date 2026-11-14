@@ -57,17 +57,17 @@ foreach($lib in @($forge.libraries)+@($vanilla.libraries)) {
     if($seen.ContainsKey($id)){continue}
     $seen[$id]=$true
     $allowed=$true
-    if($lib.rules) {
+    if($null -ne $lib.PSObject.Properties['rules'] -and $lib.rules) {
         $allowed=$false
         foreach($rule in $lib.rules) {
-            if(-not $rule.os -or $rule.os.name -eq 'windows') {
+            if($null -eq $rule.PSObject.Properties['os'] -or $rule.os.name -eq 'windows') {
                 $allowed=$rule.action -eq 'allow'
             }
         }
     }
     if(-not $allowed) {continue}
     $prefix=$parts[0].Replace('.','/')+'/'+$parts[1]+'/'+$parts[2]+'/'+$parts[1]+'-'+$parts[2]
-    if($lib.natives) {
+    if($null -ne $lib.PSObject.Properties['natives'] -and $lib.natives) {
         $classifier=[string]$lib.natives.windows
         if(-not $classifier){throw "R207 missing native classifier: $id"}
         # Legacy Mojang metadata uses a Windows architecture placeholder.
@@ -94,6 +94,7 @@ New-Item -ItemType Directory -Path @($mods,$natives)|Out-Null
 $staged=Join-Path $mods 'slinkywinky-preview-r207-reobf.jar'
 Copy-Item -LiteralPath $jar -Destination $staged
 Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $nativeCount=0
 foreach($archive in $nativePaths){
     $zip=[IO.Compression.ZipFile]::OpenRead($archive)
