@@ -158,6 +158,11 @@ public final class SprintObservationProbeSmoke {
         // R211: real Java8 -> JNI -> same native owner bridge with three
         // independent toggles and typed event17/21 data-only proposals.
         try (SprintObservationProbe session = new SprintObservationProbe()) {
+            String[] exposedNames = SprintObservationProbe.controlledModuleNames();
+            exposedNames[0] = "Fake Module";
+            check(SprintObservationProbe.NO_JUMP_DELAY.equals(
+                      SprintObservationProbe.controlledModuleNames()[0]),
+                  "caller mutated canonical module catalogue");
             SprintObservationProbe.ControlState[] initial = session.moduleStates();
             check(initial.length == 3 &&
                   SprintObservationProbe.NO_JUMP_DELAY.equals(initial[0].moduleName) &&
