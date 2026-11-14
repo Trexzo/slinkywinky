@@ -28,7 +28,8 @@ import net.minecraftforge.fml.common.gameevent.TickEvent;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
-/** Experimental Forge 1.8.9 *read-only* preview, never applies gameplay actions. */
+/** Forge 1.8.9 read-only preview by default. R212 permits bounded
+ *  local-only actions behind a separately verified TEMP/offline gate. */
 @Mod(modid="slinkywinky",name="SlinkyWinky Preview",version="0.1.0",clientSideOnly=true)
 public final class ForgePreview {
     private KeyBinding toggle;
@@ -87,7 +88,8 @@ public final class ForgePreview {
         ClientRegistry.registerKeyBinding(toggle);
         FMLCommonHandler.instance().bus().register(this);
         MinecraftForge.EVENT_BUS.register(this);
-        System.out.println("[SlinkyWinkyPreview] initialized - read-only");
+        System.out.println("[SlinkyWinkyPreview] initialized - " +
+            (R212_ACTION_TEST ? "isolated R212 action-trial mode" : "read-only"));
         if (R212_ACTION_TEST) {
             final Minecraft mc = Minecraft.getMinecraft();
             final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
