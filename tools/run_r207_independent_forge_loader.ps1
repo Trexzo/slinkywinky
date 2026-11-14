@@ -7,11 +7,17 @@ param(
  [Parameter(Mandatory=$true)][string]$ReobfJar,
  [Parameter(Mandatory=$true)][string]$NativeJniDir,
  [Parameter(Mandatory=$true)][string]$InstanceRoot,
- [switch]$Launch
+ [switch]$Launch,
+ [switch]$R208LocalWorldTest
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-$expectedJar='f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
+$expectedJar=if($R208LocalWorldTest){
+  '5084bfce416abc8527f7e0e61f104378e104496e0eee40d6828a2b37970a5c0f'
+}else{
+  'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
+}
+$offlineUsername=if($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -22,6 +28,14 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
     [IO.Path]::GetFullPath($InstanceRoot).StartsWith($root.TrimEnd('\')+'\',
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
+}
+if($R208LocalWorldTest){
+  $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
+  $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
+  if(-not $target.StartsWith($tmp,[StringComparison]::OrdinalIgnoreCase) -or
+     $target -notmatch '/slinkywinky-r208-independent-forge-[^/]+$'){
+    throw 'R208 local world test requires a fresh named TEMP instance'
+  }
 }
 if (Test-Path -LiteralPath $InstanceRoot) {
     throw 'R207 refuses to overwrite a prior isolated instance'
@@ -128,7 +142,7 @@ $argsList=@(
  '-Dslinkywinky.sprint.allowBackwards=true',
  '-cp',$classpath,
  'net.minecraft.launchwrapper.Launch',
- '--username','R207Offline',
+ '--username',$offlineUsername,
  '--version',$forgeId,
  '--gameDir',$isolation,
  '--assetsDir',$assets,
@@ -140,10 +154,14 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
+if($R208LocalWorldTest){
+  $argsList=@('-Dslinkywinky.r208LocalWorldTest=true')+$argsList
+}
 $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
 @(
  'R207_INDEPENDENT_FORGE_PREFLIGHT_PASS'
  "REOBF_SHA256=$expectedJar"
+ "ISOLATED_WORLD_TEST=$([bool]$R208LocalWorldTest)"
  "MC_SHA256=$expectedVanilla"
  "LIBRARY_COUNT=$($libraryPaths.Count)"
  "NATIVE_ARCHIVES=$($nativePaths.Count)"
