@@ -434,6 +434,21 @@ if(BUILD_TESTING)
     r203_sprint_update_and_movement_offline
     r203_sixteen_policy_coverage PROPERTIES TIMEOUT 15)
 
+  # R204: real read-only ObservationFrame ABI and session-generation
+  # admission drive source-matched Sprint callbacks without any JNI writes.
+  add_executable(slinkywinky_sprint_observation_preview_test
+    tests/test_sprint_observation_preview.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/observation.cpp")
+  target_include_directories(slinkywinky_sprint_observation_preview_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include")
+  target_link_libraries(slinkywinky_sprint_observation_preview_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r204_sprint_native_observation_preview
+    COMMAND slinkywinky_sprint_observation_preview_test)
+  set_tests_properties(r204_sprint_native_observation_preview
+    PROPERTIES TIMEOUT 15)
+
   # C++ std::thread owner contract requires explicit pthread linkage on
   # older Linux build images; Windows uses the native thread runtime.
   find_package(Threads REQUIRED)
