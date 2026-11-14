@@ -17,6 +17,7 @@
 #include "slinkywinky/fast_accel_controller.hpp"
 #include "slinkywinky/safe_walk_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
+#include "slinkywinky/keep_sprint_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -126,6 +127,24 @@ struct TimerTogglePayload {
     unsigned executions = 0;
 };
 
+struct KeepSprintAttackPayload {
+    KeepSprintAttackInput input{};
+    KeepSprintAttackDecision decision{};
+    unsigned executions = 0;
+};
+
+struct KeepSprintPostPayload {
+    KeepSprintPostInput input{};
+    KeepSprintPostDecision decision{};
+    unsigned executions = 0;
+};
+
+struct KeepSprintUpdatePayload {
+    KeepSprintUpdateInput input{};
+    KeepSprintUpdateDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -145,6 +164,9 @@ struct ExecutionFrame {
     std::optional<SafeWalkTickPayload> safe_walk{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
+    std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
+    std::optional<KeepSprintPostPayload> keep_sprint_post{};
+    std::optional<KeepSprintUpdatePayload> keep_sprint_update{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -634,6 +656,56 @@ public:
         return false;
     }
 
+    // R202: source-grounded Keep Sprint movement category 1,
+    // native event slots 14/15/17 all with zero signed priority.
+    // Register the three-phase offline state machine atomically.
+    bool bind_keep_sprint(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Keep Sprint" ||
+            definitions_[id].category != 1) return false;
+        bool pre = false, post = false, update = false;
+        for (const auto& sub : definitions_[id].subscriptions) {
+            if (sub.event == kKeepSprintAttackEvent && sub.priority == 0) pre = true;
+            if (sub.event == kKeepSprintPostEvent && sub.priority == 0) post = true;
+            if (sub.event == kKeepSprintUpdateEvent && sub.priority == 0) update = true;
+        }
+        if (!pre || !post || !update ||
+            callbacks_[id][kKeepSprintAttackEvent] ||
+            callbacks_[id][kKeepSprintPostEvent] ||
+            callbacks_[id][kKeepSprintUpdateEvent]) return false;
+        const bool first = bind(id, kKeepSprintAttackEvent,
+            [this](const Delivery&, ExecutionFrame& f) {
+                if (!f.keep_sprint_attack) return;
+                auto& payload = *f.keep_sprint_attack;
+                ++payload.executions;
+                payload.decision = keep_sprint_.on_attack(payload.input);
+            });
+        const bool second = bind(id, kKeepSprintPostEvent,
+            [this](const Delivery&, ExecutionFrame& f) {
+                if (!f.keep_sprint_post) return;
+                auto& payload = *f.keep_sprint_post;
+                ++payload.executions;
+                payload.decision = keep_sprint_.on_attack_post(payload.input);
+            });
+        const bool third = bind(id, kKeepSprintUpdateEvent,
+            [this](const Delivery&, ExecutionFrame& f) {
+                if (!f.keep_sprint_update) return;
+                auto& payload = *f.keep_sprint_update;
+                ++payload.executions;
+                payload.decision = keep_sprint_.on_player_update(payload.input);
+            });
+        if (!first || !second || !third)
+            throw std::logic_error("validated Keep Sprint event triple failed");
+        return true;
+    }
+
+    bool bind_keep_sprint_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Keep Sprint")
+                return bind_keep_sprint(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -698,6 +770,12 @@ public:
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
             return false;
+        if (frame.keep_sprint_attack && frame.event != kKeepSprintAttackEvent)
+            return false;
+        if (frame.keep_sprint_post && frame.event != kKeepSprintPostEvent)
+            return false;
+        if (frame.keep_sprint_update && frame.event != kKeepSprintUpdateEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -716,13 +794,26 @@ public:
             static_cast<unsigned>(frame.fast_accel.has_value()) +
             static_cast<unsigned>(frame.safe_walk.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
-            static_cast<unsigned>(frame.timer_toggle.has_value());
+            static_cast<unsigned>(frame.timer_toggle.has_value()) +
+            static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
+            static_cast<unsigned>(frame.keep_sprint_post.has_value()) +
+            static_cast<unsigned>(frame.keep_sprint_update.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
+        // Event14 may simultaneously carry No Hit Delay, Item Use Fix
+        // and Keep Sprint attack proposals. Each typed payload is validated
+        // against event14 above; no other event payload is admitted.
         const bool combined_mouse_click =
-            typed_count == 2 && frame.event == kItemUseFixBeforeEvent &&
-            frame.no_hit_delay && frame.item_use_fix;
+            typed_count >= 2 && typed_count <= 3 &&
+            frame.event == kItemUseFixBeforeEvent &&
+            (frame.no_hit_delay || frame.item_use_fix || frame.keep_sprint_attack);
+        const bool combined_attack_post =
+            typed_count == 2 && frame.event == kKeepSprintPostEvent &&
+            frame.item_use_fix && frame.keep_sprint_post;
+        const bool combined_player_update =
+            typed_count == 2 && frame.event == kKeepSprintUpdateEvent &&
+            frame.jump_delay && frame.keep_sprint_update;
         const bool combined_outgoing_packet =
             typed_count == 2 && frame.event == kOutgoingPacketEvent &&
             frame.ping_fix && frame.no_item_release;
@@ -730,6 +821,7 @@ public:
             typed_count == 2 && frame.event == kAntiDebuffEvent &&
             frame.no_use_delay && frame.anti_debuff;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
+            !combined_attack_post && !combined_player_update &&
             !combined_outgoing_packet && !combined_late_tick)
             return false;
         if (combined_outgoing_packet) {
@@ -813,6 +905,18 @@ public:
             frame.timer_toggle->decision = {};
             frame.timer_toggle->executions = 0;
         }
+        if (frame.keep_sprint_attack) {
+            frame.keep_sprint_attack->decision = {};
+            frame.keep_sprint_attack->executions = 0;
+        }
+        if (frame.keep_sprint_post) {
+            frame.keep_sprint_post->decision = {};
+            frame.keep_sprint_post->executions = 0;
+        }
+        if (frame.keep_sprint_update) {
+            frame.keep_sprint_update->decision = {};
+            frame.keep_sprint_update->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -835,6 +939,7 @@ public:
     void reset_no_use_delay_world_state() noexcept { no_use_delay_.reset(); }
     void reset_item_use_fix_world_state() noexcept { item_use_fix_.reset(); }
     void reset_no_item_release_world_state() noexcept { no_item_release_.reset(); }
+    void reset_keep_sprint_world_state() noexcept { keep_sprint_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -846,6 +951,7 @@ public:
         no_use_delay_.reset();
         item_use_fix_.reset();
         no_item_release_.reset();
+        keep_sprint_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -872,6 +978,7 @@ private:
     FastAccelController fast_accel_;
     SafeWalkController safe_walk_;
     TimerController timer_;
+    KeepSprintController keep_sprint_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
