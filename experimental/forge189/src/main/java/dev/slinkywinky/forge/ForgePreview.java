@@ -12,6 +12,8 @@ import net.minecraft.world.WorldType;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.Item;
+import net.minecraft.init.Items;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.item.ItemAxe;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSword;
@@ -36,6 +38,9 @@ public final class ForgePreview {
     private GameHost host;
     private SprintObservationProbe sprintProbe;
     private OwnedModuleActions moduleActions;
+    private static volatile ForgePreview r214Active;
+    private long r214HookAdmitted, r214HookWrites, r214HookFirstMs, r214LastSampleMs;
+    private boolean r214InputFixtureArmed, r214ReceiptEmitted;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -69,11 +74,13 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
+    private static final boolean R214_LOCAL_NO_SLOW_TEST =
+        Boolean.getBoolean("slinkywinky.r214LocalNoSlowAcceptance");
     private static final boolean R213_LOCAL_ACTION_ACCEPTANCE =
         Boolean.getBoolean("slinkywinky.r213LocalActionAcceptance");
     private static final boolean R212_ACTION_TEST =
         Boolean.getBoolean("slinkywinky.r212ActionTest") ||
-        R213_LOCAL_ACTION_ACCEPTANCE;
+        R213_LOCAL_ACTION_ACCEPTANCE || R214_LOCAL_NO_SLOW_TEST;
     // Test-only: create a local world only in a named TEMP game directory.
     private static final boolean R208_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r208LocalWorldTest") ||
@@ -100,12 +107,17 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
             final String tempDir = System.getProperty("java.io.tmpdir").replace('\\','/');
-            final String prefix=R213_LOCAL_ACTION_ACCEPTANCE ?
+            final String prefix=R214_LOCAL_NO_SLOW_TEST ?
+                "/slinkywinky-r214-independent-forge-" :
+                R213_LOCAL_ACTION_ACCEPTANCE ?
                 "/slinkywinky-r213-independent-forge-" :
                 "/slinkywinky-r212-independent-forge-";
-            final String username=R213_LOCAL_ACTION_ACCEPTANCE ?
+            final String username=R214_LOCAL_NO_SLOW_TEST ?
+                "R214Offline" : R213_LOCAL_ACTION_ACCEPTANCE ?
                 "R213Offline" : "R212Offline";
             if (!SPRINT_OBSERVATION || R208_LOCAL_WORLD_TEST ||
+                (R214_LOCAL_NO_SLOW_TEST &&
+                 !Boolean.getBoolean("slinkywinky.r214NoSlowAgent")) ||
                 !gameDir.startsWith(tempDir) ||
                 !gameDir.contains(prefix) ||
                 mc.getSession() == null ||
@@ -114,9 +126,12 @@ public final class ForgePreview {
                     "R212 game actions require a named TEMP-only offline test");
             }
             System.out.println("[SlinkyWinkyPreview] " +
-                (R213_LOCAL_ACTION_ACCEPTANCE ?
+                (R214_LOCAL_NO_SLOW_TEST ?
+                    "R214_ACTION_ISOLATION_GATE_PASS" :
+                    R213_LOCAL_ACTION_ACCEPTANCE ?
                     "R213_ACTION_ISOLATION_GATE_PASS" :
                     "R212_ACTION_ISOLATION_GATE_PASS"));
+            if(R214_LOCAL_NO_SLOW_TEST) r214Active=this;
         }
         if (R208_LOCAL_WORLD_TEST) {
             final Minecraft mc = Minecraft.getMinecraft();
@@ -161,6 +176,15 @@ public final class ForgePreview {
 
     private void stop() {
         enabled=false;
+        if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
+            r214Active=null;
+        if(R214_LOCAL_NO_SLOW_TEST && r214InputFixtureArmed) {
+            try {
+                Minecraft mc=Minecraft.getMinecraft();
+                KeyBinding.setKeyBindState(
+                    mc.gameSettings.keyBindForward.getKeyCode(),false);
+            } finally {r214InputFixtureArmed=false;}
+        }
         try {
             // Restore only still-owned local movement fields before closing
             // the session. If the player has gone, stale objects are never written.
@@ -193,6 +217,9 @@ public final class ForgePreview {
                 sprintProbe.setModuleEnabled(SprintObservationProbe.NO_JUMP_DELAY,true);
                 sprintProbe.setModuleEnabled(SprintObservationProbe.NO_SLOW,true);
                 sprintProbe.setNoSlowSettings(1.0f,1.0f,1.0f);
+                if(R214_LOCAL_NO_SLOW_TEST)
+                    sprintProbe.setModuleEnabled(
+                        SprintObservationProbe.NO_JUMP_DELAY,false);
             }
             enabled=true;
             observations=0;
@@ -228,17 +255,20 @@ public final class ForgePreview {
             sampleReadOnlySprint(mc,absent);
             System.out.println("[SlinkyWinkyPreview] R209_WORLD_ABSENCE_OBSERVED");
         }
-        if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE) return;
+        if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE &&
+            !R214_LOCAL_NO_SLOW_TEST) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R213_LOCAL_ACTION_ACCEPTANCE ? "R213_LOCAL_WORLD_REQUESTED" :
+                (R214_LOCAL_NO_SLOW_TEST ? "R214_LOCAL_WORLD_REQUESTED" :
+                    R213_LOCAL_ACTION_ACCEPTANCE ? "R213_LOCAL_WORLD_REQUESTED" :
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R213_LOCAL_ACTION_ACCEPTANCE ?
+            final String worldName = R214_LOCAL_NO_SLOW_TEST ?
+                "R214-local-only" : R213_LOCAL_ACTION_ACCEPTANCE ?
                 "R213-local-only" :
                 R209_PLAYER_TICK_TEST ? "R209-local-only" : "R208-local-only";
             mc.launchIntegratedServer(worldName, "Isolated module diagnostic",
@@ -253,7 +283,117 @@ public final class ForgePreview {
                     (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
                                             "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
-            if (!enabled) startPreview(); // R213 is explicitly gated action test
+            if (!enabled) startPreview(); // explicitly gated local action tests
+            if(R214_LOCAL_NO_SLOW_TEST && enabled)
+                armR214LocalInputFixture(mc);
+        }
+    }
+
+    // R214 only: simulated physical forward key and local bow item use in
+    // a newly created TEMP singleplayer world. Not a real-account control.
+    private void armR214LocalInputFixture(Minecraft mc) {
+        if(r214ReceiptEmitted) return;
+        if(!r214InputFixtureArmed){
+            mc.thePlayer.inventory.currentItem=0;
+            mc.thePlayer.inventory.setInventorySlotContents(
+                0,new ItemStack(Items.bow));
+            KeyBinding.setKeyBindState(
+                mc.gameSettings.keyBindForward.getKeyCode(),true);
+            r214InputFixtureArmed=true;
+            System.out.println("[SlinkyWinkyPreview] R214_LOCAL_INPUT_FIXTURE_ARMED");
+        }
+        ItemStack bow=mc.thePlayer.getHeldItem();
+        if(bow!=null && bow.getItem()==Items.bow &&
+           !mc.thePlayer.isUsingItem())
+            mc.thePlayer.setItemInUse(bow,bow.getMaxItemUseDuration());
+    }
+
+    private long nextR214MonotonicMs() {
+        long now=System.nanoTime()/1000000L;
+        if(now<=r214LastSampleMs) now=r214LastSampleMs+1;
+        r214LastSampleMs=now;
+        return now;
+    }
+
+    /** Called by EXACTLY ONE R214 ASM insertion after the two vanilla
+     * 0.2f movement field stores in EntityPlayerSP.onLivingUpdate.
+     * Cannot be called from another user's normal game installation.
+     */
+    static void afterR214VanillaSlowdown(EntityPlayerSP player) {
+        ForgePreview host=r214Active;
+        if(host!=null) host.acceptR214PreConsume(player);
+    }
+
+    private void acceptR214PreConsume(EntityPlayerSP player) {
+        if(!R214_LOCAL_NO_SLOW_TEST || !enabled || sprintProbe==null ||
+           moduleActions==null || r214ReceiptEmitted) return;
+        final Minecraft mc=Minecraft.getMinecraft();
+        if(player!=mc.thePlayer || mc.theWorld==null || !mc.theWorld.isRemote ||
+           !mc.isSingleplayer() || mc.getSession()==null ||
+           !"R214Offline".equals(mc.getSession().getUsername()) ||
+           !mc.mcDataDir.getAbsolutePath().replace('\\','/').contains(
+               "/slinkywinky-r214-independent-forge-")) return;
+        final ItemStack held=player.getHeldItem();
+        if(!player.isUsingItem() || held==null) return;
+        final float beforeForward=player.movementInput.moveForward;
+        final float beforeStrafe=player.movementInput.moveStrafe;
+        if(beforeForward==0 && beforeStrafe==0) return;
+        if(sprintWorld!=mc.theWorld || sprintPlayer!=player) {
+            sprintWorld=mc.theWorld;
+            sprintPlayer=player;
+            ++sprintGeneration;
+        }
+        try {
+            final ForgeModuleActionPort port=new ForgeModuleActionPort(mc);
+            final int item=Item.getIdFromItem(held.getItem());
+            final SprintObservationProbe.ModuleDecision proposed =
+                sprintProbe.observeModules(
+                    new long[]{nextR214MonotonicMs(),sprintGeneration},
+                    new int[]{3,mc.currentScreen!=null?1:0,
+                        player.isSprinting()?1:0,1,0,0,0,0},
+                    new double[]{player.posX,player.posY,player.posZ,0,0,0},
+                    new float[]{player.rotationYaw,player.rotationPitch},
+                    new float[]{beforeForward,beforeStrafe,
+                                player.capabilities.getWalkSpeed()},
+                    new int[]{1,Math.max(0,port.readJumpTicks()),1,1,item},
+                    new float[]{1,1,1});
+            if(!proposed.sprint.admitted || !proposed.sprint.worldReady ||
+               !proposed.noSlowEvaluated || !proposed.replaceInput)
+                throw new IllegalStateException("R214 native No Slow callback refused");
+            final boolean active=sprintProbe.moduleState(
+                SprintObservationProbe.NO_SLOW).activeInWorld;
+            final OwnedModuleActions.Result applied=moduleActions.apply(
+                new OwnedModuleActions.Input(
+                    true,true,sprintGeneration,active,proposed.replaceInput,
+                    proposed.proposedForward,proposed.proposedStrafe,
+                    false,false,0,true /* ASM verified precise phase */),port);
+            if(!applied.admitted || !applied.noSlowWritten ||
+               applied.noSlowBlockedByPhase)
+                throw new IllegalStateException("R214 owned No Slow write blocked");
+            ++r214HookAdmitted;
+            if(Float.compare(port.readForward(),proposed.proposedForward)==0 &&
+               Float.compare(port.readStrafe(),proposed.proposedStrafe)==0)
+                ++r214HookWrites;
+            if(r214HookFirstMs==0) r214HookFirstMs=System.currentTimeMillis();
+            if(r214HookWrites>=10 && !r214ReceiptEmitted) {
+                r214ReceiptEmitted=true;
+                KeyBinding.setKeyBindState(
+                    mc.gameSettings.keyBindForward.getKeyCode(),false);
+                r214InputFixtureArmed=false;
+                System.out.println("[SlinkyWinkyPreview] " +
+                    "R214_IN_WORLD_NO_SLOW_PRECONSUME_PASS " +
+                    "callbacks="+r214HookAdmitted+
+                    " verifiedFieldWrites="+r214HookWrites+
+                    " beforeForward="+beforeForward+
+                    " afterForward="+proposed.proposedForward+
+                    " itemId="+item+
+                    " elapsedMs="+(System.currentTimeMillis()-r214HookFirstMs));
+            }
+        }catch(RuntimeException | LinkageError failure){
+            System.err.println("[SlinkyWinkyPreview] R214_NO_SLOW_ACTION_FAIL "+
+                failure);
+            stop();
+            throw new IllegalStateException("R214 local No Slow acceptance failed",failure);
         }
     }
 
@@ -422,7 +562,8 @@ public final class ForgePreview {
             using?1:0,held!=null?1:0,itemId};
         final SprintObservationProbe.ModuleDecision decision =
             sprintProbe.observeModules(
-                new long[]{frame.monotonicMs,sprintGeneration},flags,
+                new long[]{R214_LOCAL_NO_SLOW_TEST ?
+                    nextR214MonotonicMs() : frame.monotonicMs,sprintGeneration},flags,
                 new double[]{frame.eyeX,frame.eyeY,frame.eyeZ,0,0,0},
                 new float[]{frame.yaw,frame.pitch},movement,context,
                 new float[]{1,1,1});
