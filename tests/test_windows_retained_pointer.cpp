@@ -128,7 +128,8 @@ struct Context {
 struct State {
     GLint viewport[4]{},scissorBox[4]{},mode=0,serverDepth=0,clientDepth=0;
     GLint modelDepth=0,projectionDepth=0,textureDepth=0;
-    GLint blendSrc=0,blendDst=0;
+    GLint blendSrc=0,blendDst=0,shadeModel=0;
+    GLfloat lineWidth=0.0f;
     GLboolean depth=FALSE,blend=FALSE,texture=FALSE,scissor=FALSE;
     GLboolean cull=FALSE,lighting=FALSE,alpha=FALSE,fog=FALSE;
     GLdouble model[16]{},projection[16]{},textureMatrix[16]{};
@@ -146,6 +147,8 @@ State snapshot() {
     glGetIntegerv(GL_TEXTURE_STACK_DEPTH,&s.textureDepth);
     glGetIntegerv(GL_BLEND_SRC,&s.blendSrc);
     glGetIntegerv(GL_BLEND_DST,&s.blendDst);
+    glGetIntegerv(GL_SHADE_MODEL,&s.shadeModel);
+    glGetFloatv(GL_LINE_WIDTH,&s.lineWidth);
     s.depth=glIsEnabled(GL_DEPTH_TEST);
     s.blend=glIsEnabled(GL_BLEND);
     s.texture=glIsEnabled(GL_TEXTURE_2D);
@@ -173,6 +176,8 @@ void same(const State& a,const State& b) {
     REQUIRE(a.projectionDepth==b.projectionDepth);
     REQUIRE(a.textureDepth==b.textureDepth);
     REQUIRE(a.blendSrc==b.blendSrc && a.blendDst==b.blendDst);
+    REQUIRE(a.shadeModel==b.shadeModel);
+    REQUIRE(std::fabs(a.lineWidth-b.lineWidth)<0.0001f);
     REQUIRE(a.depth==b.depth && a.blend==b.blend &&
             a.texture==b.texture && a.scissor==b.scissor);
     REQUIRE(a.cull==b.cull && a.lighting==b.lighting &&
@@ -1651,6 +1656,10 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
             popup->dropdown_preview->widget_index==accent);
     REQUIRE(preview.fixture_color_popup_rgb(
         ctx.gl,ctx.dc,676,630)==0x8B7CF6u);
+    // R203: opt-in actual GL_BACK readback of this own, disposable WGL
+    // context, never any desktop or original Minecraft game window.
+    if(const char* capture=std::getenv("SLINKYWINKY_R203_COLOR_MODAL_PPM"))
+        REQUIRE(save_gl_framebuffer_ppm(capture));
     REQUIRE(!preview.apply(MenuNavAction::NextTab));
     REQUIRE(!preview.fixture_navigation().apply(MenuNavAction::NextTab));
     REQUIRE(preview.tab()==MenuTab::Visual);
@@ -1696,6 +1705,18 @@ void verify_r200_native_color_popup(Context& ctx,const State& expected) {
     REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
     REQUIRE(preview.fixture_color_popup_rgb(
         ctx.gl,ctx.dc,676,630)!=0x8B7CF6u);
+    if(const char* capture=std::getenv("SLINKYWINKY_R203_HSL_CHANGED_PPM"))
+        REQUIRE(save_gl_framebuffer_ppm(capture));
+    // R203: explicitly adversarial GL state before painting the source
+    // six-sector gradient and outlined color knobs. The renderer must
+    // leave caller shading and line width untouched after draw.
+    glShadeModel(GL_FLAT);
+    glLineWidth(3.0f);
+    const State adversarial=snapshot();
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+    same(adversarial,snapshot());
+    glShadeModel(expected.shadeModel);
+    glLineWidth(expected.lineWidth);
     const auto black=xy(
         modal->recent[0].x+modal->recent[0].width*0.5f,
         modal->recent[0].y+modal->recent[0].height*0.5f);

@@ -15,6 +15,10 @@ int main() {
     const auto dialog=menu_color_modal_geometry(420.0f,380.0f);
     CHECK(dialog.has_value());
     CHECK(dialog->outer.height==294.0f);
+    // R203 measured native candidate layout constants: 15px HSL
+    // rows and 25px recent colors, no synthetic footer.
+    for(const auto& h:dialog->hsl)CHECK(h.height==15.0f);
+    for(const auto& h:dialog->recent)CHECK(h.height==25.0f);
     const auto center=[](const MenuColorModalRect& r) {
         return std::array<float,2>{r.x+r.width*0.5f,
                                    r.y+r.height*0.5f};
