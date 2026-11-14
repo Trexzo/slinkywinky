@@ -22,6 +22,7 @@ import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
@@ -44,7 +45,7 @@ public final class ForgePreview {
     private boolean r214InputFixtureArmed, r214ReceiptEmitted;
     private MovementInput r214OriginalInput;
     private EntityPlayerSP r214FixturePlayer;
-    private long r214DiagnosticClientTicks;
+    private long r214DiagnosticClientTicks, r214PreLivingItemUseRequests;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -447,6 +448,32 @@ public final class ForgePreview {
             stop();
             throw new IllegalStateException("R214 local No Slow acceptance failed",failure);
         }
+    }
+
+    // Forge LivingUpdateEvent is BEFORE player onLivingUpdate, so it is
+    // unsuitable for applying No Slow. It IS valid for the isolated R214
+    // fixture to make the player use a local bow immediately before the
+    // vanilla method refreshes input and applies its 0.2f slowdown.
+    @SubscribeEvent public void onR214PreLivingUpdate(
+            LivingEvent.LivingUpdateEvent event) {
+        if(!R214_LOCAL_NO_SLOW_TEST || !enabled ||
+           !r214InputFixtureArmed || r214ReceiptEmitted)
+            return;
+        Minecraft mc=Minecraft.getMinecraft();
+        if(mc.theWorld==null || mc.thePlayer==null ||
+           event.entityLiving!=mc.thePlayer || !mc.theWorld.isRemote ||
+           !mc.isSingleplayer()) return;
+        ItemStack bow=mc.thePlayer.getHeldItem();
+        if(bow==null || bow.getItem()!=Items.bow)
+            throw new IllegalStateException("R214 local item-use fixture lost bow");
+        mc.thePlayer.setItemInUse(bow,bow.getMaxItemUseDuration());
+        ++r214PreLivingItemUseRequests;
+        if(r214PreLivingItemUseRequests==1 ||
+           r214PreLivingItemUseRequests==20)
+            System.out.println("[SlinkyWinkyPreview] " +
+                "R214_PRE_LIVING_ITEM_USE_FIXTURE " +
+                "calls="+r214PreLivingItemUseRequests+
+                " usingNow="+mc.thePlayer.isUsingItem());
     }
 
     // Render ticks can run above the fixed 20 TPS simulation cadence.
