@@ -14,6 +14,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.item.Item;
 import net.minecraft.init.Items;
 import net.minecraft.util.MovementInput;
+import net.minecraft.util.MovementInputFromOptions;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.item.ItemAxe;
 import net.minecraft.item.ItemStack;
@@ -80,8 +81,11 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
+    private static final boolean R215_VANILLA_INPUT_TEST =
+        Boolean.getBoolean("slinkywinky.r215VanillaInputTest");
     private static final boolean R214_LOCAL_NO_SLOW_TEST =
-        Boolean.getBoolean("slinkywinky.r214LocalNoSlowAcceptance");
+        Boolean.getBoolean("slinkywinky.r214LocalNoSlowAcceptance") ||
+        R215_VANILLA_INPUT_TEST;
     private static final boolean R213_LOCAL_ACTION_ACCEPTANCE =
         Boolean.getBoolean("slinkywinky.r213LocalActionAcceptance");
     private static final boolean R212_ACTION_TEST =
@@ -113,12 +117,15 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String gameDir = mc.mcDataDir.getAbsolutePath().replace('\\','/');
             final String tempDir = System.getProperty("java.io.tmpdir").replace('\\','/');
-            final String prefix=R214_LOCAL_NO_SLOW_TEST ?
+            final String prefix=R215_VANILLA_INPUT_TEST ?
+                "/slinkywinky-r215-independent-forge-" :
+                R214_LOCAL_NO_SLOW_TEST ?
                 "/slinkywinky-r214-independent-forge-" :
                 R213_LOCAL_ACTION_ACCEPTANCE ?
                 "/slinkywinky-r213-independent-forge-" :
                 "/slinkywinky-r212-independent-forge-";
-            final String username=R214_LOCAL_NO_SLOW_TEST ?
+            final String username=R215_VANILLA_INPUT_TEST ?
+                "R215Offline" : R214_LOCAL_NO_SLOW_TEST ?
                 "R214Offline" : R213_LOCAL_ACTION_ACCEPTANCE ?
                 "R213Offline" : "R212Offline";
             if (!SPRINT_OBSERVATION || R208_LOCAL_WORLD_TEST ||
@@ -132,7 +139,9 @@ public final class ForgePreview {
                     "R212 game actions require a named TEMP-only offline test");
             }
             System.out.println("[SlinkyWinkyPreview] " +
-                (R214_LOCAL_NO_SLOW_TEST ?
+                (R215_VANILLA_INPUT_TEST ?
+                    "R215_VANILLA_INPUT_ISOLATION_GATE_PASS" :
+                    R214_LOCAL_NO_SLOW_TEST ?
                     "R214_ACTION_ISOLATION_GATE_PASS" :
                     R213_LOCAL_ACTION_ACCEPTANCE ?
                     "R213_ACTION_ISOLATION_GATE_PASS" :
@@ -205,10 +214,14 @@ public final class ForgePreview {
         } finally {
             if(R214_LOCAL_NO_SLOW_TEST && r214InputFixtureArmed) {
                 Minecraft mc=Minecraft.getMinecraft();
-                if(r214FixturePlayer!=null &&
+                if(R215_VANILLA_INPUT_TEST) {
+                    KeyBinding.setKeyBindState(
+                        mc.gameSettings.keyBindForward.getKeyCode(),false);
+                } else if(r214FixturePlayer!=null &&
                    mc.thePlayer==r214FixturePlayer &&
-                   mc.thePlayer.movementInput instanceof R214TestMovementInput)
+                   mc.thePlayer.movementInput instanceof R214TestMovementInput) {
                     mc.thePlayer.movementInput=r214OriginalInput;
+                }
                 r214InputFixtureArmed=false;
                 r214OriginalInput=null;
                 r214FixturePlayer=null;
@@ -279,12 +292,14 @@ public final class ForgePreview {
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R214_LOCAL_NO_SLOW_TEST ? "R214_LOCAL_WORLD_REQUESTED" :
+                (R215_VANILLA_INPUT_TEST ? "R215_LOCAL_WORLD_REQUESTED" :
+                    R214_LOCAL_NO_SLOW_TEST ? "R214_LOCAL_WORLD_REQUESTED" :
                     R213_LOCAL_ACTION_ACCEPTANCE ? "R213_LOCAL_WORLD_REQUESTED" :
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R214_LOCAL_NO_SLOW_TEST ?
+            final String worldName = R215_VANILLA_INPUT_TEST ?
+                "R215-local-only" : R214_LOCAL_NO_SLOW_TEST ?
                 "R214-local-only" : R213_LOCAL_ACTION_ACCEPTANCE ?
                 "R213-local-only" :
                 R209_PLAYER_TICK_TEST ? "R209-local-only" : "R208-local-only";
@@ -321,7 +336,9 @@ public final class ForgePreview {
                 if(r214ReceiptEmitted) {
                     stop();
                     System.out.println("[SlinkyWinkyPreview] " +
-                        "R214_INPUT_FIXTURE_AND_ACTION_CLEANUP_PASS");
+                        (R215_VANILLA_INPUT_TEST ?
+                            "R215_VANILLA_INPUT_CLEANUP_PASS" :
+                            "R214_INPUT_FIXTURE_AND_ACTION_CLEANUP_PASS"));
                 } else {
                     armR214LocalInputFixture(mc);
                 }
@@ -347,17 +364,31 @@ public final class ForgePreview {
         if(!r214InputFixtureArmed){
             r214FixturePlayer=mc.thePlayer;
             r214OriginalInput=mc.thePlayer.movementInput;
-            mc.thePlayer.movementInput=new R214TestMovementInput();
+            if(R215_VANILLA_INPUT_TEST) {
+                if(!(mc.thePlayer.movementInput instanceof MovementInputFromOptions))
+                    throw new IllegalStateException(
+                        "R215 requires original Minecraft MovementInputFromOptions");
+                // Local dummy-profile key-binding stimulus, NOT physical input.
+                KeyBinding.setKeyBindState(
+                    mc.gameSettings.keyBindForward.getKeyCode(),true);
+            } else {
+                mc.thePlayer.movementInput=new R214TestMovementInput();
+            }
             mc.thePlayer.inventory.currentItem=0;
             mc.thePlayer.inventory.setInventorySlotContents(
                 0,new ItemStack(Items.bow));
             r214InputFixtureArmed=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                "R214_LOCAL_INPUT_FIXTURE_ARMED deterministic_moveForward=1.0");
+                (R215_VANILLA_INPUT_TEST ?
+                    "R215_REAL_MOVEMENT_INPUT_ATTACHED synthetic_binding=forward" :
+                    "R214_LOCAL_INPUT_FIXTURE_ARMED deterministic_moveForward=1.0"));
         }
         if(mc.thePlayer!=r214FixturePlayer ||
-           !(mc.thePlayer.movementInput instanceof R214TestMovementInput))
-            throw new IllegalStateException("R214 local fixture player replaced");
+           (R215_VANILLA_INPUT_TEST ?
+            mc.thePlayer.movementInput!=r214OriginalInput ||
+            !(mc.thePlayer.movementInput instanceof MovementInputFromOptions) :
+            !(mc.thePlayer.movementInput instanceof R214TestMovementInput)))
+            throw new IllegalStateException("R214/R215 local fixture player replaced");
         ItemStack bow=mc.thePlayer.getHeldItem();
         if(bow!=null && bow.getItem()==Items.bow &&
            !mc.thePlayer.isUsingItem())
@@ -386,12 +417,21 @@ public final class ForgePreview {
         final Minecraft mc=Minecraft.getMinecraft();
         if(player!=mc.thePlayer || mc.theWorld==null || !mc.theWorld.isRemote ||
            !mc.isSingleplayer() || mc.getSession()==null ||
-           !"R214Offline".equals(mc.getSession().getUsername()) ||
+           !(R215_VANILLA_INPUT_TEST ?
+               "R215Offline" : "R214Offline").equals(
+                   mc.getSession().getUsername()) ||
            !mc.mcDataDir.getAbsolutePath().replace('\\','/').contains(
+               R215_VANILLA_INPUT_TEST ?
+               "/slinkywinky-r215-independent-forge-" :
                "/slinkywinky-r214-independent-forge-")) return;
         final ItemStack held=player.getHeldItem();
         if(!player.isUsingItem() || held==null) return;
         final float beforeForward=player.movementInput.moveForward;
+        if(R215_VANILLA_INPUT_TEST &&
+           (!(player.movementInput instanceof MovementInputFromOptions) ||
+            !mc.gameSettings.keyBindForward.isKeyDown()))
+            throw new IllegalStateException(
+                "R215 actual vanilla movement reader or local bound key unavailable");
         final float beforeStrafe=player.movementInput.moveStrafe;
         if(beforeForward==0 && beforeStrafe==0) return;
         if(sprintWorld!=mc.theWorld || sprintPlayer!=player) {
@@ -464,6 +504,13 @@ public final class ForgePreview {
                     // input and native owner after this player update.
                     System.out.println("[SlinkyWinkyPreview] " +
                         "R214_NO_SLOW_REENABLED_INPUT_0P2_TO_1P0_PASS samples=10");
+                    if(R215_VANILLA_INPUT_TEST)
+                        System.out.println("[SlinkyWinkyPreview] " +
+                            "R215_VANILLA_INPUT_THREE_PHASES_PASS " +
+                            "movementClass=MovementInputFromOptions " +
+                            "keySource=synthetic_local_binding " +
+                            "callbacks="+r214HookAdmitted+
+                            " writes="+r214HookWrites);
                     System.out.println("[SlinkyWinkyPreview] " +
                         "R214_IN_WORLD_NO_SLOW_PRECONSUME_PASS " +
                         "callbacks="+r214HookAdmitted+
@@ -500,6 +547,12 @@ public final class ForgePreview {
         if(bow==null || bow.getItem()!=Items.bow)
             throw new IllegalStateException("R214 local item-use fixture lost bow");
         mc.thePlayer.setItemInUse(bow,bow.getMaxItemUseDuration());
+        if(R215_VANILLA_INPUT_TEST) {
+            KeyBinding.setKeyBindState(
+                mc.gameSettings.keyBindForward.getKeyCode(),true);
+            if(!(mc.thePlayer.movementInput instanceof MovementInputFromOptions))
+                throw new IllegalStateException("R215 local vanilla input replaced");
+        }
         ++r214PreLivingItemUseRequests;
         if(r214PreLivingItemUseRequests==1 ||
            r214PreLivingItemUseRequests==20)
