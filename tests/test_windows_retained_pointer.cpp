@@ -1439,7 +1439,7 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
             ctx.gl,ctx.dc,676,630);
         REQUIRE(painted && painted->tab==MenuTab::Combat &&
                 painted->visible.front().catalog_index==0u);
-        const auto& initialBind=painted->bind_previews[0u];
+        const auto initialBind=painted->bind_previews[0u];
         const auto chips=menu_bind_chip_geometry(
             *painted,panel->logical_width(),panel->logical_height(),
             0u,0u,menu_bind_code_label(initialBind.code),false);
