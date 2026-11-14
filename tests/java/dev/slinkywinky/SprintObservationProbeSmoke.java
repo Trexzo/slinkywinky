@@ -85,6 +85,76 @@ public final class SprintObservationProbeSmoke {
             check(send(probe, 1005, 3, 3, false, true).admitted,
                   "owner thread did not recover");
         }
+        // R210: GUI-facing request -> JNI -> native owner state ->
+        // world-admitted callback -> module-state snapshot. This is the
+        // integration chain; no simulated GUI demo flag is involved.
+        try (final SprintObservationProbe control = new SprintObservationProbe()) {
+            SprintObservationProbe.ControlState initial = control.state();
+            check(initial.requestedEnabled && !initial.activeInWorld &&
+                  initial.worldGeneration == 0 && !initial.settingsOverride,
+                  "initial module state contract wrong");
+
+            control.setEnabled(false);
+            SprintObservationProbe.ControlState disabled = control.state();
+            check(!disabled.requestedEnabled && !disabled.activeInWorld,
+                  "disabling before a world was not retained");
+            SprintObservationProbe.Decision noOp =
+                send(control, 4000, 30, 3, false, true);
+            check(noOp.admitted && noOp.worldReady &&
+                  !noOp.proposedKeyPressed && !noOp.hasSprinting &&
+                  !noOp.hasSpeed, "disabled Sprint produced a gameplay proposal");
+            check(!control.state().activeInWorld && control.state().worldGeneration == 30,
+                  "disabled world registered an active module");
+
+            control.setEnabled(true);
+            check(control.state().activeInWorld,
+                  "module was not enabled in already-admitted world");
+            control.setSettings(false, false, false, false);
+            SprintObservationProbe.Decision noBackward =
+                send(control, 4001, 30, 3, false, true);
+            check(noBackward.admitted && noBackward.proposedKeyPressed &&
+                  !noBackward.hasSpeed && control.state().settingsOverride,
+                  "explicit settings did not suppress backward speed");
+            control.setSettings(false, false, true, false);
+            SprintObservationProbe.Decision yesBackward =
+                send(control, 4002, 30, 3, false, true);
+            check(yesBackward.admitted && yesBackward.hasSpeed &&
+                  Math.abs(yesBackward.proposedSpeed - 0.13f) < 0.00001f,
+                  "explicit backwards setting did not reach native policy");
+
+            final boolean[] foreignRejected = {false};
+            Thread other = new Thread(() -> {
+                try { control.setEnabled(false); }
+                catch (IllegalStateException expected) { foreignRejected[0] = true; }
+            });
+            other.start();
+            other.join();
+            check(foreignRejected[0] && control.state().requestedEnabled,
+                  "cross-thread control changed module state");
+
+            control.setEnabled(false);
+            noOp = send(control, 4003, 30, 3, false, true);
+            check(noOp.admitted && !noOp.hasSpeed && !noOp.proposedKeyPressed,
+                  "module continued dispatching after disable");
+            SprintObservationProbe.Decision absent =
+                send(control, 4004, 31, 0, false, false);
+            check(absent.admitted && !control.state().activeInWorld &&
+                  !control.state().requestedEnabled,
+                  "disabled choice was lost during disconnect");
+            control.setEnabled(true);
+            check(control.state().requestedEnabled && !control.state().activeInWorld,
+                  "no-world enable incorrectly activated an event subscription");
+            SprintObservationProbe.Decision returned =
+                send(control, 4005, 32, 3, false, true);
+            check(returned.admitted && returned.sessionTransition &&
+                  returned.hasSpeed && control.state().activeInWorld &&
+                  control.state().worldGeneration == 32,
+                  "world re-entry failed to preserve selection and settings");
+        }
+        System.out.println("R210_JAVA8_MODULE_CONTROL_INTEGRATION_PASS " +
+            "toggle=1 settings=1 state=1 world_transition=1 wrong_thread=1 " +
+            "gameplay_writes=0");
+
         System.out.println("R204_JAVA8_NATIVE_SPRINT_OBSERVATION_ROUNDTRIP_PASS " +
             "session=1 clock=1 wrong_thread=1 zero_game_actions=1");
     }
