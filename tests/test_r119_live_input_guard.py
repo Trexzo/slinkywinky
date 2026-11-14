@@ -90,6 +90,31 @@ class TestDormantOriginalKeyboardInput(unittest.TestCase):
         self.assertIn("router.event(", model)
         self.assertIn("invalidate_painted_input();", model)
 
+    def test_r197_recovered_text_and_bind_actions_remain_local_preview(self):
+        # The source hit kinds already existed, but R196's retained WGL
+        # dispatch default-rejected these controls. R197 must use the
+        # existing MenuState preview-only admissions, not gameplay APIs.
+        retained = (ROOT / "src" / "windows_retained_menu_preview.cpp").read_text(
+            encoding="utf-8"
+        )
+        for fragment in (
+            "case MenuHitKind::BindChip:",
+            "menu_.begin_bind_capture(hit->catalog_index)",
+            "case MenuHitKind::BindHold:",
+            "menu_.toggle_bind_hold(hit->catalog_index)",
+            "case MenuHitKind::RecoveredTextField:",
+            "menu_.focus_recovered_text_preview(",
+            "navigation_.focus_visible_row(hit->catalog_index)",
+        ):
+            self.assertIn(fragment, retained)
+        fixture = (ROOT / "tests" / "test_windows_retained_pointer.cpp").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("verify_r197_native_focus_receipts(context,before)", fixture)
+        self.assertIn("focused->focused_text_widget==textIndex", fixture)
+        self.assertIn("waiting->bind_capture_index==0u", fixture)
+        self.assertIn("fixture_pointer_event(", fixture)
+
     def test_source_pin_is_only_in_test_audit_and_existing_dormant_weaver(self):
         agent_file = ROOT / "loader" / "java" / "dev" / "slinkywinky" / "instrument" / "OriginalKeyboardBridgeWeaver.java"
         text = agent_file.read_text(encoding="utf-8")
