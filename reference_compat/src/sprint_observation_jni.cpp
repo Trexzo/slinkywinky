@@ -5,6 +5,7 @@
 #include <jni.h>
 #include <cstdint>
 #include <map>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -26,7 +27,7 @@ extern "C" JNIEXPORT jlong JNICALL
 Java_dev_slinkywinky_SprintObservationProbe_nativeCreate(JNIEnv* env, jclass) {
     try {
         std::lock_guard<std::mutex> lock(g_sessions_mutex);
-        if (g_next_id <= 0) {
+        if (g_next_id <= 0 || g_next_id == std::numeric_limits<jlong>::max()) {
             throw_java(env, "java/lang/IllegalStateException", "Sprint preview session IDs exhausted");
             return 0;
         }
