@@ -19,7 +19,7 @@ public final class R214NoSlowAgent {
         final String cwd = new File(System.getProperty("user.dir"))
             .getAbsolutePath().replace('\\','/');
         if (!cwd.startsWith(temp) ||
-            !cwd.matches(".*[/]slinkywinky-r214-independent-forge-[^/]+"))
+            !cwd.matches(".*[/]slinkywinky-r21[45]-independent-forge-[^/]+"))
             throw new IllegalStateException("R214 agent refuses non-TEMP Minecraft launch");
         if (instrument == null)
             throw new IllegalStateException("R214 Java instrumentation missing");
