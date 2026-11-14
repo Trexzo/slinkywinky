@@ -10,11 +10,14 @@ param(
  [switch]$Launch,
  [switch]$R208LocalWorldTest,
  [switch]$R209PlayerTickTest,
- [switch]$R213LocalActionAcceptance
+ [switch]$R213LocalActionAcceptance,
+ [switch]$R214LocalNoSlowAcceptance
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-$expectedJar=if($R213LocalActionAcceptance){
+$expectedJar=if($R214LocalNoSlowAcceptance){
+  '351aafe62c69c82d3fca500a92e7282655d4906a640d1c7072d135c2bc93e1df'
+}elseif($R213LocalActionAcceptance){
   '45cfc71bd182c05393f79b718e5a7c330cf23ad2bdb137df69586c9921774bd2'
 }elseif($R209PlayerTickTest){
   '27b7f8e707f90b3e4a5f5d56a7d7aa1e02aab55829c46fad494eb8b3771f8de2'
@@ -23,7 +26,7 @@ $expectedJar=if($R213LocalActionAcceptance){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -35,10 +38,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance){
+if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R213LocalActionAcceptance){
+  $prefix=if($R214LocalNoSlowAcceptance){
+    '/slinkywinky-r214-independent-forge-[^/]+$'
+  }elseif($R213LocalActionAcceptance){
     '/slinkywinky-r213-independent-forge-[^/]+$'
   }elseif($R209PlayerTickTest){
     '/slinkywinky-r209-independent-forge-[^/]+$'
@@ -167,7 +172,13 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R213LocalActionAcceptance){
+if($R214LocalNoSlowAcceptance){
+  # Agent comes from exact-hash-pinned JAR staged into fresh TEMP mods.
+  # Default Forge preview never carries this instrumentation flag.
+  $argsList=@("-javaagent:$staged",
+    '-Dslinkywinky.r214NoSlowAgent=true',
+    '-Dslinkywinky.r214LocalNoSlowAcceptance=true')+$argsList
+}elseif($R213LocalActionAcceptance){
   $argsList=@('-Dslinkywinky.r213LocalActionAcceptance=true')+$argsList
 }elseif($R209PlayerTickTest){
   $argsList=@('-Dslinkywinky.r209PlayerTickTest=true')+$argsList
@@ -181,6 +192,7 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
  "ISOLATED_WORLD_TEST=$([bool]($R208LocalWorldTest -or $R209PlayerTickTest))"
  "PLAYER_TICK_TEST=$([bool]$R209PlayerTickTest)"
  "R213_LOCAL_ACTION_ACCEPTANCE=$([bool]$R213LocalActionAcceptance)"
+ "R214_EXPLICIT_POST_SLOW_AGENT=$([bool]$R214LocalNoSlowAcceptance)"
  "MC_SHA256=$expectedVanilla"
  "LIBRARY_COUNT=$($libraryPaths.Count)"
  "NATIVE_ARCHIVES=$($nativePaths.Count)"
