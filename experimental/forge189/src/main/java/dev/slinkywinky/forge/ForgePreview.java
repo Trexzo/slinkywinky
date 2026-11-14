@@ -40,7 +40,9 @@ public final class ForgePreview {
     private long renderProbeFrames;
     private boolean r208WorldRequested, r208WorldReady, r208ObservationReceipt;
     private int r208MenuTicks;
-    private long r208WorldClientTicks, r208WorldRenderFrames, r208FirstWorldMs;
+    private long r208WorldClientTicks, r208WorldPlayerTicks, r208FirstWorldMs;
+    private long r209LastSampleMs, r209MinGapMs=Long.MAX_VALUE, r209MaxGapMs;
+    private boolean r209TickReceipt;
     private static final boolean RENDER_PROBE = Boolean.getBoolean("slinkywinky.renderProbe");
     // R204 opt-in only. This reports Sprint proposals, never applies them.
     private static final boolean SPRINT_OBSERVATION =
@@ -53,9 +55,15 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.sprint.allowBackwards");
     private static final boolean SPRINT_SIDE =
         Boolean.getBoolean("slinkywinky.sprint.allowSideways");
-    // Test-only: create a local singleplayer world in a brand-new TEMP gameDir.
+    // R209 moves only Sprint observation to Forge PlayerTickEvent.END.
+    // Forge 1.8.9 has no InputUpdateEvent; movementInput is sampled at
+    // this tick boundary, NOT misrepresented as original native event21.
+    private static final boolean R209_PLAYER_TICK_TEST =
+        Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
+    // Test-only: create a local world only in a named TEMP game directory.
     private static final boolean R208_LOCAL_WORLD_TEST =
-        Boolean.getBoolean("slinkywinky.r208LocalWorldTest");
+        Boolean.getBoolean("slinkywinky.r208LocalWorldTest") ||
+        R209_PLAYER_TICK_TEST;
     private final GameHost.Actions readonlyActions=new GameHost.Actions() {
         @Override public void apply(NativeEngine.Decision decision) {
             ++observations;
@@ -77,15 +85,21 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String home = mc.mcDataDir.getAbsolutePath().replace('\\', '/');
             final String temp = System.getProperty("java.io.tmpdir").replace('\\', '/');
+            final String instancePrefix = R209_PLAYER_TICK_TEST ?
+                "/slinkywinky-r209-independent-forge-" :
+                "/slinkywinky-r208-independent-forge-";
+            final String expectedUser =
+                R209_PLAYER_TICK_TEST ? "R209Offline" : "R208Offline";
             if (!SPRINT_OBSERVATION || !home.startsWith(temp) ||
-                !home.contains("/slinkywinky-r208-independent-forge-") ||
-                mc.getSession() == null ||
-                !"R208Offline".equals(mc.getSession().getUsername())) {
+                !home.contains(instancePrefix) || mc.getSession() == null ||
+                !expectedUser.equals(mc.getSession().getUsername())) {
                 throw new IllegalStateException(
                     "R208 local world test requires TEMP gameDir, dummy offline " +
                     "identity and the read-only Sprint observer");
             }
-            System.out.println("[SlinkyWinkyPreview] R208_ISOLATION_GATE_PASS");
+            System.out.println("[SlinkyWinkyPreview] " +
+                (R209_PLAYER_TICK_TEST ? "R209_ISOLATION_GATE_PASS" :
+                                        "R208_ISOLATION_GATE_PASS"));
         }
         // Diagnostic only: enable with -Dslinkywinky.startupProbe=true in an isolated
         // Forge 1.8.9 development JVM. It never issues game actions or packets.
@@ -146,24 +160,40 @@ public final class ForgePreview {
             else startPreview();
         }
 
-        if (!R208_LOCAL_WORLD_TEST) return;
         final Minecraft mc=Minecraft.getMinecraft();
+        if (enabled && sprintProbe!=null && mc.thePlayer==null &&
+            (sprintWorld!=null || sprintPlayer!=null)) {
+            // PlayerTickEvent does not fire after a disconnect. Admit one
+            // absent-player observation and retire the native session.
+            GameHost.Frame absent=new GameHost.Frame();
+            absent.monotonicMs=System.nanoTime()/1000000L;
+            absent.worldToken=mc.theWorld;
+            absent.playerToken=null;
+            sampleReadOnlySprint(mc,absent);
+            System.out.println("[SlinkyWinkyPreview] R209_WORLD_ABSENCE_OBSERVED");
+        }
+        if (!R208_LOCAL_WORLD_TEST) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
-            System.out.println("[SlinkyWinkyPreview] R208_LOCAL_WORLD_REQUESTED");
-            // Explicit opt-in creates a save only inside the isolated TEMP
-            // gameDir. Normal preview does not create worlds.
-            mc.launchIntegratedServer("R208-local-only", "R208 local diagnostic",
-                new WorldSettings(208L, WorldSettings.GameType.CREATIVE,
+            System.out.println("[SlinkyWinkyPreview] " +
+                (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
+                                        "R208_LOCAL_WORLD_REQUESTED"));
+            // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
+            final String worldName =
+                R209_PLAYER_TICK_TEST ? "R209-local-only" : "R208-local-only";
+            mc.launchIntegratedServer(worldName, "Isolated Sprint diagnostic",
+                new WorldSettings(209L, WorldSettings.GameType.CREATIVE,
                     false, false, WorldType.FLAT));
         }
         if (mc.theWorld!=null && mc.thePlayer!=null && mc.isSingleplayer()) {
             ++r208WorldClientTicks;
             if (!r208WorldReady) {
                 r208WorldReady=true;
-                System.out.println("[SlinkyWinkyPreview] R208_LOCAL_WORLD_PLAYER_READY_PASS");
+                System.out.println("[SlinkyWinkyPreview] " +
+                    (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
+                                            "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
             if (!enabled) startPreview(); // decision-only observer
         }
@@ -207,8 +237,8 @@ public final class ForgePreview {
             }
         }
         try {
-            host.tick(frame);
-            if(sprintProbe!=null) sampleReadOnlySprint(mc,frame);
+            host.tick(frame); // Existing render-only decision host stays unchanged.
+            // Sprint now samples the actual Forge PlayerTickEvent.END only.
         }
         catch(RuntimeException | LinkageError error) {
             try {stop();} catch(RuntimeException ignored) { /* native failure: no actions to release */ }
@@ -216,11 +246,41 @@ public final class ForgePreview {
         }
     }
 
+    @SubscribeEvent public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase!=TickEvent.Phase.END || !enabled || sprintProbe==null)
+            return;
+        final Minecraft mc=Minecraft.getMinecraft();
+        // The integrated server also emits PlayerTickEvent. Only the actual
+        // client-side EntityPlayerSP and a remote WorldClient are admitted.
+        if (mc.theWorld==null || mc.thePlayer==null ||
+            event.player!=mc.thePlayer || !mc.theWorld.isRemote) return;
+        GameHost.Frame frame=new GameHost.Frame();
+        frame.monotonicMs=System.nanoTime()/1000000L;
+        frame.worldToken=mc.theWorld;
+        frame.playerToken=mc.thePlayer;
+        frame.guiOpen=mc.currentScreen!=null;
+        frame.sprinting=mc.thePlayer.isSprinting();
+        Vec3 eye=mc.thePlayer.getPositionEyes(1.0F);
+        frame.eyeX=eye.xCoord;
+        frame.eyeY=eye.yCoord;
+        frame.eyeZ=eye.zCoord;
+        frame.yaw=mc.thePlayer.rotationYaw;
+        frame.pitch=mc.thePlayer.rotationPitch;
+        try {
+            sampleReadOnlySprint(mc,frame);
+        } catch (RuntimeException | LinkageError problem) {
+            try {stop();} catch (RuntimeException ignored) { }
+            status="Preview stopped after player-tick JNI failure";
+            if(R209_PLAYER_TICK_TEST)
+                System.err.println("[SlinkyWinkyPreview] R209_PLAYER_TICK_FAIL "+problem);
+        }
+    }
+
     /**
-     * R204 real Forge render-event observation only. Movement is sampled from
-     * player movement-input fields, with getWalkSpeed() as a diagnostic
-     * *baseline proxy*, NOT the original native event-21 MoveState.speed.
-     * This preview cannot establish precise original speed-event timing.
+     * Real Forge PlayerTickEvent.END sample; movementInput is observed after
+     * Minecraft's per-tick input update. There is no InputUpdateEvent
+     * in the pinned Forge 1.8.9 API. getWalkSpeed() remains an explicit
+     * diagnostic speed proxy, not the original event-21 MoveState.speed.
      */
     private void sampleReadOnlySprint(Minecraft mc, GameHost.Frame frame) {
         if(sprintWorld!=frame.worldToken || sprintPlayer!=frame.playerToken) {
@@ -237,7 +297,10 @@ public final class ForgePreview {
         final double[] coords={frame.eyeX,frame.eyeY,frame.eyeZ,
                                frame.targetX,frame.targetY,frame.targetZ};
         final float[] movement=playerReady
-            ? new float[]{mc.thePlayer.moveForward, mc.thePlayer.moveStrafing,
+            ? new float[]{mc.thePlayer.movementInput==null ? 0.0f :
+                              mc.thePlayer.movementInput.moveForward,
+                          mc.thePlayer.movementInput==null ? 0.0f :
+                              mc.thePlayer.movementInput.moveStrafe,
                           mc.thePlayer.capabilities.getWalkSpeed()}
             : new float[3];
         final SprintObservationProbe.Decision decision=sprintProbe.observe(
@@ -249,12 +312,34 @@ public final class ForgePreview {
             " speedProposal="+(decision.hasSpeed ? decision.proposedSpeed : "none");
         if (R208_LOCAL_WORLD_TEST && playerReady && mc.isSingleplayer()) {
             if (r208FirstWorldMs==0) r208FirstWorldMs=frame.monotonicMs;
-            ++r208WorldRenderFrames;
-            if (!r208ObservationReceipt && r208WorldRenderFrames>=32) {
+            ++r208WorldPlayerTicks;
+            final long gap=frame.monotonicMs-r209LastSampleMs;
+            if(r209LastSampleMs!=0 && gap>=0) {
+                r209MinGapMs=Math.min(r209MinGapMs,gap);
+                r209MaxGapMs=Math.max(r209MaxGapMs,gap);
+            }
+            r209LastSampleMs=frame.monotonicMs;
+            if (R209_PLAYER_TICK_TEST && !r209TickReceipt &&
+                r208WorldPlayerTicks>=32) {
+                r209TickReceipt=true;
+                System.out.println("[SlinkyWinkyPreview] " +
+                    "R209_PLAYER_TICK_SPRINT_JNI_PASS" +
+                    " playerTickSamples="+r208WorldPlayerTicks +
+                    " clientTicks="+r208WorldClientTicks +
+                    " elapsedMs="+(frame.monotonicMs-r208FirstWorldMs) +
+                    " minSampleGapMs="+r209MinGapMs +
+                    " maxSampleGapMs="+r209MaxGapMs +
+                    " inputForward="+movement[0] +
+                    " inputStrafe="+movement[1] +
+                    " proposedKeyPressed="+decision.proposedKeyPressed +
+                    " proposedSpeed="+decision.hasSpeed +
+                    " speedSource=getWalkSpeed_proxy");
+            } else if (!R209_PLAYER_TICK_TEST && !r208ObservationReceipt &&
+                       r208WorldPlayerTicks>=32) {
                 r208ObservationReceipt=true;
                 System.out.println("[SlinkyWinkyPreview] " +
                     "R208_IN_WORLD_SPRINT_JNI_OBSERVATION_PASS" +
-                    " renderSamples="+r208WorldRenderFrames +
+                    " playerTickSamples="+r208WorldPlayerTicks +
                     " clientTicks="+r208WorldClientTicks +
                     " elapsedMs="+(frame.monotonicMs-r208FirstWorldMs) +
                     " latestKeyProposal="+decision.proposedKeyPressed +
