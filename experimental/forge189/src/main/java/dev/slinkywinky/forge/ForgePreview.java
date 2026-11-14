@@ -131,7 +131,15 @@ public final class ForgePreview {
                     R213_LOCAL_ACTION_ACCEPTANCE ?
                     "R213_ACTION_ISOLATION_GATE_PASS" :
                     "R212_ACTION_ISOLATION_GATE_PASS"));
-            if(R214_LOCAL_NO_SLOW_TEST) r214Active=this;
+            if(R214_LOCAL_NO_SLOW_TEST) {
+                // The independent test JVM is unattended. Keep its
+                // integrated local server ticking even without window
+                // focus; this writes no original Minecraft setting.
+                mc.gameSettings.pauseOnLostFocus=false;
+                r214Active=this;
+                System.out.println("[SlinkyWinkyPreview] " +
+                    "R214_LOCAL_SERVER_UNFOCUSED_TICKING_ENABLED");
+            }
         }
         if (R208_LOCAL_WORLD_TEST) {
             final Minecraft mc = Minecraft.getMinecraft();
