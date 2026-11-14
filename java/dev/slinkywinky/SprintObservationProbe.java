@@ -61,9 +61,13 @@ public final class SprintObservationProbe implements AutoCloseable {
     public static final String MODULE_NAME = "Sprint";
     public static final String NO_JUMP_DELAY = "No Jump Delay";
     public static final String NO_SLOW = "No Slow";
-    public static final String[] CONTROLLED_MODULES = {
+    private static final String[] CONTROLLED_MODULES = {
         NO_JUMP_DELAY, NO_SLOW, MODULE_NAME
     };
+
+    public static String[] controlledModuleNames() {
+        return CONTROLLED_MODULES.clone();
+    }
 
     public static final class ControlState {
         public final boolean requestedEnabled, activeInWorld, settingsOverride;
