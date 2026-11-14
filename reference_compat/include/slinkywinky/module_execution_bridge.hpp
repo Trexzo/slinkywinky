@@ -16,6 +16,7 @@
 #include "slinkywinky/anti_debuff_controller.hpp"
 #include "slinkywinky/fast_accel_controller.hpp"
 #include "slinkywinky/safe_walk_controller.hpp"
+#include "slinkywinky/timer_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -113,6 +114,18 @@ struct SafeWalkTickPayload {
     unsigned executions = 0;
 };
 
+struct TimerFramePayload {
+    TimerFrameInput input{};
+    TimerFrameDecision decision{};
+    unsigned executions = 0;
+};
+
+struct TimerTogglePayload {
+    TimerToggleInput input{};
+    TimerToggleDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -130,6 +143,8 @@ struct ExecutionFrame {
     std::optional<AntiDebuffTickPayload> anti_debuff{};
     std::optional<FastAccelTickPayload> fast_accel{};
     std::optional<SafeWalkTickPayload> safe_walk{};
+    std::optional<TimerFramePayload> timer_frame{};
+    std::optional<TimerTogglePayload> timer_toggle{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -575,6 +590,50 @@ public:
         return false;
     }
 
+    // Source-linked Timer: utility category 4, frame event 1 priority 200
+    // and toggle notification event 5 priority 0. Both must be present before
+    // accepting the offline binding; no actual Minecraft timer is modified.
+    bool bind_timer(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Timer" ||
+            definitions_[id].category != 4) return false;
+        bool frame = false, toggle = false;
+        for (const auto& sub : definitions_[id].subscriptions) {
+            if (sub.event == kTimerFrameEvent && sub.priority == 200)
+                frame = true;
+            if (sub.event == kTimerToggleEvent && sub.priority == 0)
+                toggle = true;
+        }
+        if (!frame || !toggle ||
+            callbacks_[id][kTimerFrameEvent] ||
+            callbacks_[id][kTimerToggleEvent]) return false;
+
+        const bool first = bind(id, kTimerFrameEvent,
+            [this](const Delivery&, ExecutionFrame& tick) {
+                if (!tick.timer_frame) return;
+                auto& payload = *tick.timer_frame;
+                ++payload.executions;
+                payload.decision = timer_.on_frame(payload.input);
+            });
+        const bool second = bind(id, kTimerToggleEvent,
+            [this](const Delivery&, ExecutionFrame& tick) {
+                if (!tick.timer_toggle) return;
+                auto& payload = *tick.timer_toggle;
+                ++payload.executions;
+                payload.decision = timer_.on_toggle(payload.input);
+            });
+        if (!first || !second)
+            throw std::logic_error("validated Timer event pair failed");
+        return true;
+    }
+
+    bool bind_timer_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Timer")
+                return bind_timer(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -635,6 +694,10 @@ public:
             return false;
         if (frame.safe_walk && frame.event != kSafeWalkEvent)
             return false;
+        if (frame.timer_frame && frame.event != kTimerFrameEvent)
+            return false;
+        if (frame.timer_toggle && frame.event != kTimerToggleEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -651,7 +714,9 @@ public:
             static_cast<unsigned>(frame.no_item_release.has_value()) +
             static_cast<unsigned>(frame.anti_debuff.has_value()) +
             static_cast<unsigned>(frame.fast_accel.has_value()) +
-            static_cast<unsigned>(frame.safe_walk.has_value());
+            static_cast<unsigned>(frame.safe_walk.has_value()) +
+            static_cast<unsigned>(frame.timer_frame.has_value()) +
+            static_cast<unsigned>(frame.timer_toggle.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -740,6 +805,14 @@ public:
             frame.safe_walk->decision = {};
             frame.safe_walk->executions = 0;
         }
+        if (frame.timer_frame) {
+            frame.timer_frame->decision = {};
+            frame.timer_frame->executions = 0;
+        }
+        if (frame.timer_toggle) {
+            frame.timer_toggle->decision = {};
+            frame.timer_toggle->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -798,6 +871,7 @@ private:
     AntiDebuffController anti_debuff_;
     FastAccelController fast_accel_;
     SafeWalkController safe_walk_;
+    TimerController timer_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
