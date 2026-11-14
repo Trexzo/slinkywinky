@@ -352,6 +352,19 @@ if(BUILD_TESTING)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/seventeen_modules_with_fourteen_decisions.tsv")
   set_tests_properties(r201_timer_frame_and_toggle_offline
     r201_fourteen_decision_coverage PROPERTIES TIMEOUT 15)
+  # Metadata rejection controls guard the exact reference category/slots.
+  add_test(NAME r201_reject_timer_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r201_timer_wrong_category.tsv")
+  add_test(NAME r201_reject_timer_wrong_frame_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r201_timer_wrong_frame_priority.tsv")
+  add_test(NAME r201_reject_timer_missing_toggle
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r201_timer_missing_toggle.tsv")
+  set_tests_properties(r201_reject_timer_wrong_category
+    r201_reject_timer_wrong_frame_priority
+    r201_reject_timer_missing_toggle PROPERTIES WILL_FAIL TRUE)
 
   # C++ std::thread owner contract requires explicit pthread linkage on
   # older Linux build images; Windows uses the native thread runtime.
