@@ -102,7 +102,7 @@ foreach($archive in $nativePaths){
         foreach($entry in $zip.Entries){
             $name=[IO.Path]::GetFileName($entry.FullName)
             if(-not $name.EndsWith('.dll',[StringComparison]::OrdinalIgnoreCase)){continue}
-            if($entry.Length -gt 20000000){throw 'R207 oversized native DLL'}
+            if($entry.Length -gt 32000000){throw 'R207 oversized native DLL'}
             $target=Join-Path $natives $name
             if(Test-Path $target){throw "R207 colliding DLL: $name"}
             $inputStream=$entry.Open()
