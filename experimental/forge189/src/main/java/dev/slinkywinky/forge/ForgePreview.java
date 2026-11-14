@@ -3,6 +3,7 @@ package dev.slinkywinky.forge;
 import dev.slinkywinky.GameHost;
 import dev.slinkywinky.HostSettings;
 import dev.slinkywinky.NativeEngine;
+import dev.slinkywinky.SprintObservationProbe;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
@@ -27,11 +28,25 @@ import org.lwjgl.input.Mouse;
 public final class ForgePreview {
     private KeyBinding toggle;
     private GameHost host;
+    private SprintObservationProbe sprintProbe;
+    private Object sprintWorld, sprintPlayer;
+    private long sprintGeneration=1;
     private boolean enabled;
     private String status="F9: enable read-only preview";
     private long observations;
     private long renderProbeFrames;
     private static final boolean RENDER_PROBE = Boolean.getBoolean("slinkywinky.renderProbe");
+    // R204 opt-in only. This reports Sprint proposals, never applies them.
+    private static final boolean SPRINT_OBSERVATION =
+        Boolean.getBoolean("slinkywinky.sprintObservation");
+    private static final boolean SPRINT_GUI =
+        Boolean.getBoolean("slinkywinky.sprint.allowGui");
+    private static final boolean SPRINT_ITEM =
+        Boolean.getBoolean("slinkywinky.sprint.allowUsingItem");
+    private static final boolean SPRINT_BACK =
+        Boolean.getBoolean("slinkywinky.sprint.allowBackwards");
+    private static final boolean SPRINT_SIDE =
+        Boolean.getBoolean("slinkywinky.sprint.allowSideways");
     private final GameHost.Actions readonlyActions=new GameHost.Actions() {
         @Override public void apply(NativeEngine.Decision decision) {
             ++observations;
@@ -72,8 +87,15 @@ public final class ForgePreview {
 
     private void stop() {
         enabled=false;
-        if(host!=null) {
-            try {host.close();} finally {host=null;}
+        try {
+            if(sprintProbe!=null) sprintProbe.close();
+        } finally {
+            sprintProbe=null;
+            sprintWorld=sprintPlayer=null;
+            sprintGeneration=1;
+            if(host!=null) {
+                try {host.close();} finally {host=null;}
+            }
         }
     }
 
@@ -84,10 +106,14 @@ public final class ForgePreview {
             else {
                 try {
                     host=new GameHost(new NativeEngine(new int[]{1,2,3,4}),readonlyActions);
+                    if(SPRINT_OBSERVATION)
+                        sprintProbe=new SprintObservationProbe();
                     enabled=true;observations=0;
+                    sprintGeneration=1;
+                    sprintWorld=sprintPlayer=null;
                     status="PREVIEW ONLY | collecting frames";
                 } catch(LinkageError | RuntimeException error) {
-                    enabled=false;host=null;
+                    try { stop(); } catch(RuntimeException ignored) { /* no game actions */ }
                     status="Unavailable: native JNI library missing or incompatible";
                 }
             }
@@ -131,11 +157,49 @@ public final class ForgePreview {
                 frame.targetX=target.posX;frame.targetY=target.posY+target.getEyeHeight();frame.targetZ=target.posZ;
             }
         }
-        try {host.tick(frame);}
+        try {
+            host.tick(frame);
+            if(sprintProbe!=null) sampleReadOnlySprint(mc,frame);
+        }
         catch(RuntimeException | LinkageError error) {
             try {stop();} catch(RuntimeException ignored) { /* native failure: no actions to release */ }
             status="Preview stopped after invalid frame or JNI error";
         }
+    }
+
+    /**
+     * R204 real Forge render-event observation only. Movement is sampled from
+     * player movement-input fields, with getWalkSpeed() as a diagnostic
+     * *baseline proxy*, NOT the original native event-21 MoveState.speed.
+     * This preview cannot establish precise original speed-event timing.
+     */
+    private void sampleReadOnlySprint(Minecraft mc, GameHost.Frame frame) {
+        if(sprintWorld!=frame.worldToken || sprintPlayer!=frame.playerToken) {
+            sprintWorld=frame.worldToken;
+            sprintPlayer=frame.playerToken;
+            ++sprintGeneration;
+        }
+        final boolean playerReady=mc.theWorld!=null && mc.thePlayer!=null;
+        final int observedFlags=(mc.theWorld!=null?1:0) |
+            (mc.thePlayer!=null?2:0) | (frame.targetPresent?4:0);
+        final int[] flags={observedFlags,frame.guiOpen?1:0,frame.sprinting?1:0,
+            playerReady && mc.thePlayer.isUsingItem()?1:0,
+            SPRINT_GUI?1:0,SPRINT_ITEM?1:0,SPRINT_BACK?1:0,SPRINT_SIDE?1:0};
+        final double[] coords={frame.eyeX,frame.eyeY,frame.eyeZ,
+                               frame.targetX,frame.targetY,frame.targetZ};
+        final float[] movement=playerReady
+            ? new float[]{mc.thePlayer.moveForward, mc.thePlayer.moveStrafing,
+                          mc.thePlayer.capabilities.getWalkSpeed()}
+            : new float[3];
+        final SprintObservationProbe.Decision decision=sprintProbe.observe(
+            new long[]{frame.monotonicMs,sprintGeneration},
+            flags,coords,new float[]{frame.yaw,frame.pitch},movement);
+        if(!decision.admitted)
+            throw new IllegalStateException("Native Sprint observation frame rejected");
+        status += " | sprintPreview key="+decision.proposedKeyPressed+
+            " speedProposal="+(decision.hasSpeed ? decision.proposedSpeed : "none");
+        // Intentionally NO KeyBinding.setKeyBindState(), setSprinting(),
+        // player motion writes, game packet sends, or synthetic input.
     }
 
     @SubscribeEvent public void onOverlay(RenderGameOverlayEvent.Text event) {
