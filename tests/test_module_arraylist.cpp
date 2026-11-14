@@ -55,6 +55,55 @@ int main() {
     fixture=original;fixture.modules.clear();
     CHECK(make_module_arraylist_display(fixture)->active_names.empty());
 
+
+    // R208 owner-published feed: copies, monotonic sequence and world loss.
+    ModuleArrayListFeed feed;
+    CHECK(!feed.latest() && !feed.retired());
+    CHECK(feed.publish(original));
+    CHECK(feed.latest() && feed.latest()->modules.size()==4u);
+    auto detached=feed.latest();
+    detached->modules[0].canonical_name="Tampered";
+    CHECK(feed.latest()->modules[0].canonical_name=="Sprint");
+    auto next=original;
+    next.source_sequence=11u;
+    next.modules[0].active_in_world=false;
+    next.modules[1].active_in_world=false;
+    CHECK(feed.publish(next));
+    CHECK(make_module_arraylist_display(*feed.latest())->active_names.empty());
+    next.source_sequence=12u;
+    next.world_ready=false; // world retired; requested bits remain only requests
+    CHECK(feed.publish(next));
+    CHECK(make_module_arraylist_display(*feed.latest())->active_names.empty());
+    next.source_sequence=13u;
+    next.world_generation=8u;
+    next.world_ready=true;
+    for(auto& row:next.modules)row.world_generation=8u;
+    next.modules[0].active_in_world=true;
+    CHECK(feed.publish(next));
+    CHECK(make_module_arraylist_display(*feed.latest())->active_names.size()==1u);
+    feed.retire();
+    CHECK(feed.retired() && !feed.latest());
+    next.source_sequence=14u;
+    CHECK(!feed.publish(next) && !feed.latest());
+    ModuleArrayListFeed replay;
+    CHECK(replay.publish(original));
+    CHECK(!replay.publish(original)); // duplicate sequence quarantines
+    CHECK(replay.retired() && !replay.latest());
+    ModuleArrayListFeed oldWorld;
+    CHECK(oldWorld.publish(next));
+    next.source_sequence=15u;
+    next.world_generation=7u;
+    for(auto& row:next.modules)row.world_generation=7u;
+    CHECK(!oldWorld.publish(next)); // world-generation regression
+    CHECK(oldWorld.retired() && !oldWorld.latest());
+    ModuleArrayListFeed malformed;
+    auto bad=original;
+    bad.contract_version=2u;
+    CHECK(!malformed.publish(bad));
+    CHECK(malformed.retired() && !malformed.latest());
+    std::cout<<"R208_COPY_ONLY_MONOTONIC_WORLD_RETIRE_PASS\n";
+    std::cout<<"R208_STALE_REPLAY_QUARANTINE_PASS\n";
+
     // Source-faithful GUI preview toggles are NOT runtime active status.
     // This model exposes no MenuState pointer or preview_enabled field.
     MenuState previews;

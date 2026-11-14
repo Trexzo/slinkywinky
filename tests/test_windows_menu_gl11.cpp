@@ -952,6 +952,13 @@ int main() {
         REQUIRE(host.open(context.gl,context.dc,676,630));
         REQUIRE(!host.open(context.gl,context.dc,676,630));
         REQUIRE(host.active() && host.last_sequence()==0);
+        // R208 host owns GL context; publisher supplies state by value only.
+        ModuleArrayListFeed wglFeed;
+        REQUIRE(wglFeed.publish(arraylist));
+        REQUIRE(host.draw_active_modules(wglFeed));
+        same(before,snapshot());
+        wglFeed.retire();
+        REQUIRE(!host.draw_active_modules(wglFeed));
         REQUIRE(host.draw(menu));
         REQUIRE(host.last_sequence()==1);
         REQUIRE(glGetError()==GL_NO_ERROR);

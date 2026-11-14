@@ -78,6 +78,22 @@ bool WglMenuOverlayHost::draw(const MenuState& menu,
     return draw_menu_gl11(*frame,context_,dc_,mode,focus,
                           picker?&*picker:nullptr);
 }
+
+bool WglMenuOverlayHost::draw_active_modules(const ModuleArrayListFeed& feed) {
+    if(!current())return false;
+    // Match the same graphics-owner/viewport admission used by the menu.
+    GLint viewport[4]{};
+    glGetIntegerv(GL_VIEWPORT,viewport);
+    if(viewport[0]!=0 || viewport[1]!=0 ||
+       viewport[2]!=static_cast<GLint>(width_) ||
+       viewport[3]!=static_cast<GLint>(height_))
+        return false;
+    const auto current_snapshot=feed.latest();
+    if(!current_snapshot)return false;
+    return draw_module_arraylist_gl11(
+        *current_snapshot,context_,dc_,width_,height_);
+}
+
 bool WglMenuOverlayHost::close() noexcept {
     // No WGL or OpenGL calls here: allows shutdown if the context was
     // revoked by its owner. Only the admitted render thread may close.

@@ -2,6 +2,8 @@
 #include "slinkywinky/menu.hpp"
 #include <algorithm>
 #include <array>
+#include <mutex>
+#include <utility>
 #include <string_view>
 
 namespace slinkywinky {
@@ -45,4 +47,39 @@ std::optional<ModuleArrayListDisplay> make_module_arraylist_display(
         });
     return display;
 }
+
+bool ModuleArrayListFeed::publish(const ModuleArrayListSnapshot& snapshot) {
+    // Validate and copy before taking the short publication lock.
+    // A failed validation must not leave an older active list on screen.
+    const auto admitted=make_module_arraylist_display(snapshot);
+    std::optional<ModuleArrayListSnapshot> copy;
+    if(admitted)copy=snapshot;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(retired_)return false;
+    if(!copy || snapshot.source_sequence<=sequence_ ||
+       snapshot.world_generation<last_world_generation_) {
+        latest_.reset();
+        retired_=true; // quarantine replay, malformed or regressing producer
+        return false;
+    }
+    latest_=std::move(copy);
+    sequence_=snapshot.source_sequence;
+    last_world_generation_=snapshot.world_generation;
+    return true;
+}
+std::optional<ModuleArrayListSnapshot> ModuleArrayListFeed::latest() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(retired_)return std::nullopt;
+    return latest_; // deep value copy, never a producer-owned pointer
+}
+void ModuleArrayListFeed::retire() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    latest_.reset();
+    retired_=true;
+}
+bool ModuleArrayListFeed::retired() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return retired_;
+}
+
 } // namespace slinkywinky

@@ -30,6 +30,9 @@ public:
               MenuGL11Mode mode); // R93 ABI retained
     bool draw(const MenuState& menu,const MenuProfileBridge* profile,
               MenuGL11Mode mode,const MenuNavigation* navigation); // R96 focus
+    // R208: render ONLY a validated owner-published module-state feed.
+    // No ClickGUI preview flags and no synthetic active toggles.
+    bool draw_active_modules(const ModuleArrayListFeed& feed);
     bool close() noexcept;            // allowed after current context loss
     bool active() const noexcept {return session_.attached();}
     std::uint64_t last_sequence() const noexcept {return session_.sequence();}

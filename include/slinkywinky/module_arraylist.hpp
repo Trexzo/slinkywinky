@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,5 +36,26 @@ struct ModuleArrayListDisplay {
 // inactive/out-of-world snapshot. No module behavior is executed here.
 std::optional<ModuleArrayListDisplay> make_module_arraylist_display(
     const ModuleArrayListSnapshot& snapshot);
+
+// R208: bounded, value-only handoff from a module-owner producer to a
+// renderer consumer. Publishes whole snapshots, never Java/game pointers.
+// A violation quarantines the feed; a new attachment must use a new feed.
+// The render owner must quiesce its drawings before calling retire() at unload.
+class ModuleArrayListFeed final {
+public:
+    bool publish(const ModuleArrayListSnapshot& snapshot);
+    std::optional<ModuleArrayListSnapshot> latest() const;
+    void retire();
+    bool retired() const;
+    ModuleArrayListFeed()=default;
+    ModuleArrayListFeed(const ModuleArrayListFeed&)=delete;
+    ModuleArrayListFeed& operator=(const ModuleArrayListFeed&)=delete;
+private:
+    mutable std::mutex mutex_;
+    std::optional<ModuleArrayListSnapshot> latest_;
+    std::uint64_t sequence_=0;
+    std::uint64_t last_world_generation_=0;
+    bool retired_=false;
+};
 
 } // namespace slinkywinky
