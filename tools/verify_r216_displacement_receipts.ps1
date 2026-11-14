@@ -78,8 +78,8 @@ for($i=0;$i -lt 3;$i++){
     }
     $distance=[double]::Parse($m.Groups[3].Value,[Globalization.CultureInfo]::InvariantCulture)
     $mean=[double]::Parse($m.Groups[4].Value,[Globalization.CultureInfo]::InvariantCulture)
-    if(-not [double]::IsFinite($distance) -or
-       -not [double]::IsFinite($mean) -or
+    if([double]::IsNaN($distance) -or [double]::IsInfinity($distance) -or
+       [double]::IsNaN($mean) -or [double]::IsInfinity($mean) -or
        $distance -le 0 -or $mean -le 0 -or
        [Math]::Abs($distance / 33.0 - $mean) -gt 0.000001){
         throw "R216 inconsistent position-derived horizontal displacement phase $i"
