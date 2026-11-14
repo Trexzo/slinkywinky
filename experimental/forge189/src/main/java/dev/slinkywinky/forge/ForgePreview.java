@@ -46,6 +46,7 @@ public final class ForgePreview {
     private MovementInput r214OriginalInput;
     private EntityPlayerSP r214FixturePlayer;
     private long r214DiagnosticClientTicks, r214PreLivingItemUseRequests;
+    private int r214Phase, r214PhaseCount;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -299,7 +300,8 @@ public final class ForgePreview {
                     (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
                                             "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
-            if (!enabled) startPreview(); // explicitly gated local action tests
+            if (!enabled && !(R214_LOCAL_NO_SLOW_TEST && r214ReceiptEmitted))
+                startPreview(); // R214 completed test must never auto-restart
             if(R214_LOCAL_NO_SLOW_TEST && enabled) {
                 if(++r214DiagnosticClientTicks==20 ||
                    r214DiagnosticClientTicks==60) {
@@ -411,36 +413,67 @@ public final class ForgePreview {
                                 player.capabilities.getWalkSpeed()},
                     new int[]{1,Math.max(0,port.readJumpTicks()),1,1,item},
                     new float[]{1,1,1});
-            if(!proposed.sprint.admitted || !proposed.sprint.worldReady ||
-               !proposed.noSlowEvaluated || !proposed.replaceInput)
-                throw new IllegalStateException("R214 native No Slow callback refused");
+            if(!proposed.sprint.admitted || !proposed.sprint.worldReady)
+                throw new IllegalStateException("R214 native world frame refused");
             final boolean active=sprintProbe.moduleState(
                 SprintObservationProbe.NO_SLOW).activeInWorld;
+            final boolean expectedActive=r214Phase!=1;
+            if(active!=expectedActive ||
+               proposed.noSlowEvaluated!=expectedActive ||
+               proposed.replaceInput!=expectedActive)
+                throw new IllegalStateException("R214 native module toggle not reflected");
             final OwnedModuleActions.Result applied=moduleActions.apply(
                 new OwnedModuleActions.Input(
                     true,true,sprintGeneration,active,proposed.replaceInput,
                     proposed.proposedForward,proposed.proposedStrafe,
                     false,false,0,true /* ASM verified precise phase */),port);
-            if(!applied.admitted || !applied.noSlowWritten ||
-               applied.noSlowBlockedByPhase)
-                throw new IllegalStateException("R214 owned No Slow write blocked");
+            if(!applied.admitted || applied.noSlowBlockedByPhase ||
+               Math.abs(beforeForward-0.2f)>0.0001f)
+                throw new IllegalStateException("R214 vanilla 0.2 source not observed");
             ++r214HookAdmitted;
-            if(Float.compare(port.readForward(),proposed.proposedForward)==0 &&
-               Float.compare(port.readStrafe(),proposed.proposedStrafe)==0)
+            if(expectedActive){
+                if(!applied.noSlowWritten ||
+                   Math.abs(port.readForward()-1.0f)>0.0001f)
+                    throw new IllegalStateException("R214 active No Slow failed real field");
                 ++r214HookWrites;
+            }else{
+                if(applied.noSlowWritten ||
+                   Math.abs(port.readForward()-0.2f)>0.0001f)
+                    throw new IllegalStateException("R214 disabled No Slow wrote input");
+            }
+            ++r214PhaseCount;
             if(r214HookFirstMs==0) r214HookFirstMs=System.currentTimeMillis();
-            if(r214HookWrites>=10 && !r214ReceiptEmitted) {
-                r214ReceiptEmitted=true;
-                // Normal ClientTick.END handles release after this
-                // particular vanilla onLivingUpdate has completed.
-                System.out.println("[SlinkyWinkyPreview] " +
-                    "R214_IN_WORLD_NO_SLOW_PRECONSUME_PASS " +
-                    "callbacks="+r214HookAdmitted+
-                    " verifiedFieldWrites="+r214HookWrites+
-                    " beforeForward="+beforeForward+
-                    " afterForward="+proposed.proposedForward+
-                    " itemId="+item+
-                    " elapsedMs="+(System.currentTimeMillis()-r214HookFirstMs));
+            if(r214PhaseCount>=10){
+                if(r214Phase==0){
+                    System.out.println("[SlinkyWinkyPreview] " +
+                        "R214_NO_SLOW_ENABLED_INPUT_0P2_TO_1P0_PASS samples=10");
+                    sprintProbe.setModuleEnabled(
+                        SprintObservationProbe.NO_SLOW,false);
+                    r214Phase=1;
+                    r214PhaseCount=0;
+                }else if(r214Phase==1){
+                    System.out.println("[SlinkyWinkyPreview] " +
+                        "R214_NO_SLOW_DISABLED_INPUT_REMAINS_0P2_PASS samples=10");
+                    sprintProbe.setModuleEnabled(
+                        SprintObservationProbe.NO_SLOW,true);
+                    r214Phase=2;
+                    r214PhaseCount=0;
+                }else {
+                    r214ReceiptEmitted=true;
+                    // ClientTick.END releases the deterministic temporary
+                    // input and native owner after this player update.
+                    System.out.println("[SlinkyWinkyPreview] " +
+                        "R214_NO_SLOW_REENABLED_INPUT_0P2_TO_1P0_PASS samples=10");
+                    System.out.println("[SlinkyWinkyPreview] " +
+                        "R214_IN_WORLD_NO_SLOW_PRECONSUME_PASS " +
+                        "callbacks="+r214HookAdmitted+
+                        " verifiedFieldWrites="+r214HookWrites+
+                        " phases=enabled_disabled_reenabled" +
+                        " beforeForward="+beforeForward+
+                        " afterForward="+proposed.proposedForward+
+                        " itemId="+item+
+                        " elapsedMs="+(System.currentTimeMillis()-r214HookFirstMs));
+                }
             }
         }catch(RuntimeException | LinkageError failure){
             System.err.println("[SlinkyWinkyPreview] R214_NO_SLOW_ACTION_FAIL "+
