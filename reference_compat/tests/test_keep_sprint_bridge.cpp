@@ -88,7 +88,7 @@ int main() {
     CHECK(policy.on_player_update({true}).propose_set_sprinting);
     CHECK(!policy.pending_reapply());
     CHECK(!policy.on_player_update({true}).propose_set_sprinting);
-    CHECK(!policy.on_attack(KeepSprintAttackInput{}).armed == false);
+    CHECK(policy.on_attack(KeepSprintAttackInput{}).armed);
     CHECK(policy.armed()); // Inactive pre-event did not reset prior state.
 
     attack.chance_succeeded = false;
