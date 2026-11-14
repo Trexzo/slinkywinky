@@ -143,7 +143,7 @@ public:
         open_=false;
         bool seen=false;
         for(const auto& prior:history_)
-            if(prior && *prior==result){seen=true;break;}
+            if(prior==result){seen=true;break;}
         if(!seen) {
             history_head_=(history_head_+history_.size()-1u)%history_.size();
             history_[history_head_]=result;
@@ -153,7 +153,10 @@ public:
 private:
     bool open_=false;
     std::uint32_t original_=0u,current_=0u;
-    std::array<std::optional<std::uint32_t>,8> history_{};
+    // R199: source .data reserves 96 zero bytes: eight RGB float triples.
+    // Java also allocates new float[8][3]. All history cells begin black;
+    // a closing black color is therefore an existing duplicate.
+    std::array<std::uint32_t,8> history_{};
     std::size_t history_head_=0u;
 };
 } // namespace slinkywinky
