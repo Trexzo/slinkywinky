@@ -42,16 +42,26 @@ public final class ForgeModuleActionPort implements OwnedModuleActions.Port {
     }
 
     private static Field resolveJumpTicks() {
-        try {
-            final Field field = EntityLivingBase.class.getDeclaredField("jumpTicks");
-            if (field.getType() != int.class)
-                throw new IllegalStateException("Wrong jumpTicks field type");
-            field.setAccessible(true);
-            return field;
-        } catch (NoSuchFieldException | SecurityException error) {
-            throw new IllegalStateException(
-                "Unsupported Minecraft 1.8.9 private jumpTicks mapping", error);
+        // Exact SRG field name verified from the local ForgeGradle 1.8.9
+        // reobfuscation mapping: EntityLivingBase/jumpTicks ->
+        // EntityLivingBase/field_70773_bE. Never select a field by type
+        // or index: doing so could corrupt an unrelated game property.
+        for (String name : new String[]{"jumpTicks", "field_70773_bE"}) {
+            try {
+                final Field field = EntityLivingBase.class.getDeclaredField(name);
+                if (field.getType() != int.class)
+                    throw new IllegalStateException("Wrong jumpTicks field type");
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException missingThisName) {
+                // Development MCP and production SRG use different names.
+            } catch (SecurityException denied) {
+                throw new IllegalStateException(
+                    "Minecraft denied jumpTicks field reflection", denied);
+            }
         }
+        throw new IllegalStateException(
+            "Unsupported Minecraft 1.8.9 jumpTicks mapping");
     }
 
     private void assertCurrent() {
