@@ -338,4 +338,16 @@ if(BUILD_TESTING)
     r190_reject_safe_walk_event
     r190_reject_safe_walk_priority PROPERTIES WILL_FAIL TRUE)
 
+  # R200: reusable first-party native toggle owner fence. The test uses
+  # invented module identities and a synthetic native enqueue/apply adapter.
+  # It compiles on both Windows and Linux and never loads upstream code.
+  add_executable(slinkywinky_native_toggle_owner_gate_test
+    tests/test_native_toggle_owner_gate.cpp)
+  target_link_libraries(slinkywinky_native_toggle_owner_gate_test PRIVATE
+    slinkywinky_reference_event_model)
+  add_test(NAME r200_native_toggle_owner_thread_and_lifecycle
+    COMMAND slinkywinky_native_toggle_owner_gate_test)
+  set_tests_properties(r200_native_toggle_owner_thread_and_lifecycle
+    PROPERTIES TIMEOUT 15)
+
 endif()
