@@ -13,6 +13,7 @@ import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.entity.Entity;
 import net.minecraft.item.Item;
 import net.minecraft.init.Items;
+import net.minecraft.util.MovementInput;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.item.ItemAxe;
 import net.minecraft.item.ItemStack;
@@ -41,6 +42,8 @@ public final class ForgePreview {
     private static volatile ForgePreview r214Active;
     private long r214HookAdmitted, r214HookWrites, r214HookFirstMs, r214LastSampleMs;
     private boolean r214InputFixtureArmed, r214ReceiptEmitted;
+    private MovementInput r214OriginalInput;
+    private EntityPlayerSP r214FixturePlayer;
     private Object sprintWorld, sprintPlayer;
     private long sprintGeneration=1;
     private boolean enabled;
@@ -186,13 +189,6 @@ public final class ForgePreview {
         enabled=false;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
             r214Active=null;
-        if(R214_LOCAL_NO_SLOW_TEST && r214InputFixtureArmed) {
-            try {
-                Minecraft mc=Minecraft.getMinecraft();
-                KeyBinding.setKeyBindState(
-                    mc.gameSettings.keyBindForward.getKeyCode(),false);
-            } finally {r214InputFixtureArmed=false;}
-        }
         try {
             // Restore only still-owned local movement fields before closing
             // the session. If the player has gone, stale objects are never written.
@@ -204,6 +200,16 @@ public final class ForgePreview {
             }
             if(sprintProbe!=null) sprintProbe.close();
         } finally {
+            if(R214_LOCAL_NO_SLOW_TEST && r214InputFixtureArmed) {
+                Minecraft mc=Minecraft.getMinecraft();
+                if(r214FixturePlayer!=null &&
+                   mc.thePlayer==r214FixturePlayer &&
+                   mc.thePlayer.movementInput instanceof R214TestMovementInput)
+                    mc.thePlayer.movementInput=r214OriginalInput;
+                r214InputFixtureArmed=false;
+                r214OriginalInput=null;
+                r214FixturePlayer=null;
+            }
             moduleActions=null;
             sprintProbe=null;
             sprintWorld=sprintPlayer=null;
@@ -292,24 +298,47 @@ public final class ForgePreview {
                                             "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
             if (!enabled) startPreview(); // explicitly gated local action tests
-            if(R214_LOCAL_NO_SLOW_TEST && enabled)
-                armR214LocalInputFixture(mc);
+            if(R214_LOCAL_NO_SLOW_TEST && enabled) {
+                if(r214ReceiptEmitted) {
+                    stop();
+                    System.out.println("[SlinkyWinkyPreview] " +
+                        "R214_INPUT_FIXTURE_AND_ACTION_CLEANUP_PASS");
+                } else {
+                    armR214LocalInputFixture(mc);
+                }
+            }
         }
     }
 
-    // R214 only: simulated physical forward key and local bow item use in
-    // a newly created TEMP singleplayer world. Not a real-account control.
+    // Test-only deterministic movement-input fixture. Minecraft's REAL
+    // EntityPlayerSP.onLivingUpdate still calls updatePlayerMoveState,
+    // scales the returned 1.0 by vanilla 0.2, then runs the injected
+    // after-slow/pre-consumption callback. No OS/physical key is held.
+    private static final class R214TestMovementInput extends MovementInput {
+        @Override public void updatePlayerMoveState() {
+            moveForward=1.0f;
+            moveStrafe=0.0f;
+            jump=false;
+            sneak=false;
+        }
+    }
+
     private void armR214LocalInputFixture(Minecraft mc) {
         if(r214ReceiptEmitted) return;
         if(!r214InputFixtureArmed){
+            r214FixturePlayer=mc.thePlayer;
+            r214OriginalInput=mc.thePlayer.movementInput;
+            mc.thePlayer.movementInput=new R214TestMovementInput();
             mc.thePlayer.inventory.currentItem=0;
             mc.thePlayer.inventory.setInventorySlotContents(
                 0,new ItemStack(Items.bow));
-            KeyBinding.setKeyBindState(
-                mc.gameSettings.keyBindForward.getKeyCode(),true);
             r214InputFixtureArmed=true;
-            System.out.println("[SlinkyWinkyPreview] R214_LOCAL_INPUT_FIXTURE_ARMED");
+            System.out.println("[SlinkyWinkyPreview] " +
+                "R214_LOCAL_INPUT_FIXTURE_ARMED deterministic_moveForward=1.0");
         }
+        if(mc.thePlayer!=r214FixturePlayer ||
+           !(mc.thePlayer.movementInput instanceof R214TestMovementInput))
+            throw new IllegalStateException("R214 local fixture player replaced");
         ItemStack bow=mc.thePlayer.getHeldItem();
         if(bow!=null && bow.getItem()==Items.bow &&
            !mc.thePlayer.isUsingItem())
@@ -385,9 +414,8 @@ public final class ForgePreview {
             if(r214HookFirstMs==0) r214HookFirstMs=System.currentTimeMillis();
             if(r214HookWrites>=10 && !r214ReceiptEmitted) {
                 r214ReceiptEmitted=true;
-                KeyBinding.setKeyBindState(
-                    mc.gameSettings.keyBindForward.getKeyCode(),false);
-                r214InputFixtureArmed=false;
+                // Normal ClientTick.END handles release after this
+                // particular vanilla onLivingUpdate has completed.
                 System.out.println("[SlinkyWinkyPreview] " +
                     "R214_IN_WORLD_NO_SLOW_PRECONSUME_PASS " +
                     "callbacks="+r214HookAdmitted+
