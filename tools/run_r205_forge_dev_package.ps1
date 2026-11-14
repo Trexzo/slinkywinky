@@ -42,7 +42,7 @@ $preference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try { $versionText = (& $javac -version 2>&1 | Out-String).Trim() }
 finally { $ErrorActionPreference = $preference }
-if ($versionText -notmatch '^javac 1[.]8[.]') {
+if ($LASTEXITCODE -ne 0 -or $versionText -notmatch 'javac 1[.]8[.]') {
     throw "R205 requires JDK8 compiler, found: $versionText"
 }
 if (Test-Path -LiteralPath $OutputRoot) {
