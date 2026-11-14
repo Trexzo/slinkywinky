@@ -11,6 +11,19 @@ using namespace slinkywinky;
 int main() {
     MenuColorPopupPreview p;
     CHECK(!p.active() && !p.current() && !p.close(true));
+    // R199: both supplied references initialize eight BLACK swatches.
+    // An all-zero history cell is present, not a missing optional.
+    for(unsigned i=0u;i<8u;++i)CHECK(p.recent(i)==0u);
+    CHECK(!p.recent(8u));
+    CHECK(p.open(0u));
+    CHECK(p.close(true)==0u);
+    CHECK(p.recent(0)==0u && p.recent(7)==0u);
+    CHECK(p.open(0x112233u));
+    CHECK(p.close(true)==0x112233u);
+    CHECK(p.recent(0)==0x112233u && p.recent(1)==0u);
+    CHECK(p.open(0u));
+    CHECK(p.close(false)==std::nullopt);
+    CHECK(p.recent(0)==0x112233u); // closing black does not reinsert it
     CHECK(!p.open(0x1000000u));
     CHECK(!MenuColorPopupPreview::parse_hex6("#abcdef"));
     CHECK(!MenuColorPopupPreview::parse_hex6("abcde"));
