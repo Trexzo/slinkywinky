@@ -10,6 +10,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
+#include "slinkywinky/gui_module_control_handoff.hpp"
 #include "slinkywinky/windows_stop_gate.hpp"
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
@@ -31,6 +32,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <thread>
+#include <memory>
 #ifdef SW_R91_TEST_JNI_OVERLAY
 #include <jni.h>
 extern "C" JNIEXPORT jboolean JNICALL
@@ -926,6 +928,43 @@ int main() {
         REQUIRE(!retained.close());
         same(r99Before,snapshot());
         std::cout<<"R99_RETAINED_WGL_MENU_STATE_THREE_FRAMES_AND_OWNER_RESTORE_PASS\\n";
+
+        // R210: source-focused and actually painted WGL menu is the only
+        // sender of a Sprint request. No hardware click or game toggle here.
+        // Keep the second retained model off the already large WGL test stack.
+        auto requestMenu=std::make_unique<WglRetainedMenuPreview>();
+        GuiModuleControlHandoff requestHandoff;
+        ModuleArrayListFeed requestFeed;
+        ModuleArrayListSnapshot ownedSnapshot;
+        ownedSnapshot.source_sequence=50u;
+        ownedSnapshot.world_generation=13u;
+        ownedSnapshot.world_ready=true;
+        ownedSnapshot.modules={{"Sprint",false,false,13u}};
+        REQUIRE(requestFeed.publish(ownedSnapshot));
+        REQUIRE(!requestMenu->queue_focused_runtime_toggle(
+            requestHandoff,requestFeed,context.gl,context.dc,676,630));
+        REQUIRE(requestMenu->draw(context.gl,context.dc,676,630));
+        REQUIRE(requestMenu->apply(MenuNavAction::NextTab)); // Move
+        for(int i=0;i<8;i++)
+            REQUIRE(requestMenu->apply(MenuNavAction::NextRow));
+        REQUIRE(requestMenu->focused_row() &&
+                *requestMenu->focused_row()==25u);
+        REQUIRE(requestMenu->draw(context.gl,context.dc,676,630));
+        REQUIRE(!requestMenu->queue_focused_runtime_toggle(
+            requestHandoff,requestFeed,nullptr,context.dc,676,630));
+        REQUIRE(requestMenu->queue_focused_runtime_toggle(
+            requestHandoff,requestFeed,context.gl,context.dc,676,630));
+        REQUIRE(requestHandoff.view().phase==
+                GuiModuleControlPhase::Pending);
+        REQUIRE(requestHandoff.view().request &&
+                requestHandoff.view().request->enable);
+        REQUIRE(!requestMenu->preview_enabled(25u));
+        REQUIRE(!requestMenu->queue_focused_runtime_toggle(
+            requestHandoff,requestFeed,context.gl,context.dc,676,630));
+        REQUIRE(requestMenu->close());
+        requestHandoff.retire();
+        requestFeed.retire();
+        std::cout<<"R210_WGL_RETAINED_SOURCE_FOCUS_REQUEST_PENDING_ONLY_PASS\\n";
 
         // No current WGL context: invocation MUST be refused before any GL call.
         REQUIRE(wglMakeCurrent(nullptr,nullptr));

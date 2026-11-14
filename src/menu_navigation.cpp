@@ -28,6 +28,9 @@ bool MenuNavigation::owns(const MenuState& menu,
     return &menu_==&menu && &profile_==&profile &&
            profile_.owns(menu_) && owner_thread();
 }
+bool MenuNavigation::owns_menu(const MenuState& menu) const noexcept {
+    return &menu_==&menu && profile_.owns(menu_) && owner_thread();
+}
 bool MenuNavigation::owner_thread() const noexcept {
     return thread_==std::this_thread::get_id();
 }

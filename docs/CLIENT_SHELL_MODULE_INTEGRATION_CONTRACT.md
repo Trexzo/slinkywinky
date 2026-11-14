@@ -68,3 +68,11 @@ It is private, disabled in the existing production read-only acceptance schedule
 **Chat 2 handoff:** The native module manager must produce actual owner-thread `ModuleControlState` activation, not synthetic labels. The final cross-branch adapter should copy all current states to this value-only entry, retire records on world loss/disable/unload, and never call into Minecraft during GL painting. If module-owner and WGL-render-owner threads differ, do not bypass the current owner check; coordinate a bounded copy-only handoff and call the JNI publisher from the admitted render boundary. No game pointers or direct shared callbacks should cross this interface.
 
 R209's Java 8/JNI pixel test was completed with a disposable WGL fixture and no original Minecraft process. It is not yet proof of Chat 2 runtime publication or real module effect.
+
+## R210 Chat 1 request-control handoff
+
+PR #1 now provides `GuiModuleControlHandoff` (source-owner request, bounded one-slot transport, module-owner dequeue, validated acknowledgement/denial) and `WglRetainedMenuPreview::queue_focused_runtime_toggle`. The latter does not intercept real original Minecraft mouse/keyboard input and is not invoked by the original passive acceptance; it requires a separately authenticated input gesture before production activation.
+
+Only source-confirmed `Sprint` may be requested. A pending GUI request does not modify `MenuState.preview_enabled`, the ArrayList feed, or game motion. Only a later owner-supplied complete `ModuleArrayListSnapshot` whose request ID, sequence, world generation and requested flag match is accepted/published. An actual `active_in_world` false is allowed even for requested true when the world is not ready. Denial leaves the last state intact; invalid/replayed acknowledgment revokes the feed. No PR #2 file is copied into PR #1. For a real integration, the admitted module owner must map the copied GUI command to PR #2's `ModuleControlRequest` and copy its `ModuleControlState` response back across the render boundary.
+
+Full Windows CTest R210 acceptance passed **100/100**; this does not establish original-game physical input exclusivity, original Slinky parity, or real live module effects.

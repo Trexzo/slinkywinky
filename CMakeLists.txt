@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(slinkywinky VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/movement.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/module_arraylist.cpp src/menu.cpp src/menu_profile.cpp src/menu_prefs.cpp src/menu_render.cpp src/menu_navigation.cpp src/menu_keyboard_router.cpp src/menu_hit_test.cpp src/menu_mouse_gesture.cpp src/menu_bitmap_font.cpp src/recovered_settings.cpp
+add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/movement.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/module_arraylist.cpp src/gui_module_control_handoff.cpp src/menu.cpp src/menu_profile.cpp src/menu_prefs.cpp src/menu_render.cpp src/menu_navigation.cpp src/menu_keyboard_router.cpp src/menu_hit_test.cpp src/menu_mouse_gesture.cpp src/menu_bitmap_font.cpp src/recovered_settings.cpp
   src/piercing_preview_prefs.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(slinkywinky_core PUBLIC Threads::Threads)
@@ -252,6 +252,13 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME r207_module_arraylist_runtime_state_only
     COMMAND slinkywinky_module_arraylist_tests)
+  # R210: source-focused GUI request -> owner acknowledgement, never preview state.
+  add_executable(slinkywinky_gui_module_control_tests
+    tests/test_gui_module_control_handoff.cpp)
+  target_link_libraries(slinkywinky_gui_module_control_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME r210_gui_module_request_ack_owner_lifecycle
+    COMMAND slinkywinky_gui_module_control_tests)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)

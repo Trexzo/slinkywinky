@@ -32,6 +32,7 @@ namespace slinkywinky {
 enum class RetainedPointerPhase : unsigned char {
     Down, Move, Up, Cancel
 };
+class GuiModuleControlHandoff;
 class WglRetainedMenuPreview final {
 public:
     WglRetainedMenuPreview();
@@ -39,6 +40,11 @@ public:
     // cancel held preview gestures. Foreign-thread calls never mutate owner.
     bool draw(HGLRC context,HDC dc,unsigned width,unsigned height);
     bool apply(MenuNavAction action);
+    // R210: opt-in source-focused request only, after a separately admitted
+    // exclusive GUI gesture; never called by passive original input hooks.
+    bool queue_focused_runtime_toggle(GuiModuleControlHandoff& handoff,
+        const ModuleArrayListFeed& source,HGLRC context,HDC dc,
+        unsigned width,unsigned height);
     // R200: source-owned compact overlay scroll before color widget hit.
     // Local preview navigation only; no OS wheel or live Minecraft hook.
     bool scroll_visible(int delta,std::size_t visible_limit) noexcept;

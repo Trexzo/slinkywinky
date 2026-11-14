@@ -25,6 +25,8 @@ class MenuNavigation final {
 public:
     MenuNavigation(MenuState& menu, MenuProfileBridge& profile);
     bool owns(const MenuState& menu,const MenuProfileBridge& profile) const noexcept;
+    // R210: prevent cross-menu identity spoofing in module-control requests.
+    bool owns_menu(const MenuState& menu) const noexcept;
     bool owner_thread() const noexcept;
     // R201 modal input fence: keyboard arrows/tab/escape cannot bypass
     // color-only mouse hit routing in the preview session.
