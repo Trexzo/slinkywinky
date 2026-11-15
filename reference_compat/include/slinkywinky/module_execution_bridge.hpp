@@ -20,6 +20,7 @@
 #include "slinkywinky/fast_mine_controller.hpp"
 #include "slinkywinky/bridge_assist_controller.hpp"
 #include "slinkywinky/auto_tool_controller.hpp"
+#include "slinkywinky/clutch_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
@@ -43,6 +44,7 @@ inline constexpr unsigned kPlayerUpdateEvent = 17;
 inline constexpr unsigned kMovementTickEvent = 16;
 inline constexpr unsigned kAutoToolInventoryEvent = 25;
 inline constexpr unsigned kAutoToolShutdownEvent = 26;
+inline constexpr unsigned kClutchRotationFlagEvent = 13;
 
 struct ReachQueryPayload {
     slinkywinky::ReachInput input{};
@@ -166,6 +168,20 @@ struct AutoToolShutdownPayload {
     AutoToolShutdownDecision decision{};
     unsigned executions=0;
 };
+struct ClutchClickPayload {
+    ClutchClickInput input{};
+    ClutchClickDecision decision{};
+    unsigned executions=0;
+};
+struct ClutchRotationPayload {
+    ClutchRotationDecision decision{};
+    unsigned executions=0;
+};
+struct ClutchLatePayload {
+    ClutchLateInput input{};
+    ClutchLateDecision decision{};
+    unsigned executions=0;
+};
 
 struct TimerFramePayload {
     TimerFrameInput input{};
@@ -250,6 +266,9 @@ struct ExecutionFrame {
     std::optional<BridgeAssistLatePayload> bridge_late{};
     std::optional<AutoToolInventoryPayload> auto_tool_inventory{};
     std::optional<AutoToolShutdownPayload> auto_tool_shutdown{};
+    std::optional<ClutchClickPayload> clutch_click{};
+    std::optional<ClutchRotationPayload> clutch_rotation{};
+    std::optional<ClutchLatePayload> clutch_late{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
@@ -879,6 +898,59 @@ public:
         return false;
     }
 
+    // R229: pinned Clutch Block-category descriptor has native event 0
+    // click priority0; event13 rotation-flag priority-100; event18 late
+    // phase priority-1000. No original client input or rotation writes.
+    bool bind_clutch(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Clutch" ||
+           definitions_[id].category!=3 ||
+           definitions_[id].subscriptions.size()!=3u ||
+           callbacks_[id][kSafeWalkEvent] ||
+           callbacks_[id][kClutchRotationFlagEvent] ||
+           callbacks_[id][kAntiDebuffEvent])return false;
+        bool click=false,rotation=false,late=false;
+        for(const auto& sub:definitions_[id].subscriptions) {
+            if(sub.event==kSafeWalkEvent && sub.priority==0)click=true;
+            else if(sub.event==kClutchRotationFlagEvent &&
+                    sub.priority==-100)rotation=true;
+            else if(sub.event==kAntiDebuffEvent &&
+                    sub.priority==-1000)late=true;
+            else return false;
+        }
+        if(!click||!rotation||!late)return false;
+        const bool first=bind(id,kSafeWalkEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.clutch_click)return;
+                auto& p=*frame.clutch_click;
+                ++p.executions;
+                p.decision=clutch_.on_tick(p.input);
+            });
+        const bool second=bind(id,kClutchRotationFlagEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.clutch_rotation)return;
+                auto& p=*frame.clutch_rotation;
+                ++p.executions;
+                p.decision=clutch_.on_rotation_flag();
+            });
+        const bool third=bind(id,kAntiDebuffEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.clutch_late)return;
+                auto& p=*frame.clutch_late;
+                ++p.executions;
+                p.decision=clutch_.on_late(p.input);
+            });
+        if(!first||!second||!third)
+            throw std::logic_error("validated Clutch callback triple failed");
+        return true;
+    }
+    bool bind_clutch_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Clutch")
+                return bind_clutch(id);
+        return false;
+    }
+
     // Source-linked Timer: utility category 4, frame event 1 priority 200
     // and toggle notification event 5 priority 0. Both must be present before
     // accepting the offline binding; no actual Minecraft timer is modified.
@@ -1143,6 +1215,10 @@ public:
             frame.event!=kAutoToolInventoryEvent)return false;
         if (frame.auto_tool_shutdown &&
             frame.event!=kAutoToolShutdownEvent)return false;
+        if(frame.clutch_click && frame.event!=kSafeWalkEvent)return false;
+        if(frame.clutch_rotation &&
+           frame.event!=kClutchRotationFlagEvent)return false;
+        if(frame.clutch_late && frame.event!=kAntiDebuffEvent)return false;
         if (frame.timer_frame && frame.event != kTimerFrameEvent)
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
@@ -1187,6 +1263,9 @@ public:
             static_cast<unsigned>(frame.bridge_late.has_value()) +
             static_cast<unsigned>(frame.auto_tool_inventory.has_value()) +
             static_cast<unsigned>(frame.auto_tool_shutdown.has_value()) +
+            static_cast<unsigned>(frame.clutch_click.has_value()) +
+            static_cast<unsigned>(frame.clutch_rotation.has_value()) +
+            static_cast<unsigned>(frame.clutch_late.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
@@ -1240,9 +1319,10 @@ public:
         const unsigned edge_place_count =
             static_cast<unsigned>(frame.safe_walk.has_value()) +
             static_cast<unsigned>(frame.fast_place.has_value()) +
-            static_cast<unsigned>(frame.fast_mine_early.has_value());
+            static_cast<unsigned>(frame.fast_mine_early.has_value()) +
+            static_cast<unsigned>(frame.clutch_click.has_value());
         const bool combined_edge_place =
-            typed_count>=2 && typed_count<=3 &&
+            typed_count>=2 && typed_count<=4 &&
             frame.event==kSafeWalkEvent &&
             typed_count==edge_place_count;
         const bool combined_outgoing_packet =
@@ -1252,9 +1332,10 @@ public:
             static_cast<unsigned>(frame.no_use_delay.has_value()) +
             static_cast<unsigned>(frame.anti_debuff.has_value()) +
             static_cast<unsigned>(frame.fast_mine_late.has_value()) +
-            static_cast<unsigned>(frame.bridge_late.has_value());
+            static_cast<unsigned>(frame.bridge_late.has_value()) +
+            static_cast<unsigned>(frame.clutch_late.has_value());
         const bool combined_late_tick =
-            typed_count>=2 && typed_count<=4 &&
+            typed_count>=2 && typed_count<=5 &&
             frame.event==kAntiDebuffEvent &&
             typed_count==late_tick_count;
         const bool combined_toggle =
@@ -1274,7 +1355,9 @@ public:
             if((frame.safe_walk && frame.safe_walk->input.in_game!=state) ||
                (frame.fast_place && frame.fast_place->input.in_game!=state) ||
                (frame.fast_mine_early &&
-                frame.fast_mine_early->input.in_game!=state))
+                frame.fast_mine_early->input.in_game!=state) ||
+               (frame.clutch_click &&
+                frame.clutch_click->input.in_game!=state))
                 return false;
         }
         if(frame.fast_mine_late && frame.no_use_delay &&
@@ -1415,6 +1498,18 @@ public:
             frame.auto_tool_shutdown->decision={};
             frame.auto_tool_shutdown->executions=0;
         }
+        if(frame.clutch_click) {
+            frame.clutch_click->decision={};
+            frame.clutch_click->executions=0;
+        }
+        if(frame.clutch_rotation) {
+            frame.clutch_rotation->decision={};
+            frame.clutch_rotation->executions=0;
+        }
+        if(frame.clutch_late) {
+            frame.clutch_late->decision={};
+            frame.clutch_late->executions=0;
+        }
         if (frame.timer_frame) {
             frame.timer_frame->decision = {};
             frame.timer_frame->executions = 0;
@@ -1479,6 +1574,7 @@ public:
     void reset_fast_mine_world_state() noexcept { fast_mine_.reset(); }
     void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
     void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
+    void reset_clutch_world_state() noexcept { clutch_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1497,6 +1593,7 @@ public:
         fast_mine_.reset();
         bridge_assist_.reset();
         auto_tool_.reset();
+        clutch_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1526,6 +1623,7 @@ private:
     FastMineController fast_mine_;
     BridgeAssistController bridge_assist_;
     AutoToolController auto_tool_;
+    ClutchController clutch_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;

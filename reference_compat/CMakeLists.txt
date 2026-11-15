@@ -322,6 +322,48 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R229: pinned Clutch three callback slots 0/13/18, with native
+  # value-only click cadence, rotation flag and snap-back lifecycle.
+  add_executable(slinkywinky_clutch_bridge_test
+    tests/test_clutch_bridge.cpp)
+  target_link_libraries(slinkywinky_clutch_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r229_clutch_source_click_rotation_snapback
+    COMMAND slinkywinky_clutch_bridge_test)
+  set_tests_properties(r229_clutch_source_click_rotation_snapback
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r229_twentytwo_native_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twentyfive_modules_with_twentytwo_decisions.tsv")
+  add_test(NAME r229_reject_clutch_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_wrong_clutch_category.tsv")
+  add_test(NAME r229_reject_clutch_click_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_wrong_clutch_click_priority.tsv")
+  add_test(NAME r229_reject_clutch_rotation_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_wrong_clutch_rotation_event.tsv")
+  add_test(NAME r229_reject_clutch_rotation_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_wrong_clutch_rotation_priority.tsv")
+  add_test(NAME r229_reject_clutch_late_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_wrong_clutch_late_priority.tsv")
+  add_test(NAME r229_reject_clutch_missing_late
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_missing_clutch_late.tsv")
+  add_test(NAME r229_reject_clutch_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r229_extra_clutch_subscription.tsv")
+  set_tests_properties(r229_reject_clutch_category
+    r229_reject_clutch_click_priority
+    r229_reject_clutch_rotation_event
+    r229_reject_clutch_rotation_priority
+    r229_reject_clutch_late_priority
+    r229_reject_clutch_missing_late
+    r229_reject_clutch_extra_subscription PROPERTIES WILL_FAIL TRUE)
   # R228: source-backed original Block Auto Tool inventory/shutdown
   # callback pair, events 25/26. Pure C++ policy, no Minecraft or JNI.
   add_executable(slinkywinky_auto_tool_bridge_test

@@ -481,6 +481,13 @@ int main(int argc, char** argv) {
         if(has_auto_tool)
             require(bridge.bind_auto_tool_from_catalog(),
                     "Auto Tool category3 event25/26 priority0 pair rejected");
+        std::size_t clutch_id=manifest.modules.size();
+        for(std::size_t i=0;i<manifest.modules.size();++i)
+            if(manifest.modules[i].name=="Clutch")clutch_id=i;
+        const bool has_clutch=clutch_id<manifest.modules.size();
+        if(has_clutch)
+            require(bridge.bind_clutch_from_catalog(),
+                    "Clutch category3 event0:0 / event13:-100 / event18:-1000 descriptor rejected");
         std::size_t timer_id = manifest.modules.size();
         for (std::size_t i = 0; i < manifest.modules.size(); ++i)
             if (manifest.modules[i].name == "Timer") timer_id = i;
@@ -525,6 +532,7 @@ int main(int argc, char** argv) {
                                                (has_fast_mine ? 2u : 0u) +
                                                (has_bridge_assist ? 4u : 0u) +
                                                (has_auto_tool ? 2u : 0u) +
+                                               (has_clutch ? 3u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
                                                (has_sprint ? 2u : 0u) +
@@ -540,7 +548,8 @@ int main(int argc, char** argv) {
                     (has_sprint ? 1u : 0u) - (has_strafe ? 1u : 0u) -
                     (has_fast_mine ? 1u : 0u) -
                     (has_bridge_assist ? 3u : 0u) -
-                    (has_auto_tool ? 1u : 0u) &&
+                    (has_auto_tool ? 1u : 0u) -
+                    (has_clutch ? 2u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -564,8 +573,9 @@ int main(int argc, char** argv) {
                 "Fast Accel / Strafe callbacks not routed through event 22");
         require(c.implemented_per_event[kSafeWalkEvent] ==
                     (has_safe_walk ? 1u : 0u) + (has_fast_place ? 1u : 0u) +
-                    (has_fast_mine ? 1u : 0u),
-                "Safe Walk / Fast Place original event 0 binding drift");
+                    (has_fast_mine ? 1u : 0u) +
+                    (has_clutch ? 1u : 0u),
+                "Safe Walk / Fast Place / Fast Mine / Clutch event0 drift");
         require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
                 "Timer frame callback not routed through event 1");
         require(c.implemented_per_event[kTimerToggleEvent] ==
@@ -576,12 +586,16 @@ int main(int argc, char** argv) {
                 c.implemented_per_event[kAutoToolShutdownEvent] ==
                     (has_auto_tool ? 1u : 0u),
                 "Auto Tool native inventory/shutdown event25/26 binding drift");
+        require(c.implemented_per_event[kClutchRotationFlagEvent] ==
+                    (has_clutch ? 1u : 0u),
+                "Clutch native rotation-flag event13 binding drift");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u) +
                     (has_fast_mine ? 1u : 0u) +
-                    (has_bridge_assist ? 1u : 0u),
-                "No Use Delay / Anti Debuff / Fast Mine / Bridge Assist event18 mismatch");
+                    (has_bridge_assist ? 1u : 0u) +
+                    (has_clutch ? 1u : 0u),
+                "No Use Delay / Anti Debuff / Fast Mine / Bridge Assist / Clutch event18 mismatch");
         require(c.implemented_per_event[kItemUseFixBeforeEvent] ==
                     (has_no_hit_delay ? 1u : 0u) + (has_item_use_fix ? 1u : 0u) +
                     (has_keep_sprint ? 1u : 0u) +
@@ -604,7 +618,8 @@ int main(int argc, char** argv) {
                 event != kFastAccelEvent && event != kSafeWalkEvent &&
                 event != kTimerFrameEvent && event != kTimerToggleEvent &&
                 event != kAutoToolInventoryEvent &&
-                event != kAutoToolShutdownEvent)
+                event != kAutoToolShutdownEvent &&
+                event != kClutchRotationFlagEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -1256,6 +1271,58 @@ int main(int argc, char** argv) {
             bridge.reset_bridge_assist_world_state();
         }
 
+        if(has_clutch) {
+            require(bridge.request(clutch_id,true),
+                    "Clutch owner enable rejected");
+            require(!bridge.apply(false,false),
+                    "Clutch bypassed world admission");
+            require(bridge.apply(true,true),
+                    "Clutch world-owner admission refused");
+            ExecutionFrame f;
+            f.event=kAntiDebuffEvent;
+            f.world_present=f.player_present=true;
+            ClutchLateInput l{};
+            l.in_game=true;
+            l.has_planned_candidate=true;
+            l.holding_blocks=true;
+            l.candidate_block={1,2,3};
+            l.face_up=true;
+            l.rotation_priority_granted=true;
+            f.clutch_late=ClutchLatePayload{l,{},0};
+            require(bridge.dispatch(f) && f.clutch_late->executions==1 &&
+                    f.clutch_late->decision.planned,
+                    "Clutch late original source planning state not accepted");
+            f=ExecutionFrame{};
+            f.event=kClutchRotationFlagEvent;
+            f.world_present=f.player_present=true;
+            f.clutch_rotation=ClutchRotationPayload{};
+            require(bridge.dispatch(f) && f.clutch_rotation->executions==1 &&
+                    f.clutch_rotation->decision.override_yaw,
+                    "Clutch rotation ownership did not follow late planning");
+            f=ExecutionFrame{};
+            f.event=kSafeWalkEvent;
+            f.world_present=f.player_present=true;
+            ClutchClickInput click{};
+            click.in_game=true;click.hit_is_block=true;click.hit_top=true;
+            click.hit={1,2,3};click.adjacent={1,3,3};
+            f.clutch_click=ClutchClickPayload{click,{},0};
+            require(bridge.dispatch(f) && f.clutch_click->executions==1 &&
+                    f.clutch_click->decision.proposed_use_click,
+                    "Clutch planned-block tick click decision not calculated");
+            require(bridge.request(clutch_id,false),
+                    "Clutch disable rejected");
+            require(bridge.apply(true,true),
+                    "Clutch disable refused");
+            f=ExecutionFrame{};
+            f.event=kAntiDebuffEvent;
+            f.world_present=f.player_present=true;
+            f.clutch_late=ClutchLatePayload{l,{},0};
+            require(bridge.dispatch(f) && f.clutch_late->executions==0 &&
+                    !f.clutch_late->decision.planned,
+                    "Disabled Clutch callback still executing");
+            bridge.reset_clutch_world_state();
+        }
+
         if(has_auto_tool) {
             require(bridge.request(auto_tool_id,true),
                     "Auto Tool enable rejected");
@@ -1474,14 +1541,14 @@ int main(int argc, char** argv) {
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
                     has_fast_place && has_fast_mine && has_bridge_assist &&
-                    has_auto_tool && has_timer && has_keep_sprint &&
-                    has_sprint && has_strafe &&
+                    has_auto_tool && has_clutch && has_timer &&
+                    has_keep_sprint && has_sprint && has_strafe &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 21 &&
-                    c.executable_callback_bindings == 33 &&
-                    c.unimplemented_callback_subscriptions == 138,
+                    c.modules_with_executable_bindings == 22 &&
+                    c.executable_callback_bindings == 36 &&
+                    c.unimplemented_callback_subscriptions == 135,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
