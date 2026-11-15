@@ -1360,8 +1360,11 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
         const auto* frame=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
         REQUIRE(frame && frame->visible.front().expanded);
+        // R225: press AWAY from the original knob. Original Slinky
+        // immediately positions the selected handle on Down, without
+        // requiring an intermediate mouse Move callback.
         const float start=handle==0?
-            source.example_value:source.example_other;
+            source.example_value-0.5f:source.example_other+0.5f;
         const float ratio=(start-source.min_value)/
             (source.max_value-source.min_value);
         const auto first=physical(
@@ -1389,12 +1392,49 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
         REQUIRE(preview.fixture_pointer_event(
             down,ctx.gl,ctx.dc,676,630,epoch,
             ledger,router,first[0],first[1],30000,true));
+        // R225: a WGL paint immediately after Down, with NO Move, must
+        // show the source-selected new value and keep profile unchanged.
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* downFrame=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(downFrame && downFrame->numeric_drag_preview &&
+                !downFrame->recovered_range_overrides[rangeIndex] &&
+                downFrame->numeric_drag_preview->handle==handle);
+        const auto& downDrag=*downFrame->numeric_drag_preview;
+        REQUIRE(std::fabs((handle==0?downDrag.lower:downDrag.upper)-
+                          start)<source.step*1.5f);
+        REQUIRE(std::fabs((handle==0?downDrag.upper:downDrag.lower)-
+                          (handle==0?source.example_other:
+                                     source.example_value))<0.0001f);
+        REQUIRE(preview.profile_snapshot(ctx.gl,ctx.dc,676,630)==original);
+
+        // Another held Move, repaint, then a second Move across the
+        // original opposite knob. The owner and source hit cannot drift.
+        const float intermediate=handle==0?
+            source.example_other+0.6f:source.example_value-0.6f;
+        const float middleRatio=(intermediate-source.min_value)/
+            (source.max_value-source.min_value);
+        const auto middle=physical(
+            track->x+track->width*middleRatio,
+            track->y+track->height*0.5f);
+        REQUIRE(preview.fixture_pointer_event(
+            move,ctx.gl,ctx.dc,676,630,epoch,
+            ledger,router,middle[0],middle[1],30020,true));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* midFrame=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(midFrame && midFrame->numeric_drag_preview &&
+                !midFrame->recovered_range_overrides[rangeIndex]);
+        REQUIRE(std::fabs(midFrame->numeric_drag_preview->lower-
+                          intermediate)<source.step*1.5f &&
+                std::fabs(midFrame->numeric_drag_preview->upper-
+                          intermediate)<source.step*1.5f);
+        REQUIRE(preview.profile_snapshot(ctx.gl,ctx.dc,676,630)==original);
         REQUIRE(preview.fixture_pointer_event(
             move,ctx.gl,ctx.dc,676,630,epoch,
             ledger,router,last[0],last[1],30050,true));
-        // R224: native WGL now paints the held, source-quantized
-        // original range endpoint BEFORE Up, including push across the
-        // opposite knob. It must NOT prematurely persist the value.
+        // R224/R225: the native WGL paint updates before Up, including
+        // push across the opposite endpoint, without early persistence.
         REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
         const auto* heldFrame=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
@@ -1438,7 +1478,7 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(expected,snapshot());
     }
-    std::cout<<"R196_WGL_RANGE_PRESSED_HANDLE_CAPTURE_AND_CLAMP_PASS\n";
+    std::cout<<"R225_WGL_DOWN_FIRST_FRAME_REPEATED_MOVE_RANGE_PUSH_PASS\n";
 }
 
 // R197: exercise the real retained GL11 hit-to-preview bridges for the

@@ -448,6 +448,30 @@ bool WglRetainedMenuPreview::pointer(
     }
     const auto& frame=*last_drawn_frame_;
     constexpr auto mode=MenuPanelMode::CompactOverlay;
+    // R225: the original draw_slider_track evaluates mouse position on
+    // the same frame that activates a track, before the first Move.
+    // Reuse this source geometry for both Down and subsequent Move; only
+    // the temporary GUI render sidecar changes until verified mouse Up.
+    const auto update_held_numeric=[&]() -> bool {
+        const auto drag=menu_.numeric_drag_preview();
+        if(!drag)return true; // non-numeric input has no numeric sidecar
+        const auto panel=menu_panel_geometry(
+            width,height,frame.appearance.wide,mode);
+        const auto& all=recovered_widget_catalog();
+        if(!panel || panel->scale<=0.0f ||
+           drag->widget_index>=all.size())return false;
+        const auto track=menu_numeric_track_geometry(
+            frame,panel->logical_width(),panel->logical_height(),
+            drag->catalog_index,drag->widget_index);
+        const auto value=track?menu_numeric_value_at_x(
+            all[drag->widget_index],*track,
+            (static_cast<float>(x)-panel->left)/panel->scale):
+            std::nullopt;
+        if(!value)return false;
+        // An unchanged/quantized step is not a failed input event.
+        menu_.move_numeric_drag_preview(*value);
+        return true;
+    };
     if(phase==RetainedPointerPhase::Down) {
         if(!pointer_gesture_.press(frame,mode,x,y,monotonic_ms,true)) {
             menu_.cancel_numeric_drag_preview();
@@ -458,13 +482,14 @@ bool WglRetainedMenuPreview::pointer(
         // unchanged until a verified Up.
         const auto hit=hit_test_menu(frame,mode,x,y);
         if(hit && (hit->kind==MenuHitKind::RecoveredSliderPreview ||
-                   hit->kind==MenuHitKind::RecoveredRangePreview) &&
-           !menu_.begin_numeric_drag_preview(
-               hit->catalog_index,hit->control_index,
-               hit->kind==MenuHitKind::RecoveredRangePreview?
-                   hit->sub_index:0u)) {
-            invalidate_painted_input();
-            return false;
+                   hit->kind==MenuHitKind::RecoveredRangePreview)) {
+            if(!menu_.begin_numeric_drag_preview(
+                    hit->catalog_index,hit->control_index,
+                    hit->kind==MenuHitKind::RecoveredRangePreview?
+                        hit->sub_index:0u) || !update_held_numeric()) {
+                invalidate_painted_input();
+                return false;
+            }
         }
         return true;
     }
@@ -473,31 +498,11 @@ bool WglRetainedMenuPreview::pointer(
             menu_.cancel_numeric_drag_preview();
             return false;
         }
-        // Original draw_slider_track updates the held value while moving.
-        // Use a temporary render-only snapshot: never write profile data
-        // or publish a module-control request before Up.
-        if(const auto drag=menu_.numeric_drag_preview()) {
-            const auto panel=menu_panel_geometry(
-                width,height,frame.appearance.wide,mode);
-            const auto& all=recovered_widget_catalog();
-            if(!panel || panel->scale<=0.0f ||
-               drag->widget_index>=all.size()) {
-                invalidate_painted_input();
-                return false;
-            }
-            const auto track=menu_numeric_track_geometry(
-                frame,panel->logical_width(),panel->logical_height(),
-                drag->catalog_index,drag->widget_index);
-            const auto value=track?menu_numeric_value_at_x(
-                all[drag->widget_index],*track,
-                (static_cast<float>(x)-panel->left)/panel->scale):
-                std::nullopt;
-            if(!value) {
-                invalidate_painted_input();
-                return false;
-            }
-            // A quantized no-op is a valid held move, not a lost press.
-            menu_.move_numeric_drag_preview(*value);
+        // R225: use the same source position mapper as initial Down.
+        // A successful Move may repaint repeatedly without persisting.
+        if(!update_held_numeric()) {
+            invalidate_painted_input();
+            return false;
         }
         // R201: while a color HSL track remains the same verified modal
         // hit, update its independent preview HSL on every held move.
