@@ -227,14 +227,14 @@ int main() {
         CHECK(ranged.move_numeric_drag_preview(source.max_value));
         const auto drag=ranged.numeric_drag_preview();
         CHECK(drag && drag->handle==0u);
-        CHECK(drag->lower==source.example_other &&
-              drag->upper==source.example_other);
+        CHECK(drag->lower==source.max_value &&
+              drag->upper==source.max_value);
         CHECK(!ranged.recovered_range_override(targetRange));
         const auto rangeDuring=rangeSession.next(ranged,&ranges,&rangeNav);
         CHECK(rangeDuring && rangeDuring->numeric_drag_preview);
         const auto rangeTip=menu_numeric_tooltip_geometry(
             *rangeDuring,panel->logical_width(),panel->logical_height());
-        CHECK(rangeTip && rangeTip->label=="4.5 - 4.5 blocks");
+        CHECK(rangeTip && rangeTip->label.find("8.0 - 8.0")!=std::string::npos);
         CHECK(rangeGate.move(*rangeDuring,mode,
                              nearEnd.first,nearEnd.second,true));
         const auto rangeRelease=rangeGate.release(

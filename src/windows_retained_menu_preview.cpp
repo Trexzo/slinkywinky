@@ -50,6 +50,7 @@ void WglRetainedMenuPreview::invalidate_painted_input() noexcept {
     // Caller must already own the pinned render thread. A foreign thread
     // cannot revoke this instance's legitimate painted snapshot.
     pointer_gesture_.cancel();
+    menu_.cancel_numeric_drag_preview();
     last_drawn_frame_.reset();
     menu_.set_numeric_hover(std::nullopt);
     menu_.set_bind_hover_row(std::nullopt);
@@ -165,6 +166,7 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
         return false;
     // Navigation invalidates held gestures AND the last-painted hit surface.
     pointer_gesture_.cancel();
+    menu_.cancel_numeric_drag_preview();
     last_drawn_frame_.reset();
     if(!navigation_.apply(action)) {
         refused_actions_++;
@@ -417,8 +419,10 @@ bool WglRetainedMenuPreview::pointer(
         invalidate_painted_input(); // Wrong owner/viewport: revoke geometry.
         return false;
     }
-    if(phase==RetainedPointerPhase::Cancel)
+    if(phase==RetainedPointerPhase::Cancel) {
+        menu_.cancel_numeric_drag_preview();
         return pointer_gesture_.cancel();
+    }
     // R186: the caller's stale dimensions are insufficient. A game render
     // can change GL_VIEWPORT between valid paints without changing WGL
     // context/DC. Revoke the old painted geometry and held gesture.
@@ -432,21 +436,69 @@ bool WglRetainedMenuPreview::pointer(
     if(!exclusive_dispatch_attested || !foreground_verified ||
        !monotonic_ms || !pointer_frames_.attached() || !last_drawn_frame_) {
         pointer_gesture_.cancel(); // Fail closed on lost ownership/focus.
+        menu_.cancel_numeric_drag_preview();
         return false;
     }
     if(phase!=RetainedPointerPhase::Down &&
        phase!=RetainedPointerPhase::Move &&
        phase!=RetainedPointerPhase::Up) {
         pointer_gesture_.cancel();
+        menu_.cancel_numeric_drag_preview();
         return false;
     }
     const auto& frame=*last_drawn_frame_;
     constexpr auto mode=MenuPanelMode::CompactOverlay;
-    if(phase==RetainedPointerPhase::Down)
-        return pointer_gesture_.press(
-            frame,mode,x,y,monotonic_ms,true);
+    if(phase==RetainedPointerPhase::Down) {
+        if(!pointer_gesture_.press(frame,mode,x,y,monotonic_ms,true)) {
+            menu_.cancel_numeric_drag_preview();
+            return false;
+        }
+        // R224: establish a render-only preview for the source-identified
+        // numeric widget. The actual profile and module state remain
+        // unchanged until a verified Up.
+        const auto hit=hit_test_menu(frame,mode,x,y);
+        if(hit && (hit->kind==MenuHitKind::RecoveredSliderPreview ||
+                   hit->kind==MenuHitKind::RecoveredRangePreview) &&
+           !menu_.begin_numeric_drag_preview(
+               hit->catalog_index,hit->control_index,
+               hit->kind==MenuHitKind::RecoveredRangePreview?
+                   hit->sub_index:0u)) {
+            invalidate_painted_input();
+            return false;
+        }
+        return true;
+    }
     if(phase==RetainedPointerPhase::Move) {
-        if(!pointer_gesture_.move(frame,mode,x,y,true))return false;
+        if(!pointer_gesture_.move(frame,mode,x,y,true)) {
+            menu_.cancel_numeric_drag_preview();
+            return false;
+        }
+        // Original draw_slider_track updates the held value while moving.
+        // Use a temporary render-only snapshot: never write profile data
+        // or publish a module-control request before Up.
+        if(const auto drag=menu_.numeric_drag_preview()) {
+            const auto panel=menu_panel_geometry(
+                width,height,frame.appearance.wide,mode);
+            const auto& all=recovered_widget_catalog();
+            if(!panel || panel->scale<=0.0f ||
+               drag->widget_index>=all.size()) {
+                invalidate_painted_input();
+                return false;
+            }
+            const auto track=menu_numeric_track_geometry(
+                frame,panel->logical_width(),panel->logical_height(),
+                drag->catalog_index,drag->widget_index);
+            const auto value=track?menu_numeric_value_at_x(
+                all[drag->widget_index],*track,
+                (static_cast<float>(x)-panel->left)/panel->scale):
+                std::nullopt;
+            if(!value) {
+                invalidate_painted_input();
+                return false;
+            }
+            // A quantized no-op is a valid held move, not a lost press.
+            menu_.move_numeric_drag_preview(*value);
+        }
         // R201: while a color HSL track remains the same verified modal
         // hit, update its independent preview HSL on every held move.
         // Other controls remain release-only and side effects are local.
@@ -462,14 +514,21 @@ bool WglRetainedMenuPreview::pointer(
     }
     const auto hit=pointer_gesture_.release(
         frame,mode,x,y,monotonic_ms,true);
-    if(!hit)return false;
+    if(!hit) {
+        menu_.cancel_numeric_drag_preview();
+        return false;
+    }
     // R184: slider commit still reads the EXACT painted frame below.
     // Keep the snapshot alive until the entire dispatch returns, then
     // invalidate it even if the local-only profile mutation is refused.
     struct InvalidatePaintOnReturn final {
         std::optional<MenuRenderFrame>& frame;
-        ~InvalidatePaintOnReturn() {frame.reset();}
-    } invalidate_paint{last_drawn_frame_};
+        MenuState& menu;
+        ~InvalidatePaintOnReturn() {
+            menu.cancel_numeric_drag_preview();
+            frame.reset();
+        }
+    } invalidate_paint{last_drawn_frame_,menu_};
     // The precise source hit was certified at mouse-down and mouse-up.
     // No arbitrary module values or gameplay input are dispatched.
     switch(hit->kind) {
@@ -826,6 +885,7 @@ bool WglRetainedMenuPreview::close() noexcept {
     // Every frame uses a stack-local WGL host that is already closed.
     // Drop all held input and the owner-bound snapshot epoch.
     pointer_gesture_.cancel();
+    menu_.cancel_numeric_drag_preview();
     last_drawn_frame_.reset();
     if(!pointer_frames_.detach())return false;
     context_=nullptr;

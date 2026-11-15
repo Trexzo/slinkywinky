@@ -221,14 +221,17 @@ bool MenuState::move_numeric_drag_preview(float requested) noexcept {
     }
     if(source.kind!=RecoveredWidgetKind::Range ||
        drag.handle>1u)return false;
+    // R224: original Slinky moves the opposite handle whenever the
+    // dragged one crosses it. The former temporary visual clamping
+    // disagreed with the R220 committed value and visibly snapped on Up.
     if(drag.handle==0u) {
-        const float next=std::min(result,drag.upper);
-        if(drag.lower==next)return false;
-        drag.lower=next;
+        if(drag.lower==result && drag.upper>=result)return false;
+        drag.lower=result;
+        if(drag.lower>drag.upper)drag.upper=drag.lower;
     } else {
-        const float next=std::max(result,drag.lower);
-        if(drag.upper==next)return false;
-        drag.upper=next;
+        if(drag.upper==result && drag.lower<=result)return false;
+        drag.upper=result;
+        if(drag.upper<drag.lower)drag.lower=drag.upper;
     }
     return true;
 }

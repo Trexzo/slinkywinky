@@ -1392,11 +1392,22 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
         REQUIRE(preview.fixture_pointer_event(
             move,ctx.gl,ctx.dc,676,630,epoch,
             ledger,router,last[0],last[1],30050,true));
-        // Drag does not silently mutate the source value before Up.
+        // R224: native WGL now paints the held, source-quantized
+        // original range endpoint BEFORE Up, including push across the
+        // opposite knob. It must NOT prematurely persist the value.
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
         const auto* heldFrame=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
-        REQUIRE(heldFrame &&
+        const float expectedHeld=handle==0?
+            source.max_value:source.min_value;
+        REQUIRE(heldFrame && heldFrame->numeric_drag_preview &&
                 !heldFrame->recovered_range_overrides[rangeIndex]);
+        REQUIRE(heldFrame->numeric_drag_preview->widget_index==rangeIndex &&
+                heldFrame->numeric_drag_preview->handle==handle &&
+                std::fabs(heldFrame->numeric_drag_preview->lower-
+                          expectedHeld)<0.0001f &&
+                std::fabs(heldFrame->numeric_drag_preview->upper-
+                          expectedHeld)<0.0001f);
         REQUIRE(preview.fixture_pointer_event(
             up,ctx.gl,ctx.dc,676,630,epoch,
             ledger,router,last[0],last[1],30070,true));
@@ -1405,7 +1416,7 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
         REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
         const auto* committed=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
-        REQUIRE(committed &&
+        REQUIRE(committed && !committed->numeric_drag_preview &&
                 committed->recovered_range_overrides[rangeIndex]);
         const auto selected=*committed->recovered_range_overrides[rangeIndex];
         // R220: the native source range handler PUSHES the opposite
