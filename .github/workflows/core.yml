@@ -13,12 +13,37 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: R218 synthetic P6 diagnostic parser tests
+        run: python -m unittest discover -s tests -p test_probe_wgl_arraylist_ppm.py -v
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build }}
       - name: Build
         run: cmake --build build --config ${{ matrix.build }} --parallel
       - name: Test
+        env:
+          # Disposable WGL fixture only. Capture a P6 frame before its
+          # exact-accent assertion, without touching any real game display.
+          SLINKYWINKY_R207_ARRAYLIST_PPM: wgl-arraylist-ci.ppm
         run: ctest --test-dir build -C ${{ matrix.build }} --output-on-failure
+      - name: R218 inspect failed Windows ArrayList pixels (read-only)
+        if: ${{ failure() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath build/wgl-arraylist-ci.ppm) {
+            python tools/probe_wgl_arraylist_ppm.py build/wgl-arraylist-ci.ppm
+          } else {
+            Write-Output 'R218_WGL_FRAME_NOT_CREATED; failing test may have been unrelated'
+          }
+      - name: R219 inspect disposable WGL channel depths (read-only)
+        if: ${{ failure() && runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          cmake -S tools/r219_wgl_probe -B build-r219-wgl -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-r219-wgl --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./build-r219-wgl/Release/r219_wgl_probe.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: R102 read-only original-window identity negative controls
         run: python -m unittest discover -s tests -p test_windows_r102_window_evidence.py -v
       - name: Demo smoke test

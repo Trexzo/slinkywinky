@@ -1,0 +1,107 @@
+name: Pinned OpenSlinky source reference audit
+on:
+  push:
+    branches:
+      - 'integration/openslinky-*'
+  pull_request:
+    paths:
+      - '.gitmodules'
+      - 'references/OpenSlinky'
+      - 'docs/OPENSLINKY_INTEGRATION.md'
+      - 'tools/audit_openslinky_reference.py'
+      - 'tools/verify_candidate_binary.py'
+      - 'tests/test_candidate_binary_verifier.py'
+      - 'tools/audit_openslinky_dispatch.py'
+      - 'tests/test_openslinky_dispatch_audit.py'
+      - 'tools/audit_openslinky_data.py'
+      - 'tests/test_openslinky_data_audit.py'
+      - 'reference_compat/**'
+      - 'tools/export_candidate_event_manifest.py'
+      - 'tests/test_candidate_event_fixture_export.py'
+      - 'tools/probe_openslinky_native_toolchain.py'
+      - 'tests/test_openslinky_native_toolchain.py'
+      - 'tools/prepare_openslinky_registration_66.py'
+      - 'tests/test_openslinky_registration_66.py'
+      - 'tools/verify_compiled_registration_66.py'
+      - 'tests/test_compiled_registration_66.py'
+      - 'tools/extract_r196_linked_descriptor_manifest.py'
+      - 'tests/test_r196_linked_descriptor_manifest.py'
+      - 'tools/export_r197_private_native_records.py'
+      - 'tests/test_r197_native_record_serializer.py'
+      - 'tools/run_r197_private_native_acceptance.ps1'
+      - '.github/workflows/openslinky-reference-audit.yml'
+permissions:
+  contents: read
+jobs:
+  source-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Candidate-verifier unit tests (synthetic PE only)
+        run: python3 -m unittest discover -s tests -p 'test_candidate_binary_verifier.py' -v
+      - name: Candidate event fixture exporter tests (synthetic native tables only)
+        run: python3 -m unittest discover -s tests -p 'test_candidate_event_fixture_export.py' -v
+      - name: Event dispatcher audit tests (synthetic data only)
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_dispatch_audit.py' -v
+      - name: Pinned C++ event dispatcher inventory
+        run: python3 tools/audit_openslinky_dispatch.py --json-out dispatch_audit.json
+      - name: Assemble public reference data only (no DLL or injector)
+        run: clang --target=x86_64-pc-windows-msvc -c references/OpenSlinky/src/data/data.s -o reference_data.obj
+      - name: Data object and relocation regression tests
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_data_audit.py' -v
+      - name: Inspect COFF data layout (source-only metadata)
+        run: python3 tools/audit_openslinky_data.py --object reference_data.obj --json-out data_audit.json
+      - name: Native reference prerequisite probe tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_native_toolchain.py' -v
+      - name: Original 66-registration correction safety tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_openslinky_registration_66.py' -v
+      - name: Compiled PE/COFF registration verifier tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_compiled_registration_66.py' -v
+      - name: Linked native descriptor extractor tests (synthetic PE only)
+        run: python3 -m unittest discover -s tests -p 'test_r196_linked_descriptor_manifest.py' -v
+      - name: Private native-record serializer regression tests (synthetic only)
+        run: python3 -m unittest discover -s tests -p 'test_r197_native_record_serializer.py' -v
+      - name: Native reference compiler availability (informational; no DLL build)
+        run: python3 tools/probe_openslinky_native_toolchain.py --json-out native_toolchain_preflight.json
+      - name: Static inventory (never run untrusted native code)
+        run: python3 tools/audit_openslinky_reference.py --json-out reference_audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openslinky-static-reference-audit
+          path: |
+            reference_audit.json
+            dispatch_audit.json
+            data_audit.json
+            native_toolchain_preflight.json
+
+  native-event-replay:
+    name: Offline C++ reference event replay
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure C++ reference replay (Debug)
+        run: cmake -S reference_compat -B build-reference-debug -DCMAKE_BUILD_TYPE=Debug
+      - name: Build and test C++ reference replay (Debug)
+        run: |
+          cmake --build build-reference-debug --config Debug --parallel
+          ctest --test-dir build-reference-debug -C Debug --output-on-failure
+      - name: Compile R195 first-party manager harness source only (Windows; no upstream object)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S reference_compat/compiled_manager_harness -B build-r195-harness-source -DSLINKY_MANAGER_SOURCE_ONLY=ON
+          cmake --build build-r195-harness-source --config Release --parallel
+      - name: Configure C++ reference replay (Release)
+        run: cmake -S reference_compat -B build-reference-release -DCMAKE_BUILD_TYPE=Release
+      - name: Build and test C++ reference replay (Release)
+        run: |
+          cmake --build build-reference-release --config Release --parallel
+          ctest --test-dir build-reference-release -C Release --output-on-failure

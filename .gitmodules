@@ -1,0 +1,3 @@
+[submodule "references/OpenSlinky"]
+	path = references/OpenSlinky
+	url = https://github.com/Skid-Technology/OpenSlinky.git

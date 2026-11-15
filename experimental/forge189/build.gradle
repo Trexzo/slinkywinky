@@ -33,3 +33,12 @@ sourceSets {
     }
 }
 compileJava.options.encoding = 'UTF-8'
+
+ // R214 test-only Java8 agent. This manifest attribute has NO effect during
+ // ordinary Forge mod loading; it must be explicitly passed as -javaagent
+ // in an isolated TEMP-only launch with the matching JVM property.
+jar {
+    manifest {
+        attributes 'Premain-Class': 'dev.slinkywinky.forge.R214NoSlowAgent'
+    }
+}
