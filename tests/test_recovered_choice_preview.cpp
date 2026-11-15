@@ -186,7 +186,7 @@ int main() {
             *invFrame,panel->logical_width(),panel->logical_height(),
             invModule,invWidget);
         CHECK(clear);
-        const auto clearAt=toClient(clear->x+10.0f,clear->y+10.0f);
+        const auto clearAt=xy(clear->x+10.0f,clear->y+10.0f);
         const auto clearHit=hit_test_menu(
             *invFrame,mode,clearAt.first,clearAt.second);
         CHECK(clearHit &&
