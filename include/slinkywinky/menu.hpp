@@ -241,6 +241,13 @@ public:
     }
     std::optional<MenuProfileActionPreview> profile_action_preview()
         const noexcept { return profile_action_preview_; }
+    // R230: every visible confirmation/dropdown owns the background
+    // navigation and profile-edit surface. No MenuState layout change.
+    bool modal_input_owned() const noexcept {
+        return dropdown_preview_.has_value() ||
+               unload_confirmation_preview_ ||
+               profile_action_preview_.has_value();
+    }
     bool set_profile_icon_hover(
         std::optional<MenuProfileIconHover> hover) noexcept;
     std::optional<MenuProfileIconHover> profile_icon_hover()

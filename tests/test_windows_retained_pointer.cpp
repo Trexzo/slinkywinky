@@ -7,6 +7,8 @@
 #include "slinkywinky/windows_menu_gl11.hpp"
 #include "slinkywinky/windows_menu_system_font.hpp"
 #include "slinkywinky/menu_profile_preview.hpp"
+#include "slinkywinky/menu_profile_interaction_geometry.hpp"
+#include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/windows_menu_overlay_host.hpp"
 #include "slinkywinky/windows_retained_menu_preview.hpp"
@@ -2187,6 +2189,153 @@ void verify_r227_wgl_select_item(Context& ctx,const State& expected) {
     std::cout<<"R227_WGL_ORIGINAL_SELECT_ITEM_SEARCH_MODAL_PASS\\n";
 }
 
+// R230: real first-party WGL modal buttons, with paired synthetic
+// input only. No original Minecraft process or live key hook exists.
+void verify_r230_wgl_confirmation_ownership(
+        Context& ctx,const State& expected) {
+    constexpr unsigned width=676u,height=630u;
+    constexpr auto mode=MenuPanelMode::CompactOverlay;
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    WglRetainedMenuPreview preview;
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto panel=menu_panel_geometry(width,height,false,mode);
+    REQUIRE(panel);
+    const auto physical=[&](float x,float y) {
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    const auto baseline=preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(baseline);
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(preview.fixture_navigation());
+    constexpr std::uint64_t epoch=2300u;
+    REQUIRE(ledger.request(epoch,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(epoch,true,true,true));
+    REQUIRE(preview.fixture_begin_keyboard(epoch,ledger,router));
+    const auto click=[&](const std::array<int,2>& pt,
+                         std::uint64_t moment) {
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            pt[0],pt[1],moment,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            pt[0],pt[1],moment+40u,true));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    };
+    const auto guarded_key=[&](unsigned key) {
+        const auto press=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            key,true,true);
+        REQUIRE(press.delivery==MenuKeyDelivery::MenuExclusive &&
+                !press.action_applied && !press.request_close);
+        const auto release=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            key,false,true);
+        REQUIRE(release.delivery==MenuKeyDelivery::MenuExclusive &&
+                !release.action_applied && !release.request_close);
+        REQUIRE(ledger.tracked_released());
+    };
+    const auto* main=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(main && !main->unload_confirmation_preview);
+    const auto unload=physical(
+        menu_nav_x+6.5f*menu_tab_width(panel->logical_width()),
+        menu_nav_y+21.0f);
+    const auto uhit=hit_test_menu(
+        *main,mode,unload[0],unload[1]);
+    REQUIRE(uhit && uhit->kind==MenuHitKind::UnloadTab);
+    click(unload,33000u);
+    const auto* open=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(open && open->unload_confirmation_preview &&
+            preview.tab()==MenuTab::Combat &&
+            preview.profile_snapshot(ctx.gl,ctx.dc,width,height)==baseline);
+    const auto layout=menu_unload_modal_geometry(
+        *open,panel->logical_width(),panel->logical_height());
+    REQUIRE(layout);
+    REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    REQUIRE(!preview.scroll_visible(1,3u));
+    REQUIRE(!preview.fixture_navigation().select_tab(MenuTab::Move));
+    REQUIRE(!preview.fixture_navigation().focus_visible_row(0u));
+    REQUIRE(preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height)==open);
+    guarded_key(15u);  // Tab
+    guarded_key(1u);   // Escape may not close entire GUI
+    guarded_key(209u); // Page down
+    const auto close=physical(
+        layout->close_x+10.0f,layout->close_y+10.0f);
+    const auto closeHit=hit_test_menu(*open,mode,close[0],close[1]);
+    REQUIRE(closeHit && closeHit->kind==MenuHitKind::ModalClose);
+    click(close,33100u);
+    const auto* afterUnload=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(afterUnload && !afterUnload->unload_confirmation_preview);
+    // Five tabs from Combat through Profiles. Background navigation
+    // is restored as soon as the modal explicitly closes.
+    for(unsigned i=0u;i<5u;++i) {
+        REQUIRE(preview.apply(MenuNavAction::NextTab));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    }
+    REQUIRE(preview.tab()==MenuTab::Profiles);
+    const auto* profiles=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(profiles && profiles->profile_cards.size()==1u &&
+            !profiles->profile_action_preview);
+    const auto icon=menu_profile_action_rect(
+        *profiles,panel->logical_width(),panel->logical_height(),
+        0u,0u);
+    REQUIRE(icon);
+    const auto openAction=physical(
+        icon->x+10.0f,icon->y+10.0f);
+    const auto aHit=hit_test_menu(
+        *profiles,mode,openAction[0],openAction[1]);
+    REQUIRE(aHit && aHit->kind==MenuHitKind::ProfileAction &&
+            aHit->catalog_index==0u && aHit->control_index==0u);
+    click(openAction,33200u);
+    const auto* dialog=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(dialog && dialog->profile_action_preview &&
+            dialog->profile_action_preview->action==
+                MenuProfileAction::Load);
+    const auto modal=menu_profile_modal_geometry(
+        *dialog,panel->logical_width(),panel->logical_height());
+    REQUIRE(modal);
+    REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    REQUIRE(!preview.scroll_visible(1,3u));
+    REQUIRE(!preview.fixture_navigation().select_tab(MenuTab::Combat));
+    REQUIRE(preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height)==dialog);
+    guarded_key(15u);
+    guarded_key(1u);
+    const auto profileX=physical(
+        modal->close_x+10.0f,modal->close_y+10.0f);
+    const auto phit=hit_test_menu(
+        *dialog,mode,profileX[0],profileX[1]);
+    REQUIRE(phit && phit->kind==MenuHitKind::ProfileModalClose);
+    click(profileX,33300u);
+    const auto* dismissed=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(dismissed && !dismissed->profile_action_preview &&
+            dismissed->profile_cards.size()==1u);
+    REQUIRE(preview.profile_snapshot(ctx.gl,ctx.dc,width,height)==baseline);
+    REQUIRE(preview.apply(MenuNavAction::NextTab));
+    REQUIRE(preview.tab()==MenuTab::Combat);
+    REQUIRE(ledger.tracked_released());
+    REQUIRE(preview.fixture_end_keyboard(ledger,router));
+    REQUIRE(preview.fixture_finish_restore(
+        ledger,router,true,true,true));
+    REQUIRE(preview.close());
+    REQUIRE(!ledger.may_deliver_live_minecraft_event() &&
+            !ledger.may_suppress_vanilla_event());
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R230_WGL_UNLOAD_PROFILE_MODAL_INPUT_FENCE_PASS\\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -2203,6 +2352,7 @@ int main() {
         verify_r197_native_focus_receipts(context,before);
         verify_r200_native_color_popup(context,before);
         verify_r227_wgl_select_item(context,before);
+        verify_r230_wgl_confirmation_ownership(context,before);
         verify_r211_source_click_request(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());

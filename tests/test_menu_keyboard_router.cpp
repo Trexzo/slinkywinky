@@ -165,6 +165,41 @@ int main() {
             MenuKeyDelivery::Quarantined);
     REQUIRE(game_events==3 && gui_events>=9 && quarantined>=6);
     REQUIRE(!routing.active() && !routing.revoked());
+    // R230: with Unload or profile confirmation open, paired synthetic
+    // keys never request GUI close, switch tabs or change settings.
+    REQUIRE(menu.open_unload_confirmation_preview());
+    REQUIRE(navigation.color_modal_open()); // ABI-preserved modal predicate
+    REQUIRE(routing.begin(113,true,true));
+    for(const unsigned code:{15u,209u,28u,1u}) {
+        const auto press=deliver(code,true,true,true,true);
+        REQUIRE(press.delivery==MenuKeyDelivery::MenuExclusive &&
+                !press.action_applied && !press.request_close);
+        const auto up=deliver(code,false,true,true,true);
+        REQUIRE(up.delivery==MenuKeyDelivery::MenuExclusive);
+    }
+    REQUIRE(menu.tab()==MenuTab::Combat &&
+            menu.unload_confirmation_preview());
+    REQUIRE(routing.end());
+    REQUIRE(menu.close_unload_confirmation_preview());
+    REQUIRE(navigation.select_tab(MenuTab::Profiles));
+    REQUIRE(menu.begin_profile_action_preview(
+        0u,MenuProfileAction::Load));
+    REQUIRE(navigation.color_modal_open());
+    REQUIRE(routing.begin(114,true,true));
+    for(const unsigned code:{15u,209u,28u,1u}) {
+        const auto press=deliver(code,true,true,true,true);
+        REQUIRE(press.delivery==MenuKeyDelivery::MenuExclusive &&
+                !press.action_applied && !press.request_close);
+        REQUIRE(deliver(code,false,true,true,true).delivery==
+                MenuKeyDelivery::MenuExclusive);
+    }
+    REQUIRE(menu.tab()==MenuTab::Profiles &&
+            menu.profile_action_preview());
+    REQUIRE(routing.end());
+    REQUIRE(menu.cancel_profile_action_preview());
+    REQUIRE(navigation.apply(MenuNavAction::NextTab));
+    REQUIRE(menu.tab()==MenuTab::Combat && game_events==3);
+    std::cout << "R230_UNLOAD_AND_PROFILE_KEYBOARD_MODAL_QUARANTINE_PASS\\n";
     std::cout << "R108_EXCLUSIVE_MODAL_KEYBOARD_ROUTER_SYNTHETIC_GAME_NONDELIVERY_PASS\\n"
               << "R108_OWNER_EPOCH_RELEASE_FOCUS_LOSS_AND_CLOSE_DRAIN_PASS\\n"
               << "R108_NO_GAME_JVM_HOOK_OR_PHYSICAL_INPUT_CERTIFICATION\\n";

@@ -81,7 +81,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     // R229: popup owner forbids background tab changes, preserving
     // the current dropdown, query sidecar, and source-page identity.
     if(tab==MenuTab::Count || tab==MenuTab::Unload ||
-       dropdown_preview_)return false;
+       modal_input_owned())return false;
     focused_text_widget_.reset();
     numeric_hover_.reset();
     numeric_drag_preview_.reset();
@@ -99,7 +99,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     return true;
 }
 bool MenuState::scroll_by(int delta) noexcept {
-    if(dropdown_preview_)return false;
+    if(modal_input_owned())return false;
     const auto total=tab_count(selected_);
     if(total==0)return false;
     // Renderer has eight visible rows. Keep scrolling independent of module
@@ -121,7 +121,7 @@ bool MenuState::scroll_by(int delta) noexcept {
 }
 bool MenuState::scroll_by_visible(
         int delta,std::size_t visible_limit) noexcept {
-    if(dropdown_preview_)return false;
+    if(modal_input_owned())return false;
     const auto total=tab_count(selected_);
     if(total==0u || visible_limit==0u || visible_limit>8u)
         return false;
@@ -518,13 +518,13 @@ bool MenuState::toggle_bind_hold(
 }
 
 bool MenuState::toggle_preview(std::size_t index) noexcept {
-    if(dropdown_preview_ || index>=catalog.size() ||
+    if(modal_input_owned() || index>=catalog.size() ||
        catalog[index].tab!=selected_)return false;
     enabled_[index]=!enabled_[index];
     return true;
 }
 bool MenuState::toggle_expanded(std::size_t index) noexcept {
-    if(dropdown_preview_ || index>=catalog.size() ||
+    if(modal_input_owned() || index>=catalog.size() ||
        catalog[index].tab!=selected_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
@@ -539,7 +539,7 @@ std::size_t MenuState::settings_offset(std::size_t index) const noexcept {
     return index<settings_offsets_.size()?settings_offsets_[index]:0;
 }
 bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
-    if(dropdown_preview_ || selected_!=MenuTab::Combat ||
+    if(modal_input_owned() || selected_!=MenuTab::Combat ||
        mode>3 || mode==aim_preview_mode_)
         return false;
     dropdown_preview_.reset();
@@ -551,7 +551,7 @@ bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
     return true;
 }
 bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
-    if(dropdown_preview_ || selected_!=MenuTab::Combat ||
+    if(modal_input_owned() || selected_!=MenuTab::Combat ||
        mode>1 || mode==target_preview_mode_)
         return false;
     dropdown_preview_.reset();
@@ -563,7 +563,7 @@ bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
     return true;
 }
 bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
-    if(dropdown_preview_ || (direction!=1&&direction!=-1) ||
+    if(modal_input_owned() || (direction!=1&&direction!=-1) ||
        index>=catalog.size() ||
        catalog[index].tab!=selected_ || !expanded_[index])return false;
     const std::size_t count=recovered_widget_visible_count(
@@ -1368,7 +1368,9 @@ bool MenuState::set_recovered_range_preview(
 }
 
 bool MenuState::open_unload_confirmation_preview() noexcept {
-    if(unload_confirmation_preview_ || dropdown_preview_)return false;
+    // Confirmation actions cannot be replaced by an unrelated Unload
+    // dialog. Only the current modal's own close/confirm can clear it.
+    if(modal_input_owned())return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
@@ -1523,12 +1525,13 @@ bool MenuState::expanded(std::size_t index) const noexcept {
     return index<expanded_.size() && expanded_[index];
 }
 bool MenuState::set_scale(float value) noexcept {
-    if(!std::isfinite(value)||value<0.65f||value>1.8f)return false;
+    if(modal_input_owned() || !std::isfinite(value) ||
+       value<0.65f || value>1.8f)return false;
     appearance_.scale=value;
     return true;
 }
 bool MenuState::set_accent(std::uint32_t rgb) noexcept {
-    if(rgb>0xffffffu)return false;
+    if(modal_input_owned() || rgb>0xffffffu)return false;
     appearance_.accent_rgb=rgb;
     return true;
 }

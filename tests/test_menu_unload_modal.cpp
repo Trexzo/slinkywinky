@@ -60,6 +60,29 @@ int main() {
         CHECK(!nav.select_tab(MenuTab::Move));
         CHECK(!nav.focus_visible_row(0u));
         CHECK(!menu.select_preview_dropdown_option(0u));
+        // R230: background mutations cannot replace a pending unload.
+        const auto ownedScroll=menu.scroll();
+        const auto ownedEnabled=profile.enabled(0u);
+        const auto beforeProfile=serialize_settings(profile.settings());
+        CHECK(menu.modal_input_owned());
+        CHECK(!menu.select(MenuTab::Move));
+        CHECK(!profile.select(MenuTab::Move));
+        CHECK(!menu.scroll_by(1));
+        CHECK(!menu.scroll_by_visible(1,4u));
+        CHECK(!profile.scroll_by(1));
+        CHECK(!profile.scroll_by_visible(1,4u));
+        CHECK(!menu.toggle_preview(0u));
+        CHECK(!menu.toggle_expanded(0u));
+        CHECK(!profile.toggle(0u));
+        CHECK(!profile.adopt(profile.settings()));
+        CHECK(!menu.set_scale(1.2f));
+        CHECK(!menu.set_accent(0x00ff00u));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(menu.unload_confirmation_preview() &&
+              menu.tab()==MenuTab::Combat &&
+              menu.scroll()==ownedScroll &&
+              profile.enabled(0u)==ownedEnabled &&
+              serialize_settings(profile.settings())==beforeProfile);
         const auto x=point(modal->close_x+10.0f,modal->close_y+10.0f);
         auto xHit=hit_test_menu(*frame,mode,x.first,x.second);
         CHECK(xHit && xHit->kind==MenuHitKind::ModalClose);
@@ -95,6 +118,10 @@ int main() {
                                 modal2->close_y+10.0f);
         CHECK(click.press(*open,mode,close2.first,close2.second,
                           3000,true));
+        CHECK(!menu.select(MenuTab::Visual));
+        CHECK(menu.unload_confirmation_preview());
+        // Explicit close, not background select, revokes the held X.
+        CHECK(menu.close_unload_confirmation_preview());
         CHECK(menu.select(MenuTab::Visual));
         auto stale=session.next(menu,&profile,&nav);
         CHECK(!click.release(*stale,mode,

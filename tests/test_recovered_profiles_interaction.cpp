@@ -167,6 +167,29 @@ int main() {
         CHECK(!hit_test_menu(*modal,mode,inside.first,inside.second));
         CHECK(!menu.focus_profile_name_preview());
         CHECK(!menu.create_profile_preview());
+        // R230: confirmations have the same exclusive ownership as
+        // dropdowns and Unload. The pending action and card count
+        // must survive a refused tab or a rival modal request.
+        const auto owned=menu.profile_action_preview();
+        const auto count=menu.local_profiles().size();
+        const auto stableSettings=serialize_settings(bridge.settings());
+        CHECK(menu.modal_input_owned());
+        CHECK(!menu.select(MenuTab::Combat));
+        CHECK(!bridge.select(MenuTab::Combat));
+        CHECK(!nav.select_tab(MenuTab::Combat));
+        CHECK(!nav.apply(MenuNavAction::NextTab));
+        CHECK(!menu.scroll_by(1));
+        CHECK(!menu.scroll_by_visible(1,3u));
+        CHECK(!bridge.scroll_by(1));
+        CHECK(!bridge.scroll_by_visible(1,3u));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(!menu.set_scale(1.25f));
+        CHECK(!menu.set_accent(0x112233u));
+        CHECK(!bridge.adopt(bridge.settings()));
+        CHECK(menu.profile_action_preview()==owned &&
+              menu.tab()==MenuTab::Profiles &&
+              menu.local_profiles().size()==count &&
+              serialize_settings(bridge.settings())==stableSettings);
         CHECK(menu.confirm_profile_action_preview());
         CHECK(menu.local_profiles().size()==2u);
         CHECK(!menu.profile_action_preview()); // no disk load

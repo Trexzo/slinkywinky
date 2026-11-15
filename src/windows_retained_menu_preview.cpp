@@ -150,7 +150,7 @@ bool WglRetainedMenuPreview::queue_focused_runtime_toggle(
         unsigned width,unsigned height,
         std::uint64_t expected_source_sequence) {
     if(!owner_thread() || !active_ || !last_drawn_frame_ ||
-       menu_.dropdown_preview() || pointer_gesture_.pending() ||
+       menu_.modal_input_owned() || pointer_gesture_.pending() ||
        !context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
@@ -163,7 +163,7 @@ bool WglRetainedMenuPreview::queue_focused_runtime_toggle(
 bool WglRetainedMenuPreview::apply(MenuNavAction action) {
     // Refuse while a popup owns input, before discarding painted hit
     // geometry. A rejected background command cannot poison popup clicks.
-    if(!active_ || !owner_thread() || menu_.dropdown_preview() ||
+    if(!active_ || !owner_thread() || menu_.modal_input_owned() ||
        accepted_actions_==std::numeric_limits<std::uint64_t>::max() ||
        refused_actions_==std::numeric_limits<std::uint64_t>::max())
         return false;
@@ -180,7 +180,7 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
 }
 bool WglRetainedMenuPreview::scroll_visible(
         int delta,std::size_t visible_limit) noexcept {
-    if(!owner_thread() || !active_ || menu_.dropdown_preview() ||
+    if(!owner_thread() || !active_ || menu_.modal_input_owned() ||
        visible_limit==0u || visible_limit>8u)return false;
     if(wglGetCurrentContext()!=context_ || wglGetCurrentDC()!=dc_ ||
        !exact_current_viewport(width_,height_)) {
@@ -566,6 +566,25 @@ bool WglRetainedMenuPreview::pointer(
     // The precise source hit was certified at mouse-down and mouse-up.
     // No arbitrary module values or gameplay input are dispatched.
     switch(hit->kind) {
+        // R230: original source-recognized Unload/profile controls were
+        // rendered and hit-tested but not wired to the retained WGL
+        // dispatcher. The actions below edit *only* the local preview.
+        // They do not unload Minecraft, read/write profile files or
+        // send a game input event.
+        case MenuHitKind::UnloadTab:
+            return menu_.open_unload_confirmation_preview();
+        case MenuHitKind::ModalClose:
+        case MenuHitKind::ModalContinue:
+            return menu_.close_unload_confirmation_preview();
+        case MenuHitKind::ProfileAction:
+            if(hit->control_index>3u)return false;
+            return menu_.begin_profile_action_preview(
+                hit->catalog_index,
+                static_cast<MenuProfileAction>(hit->control_index));
+        case MenuHitKind::ProfileModalClose:
+            return menu_.cancel_profile_action_preview();
+        case MenuHitKind::ProfileModalContinue:
+            return menu_.confirm_profile_action_preview();
         case MenuHitKind::Tab:
             return navigation_.select_tab(hit->tab);
         case MenuHitKind::RowBody:

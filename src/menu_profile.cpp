@@ -128,6 +128,7 @@ bool MenuProfileBridge::enabled(std::size_t index) const noexcept {
     return stored!=nullptr && *stored;
 }
 bool MenuProfileBridge::toggle(std::size_t index) {
+    if(menu_.modal_input_owned())return false;
     bool* stored=flag(index);
     if(stored==nullptr || official_module_catalog()[index].tab!=menu_.tab())
         return false;
@@ -283,7 +284,7 @@ std::optional<MenuPrimaryParameter> MenuProfileBridge::primary(
     }
 }
 bool MenuProfileBridge::adjust_primary(std::size_t index,int direction) {
-    if(menu_.dropdown_preview() || (direction!=1 && direction!=-1))
+    if(menu_.modal_input_owned() || (direction!=1 && direction!=-1))
         return false;
     const auto parameter=primary(index);
     if(!parameter || menu_.tab()!=official_module_catalog()[index].tab ||
@@ -313,6 +314,7 @@ bool MenuProfileBridge::adjust_primary(std::size_t index,int direction) {
     return adopt(updated);
 }
 bool MenuProfileBridge::adopt(const ClientSettings& settings) {
+    if(menu_.modal_input_owned())return false;
     // Roundtrip through the existing strict parser; no partial import.
     const auto checked=parse_settings(serialize_settings(settings));
     if(!checked.valid)return false;
