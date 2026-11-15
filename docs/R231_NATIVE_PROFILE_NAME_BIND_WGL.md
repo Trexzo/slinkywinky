@@ -63,7 +63,28 @@ or load real original profile files, install a live input hook,
 launch Minecraft, or validate original-game hardware input. PR #2
 remains independent.
 
-## CI
+## Exact-commit CI verification
 
-Awaiting exact-commit GitHub Windows/Ubuntu/ASan/JNI/Java8 Attach
-verification.
+All three GitHub workflows passed against corrected source commit
+`cfe5c1a57d7d34ec213f1b559c48af75c7c4a509`:
+
+- Offline C++ core: **6/6 jobs successful** (Windows Debug/Release,
+  Ubuntu Debug/Release, Linux JNI smoke, ASan/UBSan):
+  https://github.com/Trexzo/slinkywinky/actions/runs/43757591073
+- Windows JNI preview artifact: Windows x64 native JNI and Java 8
+  roundtrip tests successful:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43757591081
+- Injectable Windows Java 8 agent: native loader/JVMTI build,
+  JVM tests, and actual Attach API tests successful:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43757591042
+
+Initial implementation commit `3ae8050` failed only the new
+Windows retained-GL11 fixture because that test clicked the same
+ProfileBindChip repeatedly within the existing R98 500ms
+double-click guard. Commit `cfe5c1a` spaced the independent edits
+farther apart without changing the underlying gesture safety
+policy. The full matrix then passed.
+
+These runs verify an isolated first-party native GUI fixture,
+not original Minecraft or hardware keyboard/mouse acceptance.
+No real profile files or other Chat 2 source were changed.
