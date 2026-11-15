@@ -241,12 +241,15 @@ public:
     }
     std::optional<MenuProfileActionPreview> profile_action_preview()
         const noexcept { return profile_action_preview_; }
-    // R230: every visible confirmation/dropdown owns the background
-    // navigation and profile-edit surface. No MenuState layout change.
+    // R230/R231: dialogs, profile text edit and keybind capture
+    // exclusively own navigation and background profile editing.
+    // This is a pure read-only predicate; no MenuState ABI change.
     bool modal_input_owned() const noexcept {
         return dropdown_preview_.has_value() ||
                unload_confirmation_preview_ ||
-               profile_action_preview_.has_value();
+               profile_action_preview_.has_value() ||
+               profile_name_focused_ ||
+               profile_bind_capture_index_.has_value();
     }
     bool set_profile_icon_hover(
         std::optional<MenuProfileIconHover> hover) noexcept;

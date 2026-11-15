@@ -2336,6 +2336,170 @@ void verify_r230_wgl_confirmation_ownership(
     std::cout<<"R230_WGL_UNLOAD_PROFILE_MODAL_INPUT_FENCE_PASS\\n";
 }
 
+// R231: the original Profile name/Create/bind chip controls now
+// exercise real retained GL11 hit geometry and paired synthetic keys.
+void verify_r231_wgl_profile_creation_binding(
+        Context& ctx,const State& expected) {
+    constexpr unsigned width=676u,height=630u;
+    constexpr auto mode=MenuPanelMode::CompactOverlay;
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    WglRetainedMenuPreview preview;
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto panel=menu_panel_geometry(width,height,false,mode);
+    REQUIRE(panel);
+    const auto point=[&](float x,float y) {
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    for(unsigned n=0u;n<5u;++n) {
+        REQUIRE(preview.apply(MenuNavAction::NextTab));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    }
+    REQUIRE(preview.tab()==MenuTab::Profiles);
+    const auto baseline=preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(baseline);
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(preview.fixture_navigation());
+    constexpr std::uint64_t epoch=2310u;
+    REQUIRE(ledger.request(epoch,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(epoch,true,true,true));
+    REQUIRE(preview.fixture_begin_keyboard(epoch,ledger,router));
+    const auto click=[&](const std::array<int,2>& xy,
+                         std::uint64_t tick) {
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            xy[0],xy[1],tick,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            xy[0],xy[1],tick+40u,true));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    };
+    const auto key=[&](unsigned lwjgl,bool edited,
+                       std::string_view chars={}) {
+        const auto result=chars.empty()?
+            preview.fixture_keyboard_event(
+                ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+                lwjgl,true,true):
+            preview.fixture_keyboard_typed_event(
+                ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+                lwjgl,true,true,chars);
+        REQUIRE(result.delivery==MenuKeyDelivery::MenuExclusive &&
+                !result.request_close && result.action_applied==edited);
+        const auto release=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            lwjgl,false,true);
+        REQUIRE(release.delivery==MenuKeyDelivery::MenuExclusive &&
+                !release.action_applied && !release.request_close);
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    };
+    const auto* blank=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(blank && blank->profile_cards.size()==1u &&
+            blank->profile_cards[0].name=="Default");
+    const auto name=menu_profile_input_rect(
+        *blank,panel->logical_width(),panel->logical_height());
+    REQUIRE(name);
+    const auto field=point(name->x+12.0f,name->y+10.0f);
+    const auto fieldHit=hit_test_menu(
+        *blank,mode,field[0],field[1]);
+    REQUIRE(fieldHit && fieldHit->kind==MenuHitKind::ProfileNameField);
+    click(field,40000u);
+    const auto* focused=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(focused && focused->profile_name_focused &&
+            focused->profile_name_draft.empty());
+    REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    REQUIRE(!preview.scroll_visible(1,3u));
+    REQUIRE(!preview.fixture_navigation().select_tab(MenuTab::Combat));
+    REQUIRE(preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height)==focused);
+    key(15u,false); // Tab is owned by focused field, not navigation.
+    REQUIRE(preview.tab()==MenuTab::Profiles);
+    key(30u,true,"N");
+    key(18u,true,"e");
+    key(17u,true,"w");
+    key(34u,false,"/"); // invalid explicit source char; no fallback G.
+    const auto* drafted=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(drafted && drafted->profile_name_focused &&
+            drafted->profile_name_draft=="New");
+    const auto create=menu_profile_create_rect(
+        *drafted,panel->logical_width(),panel->logical_height());
+    REQUIRE(create);
+    const auto createAt=point(create->x+15.0f,create->y+10.0f);
+    const auto createHit=hit_test_menu(
+        *drafted,mode,createAt[0],createAt[1]);
+    REQUIRE(createHit && createHit->kind==MenuHitKind::ProfileCreate);
+    click(createAt,40100u);
+    const auto* created=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(created && !created->profile_name_focused &&
+            created->profile_name_draft.empty() &&
+            created->profile_cards.size()==2u &&
+            created->profile_cards[1].name=="New");
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height)==baseline);
+    const auto chip=menu_profile_bind_rect(
+        *created,panel->logical_width(),panel->logical_height(),1u);
+    REQUIRE(chip);
+    const auto chipAt=point(chip->x+12.0f,chip->y+10.0f);
+    const auto chipHit=hit_test_menu(
+        *created,mode,chipAt[0],chipAt[1]);
+    REQUIRE(chipHit && chipHit->kind==MenuHitKind::ProfileBindChip &&
+            chipHit->catalog_index==1u);
+    click(chipAt,40200u);
+    const auto* capture=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(capture && capture->profile_bind_capture_index==1u);
+    REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    REQUIRE(!preview.scroll_visible(1,3u));
+    // Tab is a legitimate bind key, not a background page switch.
+    key(15u,true);
+    const auto* tabBound=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(tabBound && !tabBound->profile_bind_capture_index &&
+            tabBound->profile_cards[1].bind=="TAB" &&
+            preview.tab()==MenuTab::Profiles);
+    const auto f6chip=menu_profile_bind_rect(
+        *tabBound,panel->logical_width(),panel->logical_height(),1u);
+    REQUIRE(f6chip);
+    click(point(f6chip->x+12.0f,f6chip->y+10.0f),40300u);
+    key(64u,true); // exact LWJGL F6 -> preview VK_F6.
+    const auto* f6Bound=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(f6Bound && !f6Bound->profile_bind_capture_index &&
+            f6Bound->profile_cards[1].bind=="F6");
+    const auto clearChip=menu_profile_bind_rect(
+        *f6Bound,panel->logical_width(),panel->logical_height(),1u);
+    REQUIRE(clearChip);
+    click(point(clearChip->x+12.0f,clearChip->y+10.0f),40400u);
+    key(1u,true); // Escape clears the binding without closing the GUI.
+    const auto* cleared=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(cleared && !cleared->profile_bind_capture_index &&
+            cleared->profile_cards[1].bind.empty() &&
+            cleared->profile_cards[1].name=="New");
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height)==baseline);
+    REQUIRE(preview.apply(MenuNavAction::NextTab));
+    REQUIRE(preview.tab()==MenuTab::Combat);
+    REQUIRE(ledger.tracked_released());
+    REQUIRE(preview.fixture_end_keyboard(ledger,router));
+    REQUIRE(preview.fixture_finish_restore(
+        ledger,router,true,true,true));
+    REQUIRE(preview.close());
+    REQUIRE(!ledger.may_deliver_live_minecraft_event() &&
+            !ledger.may_suppress_vanilla_event());
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R231_WGL_PROFILE_NAME_CREATE_BIND_CAPTURE_PASS\\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -2353,6 +2517,7 @@ int main() {
         verify_r200_native_color_popup(context,before);
         verify_r227_wgl_select_item(context,before);
         verify_r230_wgl_confirmation_ownership(context,before);
+        verify_r231_wgl_profile_creation_binding(context,before);
         verify_r211_source_click_request(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());

@@ -68,7 +68,20 @@ int main() {
             *frame,mode,inside.first,inside.second);
         CHECK(inputHit && inputHit->kind==MenuHitKind::ProfileNameField);
         CHECK(menu.focus_profile_name_preview());
+        CHECK(menu.modal_input_owned() && nav.color_modal_open());
         CHECK(!menu.focus_profile_name_preview());
+        // R231: a focused source edit field blocks all background
+        // tab, scale, profile and navigation actions until committed.
+        CHECK(!menu.select(MenuTab::Combat));
+        CHECK(!bridge.select(MenuTab::Combat));
+        CHECK(!nav.select_tab(MenuTab::Combat));
+        CHECK(!nav.apply(MenuNavAction::NextTab));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(!menu.set_accent(0x112233u));
+        CHECK(!menu.set_scale(1.2f));
+        CHECK(!bridge.adopt(bridge.settings()));
+        CHECK(menu.tab()==MenuTab::Profiles &&
+              menu.profile_name_focused());
         CHECK(!menu.append_profile_name_preview("/"));
         CHECK(!menu.append_profile_name_preview("\\"));
         CHECK(!menu.append_profile_name_preview("\xC3\xA4"));
@@ -117,6 +130,15 @@ int main() {
             *updated,mode,chipXY.first,chipXY.second,420,true);
         CHECK(held && held->kind==MenuHitKind::ProfileBindChip);
         CHECK(menu.begin_profile_bind_capture(held->catalog_index));
+        CHECK(menu.modal_input_owned() && nav.color_modal_open());
+        CHECK(!menu.select(MenuTab::Combat));
+        CHECK(!bridge.select(MenuTab::Combat));
+        CHECK(!nav.select_tab(MenuTab::Combat));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(!menu.set_scale(1.15f));
+        CHECK(!bridge.adopt(bridge.settings()));
+        CHECK(menu.tab()==MenuTab::Profiles &&
+              menu.profile_bind_capture_index()==1u);
         CHECK(!menu.begin_profile_bind_capture(0u));
         CHECK(!menu.focus_profile_name_preview());
         CHECK(!menu.commit_profile_bind_capture(0xFFFFu));

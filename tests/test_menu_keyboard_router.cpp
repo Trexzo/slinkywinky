@@ -199,6 +199,40 @@ int main() {
     REQUIRE(menu.cancel_profile_action_preview());
     REQUIRE(navigation.apply(MenuNavAction::NextTab));
     REQUIRE(menu.tab()==MenuTab::Combat && game_events==3);
+    // R231: profile name and bind capture are exclusive input modes,
+    // even without a dropdown or confirmation popup.
+    REQUIRE(navigation.select_tab(MenuTab::Profiles));
+    REQUIRE(menu.focus_profile_name_preview());
+    REQUIRE(menu.modal_input_owned() && navigation.color_modal_open());
+    REQUIRE(routing.begin(115,true,true));
+    for(const unsigned code:{15u,28u,1u}) {
+        const auto press=deliver(code,true,true,true,true);
+        REQUIRE(press.delivery==MenuKeyDelivery::MenuExclusive &&
+                !press.action_applied && !press.request_close);
+        REQUIRE(deliver(code,false,true,true,true).delivery==
+                MenuKeyDelivery::MenuExclusive);
+    }
+    REQUIRE(menu.profile_name_focused() &&
+            menu.tab()==MenuTab::Profiles);
+    REQUIRE(routing.end());
+    REQUIRE(menu.blur_profile_name_preview());
+    REQUIRE(menu.begin_profile_bind_capture(0u));
+    REQUIRE(menu.modal_input_owned() && navigation.color_modal_open());
+    REQUIRE(routing.begin(116,true,true));
+    for(const unsigned code:{15u,28u,1u}) {
+        const auto press=deliver(code,true,true,true,true);
+        REQUIRE(press.delivery==MenuKeyDelivery::MenuExclusive &&
+                !press.action_applied && !press.request_close);
+        REQUIRE(deliver(code,false,true,true,true).delivery==
+                MenuKeyDelivery::MenuExclusive);
+    }
+    REQUIRE(menu.profile_bind_capture_index()==0u &&
+            menu.tab()==MenuTab::Profiles && game_events==3);
+    REQUIRE(routing.end());
+    REQUIRE(menu.cancel_profile_bind_capture());
+    REQUIRE(navigation.apply(MenuNavAction::NextTab));
+    REQUIRE(menu.tab()==MenuTab::Combat);
+    std::cout << "R231_PROFILE_EDIT_BIND_KEYBOARD_ISOLATION_PASS\\n";
     std::cout << "R230_UNLOAD_AND_PROFILE_KEYBOARD_MODAL_QUARANTINE_PASS\\n";
     std::cout << "R108_EXCLUSIVE_MODAL_KEYBOARD_ROUTER_SYNTHETIC_GAME_NONDELIVERY_PASS\\n"
               << "R108_OWNER_EPOCH_RELEASE_FOCUS_LOSS_AND_CLOSE_DRAIN_PASS\\n"

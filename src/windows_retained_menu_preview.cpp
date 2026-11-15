@@ -22,6 +22,70 @@ bool exact_current_viewport(unsigned width,unsigned height) noexcept {
            viewport[2]==static_cast<GLint>(width) &&
            viewport[3]==static_cast<GLint>(height);
 }
+// R231: source keybind and text-entry modes route through the same
+// owner-verified synthetic LWJGL key ledger.
+// Original keybind capture handles an independent key code (rather
+// than the profile name text characters). These are exact LWJGL2
+// codes mapped to the preexisting preview Win32 VK whitelist.
+// Unsupported codes do not clear or mutate a pending capture.
+std::optional<std::uint16_t> profile_vk_from_lwjgl(
+        unsigned key) noexcept {
+    switch(key) {
+        case 1u:return 0u;   // Escape: clear existing binding
+        case 14u:return 0x08u;
+        case 15u:return 0x09u;
+        case 28u:return 0x0du;
+        case 42u:case 54u:return 0x10u;
+        case 29u:case 157u:return 0x11u;
+        case 56u:case 184u:return 0x12u;
+        case 57u:return 0x20u;
+        case 201u:return 0x21u;
+        case 209u:return 0x22u;
+        case 207u:return 0x23u;
+        case 199u:return 0x24u;
+        case 203u:return 0x25u;
+        case 200u:return 0x26u;
+        case 205u:return 0x27u;
+        case 208u:return 0x28u;
+        case 210u:return 0x2du;
+        case 211u:return 0x2eu;
+        case 2u:return 0x31u;case 3u:return 0x32u;
+        case 4u:return 0x33u;case 5u:return 0x34u;
+        case 6u:return 0x35u;case 7u:return 0x36u;
+        case 8u:return 0x37u;case 9u:return 0x38u;
+        case 10u:return 0x39u;case 11u:return 0x30u;
+        case 16u:return 0x51u;case 17u:return 0x57u;
+        case 18u:return 0x45u;case 19u:return 0x52u;
+        case 20u:return 0x54u;case 21u:return 0x59u;
+        case 22u:return 0x55u;case 23u:return 0x49u;
+        case 24u:return 0x4fu;case 25u:return 0x50u;
+        case 30u:return 0x41u;case 31u:return 0x53u;
+        case 32u:return 0x44u;case 33u:return 0x46u;
+        case 34u:return 0x47u;case 35u:return 0x48u;
+        case 36u:return 0x4au;case 37u:return 0x4bu;
+        case 38u:return 0x4cu;case 44u:return 0x5au;
+        case 45u:return 0x58u;case 46u:return 0x43u;
+        case 47u:return 0x56u;case 48u:return 0x42u;
+        case 49u:return 0x4eu;case 50u:return 0x4du;
+        case 59u:case 60u:case 61u:case 62u:case 63u:
+        case 64u:case 65u:case 66u:case 67u:case 68u:
+            return static_cast<std::uint16_t>(
+                0x70u+key-59u); // F1..F10
+        case 87u:return 0x7au; // F11
+        case 88u:return 0x7bu; // F12
+        default:return std::nullopt;
+    }
+}
+std::optional<char> profile_ascii_from_lwjgl(
+        unsigned key) noexcept {
+    if(key==57u)return ' ';
+    const auto vk=profile_vk_from_lwjgl(key);
+    if(!vk)return std::nullopt;
+    if((*vk>=0x30u && *vk<=0x39u) ||
+       (*vk>=0x41u && *vk<=0x5au))
+        return static_cast<char>(*vk);
+    return std::nullopt;
+}
 // R201: identical logical-position conversion for HSL held-move and
 // release. Only hit_test_menu can authorize the actual source modal track.
 std::optional<float> color_hsl_ratio_at(
@@ -256,6 +320,9 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
     // rising LWJGL keys, without forwarding any event to Minecraft.
     const bool rising=down &&
         !ledger.tracked_down(InputHandoffDevice::Keyboard,lwjgl_key);
+    const bool profileNameEditing=menu_.profile_name_focused();
+    const bool profileBindCapturing=
+        menu_.profile_bind_capture_index().has_value();
     const bool colorModal=menu_.color_popup_owner().has_value();
     const bool searchModal=menu_.dropdown_preview() &&
         menu_.dropdown_preview()->kind==MenuDropdownKind::RecoveredChoice &&
@@ -279,6 +346,40 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
         ledger.abort();
         invalidate_painted_input();
         return denied;
+    }
+    if(profileNameEditing && rising) {
+        bool changed=false;
+        if(lwjgl_key==1u) {
+            changed=menu_.blur_profile_name_preview();
+        } else if(lwjgl_key==14u) {
+            changed=menu_.erase_profile_name_preview();
+        } else if(lwjgl_key==28u) {
+            // Source text-edit confirmation: create only a bounded,
+            // in-memory profile. No file or original runtime action.
+            changed=menu_.create_profile_preview();
+        } else if(!typed_chars.empty()) {
+            // Exact source InEv.ch[4]. An explicit rejected payload
+            // MUST NOT fall back to a keycode-derived character.
+            if(typed_chars.size()<=4u) {
+                for(const char c:typed_chars) {
+                    const std::string_view one(&c,1u);
+                    if(menu_.append_profile_name_preview(one))
+                        changed=true;
+                }
+            }
+        } else if(const auto ch=profile_ascii_from_lwjgl(lwjgl_key)) {
+            changed=menu_.append_profile_name_preview(
+                std::string_view(&*ch,1u));
+        }
+        if(changed)invalidate_painted_input();
+        return {MenuKeyDelivery::MenuExclusive,false,changed};
+    }
+    if(profileBindCapturing && rising) {
+        const auto code=profile_vk_from_lwjgl(lwjgl_key);
+        const bool changed=code &&
+            menu_.commit_profile_bind_capture(*code);
+        if(changed)invalidate_painted_input();
+        return {MenuKeyDelivery::MenuExclusive,false,changed};
     }
     if(colorModal && rising) {
         // Original color picker remains isolated from game input.
@@ -585,6 +686,14 @@ bool WglRetainedMenuPreview::pointer(
             return menu_.cancel_profile_action_preview();
         case MenuHitKind::ProfileModalContinue:
             return menu_.confirm_profile_action_preview();
+        // R231: source-painted Profiles controls already have shared
+        // renderer/hit geometry; connect them to local preview owners.
+        case MenuHitKind::ProfileNameField:
+            return menu_.focus_profile_name_preview();
+        case MenuHitKind::ProfileCreate:
+            return menu_.create_profile_preview();
+        case MenuHitKind::ProfileBindChip:
+            return menu_.begin_profile_bind_capture(hit->catalog_index);
         case MenuHitKind::Tab:
             return navigation_.select_tab(hit->tab);
         case MenuHitKind::RowBody:
