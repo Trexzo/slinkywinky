@@ -39,8 +39,10 @@ inline std::optional<MenuProfileControlRect> menu_profile_bind_rect(
     // The profile name may clip, but the key target must stay usable.
     const float neededWidth=std::max(
         41.0f,static_cast<float>(chars)*7.0f+12.0f);
+    // Leave a small extra margin so final float rounding cannot
+    // truncate a valid nine-glyph label at a scaled panel boundary.
     const float chipX=std::min(
-        iconX-neededWidth-5.0f,nameX+titleW+5.0f);
+        iconX-neededWidth-8.0f,nameX+titleW+5.0f);
     const float chipWidth=std::min(
         iconX-chipX-5.0f,neededWidth);
     if(chipX<nameX+15.0f || chipWidth<41.0f ||

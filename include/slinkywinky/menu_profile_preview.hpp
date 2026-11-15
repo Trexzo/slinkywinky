@@ -59,8 +59,10 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
         if(!menu_profile_text_valid(profile.name,28) ||
            ((i==0u || !profile.description.empty()) &&
             !menu_profile_text_valid(profile.description,62)) ||
+           // R232: BACKSPACE/BACKSLASH are legitimate 9-char
+           // labels from the bounded native preview key whitelist.
            (!profile.bind.empty() &&
-            !menu_profile_text_valid(profile.bind,8)) ||
+            !menu_profile_text_valid(profile.bind,9)) ||
            (profile.is_default != (i==0)) ||
            (i==0 && profile.name!="Default"))return false;
         has_default=has_default||profile.is_default;
