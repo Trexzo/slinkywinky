@@ -453,6 +453,13 @@ int main(int argc, char** argv) {
         if (has_safe_walk)
             require(bridge.bind_safe_walk_from_catalog(),
                     "Safe Walk exists but candidate event0/category1/priority0 binding failed");
+        std::size_t fast_place_id = manifest.modules.size();
+        for (std::size_t i=0;i<manifest.modules.size();++i)
+            if(manifest.modules[i].name=="Fast Place")fast_place_id=i;
+        const bool has_fast_place = fast_place_id<manifest.modules.size();
+        if(has_fast_place)
+            require(bridge.bind_fast_place_from_catalog(),
+                    "Fast Place category3/event0/priority-1000 binding failed");
         std::size_t timer_id = manifest.modules.size();
         for (std::size_t i = 0; i < manifest.modules.size(); ++i)
             if (manifest.modules[i].name == "Timer") timer_id = i;
@@ -493,6 +500,7 @@ int main(int argc, char** argv) {
                                                (has_anti_debuff ? 1u : 0u) +
                                                (has_fast_accel ? 1u : 0u) +
                                                (has_safe_walk ? 1u : 0u) +
+                                               (has_fast_place ? 1u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
                                                (has_sprint ? 2u : 0u) +
@@ -526,8 +534,9 @@ int main(int argc, char** argv) {
         require(c.implemented_per_event[kFastAccelEvent] ==
                     (has_fast_accel ? 1u : 0u) + (has_strafe ? 1u : 0u),
                 "Fast Accel / Strafe callbacks not routed through event 22");
-        require(c.implemented_per_event[kSafeWalkEvent] == (has_safe_walk ? 1u : 0u),
-                "Safe Walk callback not routed through event 0");
+        require(c.implemented_per_event[kSafeWalkEvent] ==
+                    (has_safe_walk ? 1u : 0u) + (has_fast_place ? 1u : 0u),
+                "Safe Walk / Fast Place original event 0 binding drift");
         require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
                 "Timer frame callback not routed through event 1");
         require(c.implemented_per_event[kTimerToggleEvent] == (has_timer ? 1u : 0u),
@@ -1079,6 +1088,44 @@ int main(int argc, char** argv) {
                     "Disabled Safe Walk callback still executed");
         }
 
+        if (has_fast_place) {
+            require(bridge.request(fast_place_id,true),
+                    "Fast Place initial enable rejected");
+            require(!bridge.apply(false,false),
+                    "Fast Place bypassed world admission");
+            require(bridge.apply(true,true),
+                    "Fast Place world-owner enable refused");
+            ExecutionFrame first;
+            first.event=kSafeWalkEvent;
+            first.world_present=first.player_present=true;
+            FastPlaceTickPayload place{};
+            place.input.in_game=true;
+            place.input.use_key_held=true;
+            place.input.block_item_held=true;
+            place.input.target_is_block=true;
+            place.input.max_cps=20.0f;
+            first.fast_place=place;
+            require(bridge.dispatch(first) &&
+                    first.fast_place->executions==1 &&
+                    first.fast_place->decision.extra_use_press_count==0,
+                    "Fast Place duplicated first physical click");
+            first.fast_place->executions=0;
+            require(bridge.dispatch(first) &&
+                    first.fast_place->executions==1 &&
+                    first.fast_place->decision.extra_use_press_count==1,
+                    "Fast Place event0 extra-use proposal did not execute");
+            require(bridge.request(fast_place_id,false),
+                    "Fast Place disable rejected");
+            require(bridge.apply(true,true),
+                    "Fast Place disable failed");
+            first.fast_place->executions=0;
+            require(bridge.dispatch(first) &&
+                    first.fast_place->executions==0 &&
+                    first.fast_place->decision.extra_use_press_count==0,
+                    "Disabled Fast Place callback still executed");
+            bridge.reset_fast_place_world_state();
+        }
+
         if (has_timer) {
             require(bridge.request(timer_id, true), "Timer enable rejected");
             require(!bridge.apply(false, true), "Timer bypassed world gate");
@@ -1255,13 +1302,14 @@ int main(int argc, char** argv) {
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
-                    has_timer && has_keep_sprint && has_sprint &&
-                    has_strafe && c.registered_modules == 66 &&
+                    has_fast_place && has_timer && has_keep_sprint &&
+                    has_sprint && has_strafe &&
+                    c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 17 &&
-                    c.executable_callback_bindings == 24 &&
-                    c.unimplemented_callback_subscriptions == 147,
+                    c.modules_with_executable_bindings == 18 &&
+                    c.executable_callback_bindings == 25 &&
+                    c.unimplemented_callback_subscriptions == 146,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);

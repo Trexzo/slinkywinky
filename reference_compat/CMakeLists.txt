@@ -322,6 +322,35 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R225: independent native Fast Place source policy / event0 -1000.
+  # Standalone executable only; never delivers a Minecraft key event.
+  add_executable(slinkywinky_fast_place_bridge_test
+    tests/test_fast_place_bridge.cpp)
+  target_link_libraries(slinkywinky_fast_place_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r225_fast_place_native_event0_policy_and_dispatch
+    COMMAND slinkywinky_fast_place_bridge_test)
+  set_tests_properties(r225_fast_place_native_event0_policy_and_dispatch
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r225_eighteen_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twentyone_modules_with_eighteen_decisions.tsv")
+  add_test(NAME r225_reject_fast_place_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r225_wrong_fast_place_category.tsv")
+  add_test(NAME r225_reject_fast_place_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r225_wrong_fast_place_event.tsv")
+  add_test(NAME r225_reject_fast_place_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r225_wrong_fast_place_priority.tsv")
+  add_test(NAME r225_reject_fast_place_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r225_wrong_fast_place_extra_event.tsv")
+  set_tests_properties(r225_reject_fast_place_category
+    r225_reject_fast_place_event r225_reject_fast_place_priority
+    r225_reject_fast_place_extra_subscription PROPERTIES WILL_FAIL TRUE)
   add_test(NAME r190_thirteen_decision_coverage
     COMMAND slinkywinky_implementation_coverage_audit
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sixteen_modules_with_thirteen_decisions.tsv")

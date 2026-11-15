@@ -16,6 +16,7 @@
 #include "slinkywinky/anti_debuff_controller.hpp"
 #include "slinkywinky/fast_accel_controller.hpp"
 #include "slinkywinky/safe_walk_controller.hpp"
+#include "slinkywinky/fast_place_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
@@ -117,6 +118,12 @@ struct SafeWalkTickPayload {
     unsigned executions = 0;
 };
 
+struct FastPlaceTickPayload {
+    FastPlaceInput input{};
+    FastPlaceDecision decision{};
+    unsigned executions = 0;
+};
+
 struct TimerFramePayload {
     TimerFrameInput input{};
     TimerFrameDecision decision{};
@@ -187,6 +194,7 @@ struct ExecutionFrame {
     std::optional<AntiDebuffTickPayload> anti_debuff{};
     std::optional<FastAccelTickPayload> fast_accel{};
     std::optional<SafeWalkTickPayload> safe_walk{};
+    std::optional<FastPlaceTickPayload> fast_place{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
@@ -641,6 +649,32 @@ public:
         return false;
     }
 
+    // R225: source-backed Fast Place, block category 3, event 0 priority
+    // -1000. Exact single callback binding; never posts actual key presses.
+    bool bind_fast_place(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Fast Place" ||
+            definitions_[id].category != 3 ||
+            definitions_[id].subscriptions.size() != 1u ||
+            definitions_[id].subscriptions[0].event != kSafeWalkEvent ||
+            definitions_[id].subscriptions[0].priority != -1000)
+            return false;
+        return bind(id,kSafeWalkEvent,
+                    [this](const Delivery&,ExecutionFrame& frame) {
+                        if (!frame.fast_place) return;
+                        auto& payload = *frame.fast_place;
+                        ++payload.executions;
+                        payload.decision = fast_place_.evaluate(payload.input);
+                    });
+    }
+
+    bool bind_fast_place_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Fast Place")
+                return bind_fast_place(id);
+        return false;
+    }
+
     // Source-linked Timer: utility category 4, frame event 1 priority 200
     // and toggle notification event 5 priority 0. Both must be present before
     // accepting the offline binding; no actual Minecraft timer is modified.
@@ -887,6 +921,8 @@ public:
             return false;
         if (frame.safe_walk && frame.event != kSafeWalkEvent)
             return false;
+        if (frame.fast_place && frame.event != kSafeWalkEvent)
+            return false;
         if (frame.timer_frame && frame.event != kTimerFrameEvent)
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
@@ -922,6 +958,7 @@ public:
             static_cast<unsigned>(frame.anti_debuff.has_value()) +
             static_cast<unsigned>(frame.fast_accel.has_value()) +
             static_cast<unsigned>(frame.safe_walk.has_value()) +
+            static_cast<unsigned>(frame.fast_place.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
@@ -964,6 +1001,11 @@ public:
         const bool combined_steering_accel =
             typed_count == 2 && frame.event == kStrafeSteeringEvent &&
             frame.strafe_steering && frame.fast_accel;
+        // Safe Walk priority 0 precedes Fast Place priority -1000 on
+        // native event0. Both payloads must describe the same game state.
+        const bool combined_edge_place =
+            typed_count == 2 && frame.event == kSafeWalkEvent &&
+            frame.safe_walk && frame.fast_place;
         const bool combined_outgoing_packet =
             typed_count == 2 && frame.event == kOutgoingPacketEvent &&
             frame.ping_fix && frame.no_item_release;
@@ -973,7 +1015,11 @@ public:
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
             !combined_attack_post && !combined_player_update &&
             !combined_movement_sprint && !combined_steering_accel &&
-            !combined_outgoing_packet && !combined_late_tick)
+            !combined_edge_place && !combined_outgoing_packet &&
+            !combined_late_tick)
+            return false;
+        if (combined_edge_place &&
+            frame.safe_walk->input.in_game != frame.fast_place->input.in_game)
             return false;
         if (combined_outgoing_packet) {
             const bool c00 =
@@ -1069,6 +1115,10 @@ public:
             frame.safe_walk->decision = {};
             frame.safe_walk->executions = 0;
         }
+        if (frame.fast_place) {
+            frame.fast_place->decision = {};
+            frame.fast_place->executions = 0;
+        }
         if (frame.timer_frame) {
             frame.timer_frame->decision = {};
             frame.timer_frame->executions = 0;
@@ -1128,6 +1178,7 @@ public:
     void reset_keep_sprint_world_state() noexcept { keep_sprint_.reset(); }
     void reset_sprint_world_state() noexcept { sprint_.reset(); }
     void reset_strafe_world_state() noexcept { strafe_.reset(); }
+    void reset_fast_place_world_state() noexcept { fast_place_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1142,6 +1193,7 @@ public:
         keep_sprint_.reset();
         sprint_.reset();
         strafe_.reset();
+        fast_place_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1167,6 +1219,7 @@ private:
     AntiDebuffController anti_debuff_;
     FastAccelController fast_accel_;
     SafeWalkController safe_walk_;
+    FastPlaceController fast_place_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;
