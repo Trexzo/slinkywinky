@@ -446,6 +446,18 @@ if(BUILD_TESTING)
     COMMAND slinkywinky_strafe_bridge_test)
   set_tests_properties(r222_strafe_offline_policy_and_dispatch
     PROPERTIES TIMEOUT 15)
+  # R223: read-only event22 motion ownership. Strafe priority100 wins over
+  # Fast Accel priority0, but only on admitted matching typed observations.
+  # No gameplay action owner is connected or enabled by this test.
+  add_executable(slinkywinky_event22_motion_resolution_test
+    tests/test_movement_proposal_resolution.cpp)
+  target_link_libraries(slinkywinky_event22_motion_resolution_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r223_event22_single_owner_motion_proposal
+    COMMAND slinkywinky_event22_motion_resolution_test)
+  set_tests_properties(r223_event22_single_owner_motion_proposal
+    PROPERTIES TIMEOUT 15)
   add_test(NAME r222_seventeen_policy_coverage
     COMMAND slinkywinky_implementation_coverage_audit
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twenty_modules_with_seventeen_decisions.tsv")
