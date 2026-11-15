@@ -171,6 +171,71 @@ int main() {
         const auto crossedLeft=menu.recovered_range_override(rangeIndex);
         CHECK(crossedLeft && crossedLeft->upper==crossedLeft->lower &&
               crossedLeft->lower==source.min_value);
+        // R221: a range collapsed to one interior value must be
+        // reopenable through either real source-pinned gesture.
+        // Earlier nearest-knob hit-testing always picked handle 0.
+        CHECK(menu.set_recovered_range_preview(
+            0u,rangeIndex,0u,4.0f));
+        const auto collapsed=frames.next(menu,&profile,&nav);
+        CHECK(collapsed);
+        const float centerX=track->x+track->width*
+            ((4.0f-source.min_value)/span);
+        const auto collapseLeft=xy(centerX-8.0f,
+            track->y+track->height*0.5f);
+        const auto collapseRight=xy(centerX+8.0f,
+            track->y+track->height*0.5f);
+        const auto lowSide=hit_test_menu(
+            *collapsed,mode,collapseLeft.first,collapseLeft.second);
+        const auto highSide=hit_test_menu(
+            *collapsed,mode,collapseRight.first,collapseRight.second);
+        CHECK(lowSide && highSide &&
+              lowSide->kind==MenuHitKind::RecoveredRangePreview &&
+              highSide->kind==MenuHitKind::RecoveredRangePreview &&
+              lowSide->control_index==rangeIndex &&
+              highSide->control_index==rangeIndex &&
+              lowSide->sub_index==0u && highSide->sub_index==1u);
+        const auto stretchRight=xy(track->x+track->width*
+            ((5.5f-source.min_value)/span),
+            track->y+track->height*0.5f);
+        CHECK(gesture.press(*collapsed,mode,collapseRight.first,
+              collapseRight.second,5100,true));
+        CHECK(gesture.move(*collapsed,mode,stretchRight.first,
+              stretchRight.second,true));
+        const auto highRelease=gesture.release(*collapsed,mode,
+            stretchRight.first,stretchRight.second,5250,true);
+        CHECK(highRelease && highRelease->sub_index==1u);
+        const auto highValue=menu_numeric_value_at_x(
+            source,*track,static_cast<float>(
+                stretchRight.first-static_cast<int>(panel->left))
+                /panel->scale);
+        CHECK(highValue && menu.set_recovered_range_preview(
+            0u,rangeIndex,highRelease->sub_index,*highValue));
+        const auto reopenedRight=menu.recovered_range_override(rangeIndex);
+        CHECK(reopenedRight && reopenedRight->lower==4.0f &&
+              reopenedRight->upper>4.0f);
+        CHECK(menu.set_recovered_range_preview(
+            0u,rangeIndex,1u,4.0f));
+        const auto collapsedAgain=frames.next(menu,&profile,&nav);
+        CHECK(collapsedAgain);
+        CHECK(gesture.press(*collapsedAgain,mode,collapseLeft.first,
+              collapseLeft.second,6100,true));
+        const auto stretchLeft=xy(track->x+track->width*
+            ((3.0f-source.min_value)/span),
+            track->y+track->height*0.5f);
+        CHECK(gesture.move(*collapsedAgain,mode,stretchLeft.first,
+              stretchLeft.second,true));
+        const auto lowRelease=gesture.release(*collapsedAgain,mode,
+            stretchLeft.first,stretchLeft.second,6250,true);
+        CHECK(lowRelease && lowRelease->sub_index==0u);
+        const auto lowValue=menu_numeric_value_at_x(
+            source,*track,static_cast<float>(
+                stretchLeft.first-static_cast<int>(panel->left))
+                /panel->scale);
+        CHECK(lowValue && menu.set_recovered_range_preview(
+            0u,rangeIndex,lowRelease->sub_index,*lowValue));
+        const auto reopenedLeft=menu.recovered_range_override(rangeIndex);
+        CHECK(reopenedLeft && reopenedLeft->lower<4.0f &&
+              reopenedLeft->upper==4.0f);
         CHECK(!menu.preview_enabled(0u) && !profile.enabled(0u));
         // Model writes invalidate an in-flight range drag; no stale commit.
         const auto thirdFrame=frames.next(menu,&profile,&nav);

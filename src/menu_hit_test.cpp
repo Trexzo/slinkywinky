@@ -364,11 +364,12 @@ std::optional<MenuHit> hit_test_menu(
                             ((value.lower-widget.min_value)/span);
                         const float upperX=track->x+track->width*
                             ((value.upper-widget.min_value)/span);
-                        // Same nearest-handle choice as the recovered
-                        // clickgui.tpl.html pointerdown algorithm. Ties
-                        // deterministically select the lower endpoint.
-                        const unsigned handle=std::fabs(x-lowerX)<=
-                            std::fabs(x-upperX)?0u:1u;
+                        // R221: original Slinky splits range capture
+                        // areas at the midpoint, even for coincident knobs.
+                        // Nearest-handle distances tie everywhere after
+                        // R220 collapses endpoints, trapping handle 1.
+                        const float midpoint=(lowerX+upperX)*0.5f;
+                        const unsigned handle=x<=midpoint?0u:1u;
                         return MenuHit{MenuHitKind::RecoveredRangePreview,
                                        frame.tab,index,global,handle};
                     }
