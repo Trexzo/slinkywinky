@@ -38,4 +38,26 @@ claim the complete original search dialog, actual physical mouse
 input, injected in-game use, gameplay module activation, or source
 ownership of the original JNI pipeline. Chat 2 PR #2 is untouched.
 
-CI verification will be recorded only after the workflow completes.
+## Exact-commit GitHub acceptance
+
+The implemented R226 source and corrected inherited regression were
+verified at commit `6ea598e42fbc9a5de6be758b7a973a9de5107d2d`.
+All three GitHub workflows completed with success:
+
+- Offline C++ core:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43742306853
+  Six successful jobs, including Windows Debug/Release, Ubuntu
+  Debug/Release, JNI smoke and sanitizer tests.
+- Windows JNI preview artifact:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43742306838
+  Windows x64 JNI build and test completed successfully.
+- Injectable Windows Java 8 agent:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43742306782
+  Windows native loader/JVMTI build and Attach tests passed.
+
+The initial candidate CI failed on one wrong test coordinate helper;
+the second run identified a legacy regression expecting ten popup
+rows including None. Both were fixed before this green commit.
+No real original Minecraft client was launched for R226, and no
+physical mouse/keyboard, full original searchable dialog, or live
+gameplay behavior is claimed.
