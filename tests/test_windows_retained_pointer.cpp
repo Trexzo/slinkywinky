@@ -2465,10 +2465,12 @@ void verify_r231_wgl_profile_creation_binding(
     REQUIRE(tabBound && !tabBound->profile_bind_capture_index &&
             tabBound->profile_cards[1].bind=="TAB" &&
             preview.tab()==MenuTab::Profiles);
+    // The original R98 gesture gate rejects a repeat of the same
+    // chip within 500ms. These are distinct intentional edits.
     const auto f6chip=menu_profile_bind_rect(
         *tabBound,panel->logical_width(),panel->logical_height(),1u);
     REQUIRE(f6chip);
-    click(point(f6chip->x+12.0f,f6chip->y+10.0f),40300u);
+    click(point(f6chip->x+12.0f,f6chip->y+10.0f),41000u);
     key(64u,true); // exact LWJGL F6 -> preview VK_F6.
     const auto* f6Bound=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,width,height);
@@ -2477,7 +2479,7 @@ void verify_r231_wgl_profile_creation_binding(
     const auto clearChip=menu_profile_bind_rect(
         *f6Bound,panel->logical_width(),panel->logical_height(),1u);
     REQUIRE(clearChip);
-    click(point(clearChip->x+12.0f,clearChip->y+10.0f),40400u);
+    click(point(clearChip->x+12.0f,clearChip->y+10.0f),41800u);
     key(1u,true); // Escape clears the binding without closing the GUI.
     const auto* cleared=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,width,height);
