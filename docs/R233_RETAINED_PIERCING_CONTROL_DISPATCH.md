@@ -59,5 +59,20 @@ first-party reconstruction of the local GUI preview, not native
 Piercing gameplay admission or a claim of pixel-perfect fidelity.
 Chat 2's PR #2 stays independent and unmerged.
 
-## CI
-Pending exact-commit GitHub workflows.
+## Exact-commit CI verification
+
+All three GitHub workflows passed against implementation commit
+`9308733dcdf9a723aaf5071017483e65245f1dd0`:
+
+- Offline C++ core: **6/6 jobs PASS**, covering Windows Debug/Release,
+  Ubuntu Debug/Release, Linux sanitizers and Linux JNI smoke:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43766202773
+- Windows JNI preview artifact: native x64/Java 8 roundtrip PASS:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43766202738
+- Injectable Windows Java 8 agent: native loader/JVMTI and actual
+  Java 8 Attach API test suite PASS:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43766202723
+
+This confirms the isolated WGL click route and existing offline
+source-typed UI model only, not original Minecraft runtime input,
+physical hardware controls, or gameplay Piercing implementation.
