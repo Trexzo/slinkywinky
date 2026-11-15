@@ -69,10 +69,9 @@ MenuKeyOutcome MenuKeyboardRouter::event(unsigned lwjgl_key,bool down,
     const bool rising=down && !pressed_[lwjgl_key];
     pressed_[lwjgl_key]=down;
     if(!rising)return {MenuKeyDelivery::MenuExclusive,false,false};
-    // R201: a modal captures all keyboard events. Do not translate Tab,
-    // arrows, Enter or Escape into background navigation or menu-close.
-    // The exact owner-bound WGL dispatcher may edit the HEX preview
-    // separately after this quarantined, key-paired router receipt.
+    // R201/R227: all visible dropdown modals capture the key stream,
+    // including the source searchable list and color HEX picker.
+    // No Tab/arrows/Enter/Escape may act on the background menu.
     if(navigation_.color_modal_open())
         return {MenuKeyDelivery::MenuExclusive,false,false};
     // Insert / Escape only request GUI close. The event and its release

@@ -142,6 +142,29 @@ std::optional<MenuHit> hit_test_menu(
     // R127: an open dropdown owns the only admissible mouse targets.
     // No click may pass through the floating popup to modules or nav tabs.
     if(frame.dropdown_preview) {
+        // R227: the original >=6 optional dropdown is a searchable
+        // two-column modal. Only painted modal hits are admissible.
+        if(frame.dropdown_preview->kind==MenuDropdownKind::RecoveredChoice &&
+           menu_source_large_optional_choice(
+               frame.dropdown_preview->widget_index)) {
+            const auto search=menu_search_popup_geometry(
+                frame,w,panel->logical_height());
+            if(!search || !search->panel.contains(x,y))
+                return std::nullopt;
+            if(search->close.contains(x,y))
+                return MenuHit{MenuHitKind::SearchPopupClose,frame.tab,
+                               frame.dropdown_preview->catalog_index};
+            if(search->field.contains(x,y))
+                return MenuHit{MenuHitKind::SearchPopupField,frame.tab,
+                               frame.dropdown_preview->catalog_index};
+            for(unsigned j=0u;j<search->matches.count;++j) {
+                if(search->result_cell(j).contains(x,y))
+                    return MenuHit{MenuHitKind::SearchPopupOption,frame.tab,
+                                   frame.dropdown_preview->catalog_index,
+                                   search->matches.indices[j]};
+            }
+            return std::nullopt;
+        }
         const auto pop=menu_dropdown_popup_geometry(
             frame,w,panel->logical_height());
         if(!pop || x<pop->x || x>=pop->x+pop->width ||

@@ -35,7 +35,8 @@ bool MenuNavigation::owner_thread() const noexcept {
     return thread_==std::this_thread::get_id();
 }
 bool MenuNavigation::color_modal_open() const noexcept {
-    return owner_thread() && menu_.color_popup_owner().has_value();
+    // R227: keep existing router ABI; any dropdown is modal-exclusive.
+    return owner_thread() && menu_.dropdown_preview().has_value();
 }
 std::optional<std::size_t> MenuNavigation::visible_focus() const {
     if(!owner_thread() || !focused_ || !profile_.owns(menu_))
@@ -117,7 +118,7 @@ bool MenuNavigation::move_row(int direction) {
 }
 bool MenuNavigation::apply(MenuNavAction action) {
     if(!owner_thread() || !profile_.owns(menu_) ||
-       menu_.color_popup_owner() ||
+       menu_.dropdown_preview() ||
        menu_.unload_confirmation_preview())return false;
     switch(action) {
         case MenuNavAction::NextTab: return switch_tab(1);

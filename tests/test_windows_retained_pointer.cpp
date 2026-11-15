@@ -1986,6 +1986,161 @@ void verify_r211_source_click_request(Context& ctx,const State& expected) {
     std::cout<<"R211_SOURCE_EXACT_WGL_FIXTURE_MOUSE_TO_PENDING_SPRINT_PASS\n";
 }
 
+// R227: actual GL11 retained Select item popup with source-only
+// two-column case-insensitive search. All input is a disposable WGL
+// fixture, never an original Minecraft Keyboard.next handler.
+void verify_r227_wgl_select_item(Context& ctx,const State& expected) {
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    constexpr auto mode=MenuPanelMode::CompactOverlay;
+    constexpr unsigned width=676u,height=630u;
+    const auto& all=recovered_widget_catalog();
+    std::size_t item=all.size();
+    for(std::size_t i=0;i<all.size();++i) {
+        if(menu_source_large_optional_choice(i)){item=i;break;}
+    }
+    REQUIRE(item<all.size());
+    WglRetainedMenuPreview preview;
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    for(unsigned i=0u;i<4u;++i) {
+        REQUIRE(preview.apply(MenuNavAction::NextTab));
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    }
+    REQUIRE(preview.tab()==MenuTab::Utility);
+    REQUIRE(preview.scroll_visible(9,8));
+    REQUIRE(preview.fixture_navigation().focus_visible_row(58u));
+    REQUIRE(preview.apply(MenuNavAction::ExpandFocused));
+    REQUIRE(preview.apply(MenuNavAction::NextSettingsPage));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto panel=menu_panel_geometry(width,height,false,mode);
+    REQUIRE(panel);
+    const auto* frame=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(frame);
+    std::size_t position=frame->visible.size();
+    for(std::size_t i=0;i<frame->visible.size();++i)
+        if(frame->visible[i].catalog_index==58u)position=i;
+    REQUIRE(position<frame->visible.size() &&
+            frame->visible[position].expanded);
+    std::array<const RecoveredWidget*,5> widgets{};
+    REQUIRE(recovered_widget_visible_page("Inv Manager",
+        frame->visible[position].settings_offset,
+        static_cast<int>(frame->aim_preview_mode),
+        static_cast<int>(frame->target_preview_mode),widgets));
+    std::size_t widgetPos=widgets.size();
+    for(std::size_t j=0;j<widgets.size();++j)
+        if(widgets[j]==&all[item])widgetPos=j;
+    REQUIRE(widgetPos<widgets.size());
+    const auto rect=menu_module_card_rect(
+        *frame,panel->logical_width(),position);
+    const auto column=menu_setting_column(rect.x,rect.width);
+    const auto physical=[&](float x,float y){
+        return std::array<int,2>{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+    };
+    const auto openAt=physical(
+        column.x+column.width*0.4f,
+        rect.y+menu_row_body_height(*frame)+
+        menu_settings_control_offset(widgets,widgetPos)+10.0f);
+    const auto hit=hit_test_menu(*frame,mode,openAt[0],openAt[1]);
+    REQUIRE(hit && hit->kind==MenuHitKind::RecoveredChoiceControl &&
+            hit->catalog_index==58u && hit->control_index==item);
+    const auto baseline=preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(baseline);
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(preview.fixture_navigation());
+    const std::uint64_t epoch=2270u;
+    REQUIRE(ledger.request(epoch,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(epoch,true,true,true));
+    REQUIRE(preview.fixture_begin_keyboard(epoch,ledger,router));
+    const auto click=[&](const std::array<int,2>& point,
+                         std::uint64_t tick) {
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            point[0],point[1],tick,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            point[0],point[1],tick+40u,true));
+    };
+    const auto key=[&](unsigned code,bool edited) {
+        const auto pressed=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            code,true,true);
+        REQUIRE(pressed.delivery==MenuKeyDelivery::MenuExclusive &&
+                !pressed.request_close &&
+                pressed.action_applied==edited);
+        const auto released=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            code,false,true);
+        REQUIRE(released.delivery==MenuKeyDelivery::MenuExclusive &&
+                !released.action_applied && !released.request_close);
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    };
+    click(openAt,30000u);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto* opened=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(opened && opened->dropdown_preview &&
+            opened->dropdown_preview->widget_index==item &&
+            opened->dropdown_search_query.empty());
+    const auto full=menu_search_popup_geometry(
+        *opened,panel->logical_width(),panel->logical_height());
+    REQUIRE(full && full->matches.count==9u &&
+            full->matches.indices[0]==1u &&
+            full->matches.indices[8]==9u);
+    const auto behind=physical(25.0f,20.0f);
+    REQUIRE(!hit_test_menu(*opened,mode,behind[0],behind[1]));
+    // A live popup must steal Tab from background navigation.
+    key(15u,false);
+    REQUIRE(preview.tab()==MenuTab::Utility);
+    key(34u,true); // g
+    key(24u,true); // o
+    key(38u,true); // l
+    const auto* filteredFrame=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(filteredFrame &&
+            filteredFrame->dropdown_search_query=="gol");
+    const auto search=menu_search_popup_geometry(
+        *filteredFrame,panel->logical_width(),
+        panel->logical_height());
+    REQUIRE(search && search->matches.count==1u &&
+            search->matches.indices[0]==7u);
+    const auto cell=search->result_cell(0u);
+    const auto selectedAt=physical(cell.x+8.0f,cell.y+12.0f);
+    const auto selectedHit=hit_test_menu(
+        *filteredFrame,mode,selectedAt[0],selectedAt[1]);
+    REQUIRE(selectedHit &&
+            selectedHit->kind==MenuHitKind::SearchPopupOption &&
+            selectedHit->catalog_index==58u &&
+            selectedHit->control_index==7u);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height)==baseline);
+    click(selectedAt,31000u);
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto* applied=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(applied && !applied->dropdown_preview &&
+            applied->dropdown_search_query.empty() &&
+            applied->recovered_choice_overrides[item] &&
+            *applied->recovered_choice_overrides[item]==7u);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height)==baseline);
+    REQUIRE(!preview.preview_enabled(58u));
+    REQUIRE(ledger.tracked_released());
+    REQUIRE(preview.fixture_end_keyboard(ledger,router));
+    REQUIRE(preview.fixture_finish_restore(
+        ledger,router,true,true,true));
+    REQUIRE(preview.close());
+    REQUIRE(!ledger.may_deliver_live_minecraft_event());
+    REQUIRE(!ledger.may_suppress_vanilla_event());
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R227_WGL_ORIGINAL_SELECT_ITEM_SEARCH_MODAL_PASS\\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -2001,6 +2156,7 @@ int main() {
         verify_r196_wgl_range(context,before);
         verify_r197_native_focus_receipts(context,before);
         verify_r200_native_color_popup(context,before);
+        verify_r227_wgl_select_item(context,before);
         verify_r211_source_click_request(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());

@@ -244,6 +244,10 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
     const bool rising=down &&
         !ledger.tracked_down(InputHandoffDevice::Keyboard,lwjgl_key);
     const bool colorModal=menu_.color_popup_owner().has_value();
+    const bool searchModal=menu_.dropdown_preview() &&
+        menu_.dropdown_preview()->kind==MenuDropdownKind::RecoveredChoice &&
+        menu_source_large_optional_choice(
+            menu_.dropdown_preview()->widget_index);
     const auto route=ledger.simulate(
         {InputHandoffDevice::Keyboard,lwjgl_key,down},
         true,foreground_verified,!draining,true);
@@ -264,9 +268,14 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
         return denied;
     }
     if(colorModal && rising) {
-        // The router already quarantined this event from ordinary
-        // navigation; only the source-bounded local color field may edit.
+        // Original color picker remains isolated from game input.
         const bool handled=menu_.color_popup_key(lwjgl_key);
+        if(handled)invalidate_painted_input();
+        return {MenuKeyDelivery::MenuExclusive,false,handled};
+    }
+    if(searchModal && rising) {
+        // Paired synthetic LWJGL edges; never install game Keyboard.next.
+        const bool handled=menu_.search_preview_popup_key(lwjgl_key);
         if(handled)invalidate_painted_input();
         return {MenuKeyDelivery::MenuExclusive,false,handled};
     }
@@ -573,6 +582,18 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.open_recovered_multi_preview(
                        hit->catalog_index,hit->control_index);
+        case MenuHitKind::SearchPopupField:
+            return menu_.dropdown_preview() &&
+                   menu_source_large_optional_choice(
+                       menu_.dropdown_preview()->widget_index);
+        case MenuHitKind::SearchPopupClose:
+            return menu_.close_preview_dropdown();
+        case MenuHitKind::SearchPopupOption:
+            if(hit->control_index>
+                static_cast<std::size_t>(
+                    std::numeric_limits<unsigned>::max()))return false;
+            return menu_.select_preview_dropdown_option(
+                static_cast<unsigned>(hit->control_index));
         case MenuHitKind::DropdownOption:
             if(hit->control_index>
                static_cast<std::size_t>(

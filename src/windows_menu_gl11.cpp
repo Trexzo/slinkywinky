@@ -1021,7 +1021,10 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
     // R127: draw the source-shaped dropdown *after* cards so it floats
     // above later columns. This is a preview-only, immutable frame surface.
     if(frame.dropdown_preview &&
-       frame.dropdown_preview->kind!=MenuDropdownKind::ColorPicker) {
+       frame.dropdown_preview->kind!=MenuDropdownKind::ColorPicker &&
+       !(frame.dropdown_preview->kind==MenuDropdownKind::RecoveredChoice &&
+         menu_source_large_optional_choice(
+             frame.dropdown_preview->widget_index))) {
         ScopedVisualAlpha popupFade(frame.control_motion?
             frame.control_motion->popup_opacity:1.0f);
         const auto popup=menu_dropdown_popup_geometry(frame,w,h);
@@ -1075,6 +1078,59 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             round_rect(popup->x+popup->width-6.0f,
                        popup->y+6.0f+(track-thumb)*ratio,
                        3.0f,thumb,1.5f);
+        }
+    }
+    // R227: pinned gui_popups.cpp kind=4 Select item modal. Its
+    // search box and two 25px-column rows replace the temporary inline
+    // six-row scroller for the original 10-option optional Slot 1 only.
+    if(frame.dropdown_preview &&
+       frame.dropdown_preview->kind==MenuDropdownKind::RecoveredChoice &&
+       menu_source_large_optional_choice(
+           frame.dropdown_preview->widget_index)) {
+        ScopedVisualAlpha popupFade(frame.control_motion?
+            frame.control_motion->popup_opacity:1.0f);
+        const auto popup=menu_search_popup_geometry(frame,w,h);
+        if(!popup)return false;
+        rgb(0x141414u);
+        round_rect(popup->panel.x,popup->panel.y,popup->panel.width,
+                   popup->panel.height,20.0f);
+        rgb(0xdddddd);
+        text("Select item",popup->title.x,
+             menu_control_center_text_y(
+                 popup->title.y,popup->title.height,16.0f),
+             16.0f,popup->title.width-28.0f);
+        // Close X on the recovered 20px title-bar hit square.
+        const float cx=popup->close.x,cy=popup->close.y;
+        rgb(0x999999u);
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glVertex2f(cx+4.0f,cy+4.0f);
+        glVertex2f(cx+16.0f,cy+16.0f);
+        glVertex2f(cx+16.0f,cy+4.0f);
+        glVertex2f(cx+4.0f,cy+16.0f);
+        glEnd();
+        rgb(0x404040u);
+        round_rect(popup->field.x,popup->field.y,
+                   popup->field.width,popup->field.height,8.0f);
+        rgb(0x141414u);
+        round_rect(popup->field.x+2.0f,popup->field.y+2.0f,
+                   popup->field.width-4.0f,popup->field.height-4.0f,6.0f);
+        rgb(0xdddddd);
+        text(frame.dropdown_search_query.empty()?"Search...":
+             std::string_view(frame.dropdown_search_query),
+             popup->field.x+8.0f,
+             menu_control_center_text_y(
+                 popup->field.y,popup->field.height,15.0f),
+             15.0f,popup->field.width-16.0f);
+        for(unsigned j=0u;j<popup->matches.count;++j) {
+            const auto cell=popup->result_cell(j);
+            const auto index=popup->matches.indices[j];
+            const auto label=menu_source_choice_label(
+                frame.dropdown_preview->widget_index,index);
+            rgb(0xdddddd);
+            text(label,cell.x+6.0f,
+                 menu_control_center_text_y(cell.y,cell.height,16.0f),
+                 16.0f,cell.width-12.0f);
         }
     }
     // R200: a real first-party GL11 modal layered above all source cards.

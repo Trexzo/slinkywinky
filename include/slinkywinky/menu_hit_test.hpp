@@ -48,7 +48,8 @@ enum class MenuHitKind : std::uint8_t {
     ProfileModalClose, ProfileModalContinue, // local confirmation only
     RecoveredSliderPreview, // R132: source-indexed inert drag-on-release
     RecoveredRangePreview, // R133: dual-handle guarded preview
-    RecoveredChoiceClear // R226: source-only optional-dropdown X
+    RecoveredChoiceClear, // R226: source-only optional-dropdown X
+    SearchPopupField, SearchPopupClose, SearchPopupOption // R227 modal
 };
 
 // Catalog index is meaningful only for non-Tab hits. No raw input pointers,

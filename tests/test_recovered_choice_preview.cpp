@@ -213,29 +213,71 @@ int main() {
             invModule,invWidget));
         const auto openFrame=invFrames.next(
             inventory,&inventoryProfile,&inventoryNav);
-        const auto large=menu_dropdown_popup_geometry(
+        const auto modal=menu_search_popup_geometry(
             *openFrame,panel->logical_width(),panel->logical_height());
-        CHECK(large && large->total_options==9u &&
-              large->option_count==6u &&
-              large->first_option==1u &&
-              large->first_selectable_option==1u);
+        CHECK(modal && modal->matches.count==9u &&
+              modal->matches.indices[0]==1u &&
+              modal->matches.indices[8]==9u);
         CHECK(!inventory.select_preview_dropdown_option(0u));
         CHECK(!inventory.scroll_preview_popup(-1));
-        CHECK(inventory.scroll_preview_popup(1));
-        CHECK(inventory.scroll_preview_popup(1));
-        CHECK(inventory.scroll_preview_popup(1));
         CHECK(!inventory.scroll_preview_popup(1));
-        const auto atEnd=invFrames.next(
+        CHECK(menu_source_search_matches(invWidget,"GOLDEN").count==1u);
+        CHECK(menu_source_search_matches(invWidget,"oW").count==1u);
+        CHECK(!menu_search_ascii_valid("gold!"));
+        const auto close=xy(modal->close.x+10.0f,modal->close.y+10.0f);
+        const auto closeHit=hit_test_menu(
+            *openFrame,mode,close.first,close.second);
+        CHECK(closeHit && closeHit->kind==MenuHitKind::SearchPopupClose);
+        const auto field=xy(modal->field.x+10.0f,modal->field.y+10.0f);
+        const auto fieldHit=hit_test_menu(
+            *openFrame,mode,field.first,field.second);
+        CHECK(fieldHit && fieldHit->kind==MenuHitKind::SearchPopupField);
+        const auto behind=xy(25.0f,20.0f);
+        CHECK(!hit_test_menu(*openFrame,mode,
+            behind.first,behind.second));
+        const auto first=modal->result_cell(0u);
+        const auto choicePoint=xy(first.x+10.0f,first.y+10.0f);
+        MenuMouseGesture searchGesture;
+        CHECK(searchGesture.press(*openFrame,mode,
+              choicePoint.first,choicePoint.second,2000u,true));
+        CHECK(inventory.search_preview_popup_key(34u)); // G
+        const auto changed=invFrames.next(
             inventory,&inventoryProfile,&inventoryNav);
-        const auto endPopup=menu_dropdown_popup_geometry(
-            *atEnd,panel->logical_width(),panel->logical_height());
-        CHECK(endPopup && endPopup->first_option==4u);
-        CHECK(inventory.select_preview_dropdown_option(9u));
+        CHECK(!searchGesture.release(*changed,mode,
+              choicePoint.first,choicePoint.second,2040u,true));
+        CHECK(inventory.search_preview_popup_key(24u)); // O
+        CHECK(inventory.search_preview_popup_key(38u)); // L
+        const auto searchFrame=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        const auto filtered=menu_search_popup_geometry(
+            *searchFrame,panel->logical_width(),panel->logical_height());
+        CHECK(filtered && filtered->matches.count==1u &&
+              filtered->matches.indices[0]==7u &&
+              searchFrame->dropdown_search_query=="gol");
+        CHECK(!inventory.select_preview_dropdown_option(9u));
+        const auto cell=filtered->result_cell(0u);
+        const auto point=xy(cell.x+8.0f,cell.y+12.0f);
+        const auto filteredHit=hit_test_menu(
+            *searchFrame,mode,point.first,point.second);
+        CHECK(filteredHit &&
+              filteredHit->kind==MenuHitKind::SearchPopupOption &&
+              filteredHit->control_index==7u);
+        CHECK(inventory.search_preview_popup_key(14u)); // Backspace
+        CHECK(inventory.search_preview_popup_query()=="go");
+        CHECK(inventory.search_preview_popup_key(38u)); // L
+        CHECK(inventory.select_preview_dropdown_option(7u));
         const auto picked=invFrames.next(
             inventory,&inventoryProfile,&inventoryNav);
         CHECK(picked && !picked->dropdown_preview &&
+              picked->dropdown_search_query.empty() &&
               picked->recovered_choice_overrides[invWidget] &&
-              *picked->recovered_choice_overrides[invWidget]==9u);
+              *picked->recovered_choice_overrides[invWidget]==7u);
+        CHECK(inventory.open_recovered_choice_preview(invModule,invWidget));
+        CHECK(inventory.search_preview_popup_query().empty());
+        CHECK(inventory.search_preview_popup_key(34u));
+        CHECK(inventory.search_preview_popup_key(1u)); // Esc cancels
+        CHECK(!inventory.dropdown_preview() &&
+              !inventory.search_preview_popup_key(34u));
         CHECK(menu_dropdown_clear_geometry(
             *picked,panel->logical_width(),panel->logical_height(),
             invModule,invWidget).has_value());

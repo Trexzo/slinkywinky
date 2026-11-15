@@ -64,6 +64,7 @@ struct MenuRenderFrame {
     unsigned target_preview_mode=0;
     PiercingPreview piercing_preview{}; // local GUI sandbox, no game
     std::optional<MenuDropdownPreview> dropdown_preview{}; // R127 snapshot
+    std::string dropdown_search_query; // R227 source large-popup sidecar snapshot
     bool unload_confirmation_preview=false; // R128 modal, no runtime unload
     std::array<MenuBindPreview,67> bind_previews{};
     std::optional<std::size_t> bind_capture_index{};

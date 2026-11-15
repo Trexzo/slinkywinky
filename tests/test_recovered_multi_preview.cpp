@@ -214,27 +214,30 @@ int main() {
         const auto panel=menu_panel_geometry(
             900,630,false,MenuPanelMode::StandalonePreview);
         CHECK(frame && panel);
-        auto popup=menu_dropdown_popup_geometry(
+        const auto modal=menu_search_popup_geometry(
             *frame,panel->logical_width(),panel->logical_height());
-        CHECK(popup && popup->total_options==9u &&
-              popup->option_count==6u && popup->first_option==1u &&
-              popup->first_selectable_option==1u);
-        CHECK(!menu.select_preview_dropdown_option(9u));
-        for(unsigned i=0;i<3u;++i)CHECK(menu.scroll_preview_popup(1));
+        CHECK(modal && modal->matches.count==9u &&
+              modal->matches.indices[0]==1u &&
+              modal->matches.indices[8]==9u);
         CHECK(!menu.scroll_preview_popup(1));
+        CHECK(!menu.select_preview_dropdown_option(0u));
+        CHECK(menu.search_preview_popup_key(19u)); // r
+        CHECK(menu.search_preview_popup_key(24u)); // o
+        CHECK(menu.search_preview_popup_key(32u)); // d
         const auto shifted=frames.next(menu,&profile,&nav);
-        popup=menu_dropdown_popup_geometry(
+        const auto filtered=menu_search_popup_geometry(
             *shifted,panel->logical_width(),panel->logical_height());
-        CHECK(popup && popup->first_option==4u);
+        CHECK(filtered && filtered->matches.count==1u &&
+              filtered->matches.indices[0]==9u);
+        const auto cell=filtered->result_cell(0u);
         const auto coord=std::pair<int,int>{
-            static_cast<int>(std::lround(popup->x+popup->width*0.5f)),
-            static_cast<int>(std::lround(
-                popup->y+popup->row_height*5.5f))
+            static_cast<int>(std::lround(cell.x+10.0f)),
+            static_cast<int>(std::lround(cell.y+10.0f))
         };
         const auto hit=hit_test_menu(
             *shifted,MenuPanelMode::StandalonePreview,
             coord.first,coord.second);
-        CHECK(hit && hit->kind==MenuHitKind::DropdownOption &&
+        CHECK(hit && hit->kind==MenuHitKind::SearchPopupOption &&
               hit->control_index==9u);
         CHECK(menu.select_preview_dropdown_option(9u));
         CHECK(!menu.dropdown_preview());

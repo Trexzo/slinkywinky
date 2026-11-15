@@ -49,11 +49,14 @@ unsigned recovered_multi_count(std::string_view options) noexcept {
 std::mutex color_sidecar_mutex;
 std::unordered_map<const MenuState*,MenuColorPopupPreview>
     color_sidecars;
+// Source-search field sidecar does not change original MenuState JNI layout.
+std::unordered_map<const MenuState*,std::string> popup_search_sidecars;
 } // namespace
 
 MenuState::~MenuState() noexcept {
     std::lock_guard<std::mutex> lock(color_sidecar_mutex);
     color_sidecars.erase(this);
+    popup_search_sidecars.erase(this);
 }
 const std::array<MenuModule,67>& official_module_catalog() noexcept {return catalog;}
 
@@ -707,6 +710,10 @@ bool MenuState::open_recovered_choice_preview(
     numeric_hover_.reset();
     numeric_drag_preview_.reset();
     bind_capture_index_.reset();
+    if(menu_source_large_optional_choice(widget_index)) {
+        std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+        popup_search_sidecars[this].clear();
+    }
     dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredChoice,catalog_index,
             settings_offsets_[catalog_index]+i,
@@ -794,12 +801,67 @@ bool MenuState::clear_recovered_choice_preview(
     recovered_choice_overrides_[widget_index]=0u;
     return true;
 }
+// R227: search is deliberately local to the one source-identified
+// large optional choice; the original Minecraft key queue is untouched.
+std::string MenuState::search_preview_popup_query() const {
+    if(!dropdown_preview_ ||
+       dropdown_preview_->kind!=MenuDropdownKind::RecoveredChoice ||
+       !menu_source_large_optional_choice(dropdown_preview_->widget_index))
+        return {};
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=popup_search_sidecars.find(this);
+    return it==popup_search_sidecars.end()?std::string{}:it->second;
+}
+bool MenuState::search_preview_popup_key(unsigned key) {
+    if(!dropdown_preview_ ||
+       dropdown_preview_->kind!=MenuDropdownKind::RecoveredChoice ||
+       !menu_source_large_optional_choice(dropdown_preview_->widget_index))
+        return false;
+    if(key==1u)return close_preview_dropdown(); // Escape: cancel modal
+    char typed='\0';
+    // Unshifted LWJGL2 ASCII; original filter is alphanumeric text.
+    switch(key) {
+        case 2:typed='1';break;case 3:typed='2';break;
+        case 4:typed='3';break;case 5:typed='4';break;
+        case 6:typed='5';break;case 7:typed='6';break;
+        case 8:typed='7';break;case 9:typed='8';break;
+        case 10:typed='9';break;case 11:typed='0';break;
+        case 16:typed='q';break;case 17:typed='w';break;
+        case 18:typed='e';break;case 19:typed='r';break;
+        case 20:typed='t';break;case 21:typed='y';break;
+        case 22:typed='u';break;case 23:typed='i';break;
+        case 24:typed='o';break;case 25:typed='p';break;
+        case 30:typed='a';break;case 31:typed='s';break;
+        case 32:typed='d';break;case 33:typed='f';break;
+        case 34:typed='g';break;case 35:typed='h';break;
+        case 36:typed='j';break;case 37:typed='k';break;
+        case 38:typed='l';break;case 44:typed='z';break;
+        case 45:typed='x';break;case 46:typed='c';break;
+        case 47:typed='v';break;case 48:typed='b';break;
+        case 49:typed='n';break;case 50:typed='m';break;
+        case 57:typed=' ';break;default:break;
+    }
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=popup_search_sidecars.find(this);
+    if(it==popup_search_sidecars.end())return false;
+    if(key==14u) {
+        if(it->second.empty())return false;
+        it->second.pop_back();
+        return true;
+    }
+    if(!typed || it->second.size()>=32u)return false;
+    it->second.push_back(typed);
+    return true;
+}
 bool MenuState::scroll_preview_popup(int direction) noexcept {
     if((direction!=1 && direction!=-1) || !dropdown_preview_ ||
        unload_confirmation_preview_)return false;
     auto& popup=*dropdown_preview_;
     if(popup.kind!=MenuDropdownKind::RecoveredChoice &&
        popup.kind!=MenuDropdownKind::RecoveredMulti)return false;
+    if(popup.kind==MenuDropdownKind::RecoveredChoice &&
+       menu_source_large_optional_choice(popup.widget_index))
+        return false; // R227: real search modal, no inline scrolling.
     const auto& all=recovered_widget_catalog();
     if(popup.widget_index>=all.size())return false;
     const auto& widget=all[popup.widget_index];
@@ -1301,6 +1363,11 @@ bool MenuState::close_preview_dropdown() noexcept {
     if(!dropdown_preview_)return false;
     if(dropdown_preview_->kind==MenuDropdownKind::ColorPicker)
         return close_color_popup(false);
+    if(dropdown_preview_->kind==MenuDropdownKind::RecoveredChoice &&
+       menu_source_large_optional_choice(dropdown_preview_->widget_index)) {
+        std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+        popup_search_sidecars.erase(this);
+    }
     dropdown_preview_.reset();
     return true;
 }
@@ -1342,9 +1409,16 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
         (popup.kind==MenuDropdownKind::RecoveredChoice?
          recovered_choice_count(widget->options):
          (popup.kind==MenuDropdownKind::AimMode?4u:2u));
-    if(!total || option>=total ||
-       option<popup.option_offset ||
-       option>=popup.option_offset+std::min(6u,total))
+    if(!total || option>=total)return false;
+    if(popup.kind==MenuDropdownKind::RecoveredChoice &&
+       menu_source_large_optional_choice(popup.widget_index)) {
+        const auto matches=menu_source_search_matches(
+            popup.widget_index,search_preview_popup_query());
+        if(std::find(matches.indices.begin(),
+                     matches.indices.begin()+matches.count,option)==
+                     matches.indices.begin()+matches.count)return false;
+    } else if(option<popup.option_offset ||
+              option>=popup.option_offset+std::min(6u,total))
         return false;
     switch(popup.kind) {
         case MenuDropdownKind::AimMode:
@@ -1395,6 +1469,11 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
             return true;
         }
         default:return false;
+    }
+    if(popup.kind==MenuDropdownKind::RecoveredChoice &&
+       menu_source_large_optional_choice(popup.widget_index)) {
+        std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+        popup_search_sidecars.erase(this);
     }
     dropdown_preview_.reset();
     return true;

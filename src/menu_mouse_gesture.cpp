@@ -100,6 +100,7 @@ bool MenuMouseGesture::equivalent_frame(
        frame.target_preview_mode!=original.target_preview_mode ||
        frame.piercing_selected!=original.piercing_selected ||
        frame.dropdown_preview!=original.dropdown_preview ||
+       frame.dropdown_search_query!=original.dropdown_search_query ||
        frame.unload_confirmation_preview!=original.unload_confirmation_preview ||
        frame.bind_previews!=original.bind_previews ||
        frame.bind_capture_index!=original.bind_capture_index ||

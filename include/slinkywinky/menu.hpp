@@ -311,6 +311,10 @@ public:
     bool clear_recovered_choice_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept;
     bool scroll_preview_popup(int direction) noexcept;
+    // R227: keyboard input only for the source large optional popup.
+    // Stored outside MenuState ABI; no original game input interception.
+    bool search_preview_popup_key(unsigned lwjgl_key);
+    std::string search_preview_popup_query() const;
     bool select_preview_dropdown_option(unsigned option) noexcept;
     bool close_preview_dropdown() noexcept;
     // R128: recovered seven-tab Unload confirmation is display-only.
