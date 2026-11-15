@@ -133,6 +133,113 @@ int main() {
         // The original Aim mode is still owned by its specialized path.
         CHECK(!menu.open_recovered_choice_preview(0u,pattern));
         CHECK(frames.detach());
+
+        // R226: original large optional selection is not a normal
+        // "None" popup row. Its 20px clear X is a distinct source hit.
+        std::size_t invModule=official_module_catalog().size();
+        std::size_t invWidget=all.size();
+        for(std::size_t i=0;i<official_module_catalog().size();++i)
+            if(std::string_view(official_module_catalog()[i].name)==
+               "Inv Manager")invModule=i;
+        for(std::size_t i=0;i<all.size();++i)
+            if(std::string_view(all[i].module)=="Inv Manager" &&
+               std::string_view(all[i].label)=="Slot 1" &&
+               all[i].kind==RecoveredWidgetKind::Dropdown)invWidget=i;
+        CHECK(invModule<official_module_catalog().size() &&
+              invWidget<all.size() &&
+              menu_source_large_optional_choice(invWidget) &&
+              !menu_source_large_optional_choice(pattern));
+        MenuState inventory;
+        MenuProfileBridge inventoryProfile(inventory);
+        MenuNavigation inventoryNav(inventory,inventoryProfile);
+        CHECK(inventoryNav.select_tab(MenuTab::Utility));
+        for(unsigned n=0;n<20u;++n) {
+            const auto rows=inventory.page();
+            if(!rows.empty() && rows.front().catalog_index==invModule)
+                break;
+            CHECK(inventoryProfile.scroll_by_visible(1,8));
+        }
+        CHECK(!inventory.page().empty() &&
+              inventory.page().front().catalog_index==invModule);
+        CHECK(inventoryNav.focus_visible_row(invModule));
+        CHECK(inventoryNav.apply(MenuNavAction::ExpandFocused));
+        MenuRenderSession invFrames;
+        CHECK(invFrames.attach(226,900,630));
+        for(unsigned page=0;page<10u;++page) {
+            const auto candidate=invFrames.next(
+                inventory,&inventoryProfile,&inventoryNav);
+            CHECK(candidate);
+            std::array<const RecoveredWidget*,5> widgets{};
+            CHECK(recovered_widget_visible_page("Inv Manager",
+                candidate->visible.front().settings_offset,
+                static_cast<int>(candidate->aim_preview_mode),
+                static_cast<int>(candidate->target_preview_mode),
+                widgets));
+            if(std::find(widgets.begin(),widgets.end(),&all[invWidget])!=
+               widgets.end())break;
+            CHECK(inventory.change_settings_page(invModule,1));
+        }
+        auto invFrame=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        CHECK(invFrame);
+        const auto clear=menu_dropdown_clear_geometry(
+            *invFrame,panel->logical_width(),panel->logical_height(),
+            invModule,invWidget);
+        CHECK(clear);
+        const auto clearAt=toClient(clear->x+10.0f,clear->y+10.0f);
+        const auto clearHit=hit_test_menu(
+            *invFrame,mode,clearAt.first,clearAt.second);
+        CHECK(clearHit &&
+              clearHit->kind==MenuHitKind::RecoveredChoiceClear &&
+              clearHit->catalog_index==invModule &&
+              clearHit->control_index==invWidget);
+        CHECK(!inventory.clear_recovered_choice_preview(2u,invWidget));
+        CHECK(inventory.clear_recovered_choice_preview(
+            invModule,invWidget));
+        CHECK(!inventory.clear_recovered_choice_preview(
+            invModule,invWidget));
+        invFrame=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        CHECK(invFrame && invFrame->recovered_choice_overrides[invWidget] &&
+              *invFrame->recovered_choice_overrides[invWidget]==0u);
+        CHECK(!menu_dropdown_clear_geometry(
+            *invFrame,panel->logical_width(),panel->logical_height(),
+            invModule,invWidget));
+        const auto clearedHit=hit_test_menu(
+            *invFrame,mode,clearAt.first,clearAt.second);
+        CHECK(clearedHit &&
+              clearedHit->kind==MenuHitKind::RecoveredChoiceControl);
+        CHECK(inventory.open_recovered_choice_preview(
+            invModule,invWidget));
+        const auto openFrame=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        const auto large=menu_dropdown_popup_geometry(
+            *openFrame,panel->logical_width(),panel->logical_height());
+        CHECK(large && large->total_options==9u &&
+              large->option_count==6u &&
+              large->first_option==1u &&
+              large->first_selectable_option==1u);
+        CHECK(!inventory.select_preview_dropdown_option(0u));
+        CHECK(!inventory.scroll_preview_popup(-1));
+        CHECK(inventory.scroll_preview_popup(1));
+        CHECK(inventory.scroll_preview_popup(1));
+        CHECK(inventory.scroll_preview_popup(1));
+        CHECK(!inventory.scroll_preview_popup(1));
+        const auto atEnd=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        const auto endPopup=menu_dropdown_popup_geometry(
+            *atEnd,panel->logical_width(),panel->logical_height());
+        CHECK(endPopup && endPopup->first_option==4u);
+        CHECK(inventory.select_preview_dropdown_option(9u));
+        const auto picked=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        CHECK(picked && !picked->dropdown_preview &&
+              picked->recovered_choice_overrides[invWidget] &&
+              *picked->recovered_choice_overrides[invWidget]==9u);
+        CHECK(menu_dropdown_clear_geometry(
+            *picked,panel->logical_width(),panel->logical_height(),
+            invModule,invWidget).has_value());
+        CHECK(invFrames.detach());
     }
     return 0;
 }

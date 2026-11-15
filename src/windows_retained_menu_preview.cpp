@@ -561,6 +561,10 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.open_recovered_choice_preview(
                        hit->catalog_index,hit->control_index);
+        case MenuHitKind::RecoveredChoiceClear:
+            return navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.clear_recovered_choice_preview(
+                       hit->catalog_index,hit->control_index);
         // R196: source-backed multiselect was rendered and hit-tested,
         // but the retained WGL dispatch omitted its local popup action.
         // R134's existing MenuState enforces source widget, current

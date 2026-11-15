@@ -1,6 +1,7 @@
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/menu_color_geometry.hpp"
+#include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
 #include "slinkywinky/menu_slider_aliases.hpp"
@@ -709,7 +710,8 @@ bool MenuState::open_recovered_choice_preview(
     dropdown_preview_=MenuDropdownPreview{
             MenuDropdownKind::RecoveredChoice,catalog_index,
             settings_offsets_[catalog_index]+i,
-            settings_offsets_[catalog_index],widget_index
+            settings_offsets_[catalog_index],widget_index,
+            menu_source_large_optional_choice(widget_index)?1u:0u
         };
         return true;
     }
@@ -754,6 +756,44 @@ bool MenuState::open_recovered_multi_preview(
     }
     return false;
 }
+bool MenuState::clear_recovered_choice_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept {
+    // Do not alias ordinary dropdowns or multiselects: only the exact
+    // source-visible optional Slot 1 owns the native 20px clear X.
+    const auto& catalog=official_module_catalog();
+    const auto& all=recovered_widget_catalog();
+    if(dropdown_preview_ || unload_confirmation_preview_ ||
+       profile_action_preview_ || selected_==MenuTab::Profiles ||
+       !menu_source_large_optional_choice(widget_index) ||
+       catalog_index>=catalog.size() ||
+       catalog[catalog_index].tab!=selected_ ||
+       !expanded_[catalog_index] ||
+       std::string_view(all[widget_index].module)!=
+           catalog[catalog_index].name)return false;
+    const auto rows=page();
+    if(std::none_of(rows.begin(),rows.end(),[catalog_index](
+           const MenuItem& row){return row.catalog_index==catalog_index;}))
+        return false;
+    std::array<const RecoveredWidget*,5> visible{};
+    if(!recovered_widget_visible_page(catalog[catalog_index].name,
+           settings_offsets_[catalog_index],
+           static_cast<int>(aim_preview_mode_),
+           static_cast<int>(target_preview_mode_),visible))
+        return false;
+    if(std::find(visible.begin(),visible.end(),&all[widget_index])==
+       visible.end())return false;
+    const auto& source=all[widget_index];
+    const auto total=recovered_choice_count(source.options);
+    if(!std::isfinite(source.example_value) ||
+       source.example_value<0.0f ||
+       source.example_value>=static_cast<float>(total))
+        return false;
+    const unsigned selected=recovered_choice_overrides_[widget_index]
+        .value_or(static_cast<unsigned>(source.example_value));
+    if(selected==0u || selected>=total)return false;
+    recovered_choice_overrides_[widget_index]=0u;
+    return true;
+}
 bool MenuState::scroll_preview_popup(int direction) noexcept {
     if((direction!=1 && direction!=-1) || !dropdown_preview_ ||
        unload_confirmation_preview_)return false;
@@ -767,10 +807,13 @@ bool MenuState::scroll_preview_popup(int direction) noexcept {
         recovered_multi_count(widget.options):
         recovered_choice_count(widget.options);
     constexpr unsigned pageSize=6u;
-    if(count<=pageSize || popup.option_offset>count-pageSize)
+    const unsigned first=popup.kind==MenuDropdownKind::RecoveredChoice &&
+        menu_source_large_optional_choice(popup.widget_index)?1u:0u;
+    if(count<=pageSize+first || popup.option_offset<first ||
+       popup.option_offset>count-pageSize)
         return false;
     if(direction<0) {
-        if(popup.option_offset==0u)return false;
+        if(popup.option_offset==first)return false;
         --popup.option_offset;
     } else {
         if(popup.option_offset>=count-pageSize)return false;

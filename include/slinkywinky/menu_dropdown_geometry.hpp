@@ -20,6 +20,7 @@ struct MenuDropdownPopupRect {
     unsigned option_count=0; // visible rows, capped at six
     unsigned total_options=0;
     unsigned first_option=0;
+    unsigned first_selectable_option=0; // R226: original search excludes None.
     unsigned selected=0;
     std::uint32_t selected_mask=0; // multiselect only
 };
@@ -54,6 +55,21 @@ inline std::string_view menu_source_choice_label(
     const auto end=options.find('|',begin);
     return options.substr(begin,end==std::string_view::npos?
                                  end:end-begin);
+}
+// Pinned original gui_controls.cpp uses items+1, n-1 for a large
+// optional selector. Only this ten-choice recovered source has a
+// verified None entry and a dedicated right-hand clear control.
+inline bool menu_source_large_optional_choice(
+        std::size_t widget_index) noexcept {
+    const auto& all=recovered_widget_catalog();
+    if(widget_index>=all.size())return false;
+    const auto& widget=all[widget_index];
+    return widget.kind==RecoveredWidgetKind::Dropdown &&
+           std::string_view(widget.module)=="Inv Manager" &&
+           std::string_view(widget.group)=="Sort hotbar" &&
+           std::string_view(widget.label)=="Slot 1" &&
+           menu_source_choice_count(widget_index)==10u &&
+           menu_source_choice_label(widget_index,0u)=="None";
 }
 inline unsigned menu_source_multi_count(
         std::size_t widget_index) noexcept {
@@ -121,6 +137,62 @@ inline std::string_view menu_dropdown_option_label(
             return menu_source_multi_label(widget_index,ordinal);
         default:return {};
     }
+}
+// The source X and its actual hit box share pixel-identical geometry.
+// Never expose a clear target while the popup or a modal owns input.
+struct MenuDropdownClearRect {
+    float x=0.0f,y=0.0f,width=20.0f,height=20.0f;
+    bool contains(float px,float py) const noexcept {
+        return px>=x && px<x+width && py>=y && py<y+height;
+    }
+};
+inline std::optional<MenuDropdownClearRect> menu_dropdown_clear_geometry(
+        const MenuRenderFrame& frame,float logical_width,
+        float logical_height,std::size_t module,std::size_t widget_index) noexcept {
+    if(!menu_source_large_optional_choice(widget_index) ||
+       frame.dropdown_preview || frame.unload_confirmation_preview ||
+       frame.profile_action_preview || frame.is_placeholder ||
+       module>=official_module_catalog().size() ||
+       official_module_catalog()[module].tab!=frame.tab ||
+       logical_width<320.0f || logical_height<240.0f)
+        return std::nullopt;
+    const auto& all=recovered_widget_catalog();
+    const auto& source=all[widget_index];
+    const auto total=menu_source_choice_count(widget_index);
+    if(!std::isfinite(source.example_value) || source.example_value<0.0f ||
+       source.example_value>=static_cast<float>(total))return std::nullopt;
+    const unsigned selected=frame.recovered_choice_overrides[widget_index]
+        .value_or(static_cast<unsigned>(source.example_value));
+    if(selected==0u || selected>=total)return std::nullopt;
+    for(std::size_t i=0;i<frame.visible.size();++i) {
+        const auto& row=frame.visible[i];
+        if(row.catalog_index!=module)continue;
+        if(!row.expanded || row.title!=official_module_catalog()[module].name)
+            return std::nullopt;
+        std::array<const RecoveredWidget*,5> widgets{};
+        if(!recovered_widget_visible_page(row.title.c_str(),row.settings_offset,
+              static_cast<int>(frame.aim_preview_mode),
+              static_cast<int>(frame.target_preview_mode),widgets))
+            return std::nullopt;
+        for(std::size_t j=0;j<widgets.size();++j) {
+            if(widgets[j]!=&source)continue;
+            const auto rect=menu_module_card_rect(frame,logical_width,i);
+            if(rect.y+rect.height>logical_height-menu_panel_padding)
+                return std::nullopt;
+            const auto col=menu_setting_column(rect.x,rect.width);
+            const float y=rect.y+menu_row_body_height(frame)+
+                menu_settings_control_offset(widgets,j);
+            const float x=col.x+col.width-20.0f;
+            if(x<menu_panel_padding || x+20.0f>
+                   logical_width-menu_panel_padding ||
+               y<menu_first_row_y || y+20.0f>
+                   logical_height-menu_panel_padding)
+                return std::nullopt;
+            return MenuDropdownClearRect{x,y,20.0f,20.0f};
+        }
+        return std::nullopt;
+    }
+    return std::nullopt;
 }
 inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
         const MenuRenderFrame& frame,float logical_width,
@@ -195,9 +267,16 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
     MenuDropdownPopupRect result;
     result.x=menu_setting_column(rect.x,rect.width).x;
     result.width=menu_setting_column(rect.x,rect.width).width;
-    result.total_options=options;
-    result.option_count=std::min(options,6u);
-    if(popup.option_offset>options-result.option_count)
+    // Source optional selections skip the None entry, using absolute
+    // source option indices for hit-testing and final storage.
+    const unsigned excluded=popup.kind==MenuDropdownKind::RecoveredChoice &&
+        menu_source_large_optional_choice(popup.widget_index)?1u:0u;
+    const unsigned available=options-excluded;
+    result.total_options=available;
+    result.option_count=std::min(available,6u);
+    result.first_selectable_option=excluded;
+    if(popup.option_offset<excluded ||
+       popup.option_offset>options-result.option_count)
         return std::nullopt;
     result.first_option=popup.option_offset;
     if(popup.kind==MenuDropdownKind::RecoveredMulti) {

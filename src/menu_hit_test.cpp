@@ -284,6 +284,11 @@ std::optional<MenuHit> hit_test_menu(
                     const auto global=static_cast<std::size_t>(
                         widgets[j]-all.data());
                     if(global>=all.size())return std::nullopt;
+                    const auto clear=menu_dropdown_clear_geometry(
+                        frame,w,panel->logical_height(),index,global);
+                    if(clear && clear->contains(x,y))
+                        return MenuHit{MenuHitKind::RecoveredChoiceClear,
+                                       frame.tab,index,global};
                     return MenuHit{MenuHitKind::RecoveredChoiceControl,
                                    frame.tab,index,global};
                 }

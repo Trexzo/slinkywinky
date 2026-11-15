@@ -307,6 +307,9 @@ public:
         std::size_t catalog_index,std::size_t widget_index) noexcept;
     bool open_recovered_multi_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept;
+    // Source-only large optional dropdown clear X; local preview only.
+    bool clear_recovered_choice_preview(
+        std::size_t catalog_index,std::size_t widget_index) noexcept;
     bool scroll_preview_popup(int direction) noexcept;
     bool select_preview_dropdown_option(unsigned option) noexcept;
     bool close_preview_dropdown() noexcept;

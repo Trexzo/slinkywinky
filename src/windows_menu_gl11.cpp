@@ -274,7 +274,8 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                            std::optional<std::uint32_t> colorOverride={},
                            std::string_view textOverride={},
                            bool textFocused=false,
-                           float booleanHover=0.0f)
+                           float booleanHover=0.0f,
+                           bool dropdownClear=false)
                            noexcept {
     const auto column=menu_setting_column(x,cardWidth);
     const float controlX=column.x;
@@ -346,7 +347,20 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                 !textOverride.empty()?0xDDDDDDu:0x999999u);
             text(label,controlX+6.0f,
                  menu_control_center_text_y(controlY,20.0f,15.0f),
-                 15.0f,controlW-12.0f);
+                 15.0f,controlW-(dropdownClear?32.0f:12.0f));
+            if(widget.kind==RecoveredWidgetKind::Dropdown &&
+               dropdownClear) {
+                // Pinned source large-optional X: rightmost 20x20.
+                const float cx=controlX+controlW-20.0f;
+                rgb(0x777777u);
+                glLineWidth(1.5f);
+                glBegin(GL_LINES);
+                glVertex2f(cx+6.0f,controlY+6.0f);
+                glVertex2f(cx+14.0f,controlY+14.0f);
+                glVertex2f(cx+14.0f,controlY+6.0f);
+                glVertex2f(cx+6.0f,controlY+14.0f);
+                glEnd();
+            }
             if(widget.kind==RecoveredWidgetKind::Text && textFocused) {
                 const float measured=textOverride.empty()?0.0f:
                     measure_menu_system_text(textOverride,15.0f);
@@ -975,10 +989,17 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                     frame.control_motion &&
                     frame.control_motion->hovered_boolean==visualWidgetIndex?
                     frame.control_motion->switch_hover_opacity:0.0f;
+                const bool dropdownClear=
+                    display.kind==RecoveredWidgetKind::Dropdown &&
+                    menu_source_large_optional_choice(visualWidgetIndex) &&
+                    menu_dropdown_clear_geometry(
+                        frame,w,h,item.catalog_index,
+                        visualWidgetIndex).has_value();
                 draw_recovered_widget(display,left,
                     settingY+menu_settings_control_offset(preview,j)-2.0f,
                     rect.width,frame.appearance.accent_rgb,selectedChoice,
-                    multiCaption,colorOverride,textOverride,textFocused,hover);
+                    multiCaption,colorOverride,textOverride,textFocused,
+                    hover,dropdownClear);
             }
             if(count>5) {
                 char pagination[70]{};
@@ -1044,7 +1065,9 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             const unsigned maxOffset=
                 popup->total_options-popup->option_count;
             const float ratio=maxOffset?
-                static_cast<float>(popup->first_option)/maxOffset:0.0f;
+                static_cast<float>(
+                    popup->first_option-popup->first_selectable_option)/
+                    maxOffset:0.0f;
             rgb(0x505050);
             round_rect(popup->x+popup->width-6.0f,
                        popup->y+6.0f,3.0f,track,1.5f);
