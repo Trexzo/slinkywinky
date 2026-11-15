@@ -717,6 +717,17 @@ bool WglRetainedMenuPreview::pointer(
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.open_preview_dropdown(
                        MenuDropdownKind::TargetMode,hit->control_index);
+        // R233: restore R125's source-targeted Piercing mouse edit path
+        // in the real retained WGL dispatcher. Exact painted hit and
+        // mouse-up have already been certified by MenuMouseGesture.
+        // Only the eight bounded local preview controls are mutable.
+        case MenuHitKind::PiercingControl:
+            return hit->catalog_index==11u &&
+                   hit->control_index<=7u &&
+                   navigation_.focus_visible_row(hit->catalog_index) &&
+                   menu_.select_piercing_control(hit->control_index) &&
+                   navigation_.apply(
+                       MenuNavAction::ActivatePiercingControl);
         case MenuHitKind::RecoveredChoiceControl:
             return navigation_.focus_visible_row(hit->catalog_index) &&
                    menu_.open_recovered_choice_preview(

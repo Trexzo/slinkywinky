@@ -21,6 +21,8 @@
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_expander_geometry.hpp"
+#include "slinkywinky/menu_setting_layout.hpp"
+#include "slinkywinky/menu_settings_vertical.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_text_geometry.hpp"
@@ -2541,6 +2543,140 @@ void verify_r231_wgl_profile_creation_binding(
     std::cout<<"R231_WGL_PROFILE_NAME_CREATE_BIND_CAPTURE_PASS\\n";
 }
 
+// R233: the R125 Piercing model and portable hit test had no
+// retained-GL11 pointer dispatch. Exercise the *actually painted*
+// controls on the same source-backed GUI, with no game/module action.
+void verify_r233_wgl_piercing_controls(
+        Context& ctx,const State& expected) {
+    constexpr unsigned width=676u,height=630u;
+    constexpr auto mode=MenuPanelMode::CompactOverlay;
+    constexpr auto down=RetainedPointerPhase::Down;
+    constexpr auto up=RetainedPointerPhase::Up;
+    WglRetainedMenuPreview preview;
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    REQUIRE(preview.scroll_visible(9,3u));
+    REQUIRE(preview.fixture_navigation().focus_visible_row(11u));
+    REQUIRE(preview.apply(MenuNavAction::ExpandFocused));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto panel=menu_panel_geometry(width,height,false,mode);
+    REQUIRE(panel);
+    const auto baseline=preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(baseline);
+    MenuInputHandoffLedger ledger;
+    MenuKeyboardRouter router(preview.fixture_navigation());
+    constexpr std::uint64_t epoch=2330u;
+    REQUIRE(ledger.request(epoch,true,true,true,true));
+    REQUIRE(ledger.confirm_fixture(epoch,true,true,true));
+    REQUIRE(preview.fixture_begin_keyboard(epoch,ledger,router));
+    // Convert exact source-row geometry to the same top-left physical
+    // client pixels the original WGL hit tester verifies.
+    const auto source_control=[&](
+            const MenuRenderFrame& frame,std::size_t control)
+            ->std::optional<std::array<int,2>> {
+        std::size_t row=frame.visible.size();
+        for(std::size_t i=0;i<frame.visible.size();++i) {
+            if(frame.visible[i].catalog_index==11u) {
+                row=i;
+                break;
+            }
+        }
+        if(row>=frame.visible.size() || !frame.visible[row].expanded)
+            return std::nullopt;
+        const auto offset=frame.visible[row].settings_offset;
+        if(control<offset || control-offset>=5u)return std::nullopt;
+        std::array<const RecoveredWidget*,5> widgets{};
+        if(!recovered_widget_visible_page(
+               "Piercing",offset,
+               static_cast<int>(frame.aim_preview_mode),
+               static_cast<int>(frame.target_preview_mode),widgets))
+            return std::nullopt;
+        const auto local=control-offset;
+        if(!widgets[local])return std::nullopt;
+        const auto card=menu_module_card_rect(
+            frame,panel->logical_width(),row);
+        const auto column=menu_setting_column(card.x,card.width);
+        const float x=control==0u?
+            column.x+column.width*0.5f:
+            column.x+column.width-17.0f;
+        const float y=card.y+menu_row_body_height(frame)+
+            menu_settings_control_offset(widgets,local)+10.0f;
+        if(y>=panel->logical_height()-menu_panel_padding)
+            return std::nullopt;
+        const std::array<int,2> px{
+            static_cast<int>(panel->left+std::lround(panel->scale*x)),
+            static_cast<int>(panel->top+std::lround(panel->scale*y))};
+        const auto hit=hit_test_menu(frame,mode,px[0],px[1]);
+        if(!hit || hit->kind!=MenuHitKind::PiercingControl ||
+           hit->catalog_index!=11u || hit->control_index!=control)
+            return std::nullopt;
+        return px;
+    };
+    const auto click=[&](
+            const std::array<int,2>& px,std::uint64_t moment) {
+        REQUIRE(preview.fixture_pointer_event(
+            down,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            px[0],px[1],moment,true));
+        REQUIRE(preview.fixture_pointer_event(
+            up,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+            px[0],px[1],moment+40u,true));
+        REQUIRE(ledger.tracked_released());
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    };
+    const auto* initial=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(initial && initial->tab==MenuTab::Combat &&
+            initial->piercing_preview.sort==0u &&
+            !initial->piercing_preview.enabled[0] &&
+            initial->piercing_preview.enabled[6]);
+    const auto sort=source_control(*initial,0u);
+    REQUIRE(sort);
+    click(*sort,50000u);
+    const auto* sorted=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(sorted && sorted->piercing_preview.sort==1u &&
+            !sorted->piercing_preview.enabled[0] &&
+            sorted->piercing_preview.enabled[6] &&
+            sorted->piercing_selected==0u);
+    const auto firstSwitch=source_control(*sorted,1u);
+    REQUIRE(firstSwitch);
+    click(*firstSwitch,51000u);
+    const auto* enabled=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(enabled && enabled->piercing_preview.sort==1u &&
+            enabled->piercing_preview.enabled[0] &&
+            enabled->piercing_preview.enabled[6] &&
+            enabled->piercing_selected==1u);
+    REQUIRE(preview.profile_snapshot(
+        ctx.gl,ctx.dc,width,height)==baseline);
+    REQUIRE(preview.apply(MenuNavAction::NextSettingsPage));
+    REQUIRE(preview.draw(ctx.gl,ctx.dc,width,height));
+    const auto* secondPage=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(secondPage && secondPage->piercing_preview.enabled[6] &&
+            !source_control(*secondPage,1u));
+    const auto finalSwitch=source_control(*secondPage,7u);
+    REQUIRE(finalSwitch);
+    click(*finalSwitch,53000u);
+    const auto* result=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(result && result->piercing_preview.sort==1u &&
+            result->piercing_preview.enabled[0] &&
+            !result->piercing_preview.enabled[6] &&
+            result->piercing_selected==7u &&
+            preview.profile_snapshot(ctx.gl,ctx.dc,width,height)==baseline);
+    REQUIRE(ledger.tracked_released());
+    REQUIRE(preview.fixture_end_keyboard(ledger,router));
+    REQUIRE(preview.fixture_finish_restore(
+        ledger,router,true,true,true));
+    REQUIRE(preview.close());
+    REQUIRE(!ledger.may_deliver_live_minecraft_event() &&
+            !ledger.may_suppress_vanilla_event());
+    REQUIRE(glGetError()==GL_NO_ERROR);
+    same(expected,snapshot());
+    std::cout<<"R233_WGL_PIERCING_SOURCE_CONTROL_DISPATCH_PASS\\n";
+}
+
 int main() {
     try {
         Context context(676,630);
@@ -2559,6 +2695,7 @@ int main() {
         verify_r227_wgl_select_item(context,before);
         verify_r230_wgl_confirmation_ownership(context,before);
         verify_r231_wgl_profile_creation_binding(context,before);
+        verify_r233_wgl_piercing_controls(context,before);
         verify_r211_source_click_request(context,before);
         REQUIRE(glGetError()==GL_NO_ERROR);
         same(before,snapshot());

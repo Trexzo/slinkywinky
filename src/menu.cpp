@@ -589,7 +589,7 @@ bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     return true;
 }
 bool MenuState::move_piercing_selection(int direction) noexcept {
-    if(dropdown_preview_ || (direction!=1 && direction!=-1) ||
+    if(modal_input_owned() || (direction!=1 && direction!=-1) ||
        selected_!=MenuTab::Combat || !expanded_[11])return false;
     const auto rows=page();
     const auto it=std::find_if(rows.begin(),rows.end(),
@@ -604,7 +604,7 @@ bool MenuState::move_piercing_selection(int direction) noexcept {
     return true;
 }
 bool MenuState::select_piercing_control(std::size_t control) noexcept {
-    if(dropdown_preview_ || control>7u || selected_!=MenuTab::Combat ||
+    if(modal_input_owned() || control>7u || selected_!=MenuTab::Combat ||
        !expanded_[11] || control/5u!=settings_offsets_[11]/5u)
         return false;
     const auto rows=page();
@@ -615,7 +615,7 @@ bool MenuState::select_piercing_control(std::size_t control) noexcept {
     return true;
 }
 bool MenuState::activate_piercing_selection() noexcept {
-    if(dropdown_preview_ || selected_!=MenuTab::Combat ||
+    if(modal_input_owned() || selected_!=MenuTab::Combat ||
        !expanded_[11])return false;
     const auto rows=page();
     if(std::none_of(rows.begin(),rows.end(),
@@ -1513,7 +1513,7 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
 
 bool MenuState::adopt_piercing_preview(
         const PiercingPreview& prefs) noexcept {
-    if(dropdown_preview_ || prefs.sort>1u)return false;
+    if(modal_input_owned() || prefs.sort>1u)return false;
     dropdown_preview_.reset();
     piercing_preview_=prefs;
     piercing_selected_=0;

@@ -99,6 +99,20 @@ int main() {
     CHECK(menu.piercing_selected()==0 && menu.settings_offset(11)==0);
     CHECK(menu.piercing_preview()==saved);
 
+    // R233: Piercing is not a route around the R230 exclusive Unload
+    // dialog. Reject both local clicking and alternate edit/import paths
+    // while confirmation owns this GUI, preserving all source values.
+    CHECK(menu.open_unload_confirmation_preview());
+    CHECK(menu.modal_input_owned());
+    CHECK(!menu.select_piercing_control(0u));
+    CHECK(!menu.move_piercing_selection(1));
+    CHECK(!menu.activate_piercing_selection());
+    CHECK(!menu.adopt_piercing_preview(saved));
+    CHECK(!nav.apply(MenuNavAction::ActivatePiercingControl));
+    CHECK(menu.piercing_preview()==saved);
+    CHECK(menu.close_unload_confirmation_preview());
+    CHECK(menu.select_piercing_control(0u));
+
     // Snapshot values, selected callsite and mode are immutable after edits.
     MenuRenderSession frames;
     CHECK(frames.attach(124,900,630));
