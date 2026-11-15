@@ -28,7 +28,15 @@ B's wait, producing a false success/refusal for B.
 The first-party WGL/JNI fixture retains all normal accepted/refused
 navigation and STOP checks and now asserts that a poisoned session
 does not acknowledge or dequeue another posted command.
-Local compilation, test counts and GitHub CI must be reported separately.
+Windows 11, Java 8, MSVC x64 Release, CMake configured with
+SLINKYWINKY_BUILD_JNI=ON, SLINKYWINKY_BUILD_ATTACH=ON and
+BUILD_TESTING=ON, fresh clone at exact R222 commit a7ec40c:
+the full native/Java/Attach/WGL CMake build completed successfully
+and CTest reported **107/107 tests passed in 37.36 seconds**.
+This includes isolated_wgl_menu_state_restore with the new poison
+negative control and native_agent_attach (29.87 seconds).
+No original Minecraft process was launched. GitHub Actions CI and
+physical input acceptance remain independently unverified.
 No original Minecraft process or physical hardware input is exercised
 by this source-level patch.
 
