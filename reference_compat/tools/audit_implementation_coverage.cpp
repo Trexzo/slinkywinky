@@ -467,6 +467,13 @@ int main(int argc, char** argv) {
         if(has_fast_mine)
             require(bridge.bind_fast_mine_from_catalog(),
                     "Fast Mine original category3 event0/18 priority0 pair rejected");
+        std::size_t bridge_assist_id=manifest.modules.size();
+        for(std::size_t i=0;i<manifest.modules.size();++i)
+            if(manifest.modules[i].name=="Bridge Assist")bridge_assist_id=i;
+        const bool has_bridge_assist=bridge_assist_id<manifest.modules.size();
+        if(has_bridge_assist)
+            require(bridge.bind_bridge_assist_from_catalog(),
+                    "Bridge Assist block-category3 event5/14/17/18 priority0 rejected");
         std::size_t timer_id = manifest.modules.size();
         for (std::size_t i = 0; i < manifest.modules.size(); ++i)
             if (manifest.modules[i].name == "Timer") timer_id = i;
@@ -509,6 +516,7 @@ int main(int argc, char** argv) {
                                                (has_safe_walk ? 1u : 0u) +
                                                (has_fast_place ? 1u : 0u) +
                                                (has_fast_mine ? 2u : 0u) +
+                                               (has_bridge_assist ? 4u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
                                                (has_sprint ? 2u : 0u) +
@@ -522,7 +530,8 @@ int main(int argc, char** argv) {
                     (has_ping_fix ? 1u : 0u) - (has_timer ? 1u : 0u) -
                     (has_keep_sprint ? 2u : 0u) -
                     (has_sprint ? 1u : 0u) - (has_strafe ? 1u : 0u) -
-                    (has_fast_mine ? 1u : 0u) &&
+                    (has_fast_mine ? 1u : 0u) -
+                    (has_bridge_assist ? 3u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -531,8 +540,9 @@ int main(int argc, char** argv) {
                 "Reach callback not routed through event 8");
         require(c.implemented_per_event[kPlayerUpdateEvent] ==
                     (has_jump ? 1u : 0u) + (has_keep_sprint ? 1u : 0u) +
-                    (has_sprint ? 1u : 0u),
-                "No Jump Delay / Keep Sprint / Sprint event 17 inventory mismatch");
+                    (has_sprint ? 1u : 0u) +
+                    (has_bridge_assist ? 1u : 0u),
+                "No Jump Delay / Keep Sprint / Sprint / Bridge Assist event 17 mismatch");
         require(c.implemented_per_event[kMovementTickEvent] ==
                     (has_null_move ? 1u : 0u) + (has_instant_stop ? 1u : 0u),
                 "Movement callbacks not routed through event 16");
@@ -549,17 +559,20 @@ int main(int argc, char** argv) {
                 "Safe Walk / Fast Place original event 0 binding drift");
         require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
                 "Timer frame callback not routed through event 1");
-        require(c.implemented_per_event[kTimerToggleEvent] == (has_timer ? 1u : 0u),
-                "Timer toggle callback not routed through event 5");
+        require(c.implemented_per_event[kTimerToggleEvent] ==
+                    (has_timer ? 1u : 0u) + (has_bridge_assist ? 1u : 0u),
+                "Timer / Bridge Assist event5 callback inventory mismatch");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u) +
-                    (has_fast_mine ? 1u : 0u),
-                "No Use Delay / Anti Debuff shared event 18 inventory mismatch");
+                    (has_fast_mine ? 1u : 0u) +
+                    (has_bridge_assist ? 1u : 0u),
+                "No Use Delay / Anti Debuff / Fast Mine / Bridge Assist event18 mismatch");
         require(c.implemented_per_event[kItemUseFixBeforeEvent] ==
                     (has_no_hit_delay ? 1u : 0u) + (has_item_use_fix ? 1u : 0u) +
-                    (has_keep_sprint ? 1u : 0u),
-                "Shared event 14 module binding inventory mismatch");
+                    (has_keep_sprint ? 1u : 0u) +
+                    (has_bridge_assist ? 1u : 0u),
+                "Shared event14 Bridge Assist place callback inventory mismatch");
         require(c.implemented_per_event[kItemUseFixAfterEvent] ==
                     (has_item_use_fix ? 1u : 0u) + (has_keep_sprint ? 1u : 0u),
                 "Item Use Fix / Keep Sprint after callbacks not routed through event 15");
@@ -1176,6 +1189,57 @@ int main(int argc, char** argv) {
             bridge.reset_fast_mine_world_state();
         }
 
+        if(has_bridge_assist) {
+            require(bridge.request(bridge_assist_id,true),
+                    "Bridge Assist enable rejected");
+            require(!bridge.apply(false,false),
+                    "Bridge Assist bypassed world admission");
+            require(bridge.apply(true,true),
+                    "Bridge Assist world-owner admission failed");
+            ExecutionFrame b;
+            b.event=kPlayerUpdateEvent;
+            b.world_present=b.player_present=true;
+            BridgeAssistTickInput input{};
+            input.in_game=true;
+            input.activation_mode=2;
+            input.edge_only_placing=true;
+            BridgeEdgeSample e{};
+            e.next_x=3.25;e.next_z=3.25;
+            e.solid[0]=false;
+            input.edge=e;
+            b.bridge_tick=BridgeAssistTickPayload{input,{},0};
+            require(bridge.dispatch(b) && b.bridge_tick->executions==1 &&
+                    b.bridge_tick->decision.proposed_sneak_pressed==true,
+                    "Bridge Assist native event17 edge/sneak decision missing");
+            b=ExecutionFrame{};
+            b.event=kAntiDebuffEvent;
+            b.world_present=b.player_present=true;
+            b.bridge_late=BridgeAssistLatePayload{};
+            require(bridge.dispatch(b) && b.bridge_late->executions==1 &&
+                    b.bridge_late->decision.proposed_track_owner_toggle==true,
+                    "Bridge Assist event18 owner toggle missing");
+            b=ExecutionFrame{};
+            b.event=kTimerToggleEvent;
+            b.world_present=b.player_present=true;
+            b.notification_target=bridge_assist_id;
+            b.notification_new_state=false;
+            b.bridge_disable=BridgeAssistDisablePayload{{false,true,false},{},0};
+            require(bridge.dispatch(b) && b.bridge_disable->executions==1 &&
+                    b.bridge_disable->decision.proposed_restore_sneak_pressed==false,
+                    "Bridge Assist source event5 sneak restore absent");
+            require(bridge.request(bridge_assist_id,false),
+                    "Bridge Assist disable request rejected");
+            require(bridge.apply(true,true),
+                    "Bridge Assist disable refused");
+            b=ExecutionFrame{};
+            b.event=kPlayerUpdateEvent;
+            b.world_present=b.player_present=true;
+            b.bridge_tick=BridgeAssistTickPayload{input,{},0};
+            require(bridge.dispatch(b) && b.bridge_tick->executions==0,
+                    "Disabled Bridge Assist tick callback still executed");
+            bridge.reset_bridge_assist_world_state();
+        }
+
         if (has_timer) {
             require(bridge.request(timer_id, true), "Timer enable rejected");
             require(!bridge.apply(false, true), "Timer bypassed world gate");
@@ -1352,14 +1416,14 @@ int main(int argc, char** argv) {
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
-                    has_fast_place && has_fast_mine && has_timer &&
-                    has_keep_sprint && has_sprint && has_strafe &&
+                    has_fast_place && has_fast_mine && has_bridge_assist &&
+                    has_timer && has_keep_sprint && has_sprint && has_strafe &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 19 &&
-                    c.executable_callback_bindings == 27 &&
-                    c.unimplemented_callback_subscriptions == 144,
+                    c.modules_with_executable_bindings == 20 &&
+                    c.executable_callback_bindings == 31 &&
+                    c.unimplemented_callback_subscriptions == 140,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);

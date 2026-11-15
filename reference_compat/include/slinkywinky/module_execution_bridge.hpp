@@ -18,6 +18,7 @@
 #include "slinkywinky/safe_walk_controller.hpp"
 #include "slinkywinky/fast_place_controller.hpp"
 #include "slinkywinky/fast_mine_controller.hpp"
+#include "slinkywinky/bridge_assist_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
@@ -134,6 +135,25 @@ struct FastMineLatePayload {
     FastMineLateDecision decision{};
     unsigned executions=0;
 };
+struct BridgeAssistDisablePayload {
+    BridgeAssistDisableInput input{};
+    BridgeAssistDisableDecision decision{};
+    unsigned executions=0;
+};
+struct BridgeAssistPlacePayload {
+    BridgeAssistPlaceInput input{};
+    BridgeAssistPlaceDecision decision{};
+    unsigned executions=0;
+};
+struct BridgeAssistTickPayload {
+    BridgeAssistTickInput input{};
+    BridgeAssistTickDecision decision{};
+    unsigned executions=0;
+};
+struct BridgeAssistLatePayload {
+    BridgeAssistLateDecision decision{};
+    unsigned executions=0;
+};
 
 struct TimerFramePayload {
     TimerFrameInput input{};
@@ -192,6 +212,10 @@ struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
     bool player_present = false;
+    // Offline event replay's native toggle-notification target/state.
+    // Defaults preserve historical event fixtures without explicit target.
+    std::size_t notification_target=0;
+    bool notification_new_state=false;
     std::optional<ReachQueryPayload> reach{};
     std::optional<JumpDelayTickPayload> jump_delay{};
     std::optional<NullMoveTickPayload> null_move{};
@@ -208,6 +232,10 @@ struct ExecutionFrame {
     std::optional<FastPlaceTickPayload> fast_place{};
     std::optional<FastMineEarlyPayload> fast_mine_early{};
     std::optional<FastMineLatePayload> fast_mine_late{};
+    std::optional<BridgeAssistDisablePayload> bridge_disable{};
+    std::optional<BridgeAssistPlacePayload> bridge_place{};
+    std::optional<BridgeAssistTickPayload> bridge_tick{};
+    std::optional<BridgeAssistLatePayload> bridge_late{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
@@ -730,6 +758,70 @@ public:
         return false;
     }
 
+    // R227: original Block category3 Bridge Assist descriptor: event5
+    // disable, event14 place, event17 tick, event18 late. Four exact
+    // source subscriptions, zero priority, with owner-only value output.
+    bool bind_bridge_assist(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Bridge Assist" ||
+           definitions_[id].category!=3 ||
+           definitions_[id].subscriptions.size()!=4u)return false;
+        bool disable=false,place=false,tick=false,late=false;
+        for(const auto& sub:definitions_[id].subscriptions) {
+            if(sub.priority!=0)return false;
+            if(sub.event==kTimerToggleEvent)disable=true;
+            else if(sub.event==kKeepSprintAttackEvent)place=true;
+            else if(sub.event==kPlayerUpdateEvent)tick=true;
+            else if(sub.event==kAntiDebuffEvent)late=true;
+            else return false;
+        }
+        if(!disable || !place || !tick || !late ||
+           callbacks_[id][kTimerToggleEvent] ||
+           callbacks_[id][kKeepSprintAttackEvent] ||
+           callbacks_[id][kPlayerUpdateEvent] ||
+           callbacks_[id][kAntiDebuffEvent])return false;
+        const bool a=bind(id,kTimerToggleEvent,
+            [this,id](const Delivery& d,ExecutionFrame& frame){
+                if(!frame.bridge_disable)return;
+                auto& p=*frame.bridge_disable;
+                ++p.executions;
+                auto input=p.input;
+                input.own_module=d.target==id;
+                input.enabled=d.new_state;
+                p.decision=bridge_assist_.on_disable(input);
+            });
+        const bool b=bind(id,kKeepSprintAttackEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.bridge_place)return;
+                auto& p=*frame.bridge_place;
+                ++p.executions;
+                p.decision=bridge_assist_.on_place(p.input);
+            });
+        const bool c=bind(id,kPlayerUpdateEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.bridge_tick)return;
+                auto& p=*frame.bridge_tick;
+                ++p.executions;
+                p.decision=bridge_assist_.on_tick(p.input);
+            });
+        const bool e=bind(id,kAntiDebuffEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.bridge_late)return;
+                auto& p=*frame.bridge_late;
+                ++p.executions;
+                p.decision=bridge_assist_.on_late();
+            });
+        if(!a||!b||!c||!e)
+            throw std::logic_error("validated Bridge Assist subscriptions failed");
+        return true;
+    }
+    bool bind_bridge_assist_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Bridge Assist")
+                return bind_bridge_assist(id);
+        return false;
+    }
+
     // Source-linked Timer: utility category 4, frame event 1 priority 200
     // and toggle notification event 5 priority 0. Both must be present before
     // accepting the offline binding; no actual Minecraft timer is modified.
@@ -982,6 +1074,14 @@ public:
             return false;
         if (frame.fast_mine_late && frame.event != kAntiDebuffEvent)
             return false;
+        if (frame.bridge_disable && frame.event != kTimerToggleEvent)
+            return false;
+        if (frame.bridge_place && frame.event != kKeepSprintAttackEvent)
+            return false;
+        if (frame.bridge_tick && frame.event != kPlayerUpdateEvent)
+            return false;
+        if (frame.bridge_late && frame.event != kAntiDebuffEvent)
+            return false;
         if (frame.timer_frame && frame.event != kTimerFrameEvent)
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
@@ -1020,6 +1120,10 @@ public:
             static_cast<unsigned>(frame.fast_place.has_value()) +
             static_cast<unsigned>(frame.fast_mine_early.has_value()) +
             static_cast<unsigned>(frame.fast_mine_late.has_value()) +
+            static_cast<unsigned>(frame.bridge_disable.has_value()) +
+            static_cast<unsigned>(frame.bridge_place.has_value()) +
+            static_cast<unsigned>(frame.bridge_tick.has_value()) +
+            static_cast<unsigned>(frame.bridge_late.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
@@ -1035,21 +1139,27 @@ public:
         // Event14 may simultaneously carry No Hit Delay, Item Use Fix
         // and Keep Sprint attack proposals. Each typed payload is validated
         // against event14 above; no other event payload is admitted.
+        const unsigned mouse_click_count =
+            static_cast<unsigned>(frame.no_hit_delay.has_value()) +
+            static_cast<unsigned>(frame.item_use_fix.has_value()) +
+            static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
+            static_cast<unsigned>(frame.bridge_place.has_value());
         const bool combined_mouse_click =
-            typed_count >= 2 && typed_count <= 3 &&
-            frame.event == kItemUseFixBeforeEvent &&
-            (frame.no_hit_delay || frame.item_use_fix || frame.keep_sprint_attack);
+            typed_count>=2 && typed_count<=4 &&
+            frame.event==kItemUseFixBeforeEvent &&
+            mouse_click_count==typed_count;
         const bool combined_attack_post =
             typed_count == 2 && frame.event == kKeepSprintPostEvent &&
             frame.item_use_fix && frame.keep_sprint_post;
         // Event17 can contain all three update policies together;
         // event21 contains No Slow and Sprint's movement proposals.
         const bool combined_player_update =
-            typed_count >= 2 && typed_count <= 3 &&
-            frame.event == kSprintPlayerUpdateEvent &&
+            typed_count>=2 && typed_count<=4 &&
+            frame.event==kSprintPlayerUpdateEvent &&
             (static_cast<unsigned>(frame.jump_delay.has_value()) +
              static_cast<unsigned>(frame.keep_sprint_update.has_value()) +
-             static_cast<unsigned>(frame.sprint_update.has_value()) == typed_count);
+             static_cast<unsigned>(frame.sprint_update.has_value()) +
+             static_cast<unsigned>(frame.bridge_tick.has_value())==typed_count);
         const bool combined_movement_sprint =
             typed_count >= 2 && typed_count <= 3 &&
             frame.event == kSprintMovementInputEvent &&
@@ -1078,16 +1188,20 @@ public:
         const unsigned late_tick_count =
             static_cast<unsigned>(frame.no_use_delay.has_value()) +
             static_cast<unsigned>(frame.anti_debuff.has_value()) +
-            static_cast<unsigned>(frame.fast_mine_late.has_value());
+            static_cast<unsigned>(frame.fast_mine_late.has_value()) +
+            static_cast<unsigned>(frame.bridge_late.has_value());
         const bool combined_late_tick =
-            typed_count>=2 && typed_count<=3 &&
+            typed_count>=2 && typed_count<=4 &&
             frame.event==kAntiDebuffEvent &&
             typed_count==late_tick_count;
+        const bool combined_toggle =
+            typed_count==2 && frame.event==kTimerToggleEvent &&
+            frame.timer_toggle && frame.bridge_disable;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
             !combined_attack_post && !combined_player_update &&
             !combined_movement_sprint && !combined_steering_accel &&
             !combined_edge_place && !combined_outgoing_packet &&
-            !combined_late_tick)
+            !combined_late_tick && !combined_toggle)
             return false;
         if (combined_edge_place) {
             const bool state=frame.safe_walk ?
@@ -1103,6 +1217,10 @@ public:
         if(frame.fast_mine_late && frame.no_use_delay &&
            frame.fast_mine_late->input.in_game!=
            frame.no_use_delay->input.in_game)
+            return false;
+        if(frame.bridge_tick && frame.jump_delay &&
+           frame.bridge_tick->input.in_game!=
+           frame.jump_delay->input.in_game)
             return false;
         if (combined_outgoing_packet) {
             const bool c00 =
@@ -1210,6 +1328,22 @@ public:
             frame.fast_mine_late->decision={};
             frame.fast_mine_late->executions=0;
         }
+        if(frame.bridge_disable) {
+            frame.bridge_disable->decision={};
+            frame.bridge_disable->executions=0;
+        }
+        if(frame.bridge_place) {
+            frame.bridge_place->decision={};
+            frame.bridge_place->executions=0;
+        }
+        if(frame.bridge_tick) {
+            frame.bridge_tick->decision={};
+            frame.bridge_tick->executions=0;
+        }
+        if(frame.bridge_late) {
+            frame.bridge_late->decision={};
+            frame.bridge_late->executions=0;
+        }
         if (frame.timer_frame) {
             frame.timer_frame->decision = {};
             frame.timer_frame->executions = 0;
@@ -1249,7 +1383,8 @@ public:
             ~ClearFrame() { self.active_frame_ = nullptr; }
         } guard{*this};
         active_frame_ = &frame;
-        return replay_.dispatch(frame.event);
+        return replay_.dispatch(
+            frame.event,frame.notification_target,frame.notification_new_state);
     }
 
     bool request(std::size_t id, bool enabled) {
@@ -1271,6 +1406,7 @@ public:
     void reset_strafe_world_state() noexcept { strafe_.reset(); }
     void reset_fast_place_world_state() noexcept { fast_place_.reset(); }
     void reset_fast_mine_world_state() noexcept { fast_mine_.reset(); }
+    void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1287,6 +1423,7 @@ public:
         strafe_.reset();
         fast_place_.reset();
         fast_mine_.reset();
+        bridge_assist_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1314,6 +1451,7 @@ private:
     SafeWalkController safe_walk_;
     FastPlaceController fast_place_;
     FastMineController fast_mine_;
+    BridgeAssistController bridge_assist_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;

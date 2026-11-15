@@ -322,6 +322,43 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R227: source 4-hook Bridge Assist owner/edge/placing, offline only.
+  add_executable(slinkywinky_bridge_assist_bridge_test
+    tests/test_bridge_assist_bridge.cpp)
+  target_link_libraries(slinkywinky_bridge_assist_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r227_bridge_assist_native_4_callback_policy
+    COMMAND slinkywinky_bridge_assist_bridge_test)
+  set_tests_properties(r227_bridge_assist_native_4_callback_policy
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r227_twenty_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twentythree_modules_with_twenty_decisions.tsv")
+  add_test(NAME r227_reject_bridge_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r227_wrong_bridge_category.tsv")
+  add_test(NAME r227_reject_bridge_wrong_disable_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r227_wrong_bridge_disable_priority.tsv")
+  add_test(NAME r227_reject_bridge_wrong_place_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r227_wrong_bridge_place_event.tsv")
+  add_test(NAME r227_reject_bridge_wrong_tick_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r227_wrong_bridge_tick_priority.tsv")
+  add_test(NAME r227_reject_bridge_missing_late
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r227_missing_bridge_late.tsv")
+  add_test(NAME r227_reject_bridge_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r227_extra_bridge_subscription.tsv")
+  set_tests_properties(r227_reject_bridge_wrong_category
+    r227_reject_bridge_wrong_disable_priority
+    r227_reject_bridge_wrong_place_event
+    r227_reject_bridge_wrong_tick_priority
+    r227_reject_bridge_missing_late
+    r227_reject_bridge_extra_subscription PROPERTIES WILL_FAIL TRUE)
   # R226: original Fast Mine dual-phase block-category callbacks:
   # event 0, priority 0; event 18, priority 0. Offline C++ only.
   add_executable(slinkywinky_fast_mine_bridge_test
