@@ -78,9 +78,10 @@ std::size_t MenuState::tab_count(MenuTab tab) const noexcept {
         [tab](const MenuModule& item){return item.tab==tab;}));
 }
 bool MenuState::select(MenuTab tab) noexcept {
-    if(tab==MenuTab::Count || tab==MenuTab::Unload)return false;
-    if(color_popup_owner())close_color_popup(false);
-    dropdown_preview_.reset();
+    // R229: popup owner forbids background tab changes, preserving
+    // the current dropdown, query sidecar, and source-page identity.
+    if(tab==MenuTab::Count || tab==MenuTab::Unload ||
+       dropdown_preview_)return false;
     focused_text_widget_.reset();
     numeric_hover_.reset();
     numeric_drag_preview_.reset();
@@ -98,7 +99,7 @@ bool MenuState::select(MenuTab tab) noexcept {
     return true;
 }
 bool MenuState::scroll_by(int delta) noexcept {
-    if(color_popup_owner())return false;
+    if(dropdown_preview_)return false;
     const auto total=tab_count(selected_);
     if(total==0)return false;
     // Renderer has eight visible rows. Keep scrolling independent of module
@@ -120,7 +121,7 @@ bool MenuState::scroll_by(int delta) noexcept {
 }
 bool MenuState::scroll_by_visible(
         int delta,std::size_t visible_limit) noexcept {
-    if(color_popup_owner())return false;
+    if(dropdown_preview_)return false;
     const auto total=tab_count(selected_);
     if(total==0u || visible_limit==0u || visible_limit>8u)
         return false;
@@ -517,12 +518,14 @@ bool MenuState::toggle_bind_hold(
 }
 
 bool MenuState::toggle_preview(std::size_t index) noexcept {
-    if(color_popup_owner() || index>=catalog.size() || catalog[index].tab!=selected_)return false;
+    if(dropdown_preview_ || index>=catalog.size() ||
+       catalog[index].tab!=selected_)return false;
     enabled_[index]=!enabled_[index];
     return true;
 }
 bool MenuState::toggle_expanded(std::size_t index) noexcept {
-    if(color_popup_owner() || index>=catalog.size() || catalog[index].tab!=selected_)return false;
+    if(dropdown_preview_ || index>=catalog.size() ||
+       catalog[index].tab!=selected_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
@@ -536,7 +539,8 @@ std::size_t MenuState::settings_offset(std::size_t index) const noexcept {
     return index<settings_offsets_.size()?settings_offsets_[index]:0;
 }
 bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
-    if(selected_!=MenuTab::Combat || mode>3 || mode==aim_preview_mode_)
+    if(dropdown_preview_ || selected_!=MenuTab::Combat ||
+       mode>3 || mode==aim_preview_mode_)
         return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
@@ -547,7 +551,8 @@ bool MenuState::set_aim_preview_mode(unsigned mode) noexcept {
     return true;
 }
 bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
-    if(selected_!=MenuTab::Combat || mode>1 || mode==target_preview_mode_)
+    if(dropdown_preview_ || selected_!=MenuTab::Combat ||
+       mode>1 || mode==target_preview_mode_)
         return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
@@ -558,7 +563,8 @@ bool MenuState::set_target_preview_mode(unsigned mode) noexcept {
     return true;
 }
 bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
-    if(color_popup_owner() || (direction!=1&&direction!=-1) || index>=catalog.size() ||
+    if(dropdown_preview_ || (direction!=1&&direction!=-1) ||
+       index>=catalog.size() ||
        catalog[index].tab!=selected_ || !expanded_[index])return false;
     const std::size_t count=recovered_widget_visible_count(
         catalog[index].name,static_cast<int>(aim_preview_mode_),
@@ -581,7 +587,7 @@ bool MenuState::change_settings_page(std::size_t index,int direction) noexcept {
     return true;
 }
 bool MenuState::move_piercing_selection(int direction) noexcept {
-    if((direction!=1 && direction!=-1) ||
+    if(dropdown_preview_ || (direction!=1 && direction!=-1) ||
        selected_!=MenuTab::Combat || !expanded_[11])return false;
     const auto rows=page();
     const auto it=std::find_if(rows.begin(),rows.end(),
@@ -596,7 +602,7 @@ bool MenuState::move_piercing_selection(int direction) noexcept {
     return true;
 }
 bool MenuState::select_piercing_control(std::size_t control) noexcept {
-    if(control>7u || selected_!=MenuTab::Combat ||
+    if(dropdown_preview_ || control>7u || selected_!=MenuTab::Combat ||
        !expanded_[11] || control/5u!=settings_offsets_[11]/5u)
         return false;
     const auto rows=page();
@@ -607,7 +613,8 @@ bool MenuState::select_piercing_control(std::size_t control) noexcept {
     return true;
 }
 bool MenuState::activate_piercing_selection() noexcept {
-    if(selected_!=MenuTab::Combat || !expanded_[11])return false;
+    if(dropdown_preview_ || selected_!=MenuTab::Combat ||
+       !expanded_[11])return false;
     const auto rows=page();
     if(std::none_of(rows.begin(),rows.end(),
         [](const MenuItem& row){return row.catalog_index==11;}))
@@ -1361,7 +1368,7 @@ bool MenuState::set_recovered_range_preview(
 }
 
 bool MenuState::open_unload_confirmation_preview() noexcept {
-    if(unload_confirmation_preview_ || color_popup_owner())return false;
+    if(unload_confirmation_preview_ || dropdown_preview_)return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
@@ -1502,7 +1509,7 @@ bool MenuState::select_preview_dropdown_option(unsigned option) noexcept {
 
 bool MenuState::adopt_piercing_preview(
         const PiercingPreview& prefs) noexcept {
-    if(prefs.sort>1u)return false;
+    if(dropdown_preview_ || prefs.sort>1u)return false;
     dropdown_preview_.reset();
     piercing_preview_=prefs;
     piercing_selected_=0;

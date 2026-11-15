@@ -221,6 +221,41 @@ int main() {
         CHECK(!inventory.select_preview_dropdown_option(0u));
         CHECK(!inventory.scroll_preview_popup(-1));
         CHECK(!inventory.scroll_preview_popup(1));
+        // R229: background routes must not scroll, switch tabs, move
+        // focus or silently destroy the original searchable dialog.
+        // Freeze a nonempty query and the source settings page.
+        CHECK(inventory.append_search_preview_popup_text("A"));
+        const auto pinnedOffset=inventory.settings_offset(invModule);
+        const auto pinnedScroll=inventory.scroll();
+        const auto pinnedFocus=inventoryNav.visible_focus();
+        const auto pinnedPopup=inventory.dropdown_preview();
+        const auto originalSelection=
+            inventory.recovered_choice_overrides()[invWidget];
+        CHECK(!inventory.select(MenuTab::Combat));
+        CHECK(!inventoryProfile.select(MenuTab::Combat));
+        CHECK(!inventory.scroll_by(1));
+        CHECK(!inventory.scroll_by_visible(1,3));
+        CHECK(!inventoryProfile.scroll_by(1));
+        CHECK(!inventoryProfile.scroll_by_visible(1,3));
+        CHECK(!inventoryNav.select_tab(MenuTab::Combat));
+        CHECK(!inventoryNav.focus_visible_row(invModule));
+        CHECK(!inventoryNav.apply(MenuNavAction::NextTab));
+        CHECK(!inventoryNav.apply(MenuNavAction::NextSettingsPage));
+        CHECK(!inventory.toggle_expanded(invModule));
+        CHECK(!inventory.change_settings_page(invModule,1));
+        CHECK(!inventory.toggle_preview(invModule));
+        CHECK(!inventory.open_unload_confirmation_preview());
+        CHECK(!inventoryProfile.toggle(invModule));
+        CHECK(inventory.tab()==MenuTab::Utility &&
+              inventory.scroll()==pinnedScroll &&
+              inventory.settings_offset(invModule)==pinnedOffset &&
+              inventoryNav.visible_focus()==pinnedFocus &&
+              inventory.dropdown_preview()==pinnedPopup &&
+              inventory.search_preview_popup_query()=="A" &&
+              inventory.recovered_choice_overrides()[invWidget]==
+                  originalSelection);
+        CHECK(inventory.search_preview_popup_key(14u));
+        CHECK(inventory.search_preview_popup_query().empty());
         CHECK(menu_source_search_matches(invWidget,"GOLDEN").count==1u);
         CHECK(menu_source_search_matches(invWidget,"oW").count==1u);
         CHECK(!menu_search_ascii_valid("gold!"));

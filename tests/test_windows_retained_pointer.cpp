@@ -2098,6 +2098,21 @@ void verify_r227_wgl_select_item(Context& ctx,const State& expected) {
     REQUIRE(full && full->matches.count==9u &&
             full->matches.indices[0]==1u &&
             full->matches.indices[8]==9u);
+    // R229: requests rejected by the retained WGL wrapper MUST NOT
+    // invalidate a real painted popup hit frame or its navigation focus.
+    const auto beforeRejected=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    const auto ownedFocus=preview.focused_row();
+    REQUIRE(!preview.scroll_visible(1,8));
+    REQUIRE(!preview.apply(MenuNavAction::NextTab));
+    REQUIRE(!preview.apply(MenuNavAction::NextSettingsPage));
+    REQUIRE(!preview.fixture_navigation().select_tab(MenuTab::Combat));
+    REQUIRE(!preview.fixture_navigation().focus_visible_row(58u));
+    REQUIRE(preview.tab()==MenuTab::Utility &&
+            preview.focused_row()==ownedFocus &&
+            preview.fixture_painted_frame(ctx.gl,ctx.dc,width,height)==
+                beforeRejected &&
+            preview.profile_snapshot(ctx.gl,ctx.dc,width,height)==baseline);
     const auto behind=physical(25.0f,20.0f);
     REQUIRE(!hit_test_menu(*opened,mode,behind[0],behind[1]));
     // A live popup must steal Tab from background navigation.
@@ -2158,6 +2173,9 @@ void verify_r227_wgl_select_item(Context& ctx,const State& expected) {
         ctx.gl,ctx.dc,width,height)==baseline);
     REQUIRE(!preview.preview_enabled(58u));
     REQUIRE(ledger.tracked_released());
+    // The same navigation command is admitted immediately on closure.
+    REQUIRE(preview.apply(MenuNavAction::NextTab));
+    REQUIRE(preview.tab()==MenuTab::Profiles);
     REQUIRE(preview.fixture_end_keyboard(ledger,router));
     REQUIRE(preview.fixture_finish_restore(
         ledger,router,true,true,true));

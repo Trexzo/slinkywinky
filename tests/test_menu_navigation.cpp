@@ -202,6 +202,49 @@ int main() {
     CHECK(!menu.change_settings_page(3,1)); // different module category
     CHECK(!menu.set_aim_preview_mode(1)); // wrong tab denied
     CHECK(!menu.set_target_preview_mode(1));
+
+    // R229: this is a separate specialized Aim dropdown, not the
+    // searchable Slot 1 modal. It must hold the same exclusive
+    // navigation fence, even through direct model/profile methods.
+    MenuState modal;
+    MenuProfileBridge modalProfile(modal);
+    MenuNavigation modalNav(modal,modalProfile);
+    CHECK(modalNav.focus_visible_row(0u));
+    CHECK(modalNav.apply(MenuNavAction::ExpandFocused));
+    CHECK(modal.open_preview_dropdown(MenuDropdownKind::AimMode,0u));
+    const auto originalPopup=modal.dropdown_preview();
+    const auto originalFocus=modalNav.visible_focus();
+    const auto originalScroll=modal.scroll();
+    const auto originalPage=modal.settings_offset(0u);
+    const auto originalAim=modal.aim_preview_mode();
+    const auto originalSetting=modalProfile.primary(0u);
+    CHECK(originalPopup && originalSetting);
+    CHECK(!modal.select(MenuTab::Move));
+    CHECK(!modalProfile.select(MenuTab::Move));
+    CHECK(!modal.scroll_by(1));
+    CHECK(!modalProfile.scroll_by(1));
+    CHECK(!modal.scroll_by_visible(1,4u));
+    CHECK(!modalProfile.scroll_by_visible(1,4u));
+    CHECK(!modalNav.select_tab(MenuTab::Move));
+    CHECK(!modalNav.focus_visible_row(1u));
+    CHECK(!modalNav.apply(MenuNavAction::NextRow));
+    CHECK(!modalNav.apply(MenuNavAction::NextTab));
+    CHECK(!modal.toggle_expanded(0u));
+    CHECK(!modal.change_settings_page(0u,1));
+    CHECK(!modal.set_aim_preview_mode(1u));
+    CHECK(!modal.toggle_preview(0u));
+    CHECK(!modalProfile.adjust_primary(0u,1));
+    CHECK(!modal.open_unload_confirmation_preview());
+    CHECK(modal.dropdown_preview()==originalPopup &&
+          modalNav.visible_focus()==originalFocus &&
+          modal.scroll()==originalScroll &&
+          modal.settings_offset(0u)==originalPage &&
+          modal.aim_preview_mode()==originalAim &&
+          modalProfile.primary(0u)->value==originalSetting->value);
+    CHECK(modal.close_preview_dropdown());
+    CHECK(modalNav.apply(MenuNavAction::NextTab));
+    CHECK(modal.tab()==MenuTab::Move);
+
     // No game/OS keyboard input is ever used by this test.
     return 0;
     } catch(const std::exception& e) {

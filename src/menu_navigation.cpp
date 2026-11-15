@@ -56,7 +56,7 @@ bool MenuNavigation::focused_visible(std::size_t* index) const {
     return true;
 }
 bool MenuNavigation::select_tab(MenuTab tab) {
-    if(menu_.color_popup_owner() ||
+    if(menu_.dropdown_preview() ||
        menu_.unload_confirmation_preview() ||
        !owner_thread() || !profile_.owns(menu_) ||
        tab==MenuTab::Count || tab==MenuTab::Unload)return false;
@@ -67,7 +67,7 @@ bool MenuNavigation::select_tab(MenuTab tab) {
     return true;
 }
 bool MenuNavigation::focus_visible_row(std::size_t catalog_index) {
-    if(menu_.color_popup_owner() ||
+    if(menu_.dropdown_preview() ||
        menu_.unload_confirmation_preview() ||
        !owner_thread() || !profile_.owns(menu_))return false;
     const auto rows=menu_.page();

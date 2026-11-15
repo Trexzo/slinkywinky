@@ -150,7 +150,7 @@ bool WglRetainedMenuPreview::queue_focused_runtime_toggle(
         unsigned width,unsigned height,
         std::uint64_t expected_source_sequence) {
     if(!owner_thread() || !active_ || !last_drawn_frame_ ||
-       pointer_gesture_.pending() ||
+       menu_.dropdown_preview() || pointer_gesture_.pending() ||
        !context || !dc || context!=context_ || dc!=dc_ ||
        width!=width_ || height!=height_ ||
        wglGetCurrentContext()!=context || wglGetCurrentDC()!=dc ||
@@ -161,7 +161,9 @@ bool WglRetainedMenuPreview::queue_focused_runtime_toggle(
         menu_,navigation_,source,expected_source_sequence);
 }
 bool WglRetainedMenuPreview::apply(MenuNavAction action) {
-    if(!active_ || !owner_thread() || menu_.color_popup_owner() ||
+    // Refuse while a popup owns input, before discarding painted hit
+    // geometry. A rejected background command cannot poison popup clicks.
+    if(!active_ || !owner_thread() || menu_.dropdown_preview() ||
        accepted_actions_==std::numeric_limits<std::uint64_t>::max() ||
        refused_actions_==std::numeric_limits<std::uint64_t>::max())
         return false;
@@ -178,7 +180,7 @@ bool WglRetainedMenuPreview::apply(MenuNavAction action) {
 }
 bool WglRetainedMenuPreview::scroll_visible(
         int delta,std::size_t visible_limit) noexcept {
-    if(!owner_thread() || !active_ || menu_.color_popup_owner() ||
+    if(!owner_thread() || !active_ || menu_.dropdown_preview() ||
        visible_limit==0u || visible_limit>8u)return false;
     if(wglGetCurrentContext()!=context_ || wglGetCurrentDC()!=dc_ ||
        !exact_current_viewport(width_,height_)) {

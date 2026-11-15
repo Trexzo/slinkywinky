@@ -283,7 +283,8 @@ std::optional<MenuPrimaryParameter> MenuProfileBridge::primary(
     }
 }
 bool MenuProfileBridge::adjust_primary(std::size_t index,int direction) {
-    if(direction!=1 && direction!=-1)return false;
+    if(menu_.dropdown_preview() || (direction!=1 && direction!=-1))
+        return false;
     const auto parameter=primary(index);
     if(!parameter || menu_.tab()!=official_module_catalog()[index].tab ||
        !menu_.expanded(index))return false;
