@@ -1215,12 +1215,18 @@ bool MenuState::set_recovered_range_preview(
     if(!std::isfinite(next.lower) || !std::isfinite(next.upper) ||
        next.lower<min || next.upper>max ||
        next.lower>next.upper)return false;
-    // The handle chosen at press remains the only editable handle
-    // throughout the verified gesture. It cannot cross the other handle.
-    if(handle==0u)next.lower=static_cast<float>(
-        std::min(snapped,static_cast<double>(next.upper)));
-    else next.upper=static_cast<float>(
-        std::max(snapped,static_cast<double>(next.lower)));
+    // R220 native ClickGUI fidelity: pinned OpenSlinky gui_controls.cpp
+    // draw_range_slider_row pushes the opposite endpoint if the dragged
+    // knob crosses it. Our old R133 implementation clamped the moving
+    // handle, which produced the wrong result. Keep the DOWN-selected
+    // handle and the source step/snapping admission unchanged.
+    if(handle==0u) {
+        next.lower=static_cast<float>(snapped);
+        if(next.lower>next.upper)next.upper=next.lower;
+    } else {
+        next.upper=static_cast<float>(snapped);
+        if(next.upper<next.lower)next.lower=next.upper;
+    }
     recovered_range_overrides_[widget_index]=next;
     return true;
 }

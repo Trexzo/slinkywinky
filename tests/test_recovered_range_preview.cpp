@@ -124,15 +124,18 @@ int main() {
         CHECK(menu.set_recovered_range_preview(
             0u,rangeIndex,released->sub_index,*requested));
         const auto first=menu.recovered_range_override(rangeIndex);
-        CHECK(first && std::fabs(first->lower-source.example_other)<0.0001f &&
-              std::fabs(first->upper-source.example_other)<0.0001f);
-        // Reopen the range for a separate high-handle test; direct model
-        // edits are still scoped to this exact page/widget and source step.
+        // R220 source behavior: the dragged lower knob PUSHES the upper
+        // endpoint to its new value, never clamps at the old upper.
+        CHECK(first && first->lower>source.example_other &&
+              std::fabs(first->upper-first->lower)<0.0001f);
+        // Reopen the range for a separate high-handle test by moving
+        // the lower knob back, preserving the upper at its pushed value.
         CHECK(menu.set_recovered_range_preview(
-            0u,rangeIndex,1u,source.max_value));
+            0u,rangeIndex,0u,source.example_value));
         const auto widened=menu.recovered_range_override(rangeIndex);
-        CHECK(widened && widened->upper==source.max_value &&
-              widened->lower<=widened->upper);
+        CHECK(widened &&
+              std::fabs(widened->lower-source.example_value)<0.0001f &&
+              widened->upper>source.example_other);
         const auto secondFrame=frames.next(menu,&profile,&nav);
         CHECK(secondFrame && secondFrame->recovered_range_overrides[rangeIndex]);
         const auto newestUpper=xy(track->x+track->width-2.0f,
@@ -153,7 +156,21 @@ int main() {
             0u,rangeIndex,upperDrag->sub_index,*lowRequested));
         const auto second=menu.recovered_range_override(rangeIndex);
         CHECK(second && second->upper==second->lower &&
-              second->lower>=source.min_value);
+              second->lower>=source.min_value &&
+              second->upper<source.example_value);
+        // Re-cross from both directions without switching the selected
+        // source handle: lower crossing pushes upper; upper crossing
+        // pushes lower. Unrelated profile/module flags stay inert.
+        CHECK(menu.set_recovered_range_preview(
+            0u,rangeIndex,0u,source.max_value));
+        const auto crossedRight=menu.recovered_range_override(rangeIndex);
+        CHECK(crossedRight && crossedRight->lower==crossedRight->upper &&
+              crossedRight->lower==source.max_value);
+        CHECK(menu.set_recovered_range_preview(
+            0u,rangeIndex,1u,source.min_value));
+        const auto crossedLeft=menu.recovered_range_override(rangeIndex);
+        CHECK(crossedLeft && crossedLeft->upper==crossedLeft->lower &&
+              crossedLeft->lower==source.min_value);
         CHECK(!menu.preview_enabled(0u) && !profile.enabled(0u));
         // Model writes invalidate an in-flight range drag; no stale commit.
         const auto thirdFrame=frames.next(menu,&profile,&nav);

@@ -1408,8 +1408,11 @@ void verify_r196_wgl_range(Context& ctx,const State& expected) {
         REQUIRE(committed &&
                 committed->recovered_range_overrides[rangeIndex]);
         const auto selected=*committed->recovered_range_overrides[rangeIndex];
+        // R220: the native source range handler PUSHES the opposite
+        // endpoint on crossing, rather than clamping at its old value.
+        // Each verified mouse-Up lands just inside an extreme endpoint.
         const float expectedValue=handle==0?
-            source.example_other:source.example_value;
+            source.max_value:source.min_value;
         REQUIRE(std::fabs(selected.lower-expectedValue)<0.0001f &&
                 std::fabs(selected.upper-expectedValue)<0.0001f);
         REQUIRE(preview.profile_snapshot(
