@@ -1051,10 +1051,14 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(
     if(!slinkywinky::menu_operator_process_birth(pid,&birth))return JNI_FALSE;
     try {
         for(int slot=0;slot<=12;slot++) {
-            if(slot==11)continue; // Sender creates a mutex, not an event.
             const auto name=slinkywinky::menu_operator_event_name(pid,birth,slot);
             if(name.empty()) {close_operator_events();return JNI_FALSE;}
-            HANDLE event=CreateEventW(nullptr,slot>=9,FALSE,name.c_str());
+            // R223: the receiver keeps a non-owned mutex handle alive
+            // through cleanup. If a sender dies while holding it, the
+            // next sender can reliably receive WAIT_ABANDONED.
+            HANDLE event=slot==11?
+                CreateMutexW(nullptr,FALSE,name.c_str()):
+                CreateEventW(nullptr,slot>=9,FALSE,name.c_str());
             const DWORD status=GetLastError();
             if(!event || status==ERROR_ALREADY_EXISTS) {
                 if(event)CloseHandle(event);

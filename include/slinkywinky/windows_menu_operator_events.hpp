@@ -32,6 +32,7 @@ inline bool menu_operator_process_birth(std::uint32_t pid,
 // Slot 0..7 is a first-party native MenuNavAction; 8 requests stop.
 // Slot 9=ack-accepted, 10=ack-refused, 11=single-sender mutex.
 // R222 slot 12 is a sticky session-uncertain event set on sender timeout.
+// R223: receiver must keep slot-11 mutex open so abandoned ownership survives.
 // No slot ever maps to a Minecraft gameplay action.
 inline const wchar_t* menu_operator_slot_name(int slot) noexcept {
     switch(slot) {
@@ -58,6 +59,36 @@ inline std::wstring menu_operator_event_name(std::uint32_t pid,
     return std::wstring(L"Local\\SlinkyWinky-MenuR100-v1-")+
            std::to_wstring(pid)+L"-"+std::to_wstring(birth)+
            L"-"+control;
+}
+// R223: the game-owner process retains the named mutex for the lifetime
+// of an original-client operator session. Without that keeper handle a
+// crashed command sender can destroy the named mutex at process exit,
+// hiding WAIT_ABANDONED from the next sender.
+enum class MenuOperatorClaim : std::uint8_t {
+    Acquired, Busy, Abandoned, Uncertain
+};
+inline MenuOperatorClaim menu_operator_claim_mutex(
+        HANDLE producer,HANDLE uncertain) noexcept {
+    if(!producer || !uncertain)return MenuOperatorClaim::Uncertain;
+    const DWORD result=WaitForSingleObject(producer,0);
+    if(result==WAIT_TIMEOUT)return MenuOperatorClaim::Busy;
+    if(result==WAIT_ABANDONED) {
+        // WAIT_ABANDONED grants mutex ownership. Poison before releasing it;
+        // otherwise a later sender could mistake a stale ACK for its own.
+        if(!SetEvent(uncertain)) {
+            // Do not release: the terminating caller leaves it abandoned
+            // again while the receiver keeps the kernel mutex alive.
+            return MenuOperatorClaim::Uncertain;
+        }
+        ReleaseMutex(producer);
+        return MenuOperatorClaim::Abandoned;
+    }
+    if(result!=WAIT_OBJECT_0)return MenuOperatorClaim::Uncertain;
+    if(WaitForSingleObject(uncertain,0)!=WAIT_TIMEOUT) {
+        ReleaseMutex(producer);
+        return MenuOperatorClaim::Uncertain;
+    }
+    return MenuOperatorClaim::Acquired;
 }
 } // namespace slinkywinky
 #endif

@@ -77,29 +77,40 @@ int wmain(int argc, wchar_t** argv) {
         const auto pid=static_cast<std::uint32_t>(pidWide);
         if(!slinkywinky::menu_operator_process_birth(pid,&birth))return 2;
         const auto mutexName=slinkywinky::menu_operator_event_name(pid,birth,11);
+        const auto uncertainName=slinkywinky::menu_operator_event_name(pid,birth,12);
+        // Open the receiver-owned session latch BEFORE the sender mutex.
+        // A sender must never create a standalone command channel.
+        HANDLE uncertain=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,
+                                    FALSE,uncertainName.c_str());
+        if(!uncertain) {
+            std::wcerr<<L"ATTACH_RESULT=FAIL R223 no active original-menu session\n";
+            return 2;
+        }
         HANDLE producer=CreateMutexW(nullptr,FALSE,mutexName.c_str());
-        if(!producer)return 2;
-        const DWORD owns=WaitForSingleObject(producer,0);
-        if(owns!=WAIT_OBJECT_0) {
+        if(!producer) {
+            CloseHandle(uncertain);
+            return 2;
+        }
+        const auto claim=slinkywinky::menu_operator_claim_mutex(
+            producer,uncertain);
+        if(claim!=slinkywinky::MenuOperatorClaim::Acquired) {
             CloseHandle(producer);
-            std::wcerr<<L"ATTACH_RESULT=FAIL R100 command producer busy/uncertain\n";
+            CloseHandle(uncertain);
+            std::wcerr<<(claim==slinkywinky::MenuOperatorClaim::Abandoned ?
+                L"ATTACH_RESULT=FAIL R223 abandoned sender poisoned session\n":
+                L"ATTACH_RESULT=FAIL R223 command producer busy/uncertain\n");
             return 2;
         }
         const auto commandName=slinkywinky::menu_operator_event_name(pid,birth,operator_slot);
         const auto successName=slinkywinky::menu_operator_event_name(pid,birth,9);
         const auto refusedName=slinkywinky::menu_operator_event_name(pid,birth,10);
-        const auto uncertainName=slinkywinky::menu_operator_event_name(pid,birth,12);
         HANDLE command=OpenEventW(EVENT_MODIFY_STATE,FALSE,commandName.c_str());
         HANDLE success=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,successName.c_str());
         HANDLE rejected=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,refusedName.c_str());
-        HANDLE uncertain=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,
-                                    FALSE,uncertainName.c_str());
         DWORD reply=WAIT_FAILED;
-        // R222: a mutex serializes senders but cannot distinguish a late
-        // ACK from the previous timed-out sender. Refuse further commands
-        // once this exact PID/birth operator session is uncertain.
-        if(uncertain && WaitForSingleObject(uncertain,0)==WAIT_TIMEOUT &&
-           command && success && rejected &&
+        // R223 claim already validated an unpoisoned session while
+        // holding this exclusive process-birth-scoped producer mutex.
+        if(command && success && rejected &&
            ResetEvent(success) && ResetEvent(rejected) && SetEvent(command)) {
             const HANDLE acknowledgments[2]={success,rejected};
             reply=WaitForMultipleObjects(2,acknowledgments,FALSE,2500);

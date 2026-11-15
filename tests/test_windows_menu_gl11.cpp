@@ -628,10 +628,35 @@ int main() {
                                     FALSE,uncertainName.c_str());
         REQUIRE(uncertain);
         REQUIRE(WaitForSingleObject(uncertain,0)==WAIT_TIMEOUT);
+        // R223: the original JNI receiver, not a short-lived sender,
+        // retains the mutex object. Reproduce a sender thread terminating
+        // while it owns the real named Win32 mutex.
+        const auto producerName=menu_operator_event_name(
+            selfPid,selfBirth,11);
+        HANDLE producer=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,
+                                   FALSE,producerName.c_str());
+        REQUIRE(producer!=nullptr);
+        REQUIRE(menu_operator_claim_mutex(producer,uncertain)==
+            MenuOperatorClaim::Acquired);
+        REQUIRE(ReleaseMutex(producer));
+        bool abandonedThreadOwned=false;
+        std::thread abandonedSender([&] {
+            abandonedThreadOwned=
+                WaitForSingleObject(producer,0)==WAIT_OBJECT_0;
+            // Deliberately return without ReleaseMutex: simulate an
+            // abrupt sender thread termination, not a process kill.
+        });
+        abandonedSender.join();
+        REQUIRE(abandonedThreadOwned);
+        REQUIRE(menu_operator_claim_mutex(producer,uncertain)==
+            MenuOperatorClaim::Abandoned);
+        REQUIRE(WaitForSingleObject(uncertain,0)==WAIT_OBJECT_0);
+        REQUIRE(menu_operator_claim_mutex(producer,uncertain)==
+            MenuOperatorClaim::Uncertain);
+        CloseHandle(producer);
         REQUIRE(ResetEvent(operatorTestEvents[9]));
         REQUIRE(ResetEvent(operatorTestEvents[10]));
         REQUIRE(SetEvent(operatorTestEvents[2]));
-        REQUIRE(SetEvent(uncertain));
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
             nullptr,nullptr,admittedContext,admittedDc)==-1);
         REQUIRE(WaitForSingleObject(operatorTestEvents[9],0)==WAIT_TIMEOUT);
