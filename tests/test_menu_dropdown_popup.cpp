@@ -131,8 +131,14 @@ int main() {
             if(!found)CHECK(menu.change_settings_page(0,1));
         }
         CHECK(found);
-        // No stale open popup survives a changed module tab.
+        // R229: background navigation may NOT dismiss a modal.
+        // Once the explicit close occurs, ordinary tab changes resume.
         CHECK(menu.open_preview_dropdown(MenuDropdownKind::AimMode,0u));
+        CHECK(!menu.select(MenuTab::Move));
+        CHECK(!nav.select_tab(MenuTab::Move));
+        CHECK(menu.tab()==MenuTab::Combat &&
+              menu.dropdown_preview());
+        CHECK(menu.close_preview_dropdown());
         CHECK(menu.select(MenuTab::Move));
         CHECK(!menu.dropdown_preview());
         CHECK(!menu.select_preview_dropdown_option(0u));

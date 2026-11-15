@@ -78,9 +78,17 @@ int main() {
               popup->option_count==6u);
         CHECK(menu.scroll_preview_popup(1));
         CHECK(menu.dropdown_preview()->option_offset==1u);
-        // A panel scroll cannot silently retain a stale popup.
+        // R229: an open popup rejects background panel scrolling
+        // without resetting its 16-choice source identity or offset.
+        const auto ownedScroll=menu.scroll();
+        CHECK(!profile.scroll_by_visible(-1,limit));
+        CHECK(menu.scroll()==ownedScroll &&
+              menu.dropdown_preview() &&
+              menu.dropdown_preview()->option_offset==1u);
+        CHECK(menu.close_preview_dropdown());
         CHECK(profile.scroll_by_visible(-1,limit));
-        CHECK(!menu.dropdown_preview());
+        CHECK(menu.scroll()==ownedScroll-1u &&
+              !menu.dropdown_preview());
         CHECK(menu.open_recovered_multi_preview(65u,teams));
         CHECK(menu.close_preview_dropdown());
         CHECK(session.detach());
