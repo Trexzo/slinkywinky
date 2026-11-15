@@ -322,6 +322,17 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R233: exact source clock + timed walk dispatch for Bridge Assist
+  # and Clutch. Pure C++ seeded deterministic fixtures, no game hooks.
+  add_executable(slinkywinky_bridge_clutch_source_walk_test
+    tests/test_bridge_clutch_source_walks.cpp)
+  target_link_libraries(slinkywinky_bridge_clutch_source_walk_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r233_source_bridge_clutch_clock_and_timed_walks
+    COMMAND slinkywinky_bridge_clutch_source_walk_test)
+  set_tests_properties(r233_source_bridge_clutch_clock_and_timed_walks
+    PROPERTIES TIMEOUT 15)
   # R232: exact source xoshiro128+ walk retarget/interpolation
   # and opt-in six-walk Block In native source pipeline.
   add_executable(slinkywinky_source_random_walk_test

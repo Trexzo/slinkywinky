@@ -7,6 +7,9 @@
 #include <cmath>
 #include <limits>
 #include <optional>
+#include <array>
+#include <cstdint>
+#include "slinkywinky/source_walk_bank.hpp"
 
 namespace slinkywinky::reference_compat {
 struct ClutchBlock {
@@ -49,12 +52,21 @@ struct ClutchLateInput {
           render_yaw=0.0f,render_pitch=0.0f;
     float jump_wiggle_yaw=0.0f,jump_wiggle_pitch=0.0f;
     bool already_aimed_at_top=false;
+    // R233: opt-in source seed/clock, includes two timed walk_update_timed
+    // calls per yaw and pitch on an admitted actual aim phase.
+    bool use_source_walk=false;
+    double clock_seconds=0.0;
+    float source_randomisation=1.0f;
+    bool straight_down_aim=false;
 };
 struct ClutchLateDecision {
     bool admitted=false,planned=false,rotating=false;
     bool proposed_disable_module=false,proposed_track_owner=false;
     bool proposed_restore_hotbar=false;
     std::optional<float> proposed_yaw_delta{},proposed_pitch_delta{};
+    std::optional<float> source_yaw_scale{},source_pitch_scale{};
+    std::optional<float> source_yaw_jitter{},source_pitch_jitter{};
+    std::optional<float> source_straight_down_yaw{};
     int snapback_delay_remaining=0,snapback_ticks_remaining=0,
         jump_snapback_ticks_remaining=0,ticks_since_hurt=0;
 };
@@ -64,6 +76,41 @@ struct ClutchRotationDecision {
 
 class ClutchController final {
 public:
+    bool configure_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        return source_walks_.configure(seed);
+    }
+    const SourceWalkBank<8>& source_walks() const noexcept {
+        return source_walks_;
+    }
+    struct CandidateSamples {
+        float inset=0.0f,shift_x=0.0f,shift_z=0.0f;
+    };
+    // Original side-face planner consumes walks #1,2,3; top-face
+    // consumes walks #1,4,5. Caller remains responsible for world
+    // candidate ordering and target raycast.
+    std::optional<CandidateSamples> source_candidate_samples(
+        bool top,double now,float randomisation) noexcept {
+        if(!source_walks_.configured() ||
+           !std::isfinite(randomisation) ||
+           randomisation<0.0f||randomisation>1.0f)
+            return std::nullopt;
+        const auto previous=source_walks_;
+        const auto inset=source_walks_.sample_clock(
+            0,now,1.0,0.0f,0.05f);
+        const auto x=source_walks_.sample_clock(
+            top?3:1,now,top?1.0:0.5,
+            top?-0.1f:-0.01f,top?0.1f:0.01f);
+        const auto z=source_walks_.sample_clock(
+            top?4:2,now,top?1.0:0.5,
+            top?-0.1f:-0.01f,top?0.1f:0.01f);
+        if(!inset||!x||!z) {
+            source_walks_=previous;
+            return std::nullopt;
+        }
+        return CandidateSamples{0.1f+(*inset)*randomisation,
+            (*x)*randomisation,(*z)*randomisation};
+    }
     void reset() noexcept {
         cooldown_=0.0f;planned_=rotating_=false;
         block_={};face_up_=false;
@@ -123,8 +170,20 @@ public:
            in.aim_multiplier_strength<0.0f||
            in.aim_multiplier_strength>1.0f||
            in.capped_yaw_scale<0.0f||in.capped_yaw_scale>1.0f||
-           in.capped_pitch_scale<0.0f||in.capped_pitch_scale>1.0f)
+           in.capped_pitch_scale<0.0f||in.capped_pitch_scale>1.0f ||
+           (in.use_source_walk &&
+             (!source_walks_.configured() ||
+              !std::isfinite(in.clock_seconds) ||
+              in.clock_seconds<0.0||in.clock_seconds>1e12||
+              !std::isfinite(in.source_randomisation)||
+              in.source_randomisation<0.0f||
+              in.source_randomisation>1.0f)))
             return out;
+        const ClutchController previous=*this;
+        auto reject=[&]() noexcept {
+            *this=previous;
+            return ClutchLateDecision{};
+        };
         out.admitted=true;
         planned_=false;rotating_=false;
         if(!in.in_game)return snapshot(out);
@@ -183,16 +242,46 @@ public:
             // Source caps the fractional aim and cap-speed components
             // separately, then lerps by aim_multiplier_strength. Source RNG
             // draws enter only through explicit typed jitter factors.
+            float yaw_diff=in.aim_yaw_diff;
+            float yaw_scale=in.capped_yaw_scale;
+            float pitch_scale=in.capped_pitch_scale;
+            float yaw_jitter=in.aim_jitter_yaw;
+            float pitch_jitter=in.aim_jitter_pitch;
+            if(in.use_source_walk) {
+                if(in.straight_down_aim) {
+                    const auto noise=source_walks_.sample_clock(
+                        5,in.clock_seconds,0.5,-20.0f,20.0f);
+                    if(!noise)return reject();
+                    yaw_diff=(*noise)*in.source_randomisation;
+                    out.source_straight_down_yaw=yaw_diff;
+                }
+                const float lo=1.0f-0.25f*in.source_randomisation;
+                const auto ys=source_walks_.sample_timed(
+                    6,1.0,10.0,lo,1.0f);
+                const auto ps=source_walks_.sample_timed(
+                    7,1.0,10.0,lo,1.0f);
+                const auto yj=source_walks_.sample_timed(
+                    6,1.0,10.0,-0.05f,0.05f);
+                const auto pj=source_walks_.sample_timed(
+                    7,1.0,10.0,-0.05f,0.05f);
+                if(!ys||!ps||!yj||!pj)return reject();
+                yaw_scale=*ys;pitch_scale=*ps;
+                yaw_jitter=*yj;pitch_jitter=*pj;
+                out.source_yaw_scale=yaw_scale;
+                out.source_pitch_scale=pitch_scale;
+                out.source_yaw_jitter=yaw_jitter;
+                out.source_pitch_jitter=pitch_jitter;
+            }
             const float capped_yaw=std::clamp(
-                in.aim_yaw_diff,-in.aim_speed*in.capped_yaw_scale,
-                 in.aim_speed*in.capped_yaw_scale);
+                yaw_diff,-in.aim_speed*yaw_scale,
+                 in.aim_speed*yaw_scale);
             const float capped_pitch=std::clamp(
-                in.aim_pitch_diff,-in.aim_speed*in.capped_pitch_scale,
-                 in.aim_speed*in.capped_pitch_scale);
+                in.aim_pitch_diff,-in.aim_speed*pitch_scale,
+                 in.aim_speed*pitch_scale);
             const float fractional_yaw=
-                (in.aim_multiplier+in.aim_jitter_yaw)*in.aim_yaw_diff;
+                (in.aim_multiplier+yaw_jitter)*yaw_diff;
             const float fractional_pitch=
-                (in.aim_multiplier+in.aim_jitter_pitch)*in.aim_pitch_diff;
+                (in.aim_multiplier+pitch_jitter)*in.aim_pitch_diff;
             out.proposed_yaw_delta=capped_yaw+(fractional_yaw-capped_yaw)*
                                           in.aim_multiplier_strength;
             out.proposed_pitch_delta=capped_pitch+(fractional_pitch-capped_pitch)*
@@ -232,5 +321,6 @@ private:
     int ticks_since_hurt_=0,jump_window_=0;
     int snapback_delay_=0,snapback_ticks_=0;
     bool disable_after_snapback_=false;
+    SourceWalkBank<8> source_walks_{};
 };
 } // namespace slinkywinky::reference_compat

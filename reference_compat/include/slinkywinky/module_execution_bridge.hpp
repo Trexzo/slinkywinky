@@ -1734,6 +1734,18 @@ public:
         if(stopped_ || active_frame_)return false;
         return block_in_.configure_source_walk_seed(seed);
     }
+    // R233: opt-in offline seeds for source-native Bridge Assist
+    // and Clutch. Production runtime RNG is not guessed or intercepted.
+    bool configure_bridge_assist_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        if(stopped_ || active_frame_)return false;
+        return bridge_assist_.configure_source_walk_seed(seed);
+    }
+    bool configure_clutch_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        if(stopped_ || active_frame_)return false;
+        return clutch_.configure_source_walk_seed(seed);
+    }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first

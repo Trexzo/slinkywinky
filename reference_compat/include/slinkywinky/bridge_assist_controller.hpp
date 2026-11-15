@@ -6,6 +6,8 @@
 #include <array>
 #include <cmath>
 #include <optional>
+#include <cstdint>
+#include "slinkywinky/source_walk_bank.hpp"
 
 namespace slinkywinky::reference_compat {
 
@@ -56,6 +58,9 @@ struct BridgeAssistTickInput {
     float release_delay=2.0f;
     float margin_random_reduction=0.0f; // preverified RNG result
     float release_random_delta=0.0f; // preverified RNG result
+    // R233: opt-in actual clock-driven source walk; external clock/seed.
+    bool use_source_walk=false;
+    double clock_seconds=0.0;
     std::optional<BridgeEdgeSample> edge{};
 };
 struct BridgeAssistTickDecision {
@@ -64,6 +69,8 @@ struct BridgeAssistTickDecision {
     std::optional<bool> proposed_sneak_pressed{};
     int cooldown_left=0,held_block_ticks_left=0;
     float release_timer=0.0f;
+    std::optional<float> sampled_edge_reduction{};
+    std::optional<float> sampled_release_delta{};
 };
 struct BridgeAssistLateDecision {
     bool placing=false;
@@ -120,6 +127,13 @@ public:
         cooldown_=0;held_ticks_=0;release_timer_=0.0f;
         activation_mode_=1;
     }
+    bool configure_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        return source_walks_.configure(seed);
+    }
+    const SourceWalkBank<3>& source_walks() const noexcept {
+        return source_walks_;
+    }
     BridgeAssistTickDecision on_tick(const BridgeAssistTickInput& in) noexcept {
         BridgeAssistTickDecision out;
         if(in.activation_mode<0||in.activation_mode>2||
@@ -130,18 +144,54 @@ public:
            !std::isfinite(in.release_random_delta)||
            std::fabs(in.release_random_delta)>4.0f||
            in.margin_random_reduction<0.0f||
-           in.margin_random_reduction>0.15f)return out;
+           in.margin_random_reduction>0.15f ||
+           (in.use_source_walk && (
+               !in.randomise || !std::isfinite(in.clock_seconds) ||
+               in.clock_seconds<0.0 || in.clock_seconds>1e12 ||
+               !source_walks_.configured())))return out;
+        // Failed ticks must not consume shared random draws or sneak
+        // ownership, regardless of where a collision observation fails.
+        const BridgeAssistController previous=*this;
+        auto reject=[&]() noexcept {
+            *this=previous;
+            return BridgeAssistTickDecision{};
+        };
         // A missing collision sample can never be interpreted as "air".
         // Validate any supplied snapshot before changing source state.
         if(in.in_game && !in.edge)return out;
         BridgeEdgeSample edge{};
         if(in.edge) {
             edge=*in.edge;
-            if(in.randomise)
-                edge.margin=std::max(0.0f,
-                    edge.margin-in.margin_random_reduction);
             if(!evaluate_bridge_edge(edge).valid)return out;
         }
+        auto unsafe_edge=[&]() -> std::optional<bool> {
+            BridgeEdgeSample checked=edge;
+            if(in.randomise) {
+                float reduction=in.margin_random_reduction;
+                if(in.use_source_walk) {
+                    const auto result=source_walks_.sample_clock(
+                        0,in.clock_seconds,5.0,0.0f,0.15f);
+                    if(!result)return std::nullopt;
+                    reduction=*result;
+                    out.sampled_edge_reduction=reduction;
+                }
+                checked.margin=std::max(0.0f,checked.margin-reduction);
+            }
+            // Original engine re-reads all corner cells at the new
+            // margin. Our offline observations cannot be reassigned
+            // to different cells without a new world snapshot.
+            const auto cells=[](const BridgeEdgeSample& e) {
+                return std::array<int,4>{
+                    static_cast<int>(std::floor(e.next_x-e.margin)),
+                    static_cast<int>(std::floor(e.next_x+e.margin)),
+                    static_cast<int>(std::floor(e.next_z-e.margin)),
+                    static_cast<int>(std::floor(e.next_z+e.margin))};
+            };
+            if(cells(edge)!=cells(checked))return std::nullopt;
+            const auto checked_result=evaluate_bridge_edge(checked);
+            if(!checked_result.valid)return std::nullopt;
+            return checked_result.unsafe;
+        };
         if(!in.in_game) {
             out.admitted=true;
             if(owned_)out.proposed_sneak_pressed=in.physical_sneak_held;
@@ -185,19 +235,29 @@ public:
             if(!in.on_ground &&
                (!in.also_air_while_not_falling||in.motion_y<0.0))
                 return complete(out);
-            if(!evaluate_bridge_edge(edge).unsafe)return complete(out);
+            const auto unsafe=unsafe_edge();
+            if(!unsafe)return reject();
+            if(!*unsafe)return complete(out);
             out.proposed_sneak_pressed=true;
             action=Keep;
         }
         if(action==CheckEdge) {
-            if(evaluate_bridge_edge(edge).unsafe)action=Keep;
+            const auto unsafe=unsafe_edge();
+            if(!unsafe)return reject();
+            if(*unsafe)action=Keep;
         }
         if(action!=Keep) {
             release_timer_-=1.0f;
             if(!(release_timer_>0.0f)) {
                 out.proposed_sneak_pressed=false;
-                release_timer_+=in.release_delay +
-                    (in.randomise?in.release_random_delta:0.0f);
+                float delta=in.randomise?in.release_random_delta:0.0f;
+                if(in.randomise && in.use_source_walk) {
+                    const auto result=source_release_delta(in.clock_seconds);
+                    if(!result)return reject();
+                    delta=*result;
+                    out.sampled_release_delta=delta;
+                }
+                release_timer_+=in.release_delay+delta;
                 return complete(out);
             }
         }
@@ -250,5 +310,23 @@ private:
     int cooldown_=0,held_ticks_=0;
     float release_timer_=0.0f;
     int activation_mode_=1;
+    SourceWalkBank<3> source_walks_{};
+    std::optional<float> source_release_delta(double now) noexcept {
+        const auto simple=source_walks_.sample_clock(
+            1,now,30.0,-0.5f,0.5f);
+        if(!simple)return std::nullopt;
+        const auto roll=source_walks_.unit();
+        if(!roll)return std::nullopt;
+        const auto odds=source_walks_.sample_clock(
+            2,now,60.0,0.04f,0.08f);
+        if(!odds)return std::nullopt;
+        float addition=*simple;
+        if(*odds>*roll) {
+            const auto extra=source_walks_.unit();
+            if(!extra)return std::nullopt;
+            addition+=3.0f*(*extra);
+        }
+        return addition;
+    }
 };
 } // namespace slinkywinky::reference_compat
