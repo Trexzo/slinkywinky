@@ -9,6 +9,7 @@
 #include <limits>
 #include <optional>
 #include "slinkywinky/block_in_aim_geometry.hpp"
+#include "slinkywinky/source_random_walk.hpp"
 
 namespace slinkywinky::reference_compat {
 
@@ -76,6 +77,9 @@ struct BlockInTickDecision {
     std::optional<unsigned> proposed_placement_bit{};
     std::optional<BlockInPoint> proposed_target_offset{};
     std::optional<BlockInVec3> proposed_world_target{};
+    // R232: exact source-walk normalized proposals, surfaced for tests.
+    std::optional<float> proposed_walk_first{},proposed_walk_second{};
+    std::optional<float> proposed_jitter_yaw{},proposed_jitter_pitch{};
     std::optional<float> proposed_absolute_yaw{},proposed_absolute_pitch{};
     std::optional<float> proposed_yaw_delta{},proposed_pitch_delta{};
     int movement_mode=0; // 0 idle; 1 walk to centre; 2 hold centre
@@ -88,6 +92,13 @@ public:
         last_y_=0.0;have_last_y_=false;
     }
     bool on_empty_tick() const noexcept { return true; }
+    bool configure_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        return source_walks_.configure(seed);
+    }
+    const SourceBlockInWalks& source_walks() const noexcept {
+        return source_walks_;
+    }
     BlockInToggleDecision on_toggle(const BlockInToggleInput& in) noexcept {
         BlockInToggleDecision out;
         if(!in.own_module)return out;
@@ -210,11 +221,21 @@ public:
         out.proposed_target_offset=offset;
         float diff_yaw=in.diff_yaw,diff_pitch=in.diff_pitch;
         if(in.source_aim) {
+            BlockInSourceAim effective=*in.source_aim;
+            if(effective.use_reconstructed_walk) {
+                const auto samples=source_walks_.sample_placement(
+                    *bit,effective.clock_seconds);
+                if(!samples)return reject();
+                effective.first_walk=(*samples)[0];
+                effective.second_walk=(*samples)[1];
+                out.proposed_walk_first=effective.first_walk;
+                out.proposed_walk_second=effective.second_walk;
+            }
             const auto target=block_in_source_look(
                 *bit,static_cast<int>(std::floor(in.player_x)),
                 static_cast<int>(std::floor(in.player_y))-1,
                 static_cast<int>(std::floor(in.player_z)),
-                *in.source_aim);
+                effective);
             if(!target)return reject();
             out.proposed_world_target=target->target;
             out.proposed_absolute_yaw=target->absolute_yaw;
@@ -227,8 +248,20 @@ public:
             return complete(out);
         }
         out.proposed_select_block=true;
-        const float yaw_limit=180.0f*in.aim_speed*in.yaw_jitter;
-        const float pitch_limit=180.0f*in.aim_speed*in.pitch_jitter;
+        float yaw_jitter=in.yaw_jitter,pitch_jitter=in.pitch_jitter;
+        if(in.source_aim && in.source_aim->use_reconstructed_walk) {
+            // Original Block In calls shared RNG states #5/#6 only
+            // after source placement selection and hotbar admission.
+            const auto jitter=source_walks_.sample_jitter(
+                in.source_aim->clock_seconds);
+            if(!jitter)return reject();
+            yaw_jitter=0.8f+0.4f*(*jitter)[0];
+            pitch_jitter=0.8f+0.4f*(*jitter)[1];
+            out.proposed_jitter_yaw=yaw_jitter;
+            out.proposed_jitter_pitch=pitch_jitter;
+        }
+        const float yaw_limit=180.0f*in.aim_speed*yaw_jitter;
+        const float pitch_limit=180.0f*in.aim_speed*pitch_jitter;
         const float scale=in.aim_speed*0.5f+0.5f;
         const float yaw=0.5f*(diff_yaw*scale+
             std::clamp(diff_yaw,-yaw_limit,yaw_limit));
@@ -274,5 +307,6 @@ private:
     std::uint64_t placed_=0;
     double last_y_=0.0;
     float center_yaw_=0.0f,center_pitch_=0.0f;
+    SourceBlockInWalks source_walks_{};
 };
 } // namespace slinkywinky::reference_compat

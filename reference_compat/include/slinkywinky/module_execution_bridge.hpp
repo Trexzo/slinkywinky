@@ -1727,6 +1727,13 @@ public:
     void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
     void reset_clutch_world_state() noexcept { clutch_.reset(); }
     void reset_block_in_world_state() noexcept { block_in_.reset(); }
+    // R232: offline owner passes a reproducible seed; never infer the
+    // original client's entropy-backed xoshiro128+ runtime state.
+    bool configure_block_in_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        if(stopped_ || active_frame_)return false;
+        return block_in_.configure_source_walk_seed(seed);
+    }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first

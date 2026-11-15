@@ -16,6 +16,10 @@ struct BlockInSourceAim {
     // These are NOT an implementation of the source's random-walk RNG.
     float first_walk=0.5f;
     float second_walk=0.5f;
+    // R232 opt-in source walk pipeline. Clock and seed must be supplied
+    // explicitly by an offline owner. No live runtime seed/time assumed.
+    bool use_reconstructed_walk=false;
+    double clock_seconds=0.0;
     BlockInVec3 eye{};
     float current_yaw=0.0f,current_pitch=0.0f;
     float silent_yaw=0.0f,silent_pitch=0.0f;
@@ -31,6 +35,9 @@ inline bool valid_block_in_source_aim(const BlockInSourceAim& v) noexcept {
     for(float n:f)if(!std::isfinite(n))return false;
     if(v.first_walk<0.0f||v.first_walk>1.0f||
        v.second_walk<0.0f||v.second_walk>1.0f)return false;
+    if(v.use_reconstructed_walk &&
+       (!std::isfinite(v.clock_seconds)||
+        v.clock_seconds<0.0||v.clock_seconds>1e12))return false;
     const double eye[]{v.eye.x,v.eye.y,v.eye.z};
     for(double n:eye)if(!std::isfinite(n)||std::fabs(n)>1000000.0)
         return false;

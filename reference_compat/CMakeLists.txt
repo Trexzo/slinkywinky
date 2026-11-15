@@ -322,6 +322,17 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R232: exact source xoshiro128+ walk retarget/interpolation
+  # and opt-in six-walk Block In native source pipeline.
+  add_executable(slinkywinky_source_random_walk_test
+    tests/test_source_random_walk.cpp)
+  target_link_libraries(slinkywinky_source_random_walk_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r232_source_xoshiro_random_walk_block_in_pipeline
+    COMMAND slinkywinky_source_random_walk_test)
+  set_tests_properties(r232_source_xoshiro_random_walk_block_in_pipeline
+    PROPERTIES TIMEOUT 15)
   # R231: original Block In source 3D roof/wall aim target geometry
   # and look-at yaw/pitch, deterministic external random-walk samples.
   add_executable(slinkywinky_block_in_source_targets_test
