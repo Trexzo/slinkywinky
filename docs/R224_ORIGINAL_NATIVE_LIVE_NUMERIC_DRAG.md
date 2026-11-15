@@ -40,6 +40,20 @@ the actual source-quantized native MenuRenderFrame, verifies both
 crossing directions and checks that Up clears the temporary preview
 and commits only the press-owned endpoint.
 
-Full build, configured CTest and live acceptance status will be added
-only after actually running them. Human physical input in unmodified
-Minecraft remains unverified; PR #2 gameplay owner untouched.
+## Verified Windows results
+
+A source-exact fast-forward checkout of R224 commit `af7990d` was
+built on Windows with Visual Studio 17 2022 x64 Release, Temurin Java 8,
+`BUILD_TESTING=ON`, `SLINKYWINKY_BUILD_JNI=ON` and
+`SLINKYWINKY_BUILD_ATTACH=ON`. The native build passed (exit 0).
+**107/107 CTests passed**, full suite exit 0, total **32.85 seconds**.
+The native retained pointer fixture exercised the actual first-party
+WGL drag-preview renderer and both range crossing directions; the
+independent R148 numeric sidecar test passed its updated push/tooltip
+assertions. The full Java 8 native-agent Attach test passed.
+
+No original Minecraft process was launched for R224. There is no
+hardware mouse, in-world module state or production injected-game
+acceptance claimed here. GitHub Actions for the current head remains
+independently unverified. Human physical input in unmodified Minecraft
+remains outstanding; PR #2 gameplay owner is untouched.
