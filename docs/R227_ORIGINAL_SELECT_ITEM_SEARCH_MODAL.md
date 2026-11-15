@@ -49,3 +49,22 @@ paired synthetic keyboard input, source hit geometry, result
 selection and GL state restoration. Windows JNI/Attach, Ubuntu,
 sanitizers and Debug/Release CI results will be recorded after
 actual completion.
+
+## Exact-commit CI verification
+
+All three GitHub workflows completed successfully at R227
+implementation commit `1fdc7aef23db253f410d984de646ea3f0306a75d`:
+
+- Offline C++ core (six successful jobs: Windows Debug/Release,
+  Ubuntu Debug/Release, JNI smoke, and sanitizers):
+  https://github.com/Trexzo/slinkywinky/actions/runs/43743920105
+- Windows JNI preview artifact (Windows x64 JNI build and tests):
+  https://github.com/Trexzo/slinkywinky/actions/runs/43743920161
+- Injectable Windows Java 8 agent (native loader/JVMTI and Attach):
+  https://github.com/Trexzo/slinkywinky/actions/runs/43743920100
+
+The first Windows attempt identified a missing dropdown-geometry
+include in windows_retained_menu_preview.cpp. Implementation commit
+`1fdc7ae` supplied the missing include; the entire fresh CI matrix
+then passed. No Minecraft was launched, and no physical mouse or
+in-world gameplay acceptance is claimed.
