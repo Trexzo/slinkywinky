@@ -55,3 +55,28 @@ runtime was started, no real keyboard/mouse hooks were installed,
 no module was activated, and Chat 2's PR #2 remains untouched.
 
 Exact-commit CI status must be appended after workflows complete.
+
+## CI verification
+
+All three GitHub workflows completed with success at exact R229
+implementation commit `116fe9b4fab0fdbb8be577231f77b05631222dc7`:
+
+- Offline C++ core — **6/6** successful jobs, covering Windows and
+  Ubuntu Debug/Release, Linux sanitizers, and Linux JNI smoke:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43748488986
+- Windows JNI preview artifact — Windows x64 native JNI and
+  Java 8 roundtrip tests passed:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43748488997
+- Injectable Windows Java 8 agent — Windows native/JVMTI loader,
+  Java 8, and actual Attach API tests passed:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43748489061
+
+The initial R229 CI at `76484d8` identified two inherited assertions
+expecting background tab selection and scrolling to dismiss an open
+dropdown (R127 and R135). Commit `116fe9b` updated those regressions
+to assert the source popup remains alive after denied navigation
+and explicit close restores normal scrolling/tab selection.
+
+This verifies the first-party offline model and disposable WGL
+window. Original Minecraft hardware input and in-game module
+integration were not exercised. PR #2 remains independent.
