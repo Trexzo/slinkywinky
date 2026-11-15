@@ -189,8 +189,8 @@ int main() {
         }
         CHECK(frames.detach());
     }
-    // R131 regression: a ten-option *single-choice* dropdown also uses
-    // the bounded popup viewport. The last option must stay reachable.
+    // R226: the original ten-option large optional list excludes None;
+    // its nine selectable choices retain absolute 1..9 source indices.
     {
         std::size_t slot1=all.size();
         for(std::size_t i=0;i<all.size();++i)
@@ -216,10 +216,11 @@ int main() {
         CHECK(frame && panel);
         auto popup=menu_dropdown_popup_geometry(
             *frame,panel->logical_width(),panel->logical_height());
-        CHECK(popup && popup->total_options==10u &&
-              popup->option_count==6u && popup->first_option==0u);
+        CHECK(popup && popup->total_options==9u &&
+              popup->option_count==6u && popup->first_option==1u &&
+              popup->first_selectable_option==1u);
         CHECK(!menu.select_preview_dropdown_option(9u));
-        for(unsigned i=0;i<4u;++i)CHECK(menu.scroll_preview_popup(1));
+        for(unsigned i=0;i<3u;++i)CHECK(menu.scroll_preview_popup(1));
         CHECK(!menu.scroll_preview_popup(1));
         const auto shifted=frames.next(menu,&profile,&nav);
         popup=menu_dropdown_popup_geometry(
