@@ -102,6 +102,7 @@ def verify_known_original_bindings(rows):
         (51, "Ping Fix", 4, [(2, -1000), (3, -1000)]),
         (54, "Reach", 0, [(8, 0)]),
         (56, "Safe Walk", 1, [(0, 0)]),
+        (59, "Strafe", 1, [(21, 1000), (22, 100)]),
     )
     for index, name, category, subscriptions in expected:
         if (len(rows) <= index or rows[index]["index"] != index or

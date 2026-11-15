@@ -474,6 +474,13 @@ int main(int argc, char** argv) {
         if (has_sprint)
             require(bridge.bind_sprint_from_catalog(),
                     "Sprint source event17/21 priority100 callback pair rejected");
+        std::size_t strafe_id = manifest.modules.size();
+        for (std::size_t i = 0; i < manifest.modules.size(); ++i)
+            if (manifest.modules[i].name == "Strafe") strafe_id = i;
+        const bool has_strafe = strafe_id < manifest.modules.size();
+        if (has_strafe)
+            require(bridge.bind_strafe_from_catalog(),
+                    "Strafe candidate event21/1000 and event22/100 pair rejected");
         const std::size_t expected_bindings = 1 + (has_jump ? 1u : 0u) +
                                                (has_null_move ? 1u : 0u) +
                                                (has_instant_stop ? 1u : 0u) +
@@ -488,7 +495,8 @@ int main(int argc, char** argv) {
                                                (has_safe_walk ? 1u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
-                                               (has_sprint ? 2u : 0u);
+                                               (has_sprint ? 2u : 0u) +
+                                               (has_strafe ? 2u : 0u);
         const auto c = bridge.coverage();
         require(c.registered_modules == manifest.modules.size(), "module coverage drift");
         require(c.native_callback_subscriptions == manifest.native_subscriptions,
@@ -497,7 +505,7 @@ int main(int argc, char** argv) {
                     expected_bindings - (has_item_use_fix ? 1u : 0u) -
                     (has_ping_fix ? 1u : 0u) - (has_timer ? 1u : 0u) -
                     (has_keep_sprint ? 2u : 0u) -
-                    (has_sprint ? 1u : 0u) &&
+                    (has_sprint ? 1u : 0u) - (has_strafe ? 1u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -512,10 +520,12 @@ int main(int argc, char** argv) {
                     (has_null_move ? 1u : 0u) + (has_instant_stop ? 1u : 0u),
                 "Movement callbacks not routed through event 16");
         require(c.implemented_per_event[kNoSlowEvent] ==
-                    (has_no_slow ? 1u : 0u) + (has_sprint ? 1u : 0u),
-                "No Slow / Sprint event 21 inventory mismatch");
-        require(c.implemented_per_event[kFastAccelEvent] == (has_fast_accel ? 1u : 0u),
-                "Fast Accel callback not routed through event 22");
+                    (has_no_slow ? 1u : 0u) + (has_sprint ? 1u : 0u) +
+                    (has_strafe ? 1u : 0u),
+                "No Slow / Sprint / Strafe event 21 inventory mismatch");
+        require(c.implemented_per_event[kFastAccelEvent] ==
+                    (has_fast_accel ? 1u : 0u) + (has_strafe ? 1u : 0u),
+                "Fast Accel / Strafe callbacks not routed through event 22");
         require(c.implemented_per_event[kSafeWalkEvent] == (has_safe_walk ? 1u : 0u),
                 "Safe Walk callback not routed through event 0");
         require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
@@ -1184,18 +1194,74 @@ int main(int argc, char** argv) {
                     "Disabled Sprint update still executed");
         }
 
+        if (has_strafe) {
+            require(bridge.request(strafe_id, true),
+                    "Strafe enable request rejected");
+            require(!bridge.apply(false, false),
+                    "Strafe bypassed world admission");
+            require(bridge.apply(true, true),
+                    "Strafe enable failed");
+            ExecutionFrame observed;
+            observed.event = kStrafeSnapshotEvent;
+            observed.world_present = true;
+            observed.player_present = true;
+            observed.strafe_snapshot = StrafeSnapshotPayload{false,0};
+            require(bridge.dispatch(observed) && observed.strafe_snapshot &&
+                    observed.strafe_snapshot->executions == 1,
+                    "Strafe event21 snapshot missing");
+            ExecutionFrame steer;
+            steer.event = kStrafeSteeringEvent;
+            steer.world_present = true;
+            steer.player_present = true;
+            steer.strafe_steering = StrafeSteeringPayload{};
+            steer.strafe_steering->input.forward = 1.0f;
+            steer.strafe_steering->input.motion_x = 0.3;
+            steer.strafe_steering->input.motion_y = 0.25;
+            steer.strafe_steering->input.settings.strength_ground = 1.0;
+            require(bridge.dispatch(steer) && steer.strafe_steering &&
+                    steer.strafe_steering->executions == 1 &&
+                    steer.strafe_steering->decision.proposed_motion &&
+                    std::abs(steer.strafe_steering->decision.proposed_motion->x) < 1e-8 &&
+                    std::abs(steer.strafe_steering->decision.proposed_motion->z - 0.3) < 1e-8 &&
+                    steer.strafe_steering->decision.proposed_motion->y == 0.25,
+                    "Strafe event22 motion policy missing");
+            bridge.reset_strafe_world_state();
+            steer = ExecutionFrame{};
+            steer.event = kStrafeSteeringEvent;
+            steer.world_present = true;
+            steer.player_present = true;
+            steer.strafe_steering = StrafeSteeringPayload{};
+            steer.strafe_steering->input.forward = 1.0f;
+            steer.strafe_steering->input.motion_x = 0.3;
+            require(bridge.dispatch(steer) && steer.strafe_steering &&
+                    !steer.strafe_steering->decision.proposed_motion,
+                    "Strafe retained snapshot across world reset");
+            require(bridge.request(strafe_id,false),
+                    "Strafe disable rejected");
+            require(bridge.apply(true,true),
+                    "Strafe disable failed");
+            observed = ExecutionFrame{};
+            observed.event = kStrafeSnapshotEvent;
+            observed.world_present = true;
+            observed.player_present = true;
+            observed.strafe_snapshot = StrafeSnapshotPayload{};
+            require(bridge.dispatch(observed) &&
+                    observed.strafe_snapshot->executions == 0,
+                    "Disabled Strafe snapshot executed");
+        }
+
         if (expect_candidate)
             require(has_jump && has_null_move && has_instant_stop &&
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
                     has_timer && has_keep_sprint && has_sprint &&
-                    c.registered_modules == 66 &&
+                    has_strafe && c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 16 &&
-                    c.executable_callback_bindings == 22 &&
-                    c.unimplemented_callback_subscriptions == 149,
+                    c.modules_with_executable_bindings == 17 &&
+                    c.executable_callback_bindings == 24 &&
+                    c.unimplemented_callback_subscriptions == 147,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);

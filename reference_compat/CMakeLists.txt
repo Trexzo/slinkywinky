@@ -434,6 +434,46 @@ if(BUILD_TESTING)
     r203_sprint_update_and_movement_offline
     r203_sixteen_policy_coverage PROPERTIES TIMEOUT 15)
 
+  # R222: candidate row 59 Strafe, events 21/1000 + 22/100.
+  # Pure independent steering policy, shared typed-event admission and
+  # fail-closed lifecycle, with no live Minecraft/JNI motion writes.
+  add_executable(slinkywinky_strafe_bridge_test
+    tests/test_strafe_bridge.cpp)
+  target_link_libraries(slinkywinky_strafe_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r222_strafe_offline_policy_and_dispatch
+    COMMAND slinkywinky_strafe_bridge_test)
+  set_tests_properties(r222_strafe_offline_policy_and_dispatch
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r222_seventeen_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twenty_modules_with_seventeen_decisions.tsv")
+  add_test(NAME r222_reject_strafe_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r222_strafe_wrong_category.tsv")
+  add_test(NAME r222_reject_strafe_wrong_snapshot_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r222_strafe_wrong_snapshot_priority.tsv")
+  add_test(NAME r222_reject_strafe_wrong_steering_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r222_strafe_wrong_steering_priority.tsv")
+  add_test(NAME r222_reject_strafe_missing_steering
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r222_strafe_missing_steering.tsv")
+  add_test(NAME r222_reject_strafe_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r222_strafe_extra_subscription.tsv")
+  set_tests_properties(
+    r222_reject_strafe_wrong_category
+    r222_reject_strafe_wrong_snapshot_priority
+    r222_reject_strafe_wrong_steering_priority
+    r222_reject_strafe_missing_steering
+    r222_reject_strafe_extra_subscription
+    PROPERTIES WILL_FAIL TRUE)
+  set_tests_properties(
+    r222_seventeen_policy_coverage PROPERTIES TIMEOUT 15)
+
   # R204: real read-only ObservationFrame ABI and session-generation
   # admission drive source-matched Sprint callbacks without any JNI writes.
   add_executable(slinkywinky_sprint_observation_preview_test

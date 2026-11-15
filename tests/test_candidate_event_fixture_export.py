@@ -86,10 +86,17 @@ class TestCandidateManifestExporter(unittest.TestCase):
         rows[56]["name"] = "Safe Walk"
         rows[56]["category"] = 1
         rows[56]["subscriptions"] = [(0, 0)]
+        rows[59]["name"] = "Strafe"
+        rows[59]["category"] = 1
+        rows[59]["subscriptions"] = [(21, 1000), (22, 100)]
         rows[54]["name"] = "Reach"
         rows[54]["category"] = 0
         rows[54]["subscriptions"] = [(8, 0)]
         fixture.verify_known_original_bindings(rows)
+        rows[59]["subscriptions"] = [(21, 1000), (22, 99)]
+        with self.assertRaisesRegex(ValueError, "binding drift"):
+            fixture.verify_known_original_bindings(rows)
+        rows[59]["subscriptions"] = [(21, 1000), (22, 100)]
         rows[45]["subscriptions"] = [(16, 100)]
         with self.assertRaisesRegex(ValueError, "binding drift"):
             fixture.verify_known_original_bindings(rows)

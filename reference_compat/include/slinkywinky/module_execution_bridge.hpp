@@ -19,6 +19,7 @@
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
+#include "slinkywinky/strafe_controller.hpp"
 
 #include <array>
 #include <cstddef>
@@ -158,6 +159,17 @@ struct SprintMovementPayload {
     unsigned executions = 0;
 };
 
+struct StrafeSnapshotPayload {
+    bool sprinting = false;
+    unsigned executions = 0;
+};
+
+struct StrafeSteeringPayload {
+    StrafeMotionInput input{};
+    StrafeMotionDecision decision{};
+    unsigned executions = 0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -182,6 +194,8 @@ struct ExecutionFrame {
     std::optional<KeepSprintUpdatePayload> keep_sprint_update{};
     std::optional<SprintUpdatePayload> sprint_update{};
     std::optional<SprintMovementPayload> sprint_movement{};
+    std::optional<StrafeSnapshotPayload> strafe_snapshot{};
+    std::optional<StrafeSteeringPayload> strafe_steering{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -766,6 +780,53 @@ public:
         return false;
     }
 
+    // R222 pinned candidate row 59: Strafe is movement category 1, with
+    // event21/1000 snapshot and event22/100 steering. Validate the complete
+    // native registration before installing either independent callback.
+    bool bind_strafe(std::size_t id) {
+        if (stopped_ || active_frame_ || id >= definitions_.size() ||
+            definitions_[id].name != "Strafe" ||
+            definitions_[id].category != 1 ||
+            definitions_[id].subscriptions.size() != 2)
+            return false;
+        bool snapshot = false, steering = false;
+        for (const auto& sub : definitions_[id].subscriptions) {
+            if (sub.event == kStrafeSnapshotEvent && sub.priority == 1000)
+                snapshot = true;
+            if (sub.event == kStrafeSteeringEvent && sub.priority == 100)
+                steering = true;
+        }
+        if (!snapshot || !steering ||
+            callbacks_[id][kStrafeSnapshotEvent] ||
+            callbacks_[id][kStrafeSteeringEvent])
+            return false;
+
+        const bool first = bind(id, kStrafeSnapshotEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.strafe_snapshot) return;
+                auto& p = *frame.strafe_snapshot;
+                ++p.executions;
+                strafe_.observe_sprinting(p.sprinting);
+            });
+        const bool second = bind(id, kStrafeSteeringEvent,
+            [this](const Delivery&, ExecutionFrame& frame) {
+                if (!frame.strafe_steering) return;
+                auto& p = *frame.strafe_steering;
+                ++p.executions;
+                p.decision = strafe_.evaluate(p.input);
+            });
+        if (!first || !second)
+            throw std::logic_error("validated Strafe callback pair failed");
+        return true;
+    }
+
+    bool bind_strafe_from_catalog() {
+        for (std::size_t id = 0; id < definitions_.size(); ++id)
+            if (definitions_[id].name == "Strafe")
+                return bind_strafe(id);
+        return false;
+    }
+
     // A full 66-module manifest is registered by add(); Reach is located by
     // validated name/category/slot, never assumed to occupy a fixed ID.
     bool bind_reach_from_catalog() {
@@ -840,6 +901,10 @@ public:
             return false;
         if (frame.sprint_movement && frame.event != kSprintMovementInputEvent)
             return false;
+        if (frame.strafe_snapshot && frame.event != kStrafeSnapshotEvent)
+            return false;
+        if (frame.strafe_steering && frame.event != kStrafeSteeringEvent)
+            return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -863,7 +928,9 @@ public:
             static_cast<unsigned>(frame.keep_sprint_post.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_update.has_value()) +
             static_cast<unsigned>(frame.sprint_update.has_value()) +
-            static_cast<unsigned>(frame.sprint_movement.has_value());
+            static_cast<unsigned>(frame.sprint_movement.has_value()) +
+            static_cast<unsigned>(frame.strafe_snapshot.has_value()) +
+            static_cast<unsigned>(frame.strafe_steering.has_value());
         const bool combined_movement =
             typed_count == 2 && frame.event == kMovementTickEvent &&
             frame.null_move && frame.instant_stop;
@@ -886,8 +953,17 @@ public:
              static_cast<unsigned>(frame.keep_sprint_update.has_value()) +
              static_cast<unsigned>(frame.sprint_update.has_value()) == typed_count);
         const bool combined_movement_sprint =
-            typed_count == 2 && frame.event == kSprintMovementInputEvent &&
-            frame.no_slow && frame.sprint_movement;
+            typed_count >= 2 && typed_count <= 3 &&
+            frame.event == kSprintMovementInputEvent &&
+            (static_cast<unsigned>(frame.no_slow.has_value()) +
+             static_cast<unsigned>(frame.sprint_movement.has_value()) +
+             static_cast<unsigned>(frame.strafe_snapshot.has_value()) ==
+             typed_count);
+        // Strafe and Fast Accel both observe the SAME event22 movement hook,
+        // and their input frames must agree before either is evaluated.
+        const bool combined_steering_accel =
+            typed_count == 2 && frame.event == kStrafeSteeringEvent &&
+            frame.strafe_steering && frame.fast_accel;
         const bool combined_outgoing_packet =
             typed_count == 2 && frame.event == kOutgoingPacketEvent &&
             frame.ping_fix && frame.no_item_release;
@@ -896,7 +972,7 @@ public:
             frame.no_use_delay && frame.anti_debuff;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
             !combined_attack_post && !combined_player_update &&
-            !combined_movement_sprint &&
+            !combined_movement_sprint && !combined_steering_accel &&
             !combined_outgoing_packet && !combined_late_tick)
             return false;
         if (combined_outgoing_packet) {
@@ -917,6 +993,15 @@ public:
             if (no_slow.forward != sprint.forward ||
                 no_slow.strafe != sprint.strafe ||
                 no_slow.using_item != sprint.using_item)
+                return false;
+        }
+        if (combined_steering_accel) {
+            const auto& a = frame.strafe_steering->input;
+            const auto& b = frame.fast_accel->input;
+            if (a.forward != b.forward || a.strafe != b.strafe ||
+                a.on_ground != b.on_ground ||
+                a.motion_x != b.motion_x || a.motion_y != b.motion_y ||
+                a.motion_z != b.motion_z)
                 return false;
         }
         if (frame.keep_sprint_update && frame.sprint_update &&
@@ -1012,6 +1097,12 @@ public:
             frame.sprint_movement->decision = {};
             frame.sprint_movement->executions = 0;
         }
+        if (frame.strafe_snapshot)
+            frame.strafe_snapshot->executions = 0;
+        if (frame.strafe_steering) {
+            frame.strafe_steering->decision = {};
+            frame.strafe_steering->executions = 0;
+        }
         struct ClearFrame {
             ModuleExecutionBridge& self;
             ~ClearFrame() { self.active_frame_ = nullptr; }
@@ -1036,6 +1127,7 @@ public:
     void reset_no_item_release_world_state() noexcept { no_item_release_.reset(); }
     void reset_keep_sprint_world_state() noexcept { keep_sprint_.reset(); }
     void reset_sprint_world_state() noexcept { sprint_.reset(); }
+    void reset_strafe_world_state() noexcept { strafe_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1049,6 +1141,7 @@ public:
         no_item_release_.reset();
         keep_sprint_.reset();
         sprint_.reset();
+        strafe_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1077,6 +1170,7 @@ private:
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;
+    StrafeController strafe_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
     ExecutionFrame* active_frame_ = nullptr;
