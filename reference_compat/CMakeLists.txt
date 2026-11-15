@@ -322,6 +322,17 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R231: original Block In source 3D roof/wall aim target geometry
+  # and look-at yaw/pitch, deterministic external random-walk samples.
+  add_executable(slinkywinky_block_in_source_targets_test
+    tests/test_block_in_source_targets.cpp)
+  target_link_libraries(slinkywinky_block_in_source_targets_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r231_block_in_source_target_and_look_at_geometry
+    COMMAND slinkywinky_block_in_source_targets_test)
+  set_tests_properties(r231_block_in_source_target_and_look_at_geometry
+    PROPERTIES TIMEOUT 15)
   # R230: Block In original five-hook placement, rotation and movement
   # state machine, with typed world evidence and no game writes.
   add_executable(slinkywinky_block_in_bridge_test

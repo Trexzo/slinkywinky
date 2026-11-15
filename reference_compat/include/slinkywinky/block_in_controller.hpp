@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include "slinkywinky/block_in_aim_geometry.hpp"
 
 namespace slinkywinky::reference_compat {
 
@@ -57,6 +58,11 @@ struct BlockInWorldInput {
     float aim_speed=0.5f;
     float diff_yaw=0.0f,diff_pitch=0.0f;
     float yaw_jitter=1.0f,pitch_jitter=1.0f;
+    // R231 source-backed option: compute actual world-space aim point,
+    // rot_look_at yaw/pitch and silent-offset delta from first-party
+    // pure native math, instead of trusting caller-supplied diff angles.
+    // Legacy R230 receives diff_yaw/diff_pitch if not supplied.
+    std::optional<BlockInSourceAim> source_aim{};
     // The game world's original block-id and bounding-box observations,
     // supplied by a caller. Missing required cells fail closed.
     std::array<std::optional<unsigned>,10> roof_block_ids{};
@@ -69,6 +75,8 @@ struct BlockInTickDecision {
     bool proposed_select_block=false,proposed_click=false;
     std::optional<unsigned> proposed_placement_bit{};
     std::optional<BlockInPoint> proposed_target_offset{};
+    std::optional<BlockInVec3> proposed_world_target{};
+    std::optional<float> proposed_absolute_yaw{},proposed_absolute_pitch{};
     std::optional<float> proposed_yaw_delta{},proposed_pitch_delta{};
     int movement_mode=0; // 0 idle; 1 walk to centre; 2 hold centre
     std::uint64_t placed_mask=0;
@@ -134,6 +142,15 @@ public:
            in.yaw_jitter<0.0f||in.yaw_jitter>2.0f||
            in.pitch_jitter<0.0f||in.pitch_jitter>2.0f)
             return out;
+        // Reject malformed caller-provided source geometry before mutating
+        // either placement state or last-height/mask data.
+        if(in.source_aim && !valid_block_in_source_aim(*in.source_aim))
+            return {};
+        const BlockInController rollback=*this;
+        auto reject=[&]() noexcept {
+            *this=rollback;
+            return BlockInTickDecision{};
+        };
         active_=false;mode_=0;
         out.admitted=true;
         if(in.require_ground&&!in.on_ground) {
@@ -147,9 +164,9 @@ public:
         BlockInPoint offset{};
         // roof first. If first roof spot is occupied, try walls instead.
         for(unsigned i=0;i<10;++i) {
-            if(!in.roof_block_ids[i])return {}; // no fabricated block data
+            if(!in.roof_block_ids[i])return reject(); // fail closed, no state drift
             const unsigned id=*in.roof_block_ids[i];
-            if(id>4095)return {};
+            if(id>4095)return reject();
             const bool marked=(placed_&(std::uint64_t{1}<<(32+i)))!=0;
             if(!marked&&block_in_is_open_id(id))continue;
             if(i!=0) {
@@ -161,15 +178,16 @@ public:
         if(!bit) {
             for(unsigned step=0;step<4&&!bit;++step) {
                 const unsigned dir=(static_cast<unsigned>(quadrant_)+step)&3u;
-                if(!in.wall_intersects_player[dir])return {};
+                if(!in.wall_intersects_player[dir])return reject();
                 if(*in.wall_intersects_player[dir])continue;
                 const auto& cells=in.wall_block_ids[dir];
                 // source scans each side from feet to head, requiring a
                 // *solid supporting block immediately below each air cell*.
                 for(unsigned level=0;level<3;++level) {
                     if(placed_&(std::uint64_t{1}<<(dir*3+level)))continue;
-                    if(!cells[level]||!cells[level+1])return {};
-                    if(*cells[level]>4095||*cells[level+1]>4095)return {};
+                    if(!cells[level]||!cells[level+1])return reject();
+                    if(*cells[level]>4095||*cells[level+1]>4095)
+                        return reject();
                     if(block_in_is_open_id(*cells[level+1]) &&
                        !block_in_is_open_id(*cells[level])) {
                         bit=dir*3+level;
@@ -190,6 +208,20 @@ public:
         }
         out.proposed_placement_bit=*bit;
         out.proposed_target_offset=offset;
+        float diff_yaw=in.diff_yaw,diff_pitch=in.diff_pitch;
+        if(in.source_aim) {
+            const auto target=block_in_source_look(
+                *bit,static_cast<int>(std::floor(in.player_x)),
+                static_cast<int>(std::floor(in.player_y))-1,
+                static_cast<int>(std::floor(in.player_z)),
+                *in.source_aim);
+            if(!target)return reject();
+            out.proposed_world_target=target->target;
+            out.proposed_absolute_yaw=target->absolute_yaw;
+            out.proposed_absolute_pitch=target->absolute_pitch;
+            diff_yaw=target->diff_yaw;
+            diff_pitch=target->diff_pitch;
+        }
         if(!in.rotation_priority_granted||!in.held_block_item) {
             out.proposed_disable=true;
             return complete(out);
@@ -198,19 +230,28 @@ public:
         const float yaw_limit=180.0f*in.aim_speed*in.yaw_jitter;
         const float pitch_limit=180.0f*in.aim_speed*in.pitch_jitter;
         const float scale=in.aim_speed*0.5f+0.5f;
-        const float yaw=0.5f*(in.diff_yaw*scale+
-            std::clamp(in.diff_yaw,-yaw_limit,yaw_limit));
-        const float pitch=0.5f*(in.diff_pitch*scale+
-            std::clamp(in.diff_pitch,-pitch_limit,pitch_limit));
-        if(!std::isfinite(yaw)||!std::isfinite(pitch))return {};
+        const float yaw=0.5f*(diff_yaw*scale+
+            std::clamp(diff_yaw,-yaw_limit,yaw_limit));
+        const float pitch=0.5f*(diff_pitch*scale+
+            std::clamp(diff_pitch,-pitch_limit,pitch_limit));
+        if(!std::isfinite(yaw)||!std::isfinite(pitch))return reject();
         out.proposed_yaw_delta=yaw;
         out.proposed_pitch_delta=pitch;
-        if(std::fabs(in.diff_yaw-yaw)+std::fabs(in.diff_pitch-pitch)<1.0f) {
+        if(std::fabs(diff_yaw-yaw)+std::fabs(diff_pitch-pitch)<1.0f) {
             out.proposed_click=true;
             placed_|=std::uint64_t{1}<<(*bit);
         }
         active_=true;
         mode_=block_in_middle(in.player_x,in.player_z)?2:1;
+        if(mode_==1 && in.source_aim) {
+            const auto center=block_in_source_look_at(
+                {in.player_x,in.player_y,in.player_z},
+                {std::floor(in.player_x)+0.5,in.player_y,
+                 std::floor(in.player_z)+0.5});
+            if(!center)return reject();
+            center_yaw_=center->yaw;
+            center_pitch_=center->pitch;
+        }
         out.active=true;
         return complete(out);
     }
