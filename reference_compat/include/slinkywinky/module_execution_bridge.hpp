@@ -17,6 +17,7 @@
 #include "slinkywinky/fast_accel_controller.hpp"
 #include "slinkywinky/safe_walk_controller.hpp"
 #include "slinkywinky/fast_place_controller.hpp"
+#include "slinkywinky/fast_mine_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
@@ -123,6 +124,16 @@ struct FastPlaceTickPayload {
     FastPlaceDecision decision{};
     unsigned executions = 0;
 };
+struct FastMineEarlyPayload {
+    FastMineEarlyInput input{};
+    FastMineEarlyDecision decision{};
+    unsigned executions=0;
+};
+struct FastMineLatePayload {
+    FastMineLateInput input{};
+    FastMineLateDecision decision{};
+    unsigned executions=0;
+};
 
 struct TimerFramePayload {
     TimerFrameInput input{};
@@ -195,6 +206,8 @@ struct ExecutionFrame {
     std::optional<FastAccelTickPayload> fast_accel{};
     std::optional<SafeWalkTickPayload> safe_walk{};
     std::optional<FastPlaceTickPayload> fast_place{};
+    std::optional<FastMineEarlyPayload> fast_mine_early{};
+    std::optional<FastMineLatePayload> fast_mine_late{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
@@ -675,6 +688,48 @@ public:
         return false;
     }
 
+    // R226: original Fast Mine block category 3, two callbacks at
+    // descriptor +0x48 (event0, priority0) and +0x168 (event18,
+    // priority0). The controller preserves early->late progress history.
+    bool bind_fast_mine(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Fast Mine" ||
+           definitions_[id].category!=3 ||
+           definitions_[id].subscriptions.size()!=2u ||
+           callbacks_[id][kSafeWalkEvent] ||
+           callbacks_[id][kAntiDebuffEvent]) return false;
+        bool early=false,late=false;
+        for(const auto& sub:definitions_[id].subscriptions) {
+            if(sub.event==kSafeWalkEvent && sub.priority==0)early=true;
+            if(sub.event==kAntiDebuffEvent && sub.priority==0)late=true;
+        }
+        if(!early || !late)return false;
+        const bool first=bind(id,kSafeWalkEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.fast_mine_early)return;
+                auto& p=*frame.fast_mine_early;
+                ++p.executions;
+                p.decision=fast_mine_.on_early(p.input);
+            });
+        const bool second=bind(id,kAntiDebuffEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.fast_mine_late)return;
+                auto& p=*frame.fast_mine_late;
+                ++p.executions;
+                p.decision=fast_mine_.on_late(p.input);
+            });
+        if(!first || !second)
+            throw std::logic_error("validated Fast Mine callback pair failed");
+        return true;
+    }
+
+    bool bind_fast_mine_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Fast Mine")
+                return bind_fast_mine(id);
+        return false;
+    }
+
     // Source-linked Timer: utility category 4, frame event 1 priority 200
     // and toggle notification event 5 priority 0. Both must be present before
     // accepting the offline binding; no actual Minecraft timer is modified.
@@ -923,6 +978,10 @@ public:
             return false;
         if (frame.fast_place && frame.event != kSafeWalkEvent)
             return false;
+        if (frame.fast_mine_early && frame.event != kSafeWalkEvent)
+            return false;
+        if (frame.fast_mine_late && frame.event != kAntiDebuffEvent)
+            return false;
         if (frame.timer_frame && frame.event != kTimerFrameEvent)
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
@@ -959,6 +1018,8 @@ public:
             static_cast<unsigned>(frame.fast_accel.has_value()) +
             static_cast<unsigned>(frame.safe_walk.has_value()) +
             static_cast<unsigned>(frame.fast_place.has_value()) +
+            static_cast<unsigned>(frame.fast_mine_early.has_value()) +
+            static_cast<unsigned>(frame.fast_mine_late.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
@@ -1003,23 +1064,45 @@ public:
             frame.strafe_steering && frame.fast_accel;
         // Safe Walk priority 0 precedes Fast Place priority -1000 on
         // native event0. Both payloads must describe the same game state.
+        const unsigned edge_place_count =
+            static_cast<unsigned>(frame.safe_walk.has_value()) +
+            static_cast<unsigned>(frame.fast_place.has_value()) +
+            static_cast<unsigned>(frame.fast_mine_early.has_value());
         const bool combined_edge_place =
-            typed_count == 2 && frame.event == kSafeWalkEvent &&
-            frame.safe_walk && frame.fast_place;
+            typed_count>=2 && typed_count<=3 &&
+            frame.event==kSafeWalkEvent &&
+            typed_count==edge_place_count;
         const bool combined_outgoing_packet =
             typed_count == 2 && frame.event == kOutgoingPacketEvent &&
             frame.ping_fix && frame.no_item_release;
+        const unsigned late_tick_count =
+            static_cast<unsigned>(frame.no_use_delay.has_value()) +
+            static_cast<unsigned>(frame.anti_debuff.has_value()) +
+            static_cast<unsigned>(frame.fast_mine_late.has_value());
         const bool combined_late_tick =
-            typed_count == 2 && frame.event == kAntiDebuffEvent &&
-            frame.no_use_delay && frame.anti_debuff;
+            typed_count>=2 && typed_count<=3 &&
+            frame.event==kAntiDebuffEvent &&
+            typed_count==late_tick_count;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
             !combined_attack_post && !combined_player_update &&
             !combined_movement_sprint && !combined_steering_accel &&
             !combined_edge_place && !combined_outgoing_packet &&
             !combined_late_tick)
             return false;
-        if (combined_edge_place &&
-            frame.safe_walk->input.in_game != frame.fast_place->input.in_game)
+        if (combined_edge_place) {
+            const bool state=frame.safe_walk ?
+                frame.safe_walk->input.in_game :
+                frame.fast_place ? frame.fast_place->input.in_game :
+                frame.fast_mine_early->input.in_game;
+            if((frame.safe_walk && frame.safe_walk->input.in_game!=state) ||
+               (frame.fast_place && frame.fast_place->input.in_game!=state) ||
+               (frame.fast_mine_early &&
+                frame.fast_mine_early->input.in_game!=state))
+                return false;
+        }
+        if(frame.fast_mine_late && frame.no_use_delay &&
+           frame.fast_mine_late->input.in_game!=
+           frame.no_use_delay->input.in_game)
             return false;
         if (combined_outgoing_packet) {
             const bool c00 =
@@ -1119,6 +1202,14 @@ public:
             frame.fast_place->decision = {};
             frame.fast_place->executions = 0;
         }
+        if(frame.fast_mine_early) {
+            frame.fast_mine_early->decision={};
+            frame.fast_mine_early->executions=0;
+        }
+        if(frame.fast_mine_late) {
+            frame.fast_mine_late->decision={};
+            frame.fast_mine_late->executions=0;
+        }
         if (frame.timer_frame) {
             frame.timer_frame->decision = {};
             frame.timer_frame->executions = 0;
@@ -1179,6 +1270,7 @@ public:
     void reset_sprint_world_state() noexcept { sprint_.reset(); }
     void reset_strafe_world_state() noexcept { strafe_.reset(); }
     void reset_fast_place_world_state() noexcept { fast_place_.reset(); }
+    void reset_fast_mine_world_state() noexcept { fast_mine_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1194,6 +1286,7 @@ public:
         sprint_.reset();
         strafe_.reset();
         fast_place_.reset();
+        fast_mine_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1220,6 +1313,7 @@ private:
     FastAccelController fast_accel_;
     SafeWalkController safe_walk_;
     FastPlaceController fast_place_;
+    FastMineController fast_mine_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;

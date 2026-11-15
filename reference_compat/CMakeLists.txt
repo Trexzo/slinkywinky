@@ -322,6 +322,40 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R226: original Fast Mine dual-phase block-category callbacks:
+  # event 0, priority 0; event 18, priority 0. Offline C++ only.
+  add_executable(slinkywinky_fast_mine_bridge_test
+    tests/test_fast_mine_bridge.cpp)
+  target_link_libraries(slinkywinky_fast_mine_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r226_fast_mine_native_dual_callback_policy
+    COMMAND slinkywinky_fast_mine_bridge_test)
+  set_tests_properties(r226_fast_mine_native_dual_callback_policy
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r226_nineteen_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twentytwo_modules_with_nineteen_decisions.tsv")
+  add_test(NAME r226_reject_fast_mine_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r226_wrong_fast_mine_category.tsv")
+  add_test(NAME r226_reject_fast_mine_wrong_early_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r226_wrong_fast_mine_early_priority.tsv")
+  add_test(NAME r226_reject_fast_mine_wrong_late_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r226_wrong_fast_mine_late_priority.tsv")
+  add_test(NAME r226_reject_fast_mine_missing_late
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r226_missing_fast_mine_late.tsv")
+  add_test(NAME r226_reject_fast_mine_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r226_extra_fast_mine_subscription.tsv")
+  set_tests_properties(r226_reject_fast_mine_wrong_category
+    r226_reject_fast_mine_wrong_early_priority
+    r226_reject_fast_mine_wrong_late_priority
+    r226_reject_fast_mine_missing_late
+    r226_reject_fast_mine_extra_subscription PROPERTIES WILL_FAIL TRUE)
   # R225: independent native Fast Place source policy / event0 -1000.
   # Standalone executable only; never delivers a Minecraft key event.
   add_executable(slinkywinky_fast_place_bridge_test

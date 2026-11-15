@@ -460,6 +460,13 @@ int main(int argc, char** argv) {
         if(has_fast_place)
             require(bridge.bind_fast_place_from_catalog(),
                     "Fast Place category3/event0/priority-1000 binding failed");
+        std::size_t fast_mine_id=manifest.modules.size();
+        for(std::size_t i=0;i<manifest.modules.size();++i)
+            if(manifest.modules[i].name=="Fast Mine")fast_mine_id=i;
+        const bool has_fast_mine=fast_mine_id<manifest.modules.size();
+        if(has_fast_mine)
+            require(bridge.bind_fast_mine_from_catalog(),
+                    "Fast Mine original category3 event0/18 priority0 pair rejected");
         std::size_t timer_id = manifest.modules.size();
         for (std::size_t i = 0; i < manifest.modules.size(); ++i)
             if (manifest.modules[i].name == "Timer") timer_id = i;
@@ -501,6 +508,7 @@ int main(int argc, char** argv) {
                                                (has_fast_accel ? 1u : 0u) +
                                                (has_safe_walk ? 1u : 0u) +
                                                (has_fast_place ? 1u : 0u) +
+                                               (has_fast_mine ? 2u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
                                                (has_sprint ? 2u : 0u) +
@@ -513,7 +521,8 @@ int main(int argc, char** argv) {
                     expected_bindings - (has_item_use_fix ? 1u : 0u) -
                     (has_ping_fix ? 1u : 0u) - (has_timer ? 1u : 0u) -
                     (has_keep_sprint ? 2u : 0u) -
-                    (has_sprint ? 1u : 0u) - (has_strafe ? 1u : 0u) &&
+                    (has_sprint ? 1u : 0u) - (has_strafe ? 1u : 0u) -
+                    (has_fast_mine ? 1u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -535,7 +544,8 @@ int main(int argc, char** argv) {
                     (has_fast_accel ? 1u : 0u) + (has_strafe ? 1u : 0u),
                 "Fast Accel / Strafe callbacks not routed through event 22");
         require(c.implemented_per_event[kSafeWalkEvent] ==
-                    (has_safe_walk ? 1u : 0u) + (has_fast_place ? 1u : 0u),
+                    (has_safe_walk ? 1u : 0u) + (has_fast_place ? 1u : 0u) +
+                    (has_fast_mine ? 1u : 0u),
                 "Safe Walk / Fast Place original event 0 binding drift");
         require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
                 "Timer frame callback not routed through event 1");
@@ -543,7 +553,8 @@ int main(int argc, char** argv) {
                 "Timer toggle callback not routed through event 5");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
-                    (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u),
+                    (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u) +
+                    (has_fast_mine ? 1u : 0u),
                 "No Use Delay / Anti Debuff shared event 18 inventory mismatch");
         require(c.implemented_per_event[kItemUseFixBeforeEvent] ==
                     (has_no_hit_delay ? 1u : 0u) + (has_item_use_fix ? 1u : 0u) +
@@ -1126,6 +1137,45 @@ int main(int argc, char** argv) {
             bridge.reset_fast_place_world_state();
         }
 
+        if(has_fast_mine) {
+            require(bridge.request(fast_mine_id,true),
+                    "Fast Mine initial enable rejected");
+            require(!bridge.apply(false,false),
+                    "Fast Mine bypassed world admission");
+            require(bridge.apply(true,true),
+                    "Fast Mine world owner admission rejected");
+            ExecutionFrame mine;
+            mine.event=kSafeWalkEvent;
+            mine.world_present=mine.player_present=true;
+            mine.fast_mine_early=FastMineEarlyPayload{
+                {true,true,0.0f,8,5.0f,true},{},0};
+            require(bridge.dispatch(mine) &&
+                    mine.fast_mine_early->executions==1 &&
+                    mine.fast_mine_early->decision.proposed_block_hit_delay==5,
+                    "Fast Mine early raw-delay cap was not computed");
+            mine=ExecutionFrame{};
+            mine.event=kAntiDebuffEvent;
+            mine.world_present=mine.player_present=true;
+            mine.fast_mine_late=FastMineLatePayload{
+                {true,true,0.1f,2.0f},{},0};
+            require(bridge.dispatch(mine) &&
+                    mine.fast_mine_late->executions==1 &&
+                    mine.fast_mine_late->decision.proposed_damage_progress &&
+                    std::fabs(*mine.fast_mine_late->decision.proposed_damage_progress-
+                              0.6f)<1e-6f,
+                    "Fast Mine late first-tick mining acceleration failed");
+            require(bridge.request(fast_mine_id,false),
+                    "Fast Mine disable rejected");
+            require(bridge.apply(true,true),
+                    "Fast Mine disable refused");
+            mine.fast_mine_late->executions=0;
+            require(bridge.dispatch(mine) &&
+                    mine.fast_mine_late->executions==0 &&
+                    !mine.fast_mine_late->decision.proposed_damage_progress,
+                    "Disabled Fast Mine late callback remained live");
+            bridge.reset_fast_mine_world_state();
+        }
+
         if (has_timer) {
             require(bridge.request(timer_id, true), "Timer enable rejected");
             require(!bridge.apply(false, true), "Timer bypassed world gate");
@@ -1302,14 +1352,14 @@ int main(int argc, char** argv) {
                     has_no_slow && has_no_hit_delay && has_no_use_delay &&
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
-                    has_fast_place && has_timer && has_keep_sprint &&
-                    has_sprint && has_strafe &&
+                    has_fast_place && has_fast_mine && has_timer &&
+                    has_keep_sprint && has_sprint && has_strafe &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 18 &&
-                    c.executable_callback_bindings == 25 &&
-                    c.unimplemented_callback_subscriptions == 146,
+                    c.modules_with_executable_bindings == 19 &&
+                    c.executable_callback_bindings == 27 &&
+                    c.unimplemented_callback_subscriptions == 144,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
