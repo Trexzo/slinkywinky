@@ -37,10 +37,20 @@ Abandoned, latch uncertainty and prevent another posted menu action
 from being consumed or acknowledged. That verifies the Win32 kernel
 abandonment path, not merely a synthetic SetEvent.
 
-Native Release compilation and the complete configured CTest results
-must be recorded after the code is built; neither CI nor actual
-Minecraft foreground hardware-input acceptance is asserted by this
-change.
+## Verified Windows acceptance
+
+The exact R223 source commit `230197c` was fast-forwarded into the
+existing isolated Windows build checkout, configured with MSVC x64 Release,
+`SLINKYWINKY_BUILD_JNI=ON`, `SLINKYWINKY_BUILD_ATTACH=ON`,
+`BUILD_TESTING=ON`, and Temurin Java 8. The native build succeeded,
+and **107/107 CTests passed**, exit **0**, total CTest time **34.39 s**.
+
+That includes the production JNI/WGL `isolated_wgl_menu_state_restore`
+fixture with an actual abandoned Win32 mutex and the Java 8
+`native_agent_attach` test (34.38 s). The fix was not exercised against
+a live original Minecraft process; no actual physical input, game world,
+or production injector session was launched. GitHub Actions CI for the
+new head remains independently unverified.
 
 Limits: Win32 named objects are not an adversarial authentication
 mechanism. A command applied before process death cannot be rolled
