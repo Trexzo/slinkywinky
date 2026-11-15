@@ -21,6 +21,7 @@
 #include "slinkywinky/bridge_assist_controller.hpp"
 #include "slinkywinky/auto_tool_controller.hpp"
 #include "slinkywinky/clutch_controller.hpp"
+#include "slinkywinky/block_in_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
@@ -182,6 +183,27 @@ struct ClutchLatePayload {
     ClutchLateDecision decision{};
     unsigned executions=0;
 };
+struct BlockInEmptyPayload {
+    unsigned executions=0;
+};
+struct BlockInTogglePayload {
+    BlockInToggleInput input{};
+    BlockInToggleDecision decision{};
+    unsigned executions=0;
+};
+struct BlockInRotationPayload {
+    BlockInRotationDecision decision{};
+    unsigned executions=0;
+};
+struct BlockInMovementPayload {
+    BlockInMovementDecision decision{};
+    unsigned executions=0;
+};
+struct BlockInTickPayload {
+    BlockInWorldInput input{};
+    BlockInTickDecision decision{};
+    unsigned executions=0;
+};
 
 struct TimerFramePayload {
     TimerFrameInput input{};
@@ -269,6 +291,11 @@ struct ExecutionFrame {
     std::optional<ClutchClickPayload> clutch_click{};
     std::optional<ClutchRotationPayload> clutch_rotation{};
     std::optional<ClutchLatePayload> clutch_late{};
+    std::optional<BlockInEmptyPayload> block_in_empty{};
+    std::optional<BlockInTogglePayload> block_in_toggle{};
+    std::optional<BlockInRotationPayload> block_in_rotation{};
+    std::optional<BlockInMovementPayload> block_in_movement{};
+    std::optional<BlockInTickPayload> block_in_tick{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
@@ -951,6 +978,80 @@ public:
         return false;
     }
 
+    // R230: the pinned source Block In descriptor has exactly five hooks:
+    // event 0 empty (priority0); event5 toggle (0); event13 rotation
+    // priority -2000; event15 keys priority -1000; event16 tick
+    // priority -500. All proposals are native-only, no gameplay writes.
+    bool bind_block_in(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Block In" ||
+           definitions_[id].category!=3 ||
+           definitions_[id].subscriptions.size()!=5u)return false;
+        bool empty=false,toggle=false,rotation=false,movement=false,tick=false;
+        for(const auto& sub:definitions_[id].subscriptions) {
+            if(sub.event==kSafeWalkEvent && sub.priority==0)empty=true;
+            else if(sub.event==kTimerToggleEvent && sub.priority==0)toggle=true;
+            else if(sub.event==kClutchRotationFlagEvent &&
+                    sub.priority==-2000)rotation=true;
+            else if(sub.event==kKeepSprintPostEvent &&
+                    sub.priority==-1000)movement=true;
+            else if(sub.event==kMovementTickEvent &&
+                    sub.priority==-500)tick=true;
+            else return false;
+        }
+        if(!empty||!toggle||!rotation||!movement||!tick ||
+           callbacks_[id][kSafeWalkEvent] ||
+           callbacks_[id][kTimerToggleEvent] ||
+           callbacks_[id][kClutchRotationFlagEvent] ||
+           callbacks_[id][kKeepSprintPostEvent] ||
+           callbacks_[id][kMovementTickEvent])return false;
+        const bool a=bind(id,kSafeWalkEvent,
+            [this](const Delivery&,ExecutionFrame& f){
+                if(f.block_in_empty && block_in_.on_empty_tick())
+                    ++f.block_in_empty->executions;
+            });
+        const bool b=bind(id,kTimerToggleEvent,
+            [this,id](const Delivery& delivery,ExecutionFrame& f){
+                if(!f.block_in_toggle)return;
+                auto& p=*f.block_in_toggle;
+                ++p.executions;
+                auto input=p.input;
+                input.own_module=delivery.target==id;
+                input.enabled=delivery.new_state;
+                p.decision=block_in_.on_toggle(input);
+            });
+        const bool c=bind(id,kClutchRotationFlagEvent,
+            [this](const Delivery&,ExecutionFrame& f){
+                if(!f.block_in_rotation)return;
+                auto& p=*f.block_in_rotation;
+                ++p.executions;
+                p.decision=block_in_.on_rotation();
+            });
+        const bool e=bind(id,kKeepSprintPostEvent,
+            [this](const Delivery&,ExecutionFrame& f){
+                if(!f.block_in_movement)return;
+                auto& p=*f.block_in_movement;
+                ++p.executions;
+                p.decision=block_in_.on_movement();
+            });
+        const bool g=bind(id,kMovementTickEvent,
+            [this](const Delivery&,ExecutionFrame& f){
+                if(!f.block_in_tick)return;
+                auto& p=*f.block_in_tick;
+                ++p.executions;
+                p.decision=block_in_.on_tick(p.input);
+            });
+        if(!a||!b||!c||!e||!g)
+            throw std::logic_error("Block In source callback five-tuple rejected");
+        return true;
+    }
+    bool bind_block_in_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Block In")
+                return bind_block_in(id);
+        return false;
+    }
+
     // Source-linked Timer: utility category 4, frame event 1 priority 200
     // and toggle notification event 5 priority 0. Both must be present before
     // accepting the offline binding; no actual Minecraft timer is modified.
@@ -1219,6 +1320,13 @@ public:
         if(frame.clutch_rotation &&
            frame.event!=kClutchRotationFlagEvent)return false;
         if(frame.clutch_late && frame.event!=kAntiDebuffEvent)return false;
+        if(frame.block_in_empty && frame.event!=kSafeWalkEvent)return false;
+        if(frame.block_in_toggle && frame.event!=kTimerToggleEvent)return false;
+        if(frame.block_in_rotation &&
+           frame.event!=kClutchRotationFlagEvent)return false;
+        if(frame.block_in_movement &&
+           frame.event!=kKeepSprintPostEvent)return false;
+        if(frame.block_in_tick && frame.event!=kMovementTickEvent)return false;
         if (frame.timer_frame && frame.event != kTimerFrameEvent)
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
@@ -1266,6 +1374,11 @@ public:
             static_cast<unsigned>(frame.clutch_click.has_value()) +
             static_cast<unsigned>(frame.clutch_rotation.has_value()) +
             static_cast<unsigned>(frame.clutch_late.has_value()) +
+            static_cast<unsigned>(frame.block_in_empty.has_value()) +
+            static_cast<unsigned>(frame.block_in_toggle.has_value()) +
+            static_cast<unsigned>(frame.block_in_rotation.has_value()) +
+            static_cast<unsigned>(frame.block_in_movement.has_value()) +
+            static_cast<unsigned>(frame.block_in_tick.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
@@ -1275,9 +1388,14 @@ public:
             static_cast<unsigned>(frame.sprint_movement.has_value()) +
             static_cast<unsigned>(frame.strafe_snapshot.has_value()) +
             static_cast<unsigned>(frame.strafe_steering.has_value());
+        const unsigned movement_count=
+            static_cast<unsigned>(frame.null_move.has_value()) +
+            static_cast<unsigned>(frame.instant_stop.has_value()) +
+            static_cast<unsigned>(frame.block_in_tick.has_value());
         const bool combined_movement =
-            typed_count == 2 && frame.event == kMovementTickEvent &&
-            frame.null_move && frame.instant_stop;
+            typed_count>=2 && typed_count<=3 &&
+            frame.event==kMovementTickEvent &&
+            movement_count==typed_count;
         // Event14 may simultaneously carry No Hit Delay, Item Use Fix
         // and Keep Sprint attack proposals. Each typed payload is validated
         // against event14 above; no other event payload is admitted.
@@ -1290,9 +1408,17 @@ public:
             typed_count>=2 && typed_count<=4 &&
             frame.event==kItemUseFixBeforeEvent &&
             mouse_click_count==typed_count;
+        const unsigned attack_post_count=
+            static_cast<unsigned>(frame.item_use_fix.has_value()) +
+            static_cast<unsigned>(frame.keep_sprint_post.has_value()) +
+            static_cast<unsigned>(frame.block_in_movement.has_value());
         const bool combined_attack_post =
-            typed_count == 2 && frame.event == kKeepSprintPostEvent &&
-            frame.item_use_fix && frame.keep_sprint_post;
+            typed_count>=2 && typed_count<=3 &&
+            frame.event==kKeepSprintPostEvent &&
+            attack_post_count==typed_count;
+        const bool combined_rotation =
+            typed_count==2 && frame.event==kClutchRotationFlagEvent &&
+            frame.clutch_rotation && frame.block_in_rotation;
         // Event17 can contain all three update policies together;
         // event21 contains No Slow and Sprint's movement proposals.
         const bool combined_player_update =
@@ -1320,9 +1446,10 @@ public:
             static_cast<unsigned>(frame.safe_walk.has_value()) +
             static_cast<unsigned>(frame.fast_place.has_value()) +
             static_cast<unsigned>(frame.fast_mine_early.has_value()) +
-            static_cast<unsigned>(frame.clutch_click.has_value());
+            static_cast<unsigned>(frame.clutch_click.has_value()) +
+            static_cast<unsigned>(frame.block_in_empty.has_value());
         const bool combined_edge_place =
-            typed_count>=2 && typed_count<=4 &&
+            typed_count>=2 && typed_count<=5 &&
             frame.event==kSafeWalkEvent &&
             typed_count==edge_place_count;
         const bool combined_outgoing_packet =
@@ -1338,14 +1465,20 @@ public:
             typed_count>=2 && typed_count<=5 &&
             frame.event==kAntiDebuffEvent &&
             typed_count==late_tick_count;
+        const unsigned toggle_count=
+            static_cast<unsigned>(frame.timer_toggle.has_value()) +
+            static_cast<unsigned>(frame.bridge_disable.has_value()) +
+            static_cast<unsigned>(frame.block_in_toggle.has_value());
         const bool combined_toggle =
-            typed_count==2 && frame.event==kTimerToggleEvent &&
-            frame.timer_toggle && frame.bridge_disable;
+            typed_count>=2 && typed_count<=3 &&
+            frame.event==kTimerToggleEvent &&
+            toggle_count==typed_count;
         if (typed_count > 1 && !combined_movement && !combined_mouse_click &&
             !combined_attack_post && !combined_player_update &&
             !combined_movement_sprint && !combined_steering_accel &&
             !combined_edge_place && !combined_outgoing_packet &&
-            !combined_late_tick && !combined_toggle)
+            !combined_late_tick && !combined_toggle &&
+            !combined_rotation)
             return false;
         if (combined_edge_place) {
             const bool state=frame.safe_walk ?
@@ -1510,6 +1643,24 @@ public:
             frame.clutch_late->decision={};
             frame.clutch_late->executions=0;
         }
+        if(frame.block_in_empty)
+            frame.block_in_empty->executions=0;
+        if(frame.block_in_toggle) {
+            frame.block_in_toggle->decision={};
+            frame.block_in_toggle->executions=0;
+        }
+        if(frame.block_in_rotation) {
+            frame.block_in_rotation->decision={};
+            frame.block_in_rotation->executions=0;
+        }
+        if(frame.block_in_movement) {
+            frame.block_in_movement->decision={};
+            frame.block_in_movement->executions=0;
+        }
+        if(frame.block_in_tick) {
+            frame.block_in_tick->decision={};
+            frame.block_in_tick->executions=0;
+        }
         if (frame.timer_frame) {
             frame.timer_frame->decision = {};
             frame.timer_frame->executions = 0;
@@ -1575,6 +1726,7 @@ public:
     void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
     void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
     void reset_clutch_world_state() noexcept { clutch_.reset(); }
+    void reset_block_in_world_state() noexcept { block_in_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1594,6 +1746,7 @@ public:
         bridge_assist_.reset();
         auto_tool_.reset();
         clutch_.reset();
+        block_in_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1624,6 +1777,7 @@ private:
     BridgeAssistController bridge_assist_;
     AutoToolController auto_tool_;
     ClutchController clutch_;
+    BlockInController block_in_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;

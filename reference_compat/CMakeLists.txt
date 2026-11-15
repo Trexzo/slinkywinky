@@ -322,6 +322,53 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R230: Block In original five-hook placement, rotation and movement
+  # state machine, with typed world evidence and no game writes.
+  add_executable(slinkywinky_block_in_bridge_test
+    tests/test_block_in_bridge.cpp)
+  target_link_libraries(slinkywinky_block_in_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r230_block_in_native_five_source_callbacks
+    COMMAND slinkywinky_block_in_bridge_test)
+  set_tests_properties(r230_block_in_native_five_source_callbacks
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r230_twentythree_native_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twentysix_modules_with_twentythree_decisions.tsv")
+  add_test(NAME r230_reject_wrong_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_wrong_category.tsv")
+  add_test(NAME r230_reject_wrong_empty_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_wrong_empty_priority.tsv")
+  add_test(NAME r230_reject_wrong_toggle_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_wrong_toggle_event.tsv")
+  add_test(NAME r230_reject_wrong_rotation_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_wrong_rotation_priority.tsv")
+  add_test(NAME r230_reject_wrong_movement_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_wrong_movement_priority.tsv")
+  add_test(NAME r230_reject_wrong_tick_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_wrong_tick_priority.tsv")
+  add_test(NAME r230_reject_missing_tick
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_missing_tick.tsv")
+  add_test(NAME r230_reject_extra_callback
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r230_extra_callback.tsv")
+  set_tests_properties(
+    r230_reject_wrong_category
+    r230_reject_wrong_empty_priority
+    r230_reject_wrong_toggle_event
+    r230_reject_wrong_rotation_priority
+    r230_reject_wrong_movement_priority
+    r230_reject_wrong_tick_priority
+    r230_reject_missing_tick
+    r230_reject_extra_callback PROPERTIES WILL_FAIL TRUE)
   # R229: pinned Clutch three callback slots 0/13/18, with native
   # value-only click cadence, rotation flag and snap-back lifecycle.
   add_executable(slinkywinky_clutch_bridge_test

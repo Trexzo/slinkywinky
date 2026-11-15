@@ -488,6 +488,13 @@ int main(int argc, char** argv) {
         if(has_clutch)
             require(bridge.bind_clutch_from_catalog(),
                     "Clutch category3 event0:0 / event13:-100 / event18:-1000 descriptor rejected");
+        std::size_t block_in_id=manifest.modules.size();
+        for(std::size_t i=0;i<manifest.modules.size();++i)
+            if(manifest.modules[i].name=="Block In")block_in_id=i;
+        const bool has_block_in=block_in_id<manifest.modules.size();
+        if(has_block_in)
+            require(bridge.bind_block_in_from_catalog(),
+                    "Block In category3 events 0:0/5:0/13:-2000/15:-1000/16:-500 rejected");
         std::size_t timer_id = manifest.modules.size();
         for (std::size_t i = 0; i < manifest.modules.size(); ++i)
             if (manifest.modules[i].name == "Timer") timer_id = i;
@@ -533,6 +540,7 @@ int main(int argc, char** argv) {
                                                (has_bridge_assist ? 4u : 0u) +
                                                (has_auto_tool ? 2u : 0u) +
                                                (has_clutch ? 3u : 0u) +
+                                               (has_block_in ? 5u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
                                                (has_sprint ? 2u : 0u) +
@@ -549,7 +557,8 @@ int main(int argc, char** argv) {
                     (has_fast_mine ? 1u : 0u) -
                     (has_bridge_assist ? 3u : 0u) -
                     (has_auto_tool ? 1u : 0u) -
-                    (has_clutch ? 2u : 0u) &&
+                    (has_clutch ? 2u : 0u) -
+                    (has_block_in ? 4u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -562,7 +571,8 @@ int main(int argc, char** argv) {
                     (has_bridge_assist ? 1u : 0u),
                 "No Jump Delay / Keep Sprint / Sprint / Bridge Assist event 17 mismatch");
         require(c.implemented_per_event[kMovementTickEvent] ==
-                    (has_null_move ? 1u : 0u) + (has_instant_stop ? 1u : 0u),
+                    (has_null_move ? 1u : 0u) + (has_instant_stop ? 1u : 0u) +
+                    (has_block_in ? 1u : 0u),
                 "Movement callbacks not routed through event 16");
         require(c.implemented_per_event[kNoSlowEvent] ==
                     (has_no_slow ? 1u : 0u) + (has_sprint ? 1u : 0u) +
@@ -574,12 +584,13 @@ int main(int argc, char** argv) {
         require(c.implemented_per_event[kSafeWalkEvent] ==
                     (has_safe_walk ? 1u : 0u) + (has_fast_place ? 1u : 0u) +
                     (has_fast_mine ? 1u : 0u) +
-                    (has_clutch ? 1u : 0u),
-                "Safe Walk / Fast Place / Fast Mine / Clutch event0 drift");
+                    (has_clutch ? 1u : 0u) + (has_block_in ? 1u : 0u),
+                "Safe Walk / Fast Place / Fast Mine / Clutch / Block In event0 drift");
         require(c.implemented_per_event[kTimerFrameEvent] == (has_timer ? 1u : 0u),
                 "Timer frame callback not routed through event 1");
         require(c.implemented_per_event[kTimerToggleEvent] ==
-                    (has_timer ? 1u : 0u) + (has_bridge_assist ? 1u : 0u),
+                    (has_timer ? 1u : 0u) + (has_bridge_assist ? 1u : 0u) +
+                    (has_block_in ? 1u : 0u),
                 "Timer / Bridge Assist event5 callback inventory mismatch");
         require(c.implemented_per_event[kAutoToolInventoryEvent] ==
                     (has_auto_tool ? 1u : 0u) &&
@@ -587,7 +598,7 @@ int main(int argc, char** argv) {
                     (has_auto_tool ? 1u : 0u),
                 "Auto Tool native inventory/shutdown event25/26 binding drift");
         require(c.implemented_per_event[kClutchRotationFlagEvent] ==
-                    (has_clutch ? 1u : 0u),
+                    (has_clutch ? 1u : 0u) + (has_block_in ? 1u : 0u),
                 "Clutch native rotation-flag event13 binding drift");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
@@ -602,7 +613,8 @@ int main(int argc, char** argv) {
                     (has_bridge_assist ? 1u : 0u),
                 "Shared event14 Bridge Assist place callback inventory mismatch");
         require(c.implemented_per_event[kItemUseFixAfterEvent] ==
-                    (has_item_use_fix ? 1u : 0u) + (has_keep_sprint ? 1u : 0u),
+                    (has_item_use_fix ? 1u : 0u) + (has_keep_sprint ? 1u : 0u) +
+                    (has_block_in ? 1u : 0u),
                 "Item Use Fix / Keep Sprint after callbacks not routed through event 15");
         require(c.implemented_per_event[kIncomingPacketEvent] == (has_ping_fix ? 1u : 0u),
                 "Ping Fix incoming event 2 not routed");
@@ -1323,6 +1335,62 @@ int main(int argc, char** argv) {
             bridge.reset_clutch_world_state();
         }
 
+        if(has_block_in) {
+            require(bridge.request(block_in_id,true),
+                    "Block In enable rejected");
+            require(!bridge.apply(false,false),
+                    "Block In bypassed world admission");
+            require(bridge.apply(true,true),
+                    "Block In owner admission rejected");
+            ExecutionFrame f;
+            f.event=kTimerToggleEvent;
+            f.world_present=f.player_present=true;
+            f.notification_target=block_in_id;
+            f.notification_new_state=true;
+            f.block_in_toggle=BlockInTogglePayload{
+                {true,true,90.0f,{}},{},0};
+            require(bridge.dispatch(f) &&
+                    f.block_in_toggle->executions==1 &&
+                    f.block_in_toggle->decision.remembered_quadrant==1,
+                    "Block In enable yaw quadrant initialization failed");
+            f=ExecutionFrame{};
+            f.event=kMovementTickEvent;
+            f.world_present=f.player_present=true;
+            BlockInWorldInput source{};
+            source.in_game=true;source.on_ground=true;
+            source.rotation_priority_granted=true;
+            source.held_block_item=true;
+            for(auto& id:source.roof_block_ids)id=0u;
+            for(unsigned dir=0;dir<4;++dir) {
+                source.wall_intersects_player[dir]=false;
+                source.wall_block_ids[dir]={1u,0u,1u,1u};
+            }
+            f.block_in_tick=BlockInTickPayload{source,{},0};
+            require(bridge.dispatch(f) && f.block_in_tick->executions==1 &&
+                    f.block_in_tick->decision.proposed_placement_bit==3u &&
+                    f.block_in_tick->decision.proposed_click,
+                    "Block In source wall-order or marked-placement decision failed");
+            f=ExecutionFrame{};
+            f.event=kClutchRotationFlagEvent;
+            f.world_present=f.player_present=true;
+            f.block_in_rotation=BlockInRotationPayload{};
+            require(bridge.dispatch(f) &&
+                    f.block_in_rotation->executions==1 &&
+                    f.block_in_rotation->decision.override_yaw,
+                    "Block In event13 rotation override failed");
+            require(bridge.request(block_in_id,false),
+                    "Block In disable request rejected");
+            require(bridge.apply(true,true),
+                    "Block In disable refused");
+            f=ExecutionFrame{};
+            f.event=kMovementTickEvent;
+            f.world_present=f.player_present=true;
+            f.block_in_tick=BlockInTickPayload{source,{},0};
+            require(bridge.dispatch(f) && f.block_in_tick->executions==0,
+                    "Disabled Block In callback remained active");
+            bridge.reset_block_in_world_state();
+        }
+
         if(has_auto_tool) {
             require(bridge.request(auto_tool_id,true),
                     "Auto Tool enable rejected");
@@ -1541,14 +1609,14 @@ int main(int argc, char** argv) {
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
                     has_fast_place && has_fast_mine && has_bridge_assist &&
-                    has_auto_tool && has_clutch && has_timer &&
+                    has_auto_tool && has_clutch && has_block_in && has_timer &&
                     has_keep_sprint && has_sprint && has_strafe &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 22 &&
-                    c.executable_callback_bindings == 36 &&
-                    c.unimplemented_callback_subscriptions == 135,
+                    c.modules_with_executable_bindings == 23 &&
+                    c.executable_callback_bindings == 41 &&
+                    c.unimplemented_callback_subscriptions == 130,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);
