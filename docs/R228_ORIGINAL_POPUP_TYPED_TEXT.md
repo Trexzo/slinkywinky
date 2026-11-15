@@ -55,3 +55,22 @@ process is launched by this change.
 Record precise CI results only after the fresh commit finishes all
 Windows Debug/Release, Ubuntu Debug/Release, sanitizer, JNI and
 Java 8 Attach tests.
+
+## Exact-commit CI acceptance
+
+R228 implementation commit `0081116800875d1c4dd008aab7aaa5e41d428ba7`
+passed every GitHub workflow on this head:
+
+- Offline C++ core: **6/6** jobs succeeded, covering Ubuntu and
+  Windows Debug/Release builds/tests, sanitizers, and JNI smoke.
+  https://github.com/Trexzo/slinkywinky/actions/runs/43746708208
+- Windows JNI preview artifact: successful Windows x64 native JNI
+  build and Java 8 roundtrip.
+  https://github.com/Trexzo/slinkywinky/actions/runs/43746708193
+- Injectable Windows Java 8 agent: successful native loader/JVMTI
+  build, Java 8 tests, and actual Attach API tests.
+  https://github.com/Trexzo/slinkywinky/actions/runs/43746708145
+
+No original Minecraft process or physical game input was launched
+or used for this reconstruction acceptance; the WGL GUI tests
+run only inside the isolated disposable native fixture.
