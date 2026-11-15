@@ -4,6 +4,7 @@
 #include "slinkywinky/windows_retained_menu_preview.hpp"
 #include "slinkywinky/gui_module_control_handoff.hpp"
 #include "slinkywinky/menu_numeric_geometry.hpp"
+#include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_color_modal_geometry.hpp"
 #include <GL/gl.h>
 #include <cmath>
