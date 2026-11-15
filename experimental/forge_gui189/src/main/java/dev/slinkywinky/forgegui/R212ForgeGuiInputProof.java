@@ -135,9 +135,19 @@ public final class R212ForgeGuiInputProof {
                       (stage==4 && nativeSprint!=null && ticks>=
                           (Boolean.getBoolean("slinkywinky.r215SourceMouseAuto") ? 70 : 20))) {
                 assertAuthoritativeSwitchVisual(4,true);
+                // R218: a held source click must cancel on vanilla Escape
+                // without dispatch, even though JNI and preview are active.
+                final boolean assertHeldClose=
+                    Boolean.getBoolean("slinkywinky.r215SourceMouseAuto");
+                if(assertHeldClose)screen.disposableHoldSourceBeforeEscape();
                 // ESC is sent to the OWN screen's real vanilla key handler.
                 // This is a scripted in-process invocation, NOT physical input.
                 screen.disposableInvokeVanillaEscape();
+                if(assertHeldClose) {
+                    if(!screen.heldCanceledOnClose() || lastRequestId!=3)
+                        throw new IllegalStateException("R218 held Escape leaked request");
+                    System.out.println("R218_HELD_CLICK_ESCAPE_CLOSE_CANCELED_PASS");
+                }
                 if(mc.currentScreen!=savedScreen || screen.actionCount()!=
                    (nativeSprint==null?1:3))
                     throw new IllegalStateException("R212 GUI restore failed");
@@ -204,8 +214,10 @@ public final class R212ForgeGuiInputProof {
                 finished=true;
                 System.out.println("R212_MANUAL_GUI_CLOSED_VANILLA_RESTORED");
             } else if(stage==1 && sourceMouseMode() &&
-                      nativeGl11!=null && !Display.isActive()) {
-                nativeGl11.cancelMouse();
+                      nativeGl11!=null) {
+                // R218: cancel BOTH the native press and Java screen's
+                // held edge on observed window focus loss. No raw queue hooks.
+                screen.observeFocus(Display.isActive());
             }
         }
     }
@@ -290,6 +302,9 @@ public final class R212ForgeGuiInputProof {
         private int actions;
         private R213NativeSprintBridge.Ack nativeAck;
         private boolean sourcePressed;
+        private boolean foregroundObserved=true;
+        private boolean heldCancelledOnClose;
+        private int focusHeldCancels;
         private long lastPointerClock;
 
         ProbeScreen(R212ForgeGuiInputProof host,GuiScreen previous) {
@@ -320,15 +335,49 @@ public final class R212ForgeGuiInputProof {
             lastPointerClock=now;
             return now;
         }
+        // R218: takes an actual Display.isActive sample in MANUAL mode.
+        // Automated acceptance explicitly feeds false/true without claiming
+        // OS-level focus transitions. Always cancel the full Java+JNI pair.
+        void observeFocus(boolean foreground) {
+            if(!owned())throw new IllegalStateException("R218 lost focus owner");
+            if(!foreground) {
+                if(sourcePressed && host.nativeGl11!=null) {
+                    host.nativeGl11.cancelMouse();
+                    sourcePressed=false;
+                    ++focusHeldCancels;
+                    if(Boolean.getBoolean("slinkywinky.r215SourceMouseManual"))
+                        System.out.println(
+                            "R218_MANUAL_DISPLAY_INACTIVE_HELD_SOURCE_CANCELED");
+                }
+                foregroundObserved=false;
+            } else if(!foregroundObserved) {
+                foregroundObserved=true;
+                if(Boolean.getBoolean("slinkywinky.r215SourceMouseManual"))
+                    System.out.println("R218_MANUAL_DISPLAY_FOREGROUND_REOBSERVED");
+            }
+        }
+        private boolean manualFocusAdmitted() {
+            if(!Boolean.getBoolean("slinkywinky.r215SourceMouseManual"))
+                return true; // scripted auto test has no physical focus claim
+            final boolean foreground=Display.isActive();
+            observeFocus(foreground);
+            return foreground && foregroundObserved;
+        }
         private int rawX(int x) {return (int)((long)x*mc.displayWidth/width);}
         private int rawY(int y) {return (int)((long)y*mc.displayHeight/height);}
         @Override protected void mouseClicked(int x,int y,int button)
                 throws IOException {
             if(sourceMouseMode() && host.nativeGl11!=null && button==0) {
                 if(!owned())throw new IllegalStateException("R215 mouse owner lost");
+                // A manual input event must be observed in the foreground;
+                // a duplicate Down must NEVER replace an unfinished edge.
+                if(!manualFocusAdmitted())return;
+                if(sourcePressed)return;
                 if(host.nativeGl11.mouseDown(mc.displayWidth,mc.displayHeight,
                     rawX(x),rawY(y),nextPointerTime())) {
                     sourcePressed=true;
+                    if(Boolean.getBoolean("slinkywinky.r215SourceMouseManual"))
+                        System.out.println("R218_MANUAL_GUIScreen_SOURCE_DOWN_ACCEPTED");
                     return;
                 }
             }
@@ -337,6 +386,7 @@ public final class R212ForgeGuiInputProof {
         @Override protected void mouseReleased(int x,int y,int button) {
             if(sourceMouseMode() && sourcePressed && host.nativeGl11!=null) {
                 if(!owned())throw new IllegalStateException("R215 release owner lost");
+                if(!manualFocusAdmitted())return; // canceled full pair
                 sourcePressed=false;
                 R214NativeMenuOverlay.Request req=button==0 ?
                     host.nativeGl11.mouseUp(mc.displayWidth,mc.displayHeight,
@@ -345,17 +395,25 @@ public final class R212ForgeGuiInputProof {
                 if(req!=null) {
                     actions++;
                     host.requestedFromOwnedScreen(this,req);
+                    if(Boolean.getBoolean("slinkywinky.r215SourceMouseManual"))
+                        System.out.println(
+                            "R218_MANUAL_GUIScreen_SOURCE_RELEASE_JNI_ACK id="+
+                            host.lastRequestId);
                 }
                 return;
             }
             super.mouseReleased(x,y,button);
         }
         @Override public void onGuiClosed() {
-            if(host.nativeGl11!=null && sourceMouseMode())
+            if(host.nativeGl11!=null && sourceMouseMode()) {
+                heldCancelledOnClose=sourcePressed;
                 host.nativeGl11.cancelMouse();
+            }
             sourcePressed=false;
+            foregroundObserved=false;
             super.onGuiClosed();
         }
+        boolean heldCanceledOnClose() {return heldCancelledOnClose && !sourcePressed;}
         @Override protected void actionPerformed(GuiButton button)
                 throws IOException {
             if(!owned())throw new IllegalStateException("R212 lost screen owner");
@@ -436,12 +494,42 @@ public final class R212ForgeGuiInputProof {
                     if(actions!=0 || host.lastRequestId!=0)
                         throw new IllegalStateException("R215 mismatched release accepted");
                     System.out.println("R215_SOURCE_MOUSE_NEGATIVE_EDGES_REFUSED_PASS");
+                    // R218: this is a *scripted* focus notification, not an
+                    // observed OS transition or injected hardware event.
+                    // A native held gesture must die with Java's held flag.
+                    mouseClicked(sx,sy,0);
+                    if(!sourcePressed)
+                        throw new IllegalStateException("R218 held press missing");
+                    mouseClicked(sx,sy,0); // duplicate Down cannot rearm
+                    if(!sourcePressed)
+                        throw new IllegalStateException("R218 duplicate Down changed hold");
+                    observeFocus(false);
+                    if(sourcePressed || focusHeldCancels!=1)
+                        throw new IllegalStateException("R218 focus loss not canceled");
+                    observeFocus(true);
+                    mouseReleased(sx,sy,0); // orphan Up after restoration
+                    if(actions!=0 || host.lastRequestId!=0)
+                        throw new IllegalStateException("R218 stale release requested");
+                    System.out.println("R218_FOCUS_LOSS_STALE_RELEASE_REFUSED_PASS");
                 }
                 mouseClicked(sx,sy,0);
                 mouseReleased(sx,sy,0);
                 if(!showsNativeAck(actions,host.requestedSprint,false))
                     throw new IllegalStateException("R215 real source toggle not acknowledged");
             } catch(IOException e) {throw new IllegalStateException(e);}
+        }
+        void disposableHoldSourceBeforeEscape() {
+            if(!owned() || host.nativeGl11==null || !sourceMouseMode())
+                throw new IllegalStateException("R218 escape cancel requires source");
+            int[] px=host.nativeGl11.fixtureSourceTogglePoint(
+                mc.displayWidth,mc.displayHeight);
+            int sx=(int)(((long)px[0]*width+mc.displayWidth/2)/mc.displayWidth);
+            int sy=(int)(((long)px[1]*height+mc.displayHeight/2)/mc.displayHeight);
+            final int before=actions;
+            try {mouseClicked(sx,sy,0);}
+            catch(IOException e) {throw new IllegalStateException(e);}
+            if(!sourcePressed || actions!=before)
+                throw new IllegalStateException("R218 expected held source gesture");
         }
         void disposableInvokeVanillaEscape() {
             if(!owned())throw new IllegalStateException("R212 missing GUI");

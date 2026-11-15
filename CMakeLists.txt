@@ -115,6 +115,12 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r217_forge_one_pass_source_paint.py"
         --selftest)
+    # R218: a held native source gesture must cancel with its Minecraft
+    # GuiScreen Java press on focus loss or Escape/close.
+    add_test(NAME r218_forge189_focus_and_close_cancel_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r218_forge_focus_cancel_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)
