@@ -1115,13 +1115,42 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         rgb(0x141414u);
         round_rect(popup->field.x+2.0f,popup->field.y+2.0f,
                    popup->field.width-4.0f,popup->field.height-4.0f,6.0f);
+        // R228: original gui_popups.cpp draw_tracked_text paints the
+        // actual edit_text (even empty) and its caret, never a fake
+        // "Search..." placeholder. Keep the trailing typed text
+        // visible when 100 source-accepted characters exceed the box.
+        std::string_view visible=frame.dropdown_search_query;
+        const float available=popup->field.width-18.0f;
+        const auto width_of=[](std::string_view chars) noexcept {
+            if(chars.empty())return 0.0f;
+            const float native=measure_menu_system_text(chars,15.0f);
+            return native>0.0f?native:
+                static_cast<float>(chars.size())*8.0f;
+        };
+        if(width_of(visible)>available) {
+            std::size_t lo=0u,hi=visible.size();
+            // The measured suffix width is monotonic. Binary search
+            // bounds GL/GDI work even for original's 100-char limit.
+            while(lo<hi) {
+                const std::size_t mid=lo+(hi-lo)/2u;
+                if(width_of(visible.substr(mid))<=available)
+                    hi=mid;
+                else lo=mid+1u;
+            }
+            visible.remove_prefix(lo);
+        }
         rgb(0xdddddd);
-        text(frame.dropdown_search_query.empty()?"Search...":
-             std::string_view(frame.dropdown_search_query),
-             popup->field.x+8.0f,
+        text(visible,popup->field.x+8.0f,
              menu_control_center_text_y(
                  popup->field.y,popup->field.height,15.0f),
-             15.0f,popup->field.width-16.0f);
+             15.0f,available);
+        // The text caret is visible even for an empty or no-match
+        // query, like the source tracked edit field.
+        const float caretX=popup->field.x+8.0f+
+            std::min(available-2.0f,width_of(visible)+1.0f);
+        rgb(0x999999u);
+        quad(caretX,popup->field.y+6.0f,
+             1.0f,popup->field.height-12.0f);
         for(unsigned j=0u;j<popup->matches.count;++j) {
             const auto cell=popup->result_cell(j);
             const auto index=popup->matches.indices[j];

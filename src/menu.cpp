@@ -812,6 +812,27 @@ std::string MenuState::search_preview_popup_query() const {
     const auto it=popup_search_sidecars.find(this);
     return it==popup_search_sidecars.end()?std::string{}:it->second;
 }
+bool MenuState::append_search_preview_popup_text(
+        std::string_view typed_chars) {
+    if(!dropdown_preview_ ||
+       dropdown_preview_->kind!=MenuDropdownKind::RecoveredChoice ||
+       !menu_source_large_optional_choice(dropdown_preview_->widget_index) ||
+       typed_chars.empty() || typed_chars.size()>4u)return false;
+    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+    const auto it=popup_search_sidecars.find(this);
+    if(it==popup_search_sidecars.end())return false;
+    bool appended=false;
+    // The source accepts individual alphanumeric/space characters,
+    // skipping invalid bytes; edit_text[100] is the bounded capacity.
+    for(const char c:typed_chars) {
+        if(it->second.size()>=100u)break;
+        const std::string_view one(&c,1u);
+        if(!menu_search_ascii_valid(one))continue;
+        it->second.push_back(c);
+        appended=true;
+    }
+    return appended;
+}
 bool MenuState::search_preview_popup_key(unsigned key) {
     if(!dropdown_preview_ ||
        dropdown_preview_->kind!=MenuDropdownKind::RecoveredChoice ||
@@ -841,17 +862,17 @@ bool MenuState::search_preview_popup_key(unsigned key) {
         case 49:typed='n';break;case 50:typed='m';break;
         case 57:typed=' ';break;default:break;
     }
-    std::lock_guard<std::mutex> lock(color_sidecar_mutex);
-    const auto it=popup_search_sidecars.find(this);
-    if(it==popup_search_sidecars.end())return false;
     if(key==14u) {
-        if(it->second.empty())return false;
+        std::lock_guard<std::mutex> lock(color_sidecar_mutex);
+        const auto it=popup_search_sidecars.find(this);
+        if(it==popup_search_sidecars.end() || it->second.empty())
+            return false;
         it->second.pop_back();
         return true;
     }
-    if(!typed || it->second.size()>=32u)return false;
-    it->second.push_back(typed);
-    return true;
+    if(!typed)return false;
+    return append_search_preview_popup_text(
+        std::string_view(&typed,1u));
 }
 bool MenuState::scroll_preview_popup(int direction) noexcept {
     if((direction!=1 && direction!=-1) || !dropdown_preview_ ||

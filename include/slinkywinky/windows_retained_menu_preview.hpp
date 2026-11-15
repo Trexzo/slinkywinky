@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 
 namespace slinkywinky {
@@ -76,6 +77,13 @@ public:
         std::uint64_t epoch,MenuInputHandoffLedger& ledger,
         MenuKeyboardRouter& router,unsigned lwjgl_key,bool down,
         bool foreground_verified);
+    // R228: explicit source event.ch[4] payload for synthetic WGL
+    // input. Same ledger/router/WGL checks; no live OS/LWJGL hook.
+    MenuKeyOutcome fixture_keyboard_typed_event(
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        std::uint64_t epoch,MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,unsigned lwjgl_key,bool down,
+        bool foreground_verified,std::string_view typed_chars);
     bool fixture_end_keyboard(MenuInputHandoffLedger& ledger,
                               MenuKeyboardRouter& router);
     // R193: finish a *synthetic* held-key/mouse release after close.

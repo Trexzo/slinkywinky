@@ -327,7 +327,8 @@ inline char menu_search_ascii_lower(char c) noexcept {
     return c>='A' && c<='Z'?static_cast<char>(c-'A'+'a'):c;
 }
 inline bool menu_search_ascii_valid(std::string_view query) noexcept {
-    if(query.size()>32u)return false;
+    // Pinned text_filter_alnum allows n=99 to append the 100th byte.
+    if(query.size()>100u)return false;
     for(const char c:query)
         if(!((c>='a'&&c<='z') || (c>='A'&&c<='Z') ||
              (c>='0'&&c<='9') || c==' '))return false;
@@ -407,8 +408,10 @@ inline std::optional<MenuSearchPopupGeometry> menu_search_popup_geometry(
     MenuSearchPopupGeometry result;
     result.matches=menu_source_search_matches(
         popup.widget_index,frame.dropdown_search_query);
+    // Source gui_popups.cpp: zero matches add no 25px result cells.
+    // The filter remains editable and the title X remains clickable.
     const float rows=static_cast<float>(
-        std::max(1u,(result.matches.count+1u)/2u));
+        (result.matches.count+1u)/2u);
     const float modalWidth=std::min(420.0f,width-32.0f);
     const float modalHeight=12.0f+20.0f+12.0f+30.0f+
         8.0f+rows*25.0f+12.0f;

@@ -224,6 +224,9 @@ int main() {
         CHECK(menu_source_search_matches(invWidget,"GOLDEN").count==1u);
         CHECK(menu_source_search_matches(invWidget,"oW").count==1u);
         CHECK(!menu_search_ascii_valid("gold!"));
+        CHECK(menu_search_ascii_valid(std::string(100u,'A')));
+        CHECK(!menu_search_ascii_valid(std::string(101u,'A')));
+        CHECK(menu_source_search_matches(invWidget,"ZZZ").count==0u);
         const auto close=xy(modal->close.x+10.0f,modal->close.y+10.0f);
         const auto closeHit=hit_test_menu(
             *openFrame,mode,close.first,close.second);
@@ -255,6 +258,18 @@ int main() {
               filtered->matches.indices[0]==7u &&
               searchFrame->dropdown_search_query=="gol");
         CHECK(!inventory.select_preview_dropdown_option(9u));
+        CHECK(inventory.search_preview_popup_key(44u)); // z -> no hits
+        const auto emptyFrame=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        const auto none=menu_search_popup_geometry(
+            *emptyFrame,panel->logical_width(),panel->logical_height());
+        CHECK(none && none->matches.count==0u &&
+              none->panel.height<filtered->panel.height &&
+              !none->result_cell(0u).contains(
+                  none->panel.x,none->panel.y));
+        CHECK(!inventory.select_preview_dropdown_option(7u));
+        CHECK(inventory.search_preview_popup_key(14u)); // erase z
+        CHECK(inventory.search_preview_popup_query()=="gol");
         const auto cell=filtered->result_cell(0u);
         const auto point=xy(cell.x+8.0f,cell.y+12.0f);
         const auto filteredHit=hit_test_menu(
@@ -274,7 +289,25 @@ int main() {
               *picked->recovered_choice_overrides[invWidget]==7u);
         CHECK(inventory.open_recovered_choice_preview(invModule,invWidget));
         CHECK(inventory.search_preview_popup_query().empty());
-        CHECK(inventory.search_preview_popup_key(34u));
+        // Source event.ch[4] alnum filter: uppercase, digits and spaces
+        // survive verbatim; invalid punctuation is silently rejected.
+        CHECK(inventory.append_search_preview_popup_text("Ab1 "));
+        CHECK(inventory.search_preview_popup_query()=="Ab1 ");
+        CHECK(!inventory.append_search_preview_popup_text("!!!"));
+        CHECK(!inventory.append_search_preview_popup_text("ABCDE"));
+        for(unsigned i=1u;i<25u;++i)
+            CHECK(inventory.append_search_preview_popup_text("Ab1 "));
+        CHECK(inventory.search_preview_popup_query().size()==100u);
+        CHECK(!inventory.append_search_preview_popup_text("b"));
+        CHECK(!inventory.search_preview_popup_key(34u));
+        CHECK(inventory.search_preview_popup_key(14u)); // 99 bytes
+        CHECK(inventory.append_search_preview_popup_text("Z"));
+        CHECK(inventory.search_preview_popup_query().back()=='Z');
+        const auto longFrame=invFrames.next(
+            inventory,&inventoryProfile,&inventoryNav);
+        const auto zero=menu_search_popup_geometry(
+            *longFrame,panel->logical_width(),panel->logical_height());
+        CHECK(zero && zero->matches.count==0u);
         CHECK(inventory.search_preview_popup_key(1u)); // Esc cancels
         CHECK(!inventory.dropdown_preview() &&
               !inventory.search_preview_popup_key(34u));

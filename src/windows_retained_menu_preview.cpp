@@ -214,6 +214,16 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
         std::uint64_t epoch,MenuInputHandoffLedger& ledger,
         MenuKeyboardRouter& router,
         unsigned lwjgl_key,bool down,bool foreground_verified) {
+    return fixture_keyboard_typed_event(
+        context,dc,width,height,epoch,ledger,router,
+        lwjgl_key,down,foreground_verified,{});
+}
+MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
+        HGLRC context,HDC dc,unsigned width,unsigned height,
+        std::uint64_t epoch,MenuInputHandoffLedger& ledger,
+        MenuKeyboardRouter& router,
+        unsigned lwjgl_key,bool down,bool foreground_verified,
+        std::string_view typed_chars) {
     constexpr MenuKeyOutcome denied{
         MenuKeyDelivery::Quarantined,false,false};
     if(!owner_thread() || !active_ || epoch==0 ||
@@ -275,8 +285,15 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_event(
         return {MenuKeyDelivery::MenuExclusive,false,handled};
     }
     if(searchModal && rising) {
-        // Paired synthetic LWJGL edges; never install game Keyboard.next.
-        const bool handled=menu_.search_preview_popup_key(lwjgl_key);
+        // Original source delivers up to four UTF-8/ASCII bytes in an
+        // independently verified typed payload. Explicit characters
+        // suppress US-only keycode fallback even if source rejects them.
+        const bool handled=
+            (lwjgl_key==1u || lwjgl_key==14u)?
+            menu_.search_preview_popup_key(lwjgl_key):
+            (!typed_chars.empty()?
+             menu_.append_search_preview_popup_text(typed_chars):
+             menu_.search_preview_popup_key(lwjgl_key));
         if(handled)invalidate_painted_input();
         return {MenuKeyDelivery::MenuExclusive,false,handled};
     }

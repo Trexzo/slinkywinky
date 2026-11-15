@@ -314,6 +314,9 @@ public:
     // R227: keyboard input only for the source large optional popup.
     // Stored outside MenuState ABI; no original game input interception.
     bool search_preview_popup_key(unsigned lwjgl_key);
+    // R228: original gui_layout.cpp carries up to four typed chars
+    // separately from the key code. Strict source ASCII filter, max 100.
+    bool append_search_preview_popup_text(std::string_view typed_chars);
     std::string search_preview_popup_query() const;
     bool select_preview_dropdown_option(unsigned option) noexcept;
     bool close_preview_dropdown() noexcept;

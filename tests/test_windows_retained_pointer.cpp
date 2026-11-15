@@ -2064,10 +2064,17 @@ void verify_r227_wgl_select_item(Context& ctx,const State& expected) {
             up,ctx.gl,ctx.dc,width,height,epoch,ledger,router,
             point[0],point[1],tick+40u,true));
     };
-    const auto key=[&](unsigned code,bool edited) {
-        const auto pressed=preview.fixture_keyboard_event(
-            ctx.gl,ctx.dc,width,height,epoch,ledger,router,
-            code,true,true);
+    const auto key=[&](unsigned code,bool edited,
+                       std::string_view source_chars={}) {
+        // The original GUI supplies typed characters in input.ch[4].
+        // Explicit payload must override any US keycode guess.
+        const auto pressed=source_chars.empty()?
+            preview.fixture_keyboard_event(
+                ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+                code,true,true):
+            preview.fixture_keyboard_typed_event(
+                ctx.gl,ctx.dc,width,height,epoch,ledger,router,
+                code,true,true,source_chars);
         REQUIRE(pressed.delivery==MenuKeyDelivery::MenuExclusive &&
                 !pressed.request_close &&
                 pressed.action_applied==edited);
@@ -2096,19 +2103,40 @@ void verify_r227_wgl_select_item(Context& ctx,const State& expected) {
     // A live popup must steal Tab from background navigation.
     key(15u,false);
     REQUIRE(preview.tab()==MenuTab::Utility);
-    key(34u,true); // g
-    key(24u,true); // o
-    key(38u,true); // l
+    key(2u,false,"!"); // invalid char cannot fall back to key=1
+    key(34u,true,"G");
+    key(24u,true,"o");
+    key(38u,true,"L");
     const auto* filteredFrame=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,width,height);
     REQUIRE(filteredFrame &&
-            filteredFrame->dropdown_search_query=="gol");
+            filteredFrame->dropdown_search_query=="GoL");
     const auto search=menu_search_popup_geometry(
         *filteredFrame,panel->logical_width(),
         panel->logical_height());
     REQUIRE(search && search->matches.count==1u &&
             search->matches.indices[0]==7u);
-    const auto cell=search->result_cell(0u);
+    key(57u,true," "); // trailing space -> real zero results
+    const auto* emptyFrame=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(emptyFrame && emptyFrame->dropdown_search_query=="GoL ");
+    const auto empty=menu_search_popup_geometry(
+        *emptyFrame,panel->logical_width(),panel->logical_height());
+    REQUIRE(empty && empty->matches.count==0u &&
+            empty->panel.height<search->panel.height);
+    const auto oldPoint=physical(
+        search->result_cell(0u).x+8.0f,
+        search->result_cell(0u).y+12.0f);
+    REQUIRE(!hit_test_menu(
+        *emptyFrame,mode,oldPoint[0],oldPoint[1]));
+    key(14u,true); // backspace restores the original match
+    const auto* restored=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(restored && restored->dropdown_search_query=="GoL");
+    const auto current=menu_search_popup_geometry(
+        *restored,panel->logical_width(),panel->logical_height());
+    REQUIRE(current && current->matches.count==1u);
+    const auto cell=current->result_cell(0u);
     const auto selectedAt=physical(cell.x+8.0f,cell.y+12.0f);
     const auto selectedHit=hit_test_menu(
         *filteredFrame,mode,selectedAt[0],selectedAt[1]);
