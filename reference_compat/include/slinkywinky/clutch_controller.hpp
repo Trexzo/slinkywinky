@@ -10,6 +10,7 @@
 #include <array>
 #include <cstdint>
 #include "slinkywinky/source_walk_bank.hpp"
+#include "slinkywinky/clutch_candidate_planner.hpp"
 
 namespace slinkywinky::reference_compat {
 struct ClutchBlock {
@@ -63,6 +64,11 @@ struct ClutchLateInput {
     // world enumeration can invoke more samples and remains external.
     bool source_sample_candidate=false;
     bool source_candidate_top=false;
+    // R235: optional actual pinned candidate ordering/side/top geometry.
+    // World block evidence, AABB, eye and prior raycast are typed inputs.
+    // The planner owns its source RNG draws (do not request a second
+    // generic candidate sample when this input is set).
+    std::optional<ClutchCandidateWorld> source_world{};
 };
 struct ClutchLateDecision {
     bool admitted=false,planned=false,rotating=false;
@@ -75,6 +81,7 @@ struct ClutchLateDecision {
     std::optional<float> source_candidate_inset{};
     std::optional<float> source_candidate_shift_x{};
     std::optional<float> source_candidate_shift_z{};
+    std::optional<ClutchCandidatePlan> source_plan{};
     int snapback_delay_remaining=0,snapback_ticks_remaining=0,
         jump_snapback_ticks_remaining=0,ticks_since_hurt=0;
 };
@@ -185,6 +192,8 @@ public:
            in.aim_multiplier_strength>1.0f||
            in.capped_yaw_scale<0.0f||in.capped_yaw_scale>1.0f||
            in.capped_pitch_scale<0.0f||in.capped_pitch_scale>1.0f ||
+           (in.source_world && (!in.use_source_walk ||
+                in.source_sample_candidate)) ||
            (in.use_source_walk &&
              (!source_walks_.configured() ||
               !std::isfinite(in.clock_seconds) ||
@@ -220,14 +229,35 @@ public:
             (!in.require_damage||ticks_since_hurt_<11) &&
             !in.riding && (!in.require_backwards||in.moving_backwards);
         bool aiming=false;
-        if(can_clutch && in.has_planned_candidate) {
+        bool have_candidate=in.has_planned_candidate;
+        ClutchBlock candidate=in.candidate_block;
+        bool face_up=in.face_up;
+        float plan_yaw_diff=in.aim_yaw_diff;
+        float plan_pitch_diff=in.aim_pitch_diff;
+        bool source_plan_found=false;
+        if(can_clutch && in.source_world) {
+            const auto plan=clutch_plan_original(
+                *in.source_world,source_walks_);
+            if(!plan.admitted)return reject();
+            out.source_plan=plan;
+            have_candidate=plan.found;
+            if(plan.found) {
+                source_plan_found=true;
+                candidate={plan.selected.x,plan.selected.y,plan.selected.z};
+                face_up=plan.face_up;
+                plan_yaw_diff=plan.aim_yaw_diff;
+                plan_pitch_diff=plan.aim_pitch_diff;
+            }
+        }
+        if(can_clutch && have_candidate) {
             if(in.select_blocks_mode==1 || in.select_blocks_mode==2) {
                 out.proposed_track_owner=true;
                 out.proposed_restore_hotbar=in.select_blocks_mode==2;
             }
             planned_=in.holding_blocks;
             if(planned_) {
-                if(in.use_source_walk && in.source_sample_candidate) {
+                if(in.use_source_walk && in.source_sample_candidate &&
+                   !in.source_world) {
                     const auto sample=source_candidate_samples(
                         in.source_candidate_top,in.clock_seconds,
                         in.source_randomisation);
@@ -236,7 +266,7 @@ public:
                     out.source_candidate_shift_x=sample->shift_x;
                     out.source_candidate_shift_z=sample->shift_z;
                 }
-                block_=in.candidate_block;face_up_=in.face_up;
+                block_=candidate;face_up_=face_up;
                 snapback_delay_=static_cast<int>(
                     in.snapback_delay_scale*in.snapback_delay);
                 jump_window_=10;
@@ -265,13 +295,18 @@ public:
             // Source caps the fractional aim and cap-speed components
             // separately, then lerps by aim_multiplier_strength. Source RNG
             // draws enter only through explicit typed jitter factors.
-            float yaw_diff=in.aim_yaw_diff;
+            float yaw_diff=source_plan_found?
+                plan_yaw_diff:in.aim_yaw_diff;
+            float pitch_diff=source_plan_found?
+                plan_pitch_diff:in.aim_pitch_diff;
             float yaw_scale=in.capped_yaw_scale;
             float pitch_scale=in.capped_pitch_scale;
             float yaw_jitter=in.aim_jitter_yaw;
             float pitch_jitter=in.aim_jitter_pitch;
             if(in.use_source_walk) {
-                if(in.straight_down_aim) {
+                if(in.straight_down_aim ||
+                   (source_plan_found && in.source_world &&
+                    in.source_world->current_pitch+pitch_diff>89.999f)) {
                     const auto noise=source_walks_.sample_clock(
                         5,in.clock_seconds,0.5,-20.0f,20.0f);
                     if(!noise)return reject();
@@ -299,12 +334,12 @@ public:
                 yaw_diff,-in.aim_speed*yaw_scale,
                  in.aim_speed*yaw_scale);
             const float capped_pitch=std::clamp(
-                in.aim_pitch_diff,-in.aim_speed*pitch_scale,
+                pitch_diff,-in.aim_speed*pitch_scale,
                  in.aim_speed*pitch_scale);
             const float fractional_yaw=
                 (in.aim_multiplier+yaw_jitter)*yaw_diff;
             const float fractional_pitch=
-                (in.aim_multiplier+pitch_jitter)*in.aim_pitch_diff;
+                (in.aim_multiplier+pitch_jitter)*pitch_diff;
             out.proposed_yaw_delta=capped_yaw+(fractional_yaw-capped_yaw)*
                                           in.aim_multiplier_strength;
             out.proposed_pitch_delta=capped_pitch+(fractional_pitch-capped_pitch)*

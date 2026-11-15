@@ -322,6 +322,17 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R235: original 167 Clutch candidate offsets, rank-truncated
+  # world observation planner, reach and source side/top aim geometry.
+  add_executable(slinkywinky_clutch_original_candidate_planner_test
+    tests/test_clutch_original_candidate_planner.cpp)
+  target_link_libraries(slinkywinky_clutch_original_candidate_planner_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r235_clutch_original_candidate_source_geometry
+    COMMAND slinkywinky_clutch_original_candidate_planner_test)
+  set_tests_properties(r235_clutch_original_candidate_source_geometry
+    PROPERTIES TIMEOUT 15)
   # R234: one bridge-owned xoshiro source stream shared across
   # Block In, Bridge Assist and Clutch in actual callback order.
   add_executable(slinkywinky_shared_global_source_rng_test
