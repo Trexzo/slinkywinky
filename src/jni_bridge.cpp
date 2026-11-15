@@ -718,7 +718,7 @@ std::mutex retained_preview_mutex;
 bool retained_preview_armed=false;
 std::unique_ptr<slinkywinky::WglRetainedMenuPreview> retained_preview;
 std::unique_ptr<slinkywinky::ModuleArrayListFeed> retained_module_feed;
-std::array<HANDLE,11> operator_events{}; // 0..8 commands, 9..10 acknowledgments
+std::array<HANDLE,13> operator_events{}; // 0..8 commands, 9..10 ACK, 11 mutex, 12 poison
 bool operator_armed=false;
 unsigned operator_commands_processed=0;
 void close_operator_events() noexcept {
@@ -1050,7 +1050,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(
     const auto pid=static_cast<std::uint32_t>(GetCurrentProcessId());
     if(!slinkywinky::menu_operator_process_birth(pid,&birth))return JNI_FALSE;
     try {
-        for(int slot=0;slot<11;slot++) {
+        for(int slot=0;slot<=12;slot++) {
+            if(slot==11)continue; // Sender creates a mutex, not an event.
             const auto name=slinkywinky::menu_operator_event_name(pid,birth,slot);
             if(name.empty()) {close_operator_events();return JNI_FALSE;}
             HANDLE event=CreateEventW(nullptr,slot>=9,FALSE,name.c_str());
@@ -1082,6 +1083,11 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
        wglGetCurrentDC()!=reinterpret_cast<HDC>(
            static_cast<std::uintptr_t>(expectedDc)))
         return -1;
+    // R222: a timed-out sender may receive a late response. Abort this
+    // original-render session before any later command can be admitted.
+    if(!operator_events[12] ||
+       WaitForSingleObject(operator_events[12],0)!=WAIT_TIMEOUT)
+        return -1;
     if(operator_commands_processed>=16)return -1;
     const DWORD stop=WaitForSingleObject(operator_events[8],0);
     if(stop==WAIT_FAILED)return -1;
@@ -1093,6 +1099,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
         const DWORD status=WaitForSingleObject(operator_events[slot],0);
         if(status==WAIT_FAILED)return -1;
         if(status!=WAIT_OBJECT_0)continue;
+        if(WaitForSingleObject(operator_events[12],0)!=WAIT_TIMEOUT)
+            return -1;
         operator_commands_processed++;
         bool accepted=false;
         try {

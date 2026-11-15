@@ -31,6 +31,7 @@ inline bool menu_operator_process_birth(std::uint32_t pid,
 
 // Slot 0..7 is a first-party native MenuNavAction; 8 requests stop.
 // Slot 9=ack-accepted, 10=ack-refused, 11=single-sender mutex.
+// R222 slot 12 is a sticky session-uncertain event set on sender timeout.
 // No slot ever maps to a Minecraft gameplay action.
 inline const wchar_t* menu_operator_slot_name(int slot) noexcept {
     switch(slot) {
@@ -46,6 +47,7 @@ inline const wchar_t* menu_operator_slot_name(int slot) noexcept {
         case 9:return L"ack-success";
         case 10:return L"ack-refused";
         case 11:return L"producer-mutex";
+        case 12:return L"uncertain-session";
         default:return nullptr;
     }
 }

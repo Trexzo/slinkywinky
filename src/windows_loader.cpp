@@ -88,18 +88,30 @@ int wmain(int argc, wchar_t** argv) {
         const auto commandName=slinkywinky::menu_operator_event_name(pid,birth,operator_slot);
         const auto successName=slinkywinky::menu_operator_event_name(pid,birth,9);
         const auto refusedName=slinkywinky::menu_operator_event_name(pid,birth,10);
+        const auto uncertainName=slinkywinky::menu_operator_event_name(pid,birth,12);
         HANDLE command=OpenEventW(EVENT_MODIFY_STATE,FALSE,commandName.c_str());
         HANDLE success=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,successName.c_str());
         HANDLE rejected=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,FALSE,refusedName.c_str());
+        HANDLE uncertain=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,
+                                    FALSE,uncertainName.c_str());
         DWORD reply=WAIT_FAILED;
-        if(command && success && rejected &&
+        // R222: a mutex serializes senders but cannot distinguish a late
+        // ACK from the previous timed-out sender. Refuse further commands
+        // once this exact PID/birth operator session is uncertain.
+        if(uncertain && WaitForSingleObject(uncertain,0)==WAIT_TIMEOUT &&
+           command && success && rejected &&
            ResetEvent(success) && ResetEvent(rejected) && SetEvent(command)) {
             const HANDLE acknowledgments[2]={success,rejected};
             reply=WaitForMultipleObjects(2,acknowledgments,FALSE,2500);
         }
+        // Poison BEFORE releasing producer lock, not after another sender
+        // can reset the shared ACK and mistake an old reply for its own.
+        if(uncertain && reply!=WAIT_OBJECT_0 && reply!=WAIT_OBJECT_0+1)
+            SetEvent(uncertain);
         if(command)CloseHandle(command);
         if(success)CloseHandle(success);
         if(rejected)CloseHandle(rejected);
+        if(uncertain)CloseHandle(uncertain);
         ReleaseMutex(producer);
         CloseHandle(producer);
         if(reply==WAIT_OBJECT_0) {

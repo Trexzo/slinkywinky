@@ -569,7 +569,7 @@ int main() {
         const auto selfPid=static_cast<std::uint32_t>(GetCurrentProcessId());
         std::uint64_t selfBirth=0;
         REQUIRE(menu_operator_process_birth(selfPid,&selfBirth) && selfBirth!=0);
-        REQUIRE(menu_operator_event_name(selfPid,selfBirth,12).empty());
+        REQUIRE(menu_operator_event_name(selfPid,selfBirth,13).empty());
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
             nullptr,nullptr,admittedContext,admittedDc)==-1);
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeOpenOperatorMenu(
@@ -620,6 +620,24 @@ int main() {
         commandNative(0,1,true); // NextTab (Move, focus index 17)
         commandNative(5,15,false); // Unsupported row denied + refused ACK
         commandNative(8,9,true); // Cooperative operator stop
+        // R222: a poisoned session must not dequeue or acknowledge
+        // another command, even if a sender posted it before cleanup.
+        const auto uncertainName=menu_operator_event_name(
+            selfPid,selfBirth,12);
+        HANDLE uncertain=OpenEventW(EVENT_MODIFY_STATE|SYNCHRONIZE,
+                                    FALSE,uncertainName.c_str());
+        REQUIRE(uncertain);
+        REQUIRE(WaitForSingleObject(uncertain,0)==WAIT_TIMEOUT);
+        REQUIRE(ResetEvent(operatorTestEvents[9]));
+        REQUIRE(ResetEvent(operatorTestEvents[10]));
+        REQUIRE(SetEvent(operatorTestEvents[2]));
+        REQUIRE(SetEvent(uncertain));
+        REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativePollOperatorMenu(
+            nullptr,nullptr,admittedContext,admittedDc)==-1);
+        REQUIRE(WaitForSingleObject(operatorTestEvents[9],0)==WAIT_TIMEOUT);
+        REQUIRE(WaitForSingleObject(operatorTestEvents[10],0)==WAIT_TIMEOUT);
+        REQUIRE(WaitForSingleObject(operatorTestEvents[2],0)==WAIT_OBJECT_0);
+        CloseHandle(uncertain);
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
             nullptr,nullptr)==JNI_TRUE);
         REQUIRE(Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
