@@ -52,5 +52,27 @@ No Minecraft process, physical input hook or real profile filesystem
 action. These are original-reference-informed improvements to
 first-party offline/native WGL preview only. Chat 2 PR #2 untouched.
 
-## CI
-Pending exact-commit Windows/Ubuntu/sanitizer/JNI/Java8 Attach checks.
+## Exact-commit CI verification
+
+All three GitHub workflows completed successfully on the exact
+source implementation commit `2376d3d736b24a0739482087cc7200ed8107829f`:
+
+- Offline C++ core: **6/6 jobs PASS** — Windows Debug/Release,
+  Ubuntu Debug/Release, sanitizers and Linux JNI smoke:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43763840377
+- Windows JNI preview artifact: native x64/Java 8 roundtrip PASS:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43763840267
+- Injectable Windows Java 8 agent: loader/JVMTI, native and actual
+  Java 8 Attach API test suite PASS:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43763840136
+
+First R232 candidate `97acfff` compiled but failed portable
+profile tests because its preexisting frame validator still
+limited displayed bind labels to eight characters, invalidating
+the new BACKSPACE label. The corrected `2376d3d` also updates
+that validator to nine source-safe characters, with unchanged
+printable ASCII and slash protections and a layout margin that
+keeps the full chip visible.
+
+No Minecraft runtime or original-game physical input was used.
+PR #2's integration branch remains independent.
