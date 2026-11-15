@@ -322,6 +322,17 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R234: one bridge-owned xoshiro source stream shared across
+  # Block In, Bridge Assist and Clutch in actual callback order.
+  add_executable(slinkywinky_shared_global_source_rng_test
+    tests/test_shared_global_source_rng.cpp)
+  target_link_libraries(slinkywinky_shared_global_source_rng_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r234_shared_global_xoshiro_source_callback_order
+    COMMAND slinkywinky_shared_global_source_rng_test)
+  set_tests_properties(r234_shared_global_xoshiro_source_callback_order
+    PROPERTIES TIMEOUT 15)
   # R233: exact source clock + timed walk dispatch for Bridge Assist
   # and Clutch. Pure C++ seeded deterministic fixtures, no game hooks.
   add_executable(slinkywinky_bridge_clutch_source_walk_test

@@ -862,7 +862,15 @@ public:
                 if(!frame.bridge_tick)return;
                 auto& p=*frame.bridge_tick;
                 ++p.executions;
+                if(shared_source_rng_enabled_ && p.input.use_source_walk &&
+                   !bridge_assist_.adopt_source_rng(shared_source_rng_)) {
+                    p.decision={};
+                    return;
+                }
                 p.decision=bridge_assist_.on_tick(p.input);
+                if(shared_source_rng_enabled_ && p.input.use_source_walk &&
+                   p.decision.admitted)
+                    shared_source_rng_=bridge_assist_.source_rng_snapshot();
             });
         const bool e=bind(id,kAntiDebuffEvent,
             [this](const Delivery&,ExecutionFrame& frame){
@@ -965,7 +973,15 @@ public:
                 if(!frame.clutch_late)return;
                 auto& p=*frame.clutch_late;
                 ++p.executions;
+                if(shared_source_rng_enabled_ && p.input.use_source_walk &&
+                   !clutch_.adopt_source_rng(shared_source_rng_)) {
+                    p.decision={};
+                    return;
+                }
                 p.decision=clutch_.on_late(p.input);
+                if(shared_source_rng_enabled_ && p.input.use_source_walk &&
+                   p.decision.admitted)
+                    shared_source_rng_=clutch_.source_rng_snapshot();
             });
         if(!first||!second||!third)
             throw std::logic_error("validated Clutch callback triple failed");
@@ -1039,7 +1055,16 @@ public:
                 if(!f.block_in_tick)return;
                 auto& p=*f.block_in_tick;
                 ++p.executions;
+                const bool share=shared_source_rng_enabled_ &&
+                    p.input.source_aim &&
+                    p.input.source_aim->use_reconstructed_walk;
+                if(share && !block_in_.adopt_source_rng(shared_source_rng_)) {
+                    p.decision={};
+                    return;
+                }
                 p.decision=block_in_.on_tick(p.input);
+                if(share && p.decision.admitted)
+                    shared_source_rng_=block_in_.source_rng_snapshot();
             });
         if(!a||!b||!c||!e||!g)
             throw std::logic_error("Block In source callback five-tuple rejected");
@@ -1700,8 +1725,33 @@ public:
             ~ClearFrame() { self.active_frame_ = nullptr; }
         } guard{*this};
         active_frame_ = &frame;
-        return replay_.dispatch(
-            frame.event,frame.notification_target,frame.notification_new_state);
+        if(!shared_source_rng_enabled_)
+            return replay_.dispatch(frame.event,
+                frame.notification_target,frame.notification_new_state);
+        // R234 frame-atomic shared RNG transaction. Each module retains
+        // its OWN walk timing state, but draws and optional random_chance
+        // advance exactly one bridge-owned xoshiro generator in source
+        // callback order. Rejected or exceptional dispatch restores all
+        // three source controllers plus global generator.
+        const SourceWalkRng previous_rng=shared_source_rng_;
+        const BridgeAssistController previous_bridge=bridge_assist_;
+        const ClutchController previous_clutch=clutch_;
+        const BlockInController previous_block=block_in_;
+        const auto rollback=[&]() noexcept {
+            shared_source_rng_=previous_rng;
+            bridge_assist_=previous_bridge;
+            clutch_=previous_clutch;
+            block_in_=previous_block;
+        };
+        try {
+            const bool delivered=replay_.dispatch(frame.event,
+                frame.notification_target,frame.notification_new_state);
+            if(!delivered)rollback();
+            return delivered;
+        } catch(...) {
+            rollback();
+            throw;
+        }
     }
 
     bool request(std::size_t id, bool enabled) {
@@ -1731,20 +1781,53 @@ public:
     // original client's entropy-backed xoshiro128+ runtime state.
     bool configure_block_in_source_walk_seed(
         const std::array<std::uint32_t,4>& seed) noexcept {
-        if(stopped_ || active_frame_)return false;
+        if(stopped_ || active_frame_ || shared_source_rng_enabled_)
+            return false;
         return block_in_.configure_source_walk_seed(seed);
     }
     // R233: opt-in offline seeds for source-native Bridge Assist
     // and Clutch. Production runtime RNG is not guessed or intercepted.
     bool configure_bridge_assist_source_walk_seed(
         const std::array<std::uint32_t,4>& seed) noexcept {
-        if(stopped_ || active_frame_)return false;
+        if(stopped_ || active_frame_ || shared_source_rng_enabled_)
+            return false;
         return bridge_assist_.configure_source_walk_seed(seed);
     }
     bool configure_clutch_source_walk_seed(
         const std::array<std::uint32_t,4>& seed) noexcept {
-        if(stopped_ || active_frame_)return false;
+        if(stopped_ || active_frame_ || shared_source_rng_enabled_)
+            return false;
         return clutch_.configure_source_walk_seed(seed);
+    }
+    // R234 source's ONE global generator. Atomic enable initializes
+    // independent interpolation states together; afterward only the
+    // bridge may advance this seed in source dispatch order.
+    bool configure_shared_source_walk_seed(
+        const std::array<std::uint32_t,4>& seed) noexcept {
+        if(stopped_ || active_frame_ || shared_source_rng_enabled_)
+            return false;
+        SourceWalkRng rng;
+        if(!rng.seed(seed))return false;
+        auto bridge=bridge_assist_;
+        auto clutch=clutch_;
+        auto block=block_in_;
+        if(!bridge.configure_source_walk_seed(seed) ||
+           !clutch.configure_source_walk_seed(seed) ||
+           !block.configure_source_walk_seed(seed))return false;
+        bridge_assist_=bridge;
+        clutch_=clutch;
+        block_in_=block;
+        shared_source_rng_=rng;
+        shared_source_rng_enabled_=true;
+        return true;
+    }
+    bool has_shared_source_walk() const noexcept {
+        return shared_source_rng_enabled_;
+    }
+    std::optional<std::array<std::uint32_t,4>>
+    shared_source_rng_state() const noexcept {
+        if(!shared_source_rng_enabled_)return std::nullopt;
+        return shared_source_rng_.state();
     }
 
     void stop() noexcept {
@@ -1766,6 +1849,8 @@ public:
         auto_tool_.reset();
         clutch_.reset();
         block_in_.reset();
+        shared_source_rng_enabled_=false;
+        shared_source_rng_=SourceWalkRng{};
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1797,6 +1882,8 @@ private:
     AutoToolController auto_tool_;
     ClutchController clutch_;
     BlockInController block_in_;
+    SourceWalkRng shared_source_rng_{};
+    bool shared_source_rng_enabled_=false;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;

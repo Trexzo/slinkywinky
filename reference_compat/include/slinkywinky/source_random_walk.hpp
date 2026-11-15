@@ -64,6 +64,14 @@ public:
     const std::array<std::uint32_t,4>& rng_state() const noexcept {
         return rng_.state();
     }
+    // R234: transfer only the four-word shared generator; walk t0/a/b
+    // belong to Block In. Caller owns transaction/dispatch sequencing.
+    SourceWalkRng source_rng_snapshot() const noexcept{return rng_;}
+    bool adopt_source_rng(const SourceWalkRng& next) noexcept {
+        if(!configured_ || !next.seeded())return false;
+        rng_=next;
+        return true;
+    }
     std::optional<std::array<float,2>> sample_placement(
         unsigned bit,double now) noexcept {
         if(bit<12u)

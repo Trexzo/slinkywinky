@@ -99,6 +99,12 @@ public:
     const SourceBlockInWalks& source_walks() const noexcept {
         return source_walks_;
     }
+    SourceWalkRng source_rng_snapshot() const noexcept {
+        return source_walks_.source_rng_snapshot();
+    }
+    bool adopt_source_rng(const SourceWalkRng& rng) noexcept {
+        return source_walks_.adopt_source_rng(rng);
+    }
     BlockInToggleDecision on_toggle(const BlockInToggleInput& in) noexcept {
         BlockInToggleDecision out;
         if(!in.own_module)return out;

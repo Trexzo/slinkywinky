@@ -24,6 +24,12 @@ public:
     const std::array<std::uint32_t,4>& rng_state() const noexcept {
         return rng_.state();
     }
+    SourceWalkRng source_rng_snapshot() const noexcept{return rng_;}
+    bool adopt_source_rng(const SourceWalkRng& next) noexcept {
+        if(!configured_ || !next.seeded())return false;
+        rng_=next;
+        return true;
+    }
     std::optional<float> unit() noexcept {
         if(!configured_)return std::nullopt;
         return rng_.unit();

@@ -58,6 +58,11 @@ struct ClutchLateInput {
     double clock_seconds=0.0;
     float source_randomisation=1.0f;
     bool straight_down_aim=false;
+    // R234: optional ONE source candidate sampling step, explicitly
+    // requested after the caller has observed a candidate. Full
+    // world enumeration can invoke more samples and remains external.
+    bool source_sample_candidate=false;
+    bool source_candidate_top=false;
 };
 struct ClutchLateDecision {
     bool admitted=false,planned=false,rotating=false;
@@ -67,6 +72,9 @@ struct ClutchLateDecision {
     std::optional<float> source_yaw_scale{},source_pitch_scale{};
     std::optional<float> source_yaw_jitter{},source_pitch_jitter{};
     std::optional<float> source_straight_down_yaw{};
+    std::optional<float> source_candidate_inset{};
+    std::optional<float> source_candidate_shift_x{};
+    std::optional<float> source_candidate_shift_z{};
     int snapback_delay_remaining=0,snapback_ticks_remaining=0,
         jump_snapback_ticks_remaining=0,ticks_since_hurt=0;
 };
@@ -82,6 +90,12 @@ public:
     }
     const SourceWalkBank<8>& source_walks() const noexcept {
         return source_walks_;
+    }
+    SourceWalkRng source_rng_snapshot() const noexcept {
+        return source_walks_.source_rng_snapshot();
+    }
+    bool adopt_source_rng(const SourceWalkRng& rng) noexcept {
+        return source_walks_.adopt_source_rng(rng);
     }
     struct CandidateSamples {
         float inset=0.0f,shift_x=0.0f,shift_z=0.0f;
@@ -213,6 +227,15 @@ public:
             }
             planned_=in.holding_blocks;
             if(planned_) {
+                if(in.use_source_walk && in.source_sample_candidate) {
+                    const auto sample=source_candidate_samples(
+                        in.source_candidate_top,in.clock_seconds,
+                        in.source_randomisation);
+                    if(!sample)return reject();
+                    out.source_candidate_inset=sample->inset;
+                    out.source_candidate_shift_x=sample->shift_x;
+                    out.source_candidate_shift_z=sample->shift_z;
+                }
                 block_=in.candidate_block;face_up_=in.face_up;
                 snapback_delay_=static_cast<int>(
                     in.snapback_delay_scale*in.snapback_delay);

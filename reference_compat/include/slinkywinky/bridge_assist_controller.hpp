@@ -134,6 +134,12 @@ public:
     const SourceWalkBank<3>& source_walks() const noexcept {
         return source_walks_;
     }
+    SourceWalkRng source_rng_snapshot() const noexcept {
+        return source_walks_.source_rng_snapshot();
+    }
+    bool adopt_source_rng(const SourceWalkRng& rng) noexcept {
+        return source_walks_.adopt_source_rng(rng);
+    }
     BridgeAssistTickDecision on_tick(const BridgeAssistTickInput& in) noexcept {
         BridgeAssistTickDecision out;
         if(in.activation_mode<0||in.activation_mode>2||
