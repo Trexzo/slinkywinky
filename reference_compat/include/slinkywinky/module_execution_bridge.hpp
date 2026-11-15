@@ -19,6 +19,7 @@
 #include "slinkywinky/fast_place_controller.hpp"
 #include "slinkywinky/fast_mine_controller.hpp"
 #include "slinkywinky/bridge_assist_controller.hpp"
+#include "slinkywinky/auto_tool_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
@@ -40,6 +41,8 @@ namespace slinkywinky::reference_compat {
 inline constexpr unsigned kReachQueryEvent = 8;
 inline constexpr unsigned kPlayerUpdateEvent = 17;
 inline constexpr unsigned kMovementTickEvent = 16;
+inline constexpr unsigned kAutoToolInventoryEvent = 25;
+inline constexpr unsigned kAutoToolShutdownEvent = 26;
 
 struct ReachQueryPayload {
     slinkywinky::ReachInput input{};
@@ -154,6 +157,15 @@ struct BridgeAssistLatePayload {
     BridgeAssistLateDecision decision{};
     unsigned executions=0;
 };
+struct AutoToolInventoryPayload {
+    AutoToolTickInput input{};
+    AutoToolTickDecision decision{};
+    unsigned executions=0;
+};
+struct AutoToolShutdownPayload {
+    AutoToolShutdownDecision decision{};
+    unsigned executions=0;
+};
 
 struct TimerFramePayload {
     TimerFrameInput input{};
@@ -236,6 +248,8 @@ struct ExecutionFrame {
     std::optional<BridgeAssistPlacePayload> bridge_place{};
     std::optional<BridgeAssistTickPayload> bridge_tick{};
     std::optional<BridgeAssistLatePayload> bridge_late{};
+    std::optional<AutoToolInventoryPayload> auto_tool_inventory{};
+    std::optional<AutoToolShutdownPayload> auto_tool_shutdown{};
     std::optional<TimerFramePayload> timer_frame{};
     std::optional<TimerTogglePayload> timer_toggle{};
     std::optional<KeepSprintAttackPayload> keep_sprint_attack{};
@@ -822,6 +836,49 @@ public:
         return false;
     }
 
+    // R228: original Block category3 Auto Tool slots +0x1d8/+0x1e8,
+    // candidate events 25 and 26, each priority0. A two-event
+    // first-party C++ state machine; no actual hotbar/game writes.
+    bool bind_auto_tool(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Auto Tool" ||
+           definitions_[id].category!=3 ||
+           definitions_[id].subscriptions.size()!=2u ||
+           callbacks_[id][kAutoToolInventoryEvent] ||
+           callbacks_[id][kAutoToolShutdownEvent])return false;
+        bool inventory=false,shutdown=false;
+        for(const auto& sub:definitions_[id].subscriptions) {
+            if(sub.priority!=0)return false;
+            if(sub.event==kAutoToolInventoryEvent)inventory=true;
+            else if(sub.event==kAutoToolShutdownEvent)shutdown=true;
+            else return false;
+        }
+        if(!inventory || !shutdown)return false;
+        const bool first=bind(id,kAutoToolInventoryEvent,
+            [this](const Delivery&,ExecutionFrame& frame) {
+                if(!frame.auto_tool_inventory)return;
+                auto& p=*frame.auto_tool_inventory;
+                ++p.executions;
+                p.decision=auto_tool_.on_tick(p.input);
+            });
+        const bool second=bind(id,kAutoToolShutdownEvent,
+            [this](const Delivery&,ExecutionFrame& frame) {
+                if(!frame.auto_tool_shutdown)return;
+                auto& p=*frame.auto_tool_shutdown;
+                ++p.executions;
+                p.decision=auto_tool_.on_shutdown();
+            });
+        if(!first || !second)
+            throw std::logic_error("validated Auto Tool callback pair failed");
+        return true;
+    }
+    bool bind_auto_tool_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Auto Tool")
+                return bind_auto_tool(id);
+        return false;
+    }
+
     // Source-linked Timer: utility category 4, frame event 1 priority 200
     // and toggle notification event 5 priority 0. Both must be present before
     // accepting the offline binding; no actual Minecraft timer is modified.
@@ -1082,6 +1139,10 @@ public:
             return false;
         if (frame.bridge_late && frame.event != kAntiDebuffEvent)
             return false;
+        if (frame.auto_tool_inventory &&
+            frame.event!=kAutoToolInventoryEvent)return false;
+        if (frame.auto_tool_shutdown &&
+            frame.event!=kAutoToolShutdownEvent)return false;
         if (frame.timer_frame && frame.event != kTimerFrameEvent)
             return false;
         if (frame.timer_toggle && frame.event != kTimerToggleEvent)
@@ -1124,6 +1185,8 @@ public:
             static_cast<unsigned>(frame.bridge_place.has_value()) +
             static_cast<unsigned>(frame.bridge_tick.has_value()) +
             static_cast<unsigned>(frame.bridge_late.has_value()) +
+            static_cast<unsigned>(frame.auto_tool_inventory.has_value()) +
+            static_cast<unsigned>(frame.auto_tool_shutdown.has_value()) +
             static_cast<unsigned>(frame.timer_frame.has_value()) +
             static_cast<unsigned>(frame.timer_toggle.has_value()) +
             static_cast<unsigned>(frame.keep_sprint_attack.has_value()) +
@@ -1344,6 +1407,14 @@ public:
             frame.bridge_late->decision={};
             frame.bridge_late->executions=0;
         }
+        if(frame.auto_tool_inventory) {
+            frame.auto_tool_inventory->decision={};
+            frame.auto_tool_inventory->executions=0;
+        }
+        if(frame.auto_tool_shutdown) {
+            frame.auto_tool_shutdown->decision={};
+            frame.auto_tool_shutdown->executions=0;
+        }
         if (frame.timer_frame) {
             frame.timer_frame->decision = {};
             frame.timer_frame->executions = 0;
@@ -1407,6 +1478,7 @@ public:
     void reset_fast_place_world_state() noexcept { fast_place_.reset(); }
     void reset_fast_mine_world_state() noexcept { fast_mine_.reset(); }
     void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
+    void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
 
     void stop() noexcept {
         if (active_frame_) return; // caller must finish an active frame first
@@ -1424,6 +1496,7 @@ public:
         fast_place_.reset();
         fast_mine_.reset();
         bridge_assist_.reset();
+        auto_tool_.reset();
         callbacks_.clear();
         definitions_.clear();
         bound_count_ = 0;
@@ -1452,6 +1525,7 @@ private:
     FastPlaceController fast_place_;
     FastMineController fast_mine_;
     BridgeAssistController bridge_assist_;
+    AutoToolController auto_tool_;
     TimerController timer_;
     KeepSprintController keep_sprint_;
     SprintController sprint_;

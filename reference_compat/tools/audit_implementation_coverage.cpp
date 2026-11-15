@@ -474,6 +474,13 @@ int main(int argc, char** argv) {
         if(has_bridge_assist)
             require(bridge.bind_bridge_assist_from_catalog(),
                     "Bridge Assist block-category3 event5/14/17/18 priority0 rejected");
+        std::size_t auto_tool_id=manifest.modules.size();
+        for(std::size_t i=0;i<manifest.modules.size();++i)
+            if(manifest.modules[i].name=="Auto Tool")auto_tool_id=i;
+        const bool has_auto_tool=auto_tool_id<manifest.modules.size();
+        if(has_auto_tool)
+            require(bridge.bind_auto_tool_from_catalog(),
+                    "Auto Tool category3 event25/26 priority0 pair rejected");
         std::size_t timer_id = manifest.modules.size();
         for (std::size_t i = 0; i < manifest.modules.size(); ++i)
             if (manifest.modules[i].name == "Timer") timer_id = i;
@@ -517,6 +524,7 @@ int main(int argc, char** argv) {
                                                (has_fast_place ? 1u : 0u) +
                                                (has_fast_mine ? 2u : 0u) +
                                                (has_bridge_assist ? 4u : 0u) +
+                                               (has_auto_tool ? 2u : 0u) +
                                                (has_timer ? 2u : 0u) +
                                                (has_keep_sprint ? 3u : 0u) +
                                                (has_sprint ? 2u : 0u) +
@@ -531,7 +539,8 @@ int main(int argc, char** argv) {
                     (has_keep_sprint ? 2u : 0u) -
                     (has_sprint ? 1u : 0u) - (has_strafe ? 1u : 0u) -
                     (has_fast_mine ? 1u : 0u) -
-                    (has_bridge_assist ? 3u : 0u) &&
+                    (has_bridge_assist ? 3u : 0u) -
+                    (has_auto_tool ? 1u : 0u) &&
                 c.executable_callback_bindings == expected_bindings,
                 "incorrectly counted unimplemented module functions");
         require(c.unimplemented_callback_subscriptions + c.executable_callback_bindings ==
@@ -562,6 +571,11 @@ int main(int argc, char** argv) {
         require(c.implemented_per_event[kTimerToggleEvent] ==
                     (has_timer ? 1u : 0u) + (has_bridge_assist ? 1u : 0u),
                 "Timer / Bridge Assist event5 callback inventory mismatch");
+        require(c.implemented_per_event[kAutoToolInventoryEvent] ==
+                    (has_auto_tool ? 1u : 0u) &&
+                c.implemented_per_event[kAutoToolShutdownEvent] ==
+                    (has_auto_tool ? 1u : 0u),
+                "Auto Tool native inventory/shutdown event25/26 binding drift");
 
         require(c.implemented_per_event[kNoUseDelayEvent] ==
                     (has_no_use_delay ? 1u : 0u) + (has_anti_debuff ? 1u : 0u) +
@@ -588,7 +602,9 @@ int main(int argc, char** argv) {
                 event != kItemUseFixAfterEvent &&
                 event != kIncomingPacketEvent && event != kOutgoingPacketEvent &&
                 event != kFastAccelEvent && event != kSafeWalkEvent &&
-                event != kTimerFrameEvent && event != kTimerToggleEvent)
+                event != kTimerFrameEvent && event != kTimerToggleEvent &&
+                event != kAutoToolInventoryEvent &&
+                event != kAutoToolShutdownEvent)
                 require(c.implemented_per_event[event] == 0,
                         "unimplemented native callback incorrectly counted");
 
@@ -1240,6 +1256,47 @@ int main(int argc, char** argv) {
             bridge.reset_bridge_assist_world_state();
         }
 
+        if(has_auto_tool) {
+            require(bridge.request(auto_tool_id,true),
+                    "Auto Tool enable rejected");
+            require(!bridge.apply(false,false),
+                    "Auto Tool bypassed world admission");
+            require(bridge.apply(true,true),
+                    "Auto Tool owner admission refused");
+            ExecutionFrame f;
+            f.event=kAutoToolInventoryEvent;
+            f.world_present=f.player_present=true;
+            AutoToolTickInput in{};
+            in.in_game=true;in.current_slot=2;in.held=AutoToolHeldKind::tool;
+            in.attack_held=true;in.look_at_block=in.block_exists=true;
+            in.hotbar_claim_granted=true;in.switch_back=true;
+            in.stack_present[2]=in.stack_present[4]=true;
+            in.mining_speed[2]=2.0f;in.mining_speed[4]=5.0f;
+            f.auto_tool_inventory=AutoToolInventoryPayload{in,{},0};
+            require(bridge.dispatch(f) && f.auto_tool_inventory->executions==1 &&
+                    f.auto_tool_inventory->decision.proposed_selected_slot==4 &&
+                    f.auto_tool_inventory->decision.remembered_slot==2,
+                    "Auto Tool original cyclic best hotbar slot was not selected");
+            f=ExecutionFrame{};
+            f.event=kAutoToolShutdownEvent;
+            f.world_present=f.player_present=true;
+            f.auto_tool_shutdown=AutoToolShutdownPayload{};
+            require(bridge.dispatch(f) && f.auto_tool_shutdown->executions==1 &&
+                    f.auto_tool_shutdown->decision.proposed_release_allowed_block_list,
+                    "Auto Tool source shutdown list cleanup proposal missing");
+            require(bridge.request(auto_tool_id,false),
+                    "Auto Tool disable request rejected");
+            require(bridge.apply(true,true),
+                    "Auto Tool disable refused");
+            bridge.reset_auto_tool_world_state();
+            f=ExecutionFrame{};
+            f.event=kAutoToolInventoryEvent;
+            f.world_present=f.player_present=true;
+            f.auto_tool_inventory=AutoToolInventoryPayload{in,{},0};
+            require(bridge.dispatch(f) && f.auto_tool_inventory->executions==0,
+                    "Disabled Auto Tool inventory callback executed");
+        }
+
         if (has_timer) {
             require(bridge.request(timer_id, true), "Timer enable rejected");
             require(!bridge.apply(false, true), "Timer bypassed world gate");
@@ -1417,13 +1474,14 @@ int main(int argc, char** argv) {
                     has_item_use_fix && has_ping_fix && has_no_item_release &&
                     has_anti_debuff && has_fast_accel && has_safe_walk &&
                     has_fast_place && has_fast_mine && has_bridge_assist &&
-                    has_timer && has_keep_sprint && has_sprint && has_strafe &&
+                    has_auto_tool && has_timer && has_keep_sprint &&
+                    has_sprint && has_strafe &&
                     c.registered_modules == 66 &&
                     c.native_callback_subscriptions == 171 &&
                     c.modules_with_native_handlers == 64 &&
-                    c.modules_with_executable_bindings == 20 &&
-                    c.executable_callback_bindings == 31 &&
-                    c.unimplemented_callback_subscriptions == 140,
+                    c.modules_with_executable_bindings == 21 &&
+                    c.executable_callback_bindings == 33 &&
+                    c.unimplemented_callback_subscriptions == 138,
                     "private 66-module catalog implementation gap was misreported");
 
         const std::string report = coverage_json(c, expect_candidate);

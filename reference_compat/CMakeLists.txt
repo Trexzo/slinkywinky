@@ -322,6 +322,44 @@ if(BUILD_TESTING)
     slinkywinky_reference_event_model
     slinkywinky_reference_firstparty_core)
   add_test(NAME r190_safe_walk_bridge COMMAND slinkywinky_safe_walk_bridge_test)
+  # R228: source-backed original Block Auto Tool inventory/shutdown
+  # callback pair, events 25/26. Pure C++ policy, no Minecraft or JNI.
+  add_executable(slinkywinky_auto_tool_bridge_test
+    tests/test_auto_tool_bridge.cpp)
+  target_link_libraries(slinkywinky_auto_tool_bridge_test PRIVATE
+    slinkywinky_reference_event_model
+    slinkywinky_reference_firstparty_core)
+  add_test(NAME r228_auto_tool_native_event25_26_source_policy
+    COMMAND slinkywinky_auto_tool_bridge_test)
+  set_tests_properties(r228_auto_tool_native_event25_26_source_policy
+    PROPERTIES TIMEOUT 15)
+  add_test(NAME r228_twentyone_native_policy_coverage
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/twentyfour_modules_with_twentyone_decisions.tsv")
+  add_test(NAME r228_reject_auto_tool_category
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r228_wrong_auto_tool_category.tsv")
+  add_test(NAME r228_reject_auto_tool_tick_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r228_wrong_auto_tool_tick_event.tsv")
+  add_test(NAME r228_reject_auto_tool_tick_priority
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r228_wrong_auto_tool_tick_priority.tsv")
+  add_test(NAME r228_reject_auto_tool_shutdown_event
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r228_wrong_auto_tool_shutdown_event.tsv")
+  add_test(NAME r228_reject_auto_tool_missing_shutdown
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r228_missing_auto_tool_shutdown.tsv")
+  add_test(NAME r228_reject_auto_tool_extra_subscription
+    COMMAND slinkywinky_implementation_coverage_audit
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/r228_extra_auto_tool_subscription.tsv")
+  set_tests_properties(r228_reject_auto_tool_category
+    r228_reject_auto_tool_tick_event
+    r228_reject_auto_tool_tick_priority
+    r228_reject_auto_tool_shutdown_event
+    r228_reject_auto_tool_missing_shutdown
+    r228_reject_auto_tool_extra_subscription PROPERTIES WILL_FAIL TRUE)
   # R227: source 4-hook Bridge Assist owner/edge/placing, offline only.
   add_executable(slinkywinky_bridge_assist_bridge_test
     tests/test_bridge_assist_bridge.cpp)
