@@ -58,6 +58,23 @@ None of these events launches Minecraft, installs a keyboard hook,
 unloads a process, opens profile folders, or writes real profile
 files. Production runtime behavior is not claimed as validated.
 
-## CI status
+## Exact-commit CI verification
 
-Pending exact-commit GitHub CI validation.
+R230 implementation commit `d7a3bcc00285d10df9274cad3438339850932803`
+has passed all three GitHub workflows:
+
+- Offline C++ core: **6/6 jobs PASS** — Windows Debug/Release,
+  Ubuntu Debug/Release, Linux JNI smoke and sanitizers.
+  https://github.com/Trexzo/slinkywinky/actions/runs/43755040248
+- Windows JNI preview artifact: Windows x64 native JNI build and
+  Java 8 native roundtrip PASS.
+  https://github.com/Trexzo/slinkywinky/actions/runs/43755040233
+- Injectable Windows Java 8 agent: native loader/JVMTI, Java 8
+  JVM and actual Attach API test suite PASS.
+  https://github.com/Trexzo/slinkywinky/actions/runs/43755040259
+
+All reported successes refer to the same implementation commit.
+The native WGL test verifies both modal buttons and the isolation
+of synthetic keyboard/mouse events. There is still no real
+Minecraft process, physical mouse/keyboard, native profile I/O,
+or in-world Slinky gameplay-module acceptance.
