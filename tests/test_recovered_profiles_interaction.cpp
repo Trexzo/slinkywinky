@@ -142,9 +142,22 @@ int main() {
         CHECK(!menu.begin_profile_bind_capture(0u));
         CHECK(!menu.focus_profile_name_preview());
         CHECK(!menu.commit_profile_bind_capture(0xFFFFu));
-        CHECK(!menu.commit_profile_bind_capture(0x08u)); // long label
+        // R232: BACKSPACE is source-bindable; long labels must not
+        // be rejected merely for needing more than eight glyphs.
+        CHECK(menu.commit_profile_bind_capture(0x08u));
+        CHECK(menu.local_profiles()[1].bind=="BACKSPACE");
+        auto boundFrame=frames.next(menu,&bridge,&nav);
+        const auto wide=menu_profile_bind_rect(
+            *boundFrame,panel->logical_width(),
+            panel->logical_height(),1u);
+        CHECK(wide && wide->width>=75.0f);
+        CHECK(menu.begin_profile_bind_capture(1u));
         auto bindFrame=frames.next(menu,&bridge,&nav);
-        CHECK(bindFrame && bindFrame->profile_bind_capture_index==1u);
+        const auto capturing=menu_profile_bind_rect(
+            *bindFrame,panel->logical_width(),
+            panel->logical_height(),1u);
+        CHECK(bindFrame && bindFrame->profile_bind_capture_index==1u &&
+              capturing && capturing->width>=110.0f);
         CHECK(menu.commit_profile_bind_capture(0x75u)); // F6
         CHECK(menu.local_profiles()[1].bind=="F6");
         CHECK(!menu.profile_bind_capture_index());

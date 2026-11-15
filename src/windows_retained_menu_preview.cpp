@@ -35,9 +35,23 @@ std::optional<std::uint16_t> profile_vk_from_lwjgl(
         case 14u:return 0x08u;
         case 15u:return 0x09u;
         case 28u:return 0x0du;
-        case 42u:case 54u:return 0x10u;
-        case 29u:case 157u:return 0x11u;
-        case 56u:case 184u:return 0x12u;
+        // Preserve source distinctions between physical sides when
+        // the preview VK whitelist has an independent label for each.
+        case 42u:return 0xa0u; case 54u:return 0xa1u;
+        case 29u:return 0xa2u; case 157u:return 0xa3u;
+        case 56u:return 0xa4u; case 184u:return 0xa5u;
+        // LWJGL2 punctuation scan codes, not translated text bytes.
+        case 12u:return 0xbdu; // minus
+        case 13u:return 0xbbu; // equals / plus
+        case 26u:return 0xdbu; // [
+        case 27u:return 0xddu; // ]
+        case 39u:return 0xbau; // semicolon
+        case 40u:return 0xdeu; // apostrophe
+        case 41u:return 0xc0u; // grave
+        case 43u:return 0xdcu; // backslash
+        case 51u:return 0xbcu; // comma
+        case 52u:return 0xbeu; // period
+        case 53u:return 0xbfu; // slash
         case 57u:return 0x20u;
         case 201u:return 0x21u;
         case 209u:return 0x22u;
@@ -75,16 +89,6 @@ std::optional<std::uint16_t> profile_vk_from_lwjgl(
         case 88u:return 0x7bu; // F12
         default:return std::nullopt;
     }
-}
-std::optional<char> profile_ascii_from_lwjgl(
-        unsigned key) noexcept {
-    if(key==57u)return ' ';
-    const auto vk=profile_vk_from_lwjgl(key);
-    if(!vk)return std::nullopt;
-    if((*vk>=0x30u && *vk<=0x39u) ||
-       (*vk>=0x41u && *vk<=0x5au))
-        return static_cast<char>(*vk);
-    return std::nullopt;
 }
 // R201: identical logical-position conversion for HSL held-move and
 // release. Only hit_test_menu can authorize the actual source modal track.
@@ -357,19 +361,18 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
             // Source text-edit confirmation: create only a bounded,
             // in-memory profile. No file or original runtime action.
             changed=menu_.create_profile_preview();
-        } else if(!typed_chars.empty()) {
-            // Exact source InEv.ch[4]. An explicit rejected payload
-            // MUST NOT fall back to a keycode-derived character.
-            if(typed_chars.size()<=4u) {
-                for(const char c:typed_chars) {
-                    const std::string_view one(&c,1u);
-                    if(menu_.append_profile_name_preview(one))
-                        changed=true;
-                }
+        } else if(!typed_chars.empty() && typed_chars.size()<=4u) {
+            // Source InEv.ch[4] is the only source of printable text.
+            // Zero terminates the input event. A keycode alone does NOT
+            // synthesize text (e.g., Ctrl+A must not append an "A").
+            // Never append bytes after NUL, and never decode a
+            // punctuation keycode as an arbitrary visible character.
+            for(const char c:typed_chars) {
+                if(c=='\0')break;
+                const std::string_view one(&c,1u);
+                if(menu_.append_profile_name_preview(one))
+                    changed=true;
             }
-        } else if(const auto ch=profile_ascii_from_lwjgl(lwjgl_key)) {
-            changed=menu_.append_profile_name_preview(
-                std::string_view(&*ch,1u));
         }
         if(changed)invalidate_painted_input();
         return {MenuKeyDelivery::MenuExclusive,false,changed};

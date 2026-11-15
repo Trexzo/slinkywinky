@@ -653,10 +653,15 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                        menu_card_radius);
             const float nameX=rect.x+8.0f;
             const float iconX=rect.x+rect.width-124.0f;
-            const float titleWidth=std::max(30.0f,iconX-nameX-45.0f);
+            const auto chip=menu_profile_bind_rect(frame,w,h,i);
+            // The bind chip is the interactive owner of this space:
+            // constrain the name text BEFORE drawing it, otherwise a
+            // 28-byte name can paint across a long valid key label.
+            const float titleWidth=std::max(
+                30.0f,chip?
+                chip->x-nameX-5.0f:iconX-nameX-45.0f);
             rgb(0xdddddd);
             text(card.name,nameX,rect.y+8.0f,16.0f,titleWidth);
-            const auto chip=menu_profile_bind_rect(frame,w,h,i);
             if(chip) {
                 const bool capturing=frame.profile_bind_capture_index==i;
                 const bool bound=!card.bind.empty()&&card.bind!="NONE";

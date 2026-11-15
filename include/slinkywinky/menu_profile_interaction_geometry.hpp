@@ -30,13 +30,19 @@ inline std::optional<MenuProfileControlRect> menu_profile_bind_rect(
     const float titleW=std::min(titleWidth,
         static_cast<float>(frame.profile_cards[profile_index].name.size())*
         9.0f);
-    const float chipX=std::min(iconX-46.0f,nameX+titleW+5.0f);
     const bool capturing=frame.profile_bind_capture_index==profile_index;
     const std::size_t chars=capturing?14u:
         (frame.profile_cards[profile_index].bind.empty()?4u:
          frame.profile_cards[profile_index].bind.size());
-    const float chipWidth=std::min(iconX-chipX-5.0f,
-        std::max(41.0f,static_cast<float>(chars)*7.0f+12.0f));
+    // R232: reserve source-visible space for long valid key labels
+    // (BACKSPACE, BACKSLASH) and PRESS A KEY... in the same card.
+    // The profile name may clip, but the key target must stay usable.
+    const float neededWidth=std::max(
+        41.0f,static_cast<float>(chars)*7.0f+12.0f);
+    const float chipX=std::min(
+        iconX-neededWidth-5.0f,nameX+titleW+5.0f);
+    const float chipWidth=std::min(
+        iconX-chipX-5.0f,neededWidth);
     if(chipX<nameX+15.0f || chipWidth<41.0f ||
        chipX+chipWidth>iconX-4.0f)return std::nullopt;
     return MenuProfileControlRect{

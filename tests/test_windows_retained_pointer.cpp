@@ -2424,6 +2424,11 @@ void verify_r231_wgl_profile_creation_binding(
     key(18u,true,"e");
     key(17u,true,"w");
     key(34u,false,"/"); // invalid explicit source char; no fallback G.
+    key(30u,false); // physical A without source text must NOT append A.
+    key(57u,false); // physical Space without source text must NOT append.
+    key(48u,false,std::string_view("B\\0Z",5u)); // >4 rejected
+    key(48u,true,std::string_view("B\0Z",3u)); // NUL terminates
+    key(14u,true); // erase the last B, restoring "New"
     const auto* drafted=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,width,height);
     REQUIRE(drafted && drafted->profile_name_focused &&
@@ -2476,10 +2481,44 @@ void verify_r231_wgl_profile_creation_binding(
         ctx.gl,ctx.dc,width,height);
     REQUIRE(f6Bound && !f6Bound->profile_bind_capture_index &&
             f6Bound->profile_cards[1].bind=="F6");
-    const auto clearChip=menu_profile_bind_rect(
+    const auto backspaceChip=menu_profile_bind_rect(
         *f6Bound,panel->logical_width(),panel->logical_height(),1u);
+    REQUIRE(backspaceChip);
+    click(point(backspaceChip->x+12.0f,
+                backspaceChip->y+10.0f),41800u);
+    // Unsupported NumLock scan code must not end the source capture.
+    key(69u,false);
+    const auto* holding=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(holding && holding->profile_bind_capture_index==1u);
+    key(14u,true); // valid Backspace binding (nine-glyph label)
+    const auto* backspaceBound=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(backspaceBound &&
+            !backspaceBound->profile_bind_capture_index &&
+            backspaceBound->profile_cards[1].bind=="BACKSPACE");
+    const auto wideChip=menu_profile_bind_rect(
+        *backspaceBound,panel->logical_width(),
+        panel->logical_height(),1u);
+    REQUIRE(wideChip && wideChip->width>=75.0f);
+    click(point(wideChip->x+12.0f,wideChip->y+10.0f),42600u);
+    key(39u,true); // LWJGL semicolon -> native COLON label
+    const auto* punctuation=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(punctuation && punctuation->profile_cards[1].bind=="COLON");
+    const auto punctuationChip=menu_profile_bind_rect(
+        *punctuation,panel->logical_width(),panel->logical_height(),1u);
+    REQUIRE(punctuationChip);
+    click(point(punctuationChip->x+12.0f,
+                punctuationChip->y+10.0f),43400u);
+    key(54u,true); // source right SHIFT retains physical side
+    const auto* sided=preview.fixture_painted_frame(
+        ctx.gl,ctx.dc,width,height);
+    REQUIRE(sided && sided->profile_cards[1].bind=="RSHIFT");
+    const auto clearChip=menu_profile_bind_rect(
+        *sided,panel->logical_width(),panel->logical_height(),1u);
     REQUIRE(clearChip);
-    click(point(clearChip->x+12.0f,clearChip->y+10.0f),41800u);
+    click(point(clearChip->x+12.0f,clearChip->y+10.0f),44200u);
     key(1u,true); // Escape clears the binding without closing the GUI.
     const auto* cleared=preview.fixture_painted_frame(
         ctx.gl,ctx.dc,width,height);

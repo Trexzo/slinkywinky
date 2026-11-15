@@ -400,7 +400,9 @@ bool MenuState::commit_profile_bind_capture(std::uint16_t code) {
     const auto index=*profile_bind_capture_index_;
     if(index>=local_profiles_.size())return false;
     const auto display=menu_bind_code_label(code);
-    if(code && display.size()>8u)return false;
+    // The source accepts valid keys regardless of how many glyphs
+    // their name requires. Layout is responsible for fitting labels:
+    // BACKSPACE and BACKSLASH are legitimate nine-character keys.
     local_profiles_[index].bind=code==0u?std::string{}:display;
     profile_bind_capture_index_.reset();
     return true;
