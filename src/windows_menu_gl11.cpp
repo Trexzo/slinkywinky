@@ -1340,8 +1340,16 @@ bool draw_module_arraylist_gl11(
         const float rowX=right-rowW;
         rgba(0x101014u,180u);
         quad(rowX,rowY,rowW,19.0f);
+        // R219: the 3px accent is explicitly opaque first-party geometry.
+        // Some Windows WGL software/PFD paths round an alpha=255 SRC_ALPHA
+        // blend against the underlying panel (F35D12 -> F05B10). Draw just
+        // this solid strip without blending, then restore HUD alpha blending
+        // for its glyphs and later rows. ScopedFixedFunctionState restores
+        // the caller's ORIGINAL enable/func when the HUD returns.
+        glDisable(GL_BLEND);
         rgb(accent_rgb);
         quad(right-3.0f,rowY,3.0f,19.0f);
+        glEnable(GL_BLEND);
         rgb(0xFFFFFFu);
         text(label.name,rowX+7.0f,rowY+2.0f,14.0f,
              label.width+2.0f);

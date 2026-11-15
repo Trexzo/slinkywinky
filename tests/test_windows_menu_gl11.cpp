@@ -300,6 +300,13 @@ int main() {
         REQUIRE(paintedArraylistAccent[0]==0xF3u &&
                 paintedArraylistAccent[1]==0x5Du &&
                 paintedArraylistAccent[2]==0x12u);
+        // R219: the second ACTIVE row must paint the same opaque source
+        // accent. CI's blended Windows software GL path previously returned
+        // F05B10 for both rows, despite requested RGB F35D12.
+        const auto secondArraylistAccent=readback(666,590);
+        REQUIRE(secondArraylistAccent[0]==0xF3u &&
+                secondArraylistAccent[1]==0x5Du &&
+                secondArraylistAccent[2]==0x12u);
         auto invalidArraylist=arraylist;
         invalidArraylist.modules[0].canonical_name="Unknown";
         REQUIRE(!draw_module_arraylist_gl11(
