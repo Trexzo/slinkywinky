@@ -2,6 +2,7 @@
 // Read-only JNI surface: NO key presses, game memory writes, hooks, packets,
 // player setters, or native library injection.
 #include "slinkywinky/sprint_observation_preview.hpp"
+#include "slinkywinky/strafe_controller.hpp"
 #include <jni.h>
 #include <cstdint>
 #include <cmath>
@@ -16,6 +17,15 @@ namespace {
 using slinkywinky::reference_compat::SprintObservationPreview;
 std::mutex g_sessions_mutex;
 std::map<jlong, std::unique_ptr<SprintObservationPreview>> g_sessions;
+// R224: a read-only preview scoped to the SAME native module owner/session.
+// Not an original event-21/22 hook or a future gameplay action gate.
+struct StrafeReadOnlySession {
+    std::thread::id owner=std::this_thread::get_id();
+    std::uint64_t generation=0;
+    std::uint64_t last_tick=0;
+    slinkywinky::reference_compat::StrafeController controller{};
+};
+std::map<jlong,StrafeReadOnlySession> g_strafe_observers;
 jlong g_next_id = 1;
 
 void throw_java(JNIEnv* env, const char* type, const char* reason) {
@@ -35,6 +45,12 @@ Java_dev_slinkywinky_SprintObservationProbe_nativeCreate(JNIEnv* env, jclass) {
         }
         const jlong id = g_next_id++;
         g_sessions.emplace(id, std::make_unique<SprintObservationPreview>());
+        try {
+            g_strafe_observers.emplace(id,StrafeReadOnlySession{});
+        } catch(...) {
+            g_sessions.erase(id);
+            throw;
+        }
         return id;
     } catch (...) {
         throw_java(env, "java/lang/IllegalStateException", "Could not create read-only Sprint preview");
@@ -353,5 +369,91 @@ Java_dev_slinkywinky_SprintObservationProbe_nativeClose(JNIEnv* env, jclass, jlo
         throw_java(env, "java/lang/IllegalStateException", "Unknown or foreign-thread Sprint session");
         return;
     }
+    g_strafe_observers.erase(id);
     g_sessions.erase(it);
+}
+
+
+// R224: attached to the existing, owner-pinned SprintObservationProbe native
+// session, but invokes only the independent first-party read-only Strafe
+// decision. Event21 sprint snapshot and event22 movement observation are
+// delivered from the SAME Forge player-tick callback, not asserted to be the
+// original binary's callback timing. No Minecraft field, key or packet writes.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_SprintObservationProbe_nativeObserveStrafe(
+    JNIEnv* env,jclass,jlong handle,jlong generation,jlong tick,
+    jboolean world,jboolean player,jboolean sprinting,
+    jfloat forward,jfloat strafe,jfloat yaw,
+    jboolean on_ground,jboolean jump_phase,
+    jdouble motion_x,jdouble motion_y,jdouble motion_z) {
+    if (generation<=0 || tick<=0 ||
+        (world!=JNI_FALSE && world!=JNI_TRUE) ||
+        (player!=JNI_FALSE && player!=JNI_TRUE) ||
+        (sprinting!=JNI_FALSE && sprinting!=JNI_TRUE) ||
+        (on_ground!=JNI_FALSE && on_ground!=JNI_TRUE) ||
+        (jump_phase!=JNI_FALSE && jump_phase!=JNI_TRUE) ||
+        (player==JNI_TRUE && world==JNI_FALSE) ||
+        !std::isfinite(forward) || !std::isfinite(strafe) ||
+        !std::isfinite(yaw) || !std::isfinite(motion_x) ||
+        !std::isfinite(motion_y) || !std::isfinite(motion_z)) {
+        throw_java(env,"java/lang/IllegalArgumentException",
+                   "R224 malformed read-only movement observation");
+        return nullptr;
+    }
+    std::lock_guard<std::mutex> lock(g_sessions_mutex);
+    const auto it=g_sessions.find(handle);
+    const auto live=g_strafe_observers.find(handle);
+    if (it==g_sessions.end() || live==g_strafe_observers.end() ||
+        live->second.owner!=std::this_thread::get_id()) {
+        throw_java(env,"java/lang/IllegalStateException",
+                   "R224 closed or foreign native owner");
+        return nullptr;
+    }
+    auto& session=live->second;
+    if (world==JNI_FALSE || player==JNI_FALSE) {
+        session.controller.reset();
+        session.generation=0;
+        session.last_tick=0;
+    } else {
+        // The same native Sprint session MUST have admitted an actual
+        // world/player observation for this exact world generation.
+        const auto state=it->second->control_state();
+        if (!state || state->world_generation!=
+                        static_cast<std::uint64_t>(generation) ||
+            static_cast<std::uint64_t>(generation)<session.generation ||
+            (session.generation==static_cast<std::uint64_t>(generation) &&
+             static_cast<std::uint64_t>(tick)<=session.last_tick)) {
+            throw_java(env,"java/lang/IllegalStateException",
+                       "R224 stale or unadmitted world/tick");
+            return nullptr;
+        }
+        if (session.generation!=static_cast<std::uint64_t>(generation)) {
+            session.controller.reset();
+            session.generation=static_cast<std::uint64_t>(generation);
+            session.last_tick=0;
+        }
+        session.last_tick=static_cast<std::uint64_t>(tick);
+        session.controller.observe_sprinting(sprinting==JNI_TRUE);
+    }
+    const bool admitted=world==JNI_TRUE && player==JNI_TRUE;
+    slinkywinky::reference_compat::StrafeMotionDecision decision{};
+    if (admitted) {
+        slinkywinky::reference_compat::StrafeMotionInput input{};
+        input.forward=forward;
+        input.strafe=strafe;
+        input.yaw_degrees=yaw;
+        input.on_ground=on_ground==JNI_TRUE;
+        input.jump_phase=jump_phase==JNI_TRUE;
+        input.motion_x=motion_x;
+        input.motion_y=motion_y;
+        input.motion_z=motion_z;
+        decision=session.controller.evaluate(input);
+    }
+    const auto& value=decision.proposed_motion;
+    const jdouble fields[5]{
+        admitted?1.0:0.0,value?1.0:0.0,
+        value?value->x:0.0,value?value->y:0.0,value?value->z:0.0};
+    jdoubleArray out=env->NewDoubleArray(5);
+    if(out)env->SetDoubleArrayRegion(out,0,5,fields);
+    return out;
 }

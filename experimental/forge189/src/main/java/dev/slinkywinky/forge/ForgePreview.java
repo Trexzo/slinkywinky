@@ -66,6 +66,10 @@ public final class ForgePreview {
     private long r208WorldClientTicks, r208WorldPlayerTicks, r208FirstWorldMs;
     private long r209LastSampleMs, r209MinGapMs=Long.MAX_VALUE, r209MaxGapMs;
     private boolean r209TickReceipt;
+    // R224: source-grounded real Forge PlayerTick -> read-only Strafe JNI.
+    private boolean r224ForwardArmed,r224ReceiptEmitted,r224CleanupDone;
+    private int r224WorldSamples,r224MotionSamples,r224Proposals;
+    private double r224StartX,r224StartZ,r224LastX,r224LastZ;
     private long r213InWorldTicks;
     private boolean r213JumpEnabledVerified, r213JumpDisabledVerified,
                     r213JumpReenabledVerified;
@@ -86,6 +90,8 @@ public final class ForgePreview {
     // this tick boundary, NOT misrepresented as original native event21.
     private static final boolean R209_PLAYER_TICK_TEST =
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
+    private static final boolean R224_LOCAL_STRAFE_TEST =
+        Boolean.getBoolean("slinkywinky.r224LocalStrafeReadOnlyTest");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
     private static final boolean R217_ITEM_CATEGORIES_TEST =
@@ -107,7 +113,7 @@ public final class ForgePreview {
     // Test-only: create a local world only in a named TEMP game directory.
     private static final boolean R208_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r208LocalWorldTest") ||
-        R209_PLAYER_TICK_TEST;
+        R209_PLAYER_TICK_TEST || R224_LOCAL_STRAFE_TEST;
     private final GameHost.Actions readonlyActions=new GameHost.Actions() {
         @Override public void apply(NativeEngine.Decision decision) {
             ++observations;
@@ -183,10 +189,13 @@ public final class ForgePreview {
             final Minecraft mc = Minecraft.getMinecraft();
             final String home = mc.mcDataDir.getAbsolutePath().replace('\\', '/');
             final String temp = System.getProperty("java.io.tmpdir").replace('\\', '/');
-            final String instancePrefix = R209_PLAYER_TICK_TEST ?
+            final String instancePrefix = R224_LOCAL_STRAFE_TEST ?
+                "/slinkywinky-r224-independent-forge-" :
+                R209_PLAYER_TICK_TEST ?
                 "/slinkywinky-r209-independent-forge-" :
                 "/slinkywinky-r208-independent-forge-";
-            final String expectedUser =
+            final String expectedUser = R224_LOCAL_STRAFE_TEST ?
+                "R224Offline" :
                 R209_PLAYER_TICK_TEST ? "R209Offline" : "R208Offline";
             if (!SPRINT_OBSERVATION || !home.startsWith(temp) ||
                 !home.contains(instancePrefix) || mc.getSession() == null ||
@@ -196,8 +205,11 @@ public final class ForgePreview {
                     "identity and the read-only Sprint observer");
             }
             System.out.println("[SlinkyWinkyPreview] " +
-                (R209_PLAYER_TICK_TEST ? "R209_ISOLATION_GATE_PASS" :
-                                        "R208_ISOLATION_GATE_PASS"));
+                (R224_LOCAL_STRAFE_TEST ? "R224_STRAFE_ISOLATION_GATE_PASS" :
+                 R209_PLAYER_TICK_TEST ? "R209_ISOLATION_GATE_PASS" :
+                                         "R208_ISOLATION_GATE_PASS"));
+            if(R224_LOCAL_STRAFE_TEST)
+                mc.gameSettings.pauseOnLostFocus=false;
         }
         // Diagnostic only: enable with -Dslinkywinky.startupProbe=true in an isolated
         // Forge 1.8.9 development JVM. It never issues game actions or packets.
@@ -235,7 +247,13 @@ public final class ForgePreview {
             }
             if(sprintProbe!=null) sprintProbe.close();
         } finally {
-            if(R214_LOCAL_NO_SLOW_TEST && r214InputFixtureArmed) {
+            if(R224_LOCAL_STRAFE_TEST && r224ForwardArmed) {
+            final Minecraft mc=Minecraft.getMinecraft();
+            KeyBinding.setKeyBindState(
+                mc.gameSettings.keyBindForward.getKeyCode(),false);
+            r224ForwardArmed=false;
+        }
+        if(R214_LOCAL_NO_SLOW_TEST && r214InputFixtureArmed) {
                 Minecraft mc=Minecraft.getMinecraft();
                 if(R215_VANILLA_INPUT_TEST) {
                     KeyBinding.setKeyBindState(
@@ -318,7 +336,8 @@ public final class ForgePreview {
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R217_ITEM_CATEGORIES_TEST ? "R217_LOCAL_WORLD_REQUESTED" :
+                (R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_REQUESTED" :
+                 R217_ITEM_CATEGORIES_TEST ? "R217_LOCAL_WORLD_REQUESTED" :
                     R216_DISPLACEMENT_TEST ? "R216_LOCAL_WORLD_REQUESTED" :
                     R215_VANILLA_INPUT_TEST ? "R215_LOCAL_WORLD_REQUESTED" :
                     R214_LOCAL_NO_SLOW_TEST ? "R214_LOCAL_WORLD_REQUESTED" :
@@ -326,7 +345,8 @@ public final class ForgePreview {
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R217_ITEM_CATEGORIES_TEST ?
+            final String worldName = R224_LOCAL_STRAFE_TEST ?
+                "R224-local-only" : R217_ITEM_CATEGORIES_TEST ?
                 "R217-local-only" : R216_DISPLACEMENT_TEST ?
                 "R216-local-only" : R215_VANILLA_INPUT_TEST ?
                 "R215-local-only" : R214_LOCAL_NO_SLOW_TEST ?
@@ -342,11 +362,41 @@ public final class ForgePreview {
             if (!r208WorldReady) {
                 r208WorldReady=true;
                 System.out.println("[SlinkyWinkyPreview] " +
-                    (R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
+                    (R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_PLAYER_READY_PASS" :
+                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
                                             "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
-            if (!enabled && !(R214_LOCAL_NO_SLOW_TEST && r214ReceiptEmitted))
-                startPreview(); // R214 completed test must never auto-restart
+            if (!enabled &&
+                !(R214_LOCAL_NO_SLOW_TEST && r214ReceiptEmitted) &&
+                !(R224_LOCAL_STRAFE_TEST && r224ReceiptEmitted))
+                startPreview(); // completed TEMP-only tests never auto-restart
+            if(R224_LOCAL_STRAFE_TEST && enabled &&
+               !r224ReceiptEmitted && !r224ForwardArmed) {
+                if (!(mc.thePlayer.movementInput instanceof MovementInputFromOptions))
+                    throw new IllegalStateException(
+                        "R224 requires original vanilla MovementInputFromOptions");
+                r224StartX=mc.thePlayer.posX;
+                r224StartZ=mc.thePlayer.posZ;
+                KeyBinding.setKeyBindState(
+                    mc.gameSettings.keyBindForward.getKeyCode(),true);
+                r224ForwardArmed=true;
+                System.out.println("[SlinkyWinkyPreview] " +
+                    "R224_REAL_VANILLA_INPUT_ARMED source=MovementInputFromOptions " +
+                    "synthetic_key=forward");
+            }
+            if(R224_LOCAL_STRAFE_TEST && r224ReceiptEmitted &&
+               !r224CleanupDone) {
+                r224CleanupDone=true;
+                stop();
+                if(enabled || sprintProbe!=null || host!=null ||
+                   r224ForwardArmed ||
+                   mc.gameSettings.keyBindForward.isKeyDown())
+                    throw new IllegalStateException("R224 cleanup retained state");
+                System.out.println("[SlinkyWinkyPreview] " +
+                    "R224_READONLY_STRAFE_CLEANUP_PASS key_released=1 " +
+                    "native_owner_closed=1 preview_closed=1 auto_restart=0 " +
+                    "gameplay_motion_writes=0");
+            }
             if(R214_LOCAL_NO_SLOW_TEST && enabled) {
                 if(++r214DiagnosticClientTicks==20 ||
                    r214DiagnosticClientTicks==60) {
@@ -895,12 +945,18 @@ public final class ForgePreview {
                 sampleOwnedModuleActions(mc,frame);
                 if(R213_LOCAL_ACTION_ACCEPTANCE)
                     verifyR213JumpFixture(mc);
-            } else sampleReadOnlySprint(mc,frame);
+            } else {
+                sampleReadOnlySprint(mc,frame);
+                if(R224_LOCAL_STRAFE_TEST)
+                    sampleR224ReadOnlyStrafe(mc,frame);
+            }
         } catch (RuntimeException | LinkageError problem) {
             try {stop();} catch (RuntimeException ignored) { }
             status="Preview stopped after player-tick JNI failure";
             if(R209_PLAYER_TICK_TEST)
                 System.err.println("[SlinkyWinkyPreview] R209_PLAYER_TICK_FAIL "+problem);
+            if(R224_LOCAL_STRAFE_TEST)
+                System.err.println("[SlinkyWinkyPreview] R224_READONLY_STRAFE_FAIL "+problem);
         }
     }
 
@@ -1087,6 +1143,66 @@ public final class ForgePreview {
         }
         // Intentionally NO KeyBinding.setKeyBindState(), setSprinting(),
         // player motion writes, game packet sends, or synthetic input.
+    }
+
+    /**
+     * R224: real Forge PlayerTickEvent.END, actual vanilla movementInput
+     * and EntityPlayerSP motion. The local forward key is deliberately
+     * synthetic and TEMP-only; the Strafe *policy* remains read-only.
+     * This observes Minecraft's tick, NOT the original Slinky event21/22
+     * dispatch or an accepted runtime motion write.
+     */
+    private void sampleR224ReadOnlyStrafe(Minecraft mc,GameHost.Frame frame) {
+        if(!R224_LOCAL_STRAFE_TEST || !r224ForwardArmed ||
+           r224ReceiptEmitted)return;
+        if(mc.theWorld!=frame.worldToken || mc.thePlayer!=frame.playerToken ||
+           !mc.theWorld.isRemote || !mc.isSingleplayer() ||
+           !(mc.thePlayer.movementInput instanceof MovementInputFromOptions))
+            throw new IllegalStateException("R224 player/world identity lost");
+        final float forward=mc.thePlayer.movementInput.moveForward;
+        final float sideways=mc.thePlayer.movementInput.moveStrafe;
+        final double mx=mc.thePlayer.motionX;
+        final double my=mc.thePlayer.motionY;
+        final double mz=mc.thePlayer.motionZ;
+        final long tick=++r224WorldSamples;
+        SprintObservationProbe.StrafeDecision decision=
+            sprintProbe.observeStrafe(
+                sprintGeneration,tick,true,true,frame.sprinting,
+                forward,sideways,frame.yaw,mc.thePlayer.onGround,
+                mc.thePlayer.movementInput.jump,mx,my,mz);
+        if(!decision.admitted)
+            throw new IllegalStateException("R224 native world/tick refused");
+        if(Math.hypot(mx,mz)>0.0001 && forward!=0.0f)
+            ++r224MotionSamples;
+        if(decision.hasProposal) {
+            if(!Double.isFinite(decision.proposedX) ||
+               !Double.isFinite(decision.proposedZ) ||
+               decision.proposedY!=my)
+                throw new IllegalStateException("R224 invalid native motion");
+            ++r224Proposals;
+        }
+        r224LastX=mc.thePlayer.posX;
+        r224LastZ=mc.thePlayer.posZ;
+        final double horizontalDistance=Math.hypot(
+            r224LastX-r224StartX,r224LastZ-r224StartZ);
+        if(tick>=50 && r224MotionSamples>=10 &&
+           r224Proposals>=10 && horizontalDistance>0.1) {
+            r224ReceiptEmitted=true;
+            System.out.println("[SlinkyWinkyPreview] "+
+                "R224_REAL_PLAYER_TICK_READONLY_STRAFE_JNI_PASS"+
+                " samples="+r224WorldSamples+
+                " movingSamples="+r224MotionSamples+
+                " proposedSamples="+r224Proposals+
+                " distance="+horizontalDistance+
+                " gameMotionWrites=0"+
+                " source=Forge_PlayerTick_END_and_vanilla_motion");
+        } else if(tick>=150) {
+            throw new IllegalStateException(
+                "R224 real in-world motion/proposals not observed "+
+                "samples="+tick+" motion="+r224MotionSamples+
+                " proposals="+r224Proposals+
+                " distance="+horizontalDistance);
+        }
     }
 
     @SubscribeEvent public void onOverlay(RenderGameOverlayEvent.Text event) {

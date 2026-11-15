@@ -61,6 +61,12 @@ if(BUILD_TESTING)
     # R160: any premature live keyboard/mouse queue activation fails CI.
     add_test(NAME r160_no_unverified_live_input_hook
       COMMAND "${Python3_EXECUTABLE}" -u "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r119_live_input_guard.py")
+    # R224: bounded TEMP-only original Forge player-tick / read-only JNI
+    # Strafe receipts. CI tests fake receipts only; no Minecraft launch.
+    add_test(NAME r224_real_world_strafe_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r224_in_world_strafe_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

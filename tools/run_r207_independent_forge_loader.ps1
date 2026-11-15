@@ -14,11 +14,21 @@ param(
  [switch]$R214LocalNoSlowAcceptance,
  [switch]$R215VanillaInputTest,
  [switch]$R216DisplacementTest,
- [switch]$R217ItemCategoriesTest
+ [switch]$R217ItemCategoriesTest,
+ [switch]$R224LocalStrafeReadOnlyTest
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-$expectedJar=if($R217ItemCategoriesTest){
+if($R224LocalStrafeReadOnlyTest -and
+   ($R208LocalWorldTest -or $R209PlayerTickTest -or
+    $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
+    $R215VanillaInputTest -or $R216DisplacementTest -or
+    $R217ItemCategoriesTest)){
+  throw 'R224 read-only native Strafe must be the ONLY selected test mode'
+}
+$expectedJar=if($R224LocalStrafeReadOnlyTest){
+  'ba8759cec99148cf14b31ad4e4b2c7ec06abe387a9730e3a0bb8586d60b2d345'
+}elseif($R217ItemCategoriesTest){
   '8f03d30da031aeb21d72eb0dbc5cd337b09aadfdc673988101bb64a28b29bcff'
 }elseif($R216DisplacementTest){
   'a4ef40b697019fdc209e31ee7b6e6453eb6326e952add4533033d05ad70ae08d'
@@ -35,7 +45,7 @@ $expectedJar=if($R217ItemCategoriesTest){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -47,10 +57,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest){
+if($R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R217ItemCategoriesTest){
+  $prefix=if($R224LocalStrafeReadOnlyTest){
+    '/slinkywinky-r224-independent-forge-[^/]+$'
+  }elseif($R217ItemCategoriesTest){
     '/slinkywinky-r217-independent-forge-[^/]+$'
   }elseif($R216DisplacementTest){
     '/slinkywinky-r216-independent-forge-[^/]+$'
@@ -187,7 +199,11 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R217ItemCategoriesTest){
+if($R224LocalStrafeReadOnlyTest){
+  # Opt-in real in-world *read-only* JNI Strafe proposal: no Javaagent,
+  # gameplay motion write, packet modification, or original input hooks.
+  $argsList=@('-Dslinkywinky.r224LocalStrafeReadOnlyTest=true')+$argsList
+}elseif($R217ItemCategoriesTest){
   # Separate sword and consumable native No Slow test; exact hash pin,
   # dummy profile and TEMP-only world. R216 remains reproducible.
   $argsList=@("-javaagent:$staged",
@@ -217,7 +233,8 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
 @(
  'R207_INDEPENDENT_FORGE_PREFLIGHT_PASS'
  "REOBF_SHA256=$expectedJar"
- "ISOLATED_WORLD_TEST=$([bool]($R208LocalWorldTest -or $R209PlayerTickTest))"
+ "ISOLATED_WORLD_TEST=$([bool]($R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "R224_LOCAL_STRAFE_READONLY=$([bool]$R224LocalStrafeReadOnlyTest)"
  "PLAYER_TICK_TEST=$([bool]$R209PlayerTickTest)"
  "R213_LOCAL_ACTION_ACCEPTANCE=$([bool]$R213LocalActionAcceptance)"
  "R214_EXPLICIT_POST_SLOW_AGENT=$([bool]$R214LocalNoSlowAcceptance)"

@@ -266,6 +266,58 @@ public final class SprintObservationProbeSmoke {
             "toggles=3 native_callbacks=4 typed_events=17,21 " +
             "settings=1 world_reentry=1 wrong_thread=1 actions=0");
 
+        // R224: same owner, same native session and admitted world
+        // generation. This is a pure Strafe decision, never a game action.
+        try (SprintObservationProbe source = new SprintObservationProbe()) {
+            check(send(source,7000,50,3,false,false).admitted,
+                "R224 initial native world not admitted");
+            SprintObservationProbe.StrafeDecision motion=
+                source.observeStrafe(50,1,true,true,false,
+                    1,0,0,true,false,0.3,0.4,0);
+            check(motion.admitted && motion.hasProposal &&
+                Math.abs(motion.proposedX)<1e-9 &&
+                Math.abs(motion.proposedZ-0.3)<1e-9 &&
+                Math.abs(motion.proposedY-0.4)<1e-9,
+                "R224 actual C++ Strafe policy proposal wrong");
+
+            boolean staleDenied=false;
+            try {source.observeStrafe(50,1,true,true,false,
+                1,0,0,true,false,0.3,0.4,0);}
+            catch(IllegalStateException expected){staleDenied=true;}
+            check(staleDenied,"R224 replayed player-tick accepted");
+
+            final boolean[] wrongOwner={false};
+            Thread foreign=new Thread(() -> {
+                try {source.observeStrafe(50,2,true,true,false,
+                    1,0,0,true,false,0.3,0.4,0);}
+                catch(IllegalStateException expected){wrongOwner[0]=true;}
+            });
+            foreign.start();foreign.join();
+            check(wrongOwner[0],"R224 cross-thread Strafe accepted");
+
+            check(send(source,7001,51,0,false,false).admitted,
+                "R224 world absence not admitted");
+            motion=source.observeStrafe(51,2,false,false,false,
+                0,0,0,false,false,0,0,0);
+            check(!motion.admitted && !motion.hasProposal,
+                "R224 no-world Strafe produced a proposal");
+            check(send(source,7002,52,3,false,false).admitted,
+                "R224 world reentry not admitted");
+            motion=source.observeStrafe(52,3,true,true,false,
+                1,0,90,true,false,0.3,0.4,0);
+            check(motion.admitted && motion.hasProposal &&
+                Math.abs(motion.proposedX+0.3)<1e-9,
+                "R224 new world generation lost Strafe proposal");
+            boolean wrongGeneration=false;
+            try {source.observeStrafe(51,4,true,true,false,
+                1,0,0,true,false,0.3,0.4,0);}
+            catch(IllegalStateException expected){wrongGeneration=true;}
+            check(wrongGeneration,"R224 stale world generation allowed");
+        }
+        System.out.println("R224_JAVA8_IN_WORLD_STRAFE_READONLY_JNI_SMOKE_PASS " +
+            "snapshot=1 proposal=1 world_reset=1 replay_denied=1 " +
+            "foreign_owner_denied=1 gameplay_writes=0");
+
         System.out.println("R204_JAVA8_NATIVE_SPRINT_OBSERVATION_ROUNDTRIP_PASS " +
             "session=1 clock=1 wrong_thread=1 zero_game_actions=1");
     }

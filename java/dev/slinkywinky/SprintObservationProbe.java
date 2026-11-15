@@ -11,6 +11,12 @@ public final class SprintObservationProbe implements AutoCloseable {
     static { System.loadLibrary("slinkywinky_jni"); }
 
     private static native long nativeCreate();
+    // R224: strictly read-only, session-bound same-client-tick Strafe query.
+    private static native double[] nativeObserveStrafe(
+        long handle,long generation,long tick,
+        boolean world,boolean player,boolean sprinting,
+        float forward,float strafe,float yaw,boolean onGround,
+        boolean jumpPhase,double motionX,double motionY,double motionZ);
     private static native float[] nativeObserve(
         long handle, long[] clocks, int[] flags,
         double[] coordinates, float[] rotation, float[] movement);
@@ -67,6 +73,45 @@ public final class SprintObservationProbe implements AutoCloseable {
 
     public static String[] controlledModuleNames() {
         return CONTROLLED_MODULES.clone();
+    }
+
+    public static final class StrafeDecision {
+        public final boolean admitted,hasProposal;
+        public final double proposedX,proposedY,proposedZ;
+        private StrafeDecision(double[] a) {
+            if(a==null || a.length!=5 ||
+               (a[0]!=0.0 && a[0]!=1.0) ||
+               (a[1]!=0.0 && a[1]!=1.0) ||
+               (a[0]==0.0 && a[1]!=0.0))
+                throw new IllegalStateException("Invalid R224 Strafe native receipt");
+            for(double value:a)
+                if(Double.isNaN(value)||Double.isInfinite(value))
+                    throw new IllegalStateException("Nonfinite R224 motion");
+            admitted=a[0]==1.0;hasProposal=a[1]==1.0;
+            proposedX=a[2];proposedY=a[3];proposedZ=a[4];
+            if(!hasProposal && (proposedX!=0 || proposedY!=0 || proposedZ!=0))
+                throw new IllegalStateException("R224 unowned motion data");
+        }
+    }
+
+    /**
+     * Same native owner/session after an admitted observe() tick.
+     * No game writes or JNI callback hooks; the original Slinky event21/22
+     * phases have NOT been recovered from this Forge player-tick sample.
+     */
+    public synchronized StrafeDecision observeStrafe(
+            long generation,long tick,boolean world,boolean player,
+            boolean sprinting,float forward,float strafe,float yaw,
+            boolean onGround,boolean jumpPhase,
+            double motionX,double motionY,double motionZ) {
+        assertOwner();
+        assertOpen();
+        if(generation<=0 || tick<=0 ||
+           (player && !world))
+            throw new IllegalArgumentException("R224 invalid world/tick");
+        return new StrafeDecision(nativeObserveStrafe(
+            handle,generation,tick,world,player,sprinting,
+            forward,strafe,yaw,onGround,jumpPhase,motionX,motionY,motionZ));
     }
 
     public static final class ControlState {
