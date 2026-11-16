@@ -165,6 +165,83 @@ int main() {
         CHECK(!editor.append_recovered_text_event_preview("K"));
         CHECK(editor.select(MenuTab::Combat));
     }
+    // R236: a keybind/text editor is the exclusive owner. Direct
+    // low-level GUI calls cannot silently replace it with a popup,
+    // drag or setting write, even if a caller bypasses navigation.
+    {
+        const auto& widgets=recovered_widget_catalog();
+        std::size_t textIndex=widgets.size(),multiIndex=widgets.size();
+        std::size_t sliderIndex=widgets.size(),booleanIndex=widgets.size();
+        for(std::size_t i=0u;i<widgets.size();++i) {
+            if(std::string_view(widgets[i].module)!="Auto Tool")continue;
+            if(widgets[i].kind==RecoveredWidgetKind::Text &&
+               std::string_view(widgets[i].auxiliary)=="Search item")
+                textIndex=i;
+            if(widgets[i].kind==RecoveredWidgetKind::MultiSelect)
+                multiIndex=i;
+            if(widgets[i].kind==RecoveredWidgetKind::Slider)
+                sliderIndex=i;
+            if(widgets[i].kind==RecoveredWidgetKind::Boolean &&
+               std::string_view(widgets[i].label)=="Switch back when done")
+                booleanIndex=i;
+        }
+        CHECK(textIndex<widgets.size() && multiIndex<widgets.size() &&
+              sliderIndex<widgets.size() && booleanIndex<widgets.size());
+        MenuState owned;
+        CHECK(owned.select(MenuTab::Block));
+        CHECK(owned.toggle_expanded(42u)); // source Auto Tool
+        CHECK(owned.begin_bind_capture(42u));
+        CHECK(!owned.focus_recovered_text_preview(42u,textIndex));
+        CHECK(!owned.open_recovered_multi_preview(42u,multiIndex));
+        CHECK(!owned.set_recovered_slider_preview(42u,sliderIndex,20.0f));
+        CHECK(!owned.set_recovered_boolean_preview(
+            42u,booleanIndex,false));
+        CHECK(!owned.begin_numeric_drag_preview(42u,sliderIndex,0u));
+        CHECK(owned.bind_capture_index()==42u &&
+              !owned.focused_text_widget() && !owned.dropdown_preview());
+        CHECK(!owned.recovered_slider_override(sliderIndex) &&
+              !owned.recovered_boolean_override(booleanIndex));
+        CHECK(owned.cancel_bind_capture());
+
+        CHECK(owned.focus_recovered_text_preview(42u,textIndex));
+        CHECK(owned.focus_recovered_text_preview(42u,textIndex));
+        CHECK(owned.append_recovered_text_event_preview("ok"));
+        CHECK(!owned.begin_bind_capture(42u));
+        CHECK(!owned.open_recovered_multi_preview(42u,multiIndex));
+        CHECK(!owned.set_recovered_slider_preview(42u,sliderIndex,20.0f));
+        CHECK(!owned.set_recovered_boolean_preview(
+            42u,booleanIndex,false));
+        CHECK(!owned.begin_numeric_drag_preview(42u,sliderIndex,0u));
+        CHECK(!owned.open_unload_confirmation_preview());
+        CHECK(owned.focused_text_widget()==textIndex &&
+              !owned.dropdown_preview() &&
+              owned.recovered_text_overrides()[textIndex] &&
+              *owned.recovered_text_overrides()[textIndex]=="ok");
+        CHECK(owned.blur_recovered_text_preview());
+        CHECK(owned.open_recovered_multi_preview(42u,multiIndex));
+        CHECK(!owned.begin_bind_capture(42u));
+        CHECK(owned.close_preview_dropdown());
+        CHECK(owned.set_recovered_slider_preview(42u,sliderIndex,20.0f));
+        CHECK(owned.set_recovered_boolean_preview(
+            42u,booleanIndex,false));
+        CHECK(owned.recovered_slider_override(sliderIndex)==20.0f &&
+              owned.recovered_boolean_override(booleanIndex)==false);
+        CHECK(owned.begin_numeric_drag_preview(42u,sliderIndex,0u));
+        CHECK(!owned.open_recovered_multi_preview(42u,multiIndex));
+        CHECK(owned.cancel_numeric_drag_preview());
+        CHECK(owned.begin_bind_capture(42u));
+        CHECK(owned.cancel_bind_capture());
+
+        MenuState combat;
+        CHECK(combat.toggle_expanded(0u)); // source Aim Assist
+        CHECK(combat.begin_bind_capture(0u));
+        CHECK(!combat.open_preview_dropdown(MenuDropdownKind::AimMode,0u));
+        CHECK(combat.bind_capture_index()==0u &&
+              !combat.dropdown_preview());
+        CHECK(combat.cancel_bind_capture());
+        CHECK(combat.open_preview_dropdown(MenuDropdownKind::AimMode,0u));
+        CHECK(combat.close_preview_dropdown());
+    }
     // UI is strictly an inert model: no game/JVM or network dependencies.
     return 0;
 }

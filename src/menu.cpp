@@ -147,8 +147,7 @@ bool MenuState::begin_numeric_drag_preview(
         unsigned handle) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(numeric_drag_preview_ || dropdown_preview_ ||
-       unload_confirmation_preview_ || profile_action_preview_ ||
+    if(numeric_drag_preview_ || modal_input_owned() ||
        selected_==MenuTab::Profiles ||
        module>=catalog.size() || widget_index>=all.size() ||
        catalog[module].tab!=selected_ || !expanded_[module] ||
@@ -635,7 +634,7 @@ bool MenuState::activate_piercing_selection() noexcept {
 // dropdowns. Source-conditioned Aim widget indices must still be visible.
 bool MenuState::open_preview_dropdown(
         MenuDropdownKind kind,std::size_t control_index) noexcept {
-    if(unload_confirmation_preview_ || dropdown_preview_ ||
+    if(modal_input_owned() || numeric_drag_preview_ ||
        selected_!=MenuTab::Combat ||
        (kind!=MenuDropdownKind::AimMode &&
         kind!=MenuDropdownKind::TargetMode &&
@@ -683,7 +682,7 @@ bool MenuState::open_recovered_choice_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(dropdown_preview_ || unload_confirmation_preview_ ||
+    if(modal_input_owned() || numeric_drag_preview_ ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=selected_ ||
        !expanded_[catalog_index] ||
@@ -737,7 +736,7 @@ bool MenuState::open_recovered_multi_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(dropdown_preview_ || unload_confirmation_preview_ ||
+    if(modal_input_owned() || numeric_drag_preview_ ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=selected_ ||
        !expanded_[catalog_index] ||
@@ -778,8 +777,7 @@ bool MenuState::clear_recovered_choice_preview(
     // source-visible optional Slot 1 owns the native 20px clear X.
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(dropdown_preview_ || unload_confirmation_preview_ ||
-       profile_action_preview_ || selected_==MenuTab::Profiles ||
+    if(modal_input_owned() || selected_==MenuTab::Profiles ||
        !menu_source_large_optional_choice(widget_index) ||
        catalog_index>=catalog.size() ||
        catalog[catalog_index].tab!=selected_ ||
@@ -924,7 +922,7 @@ bool MenuState::set_recovered_boolean_preview(
     // This setter is local GUI state only. Piercing has its own editor.
     const auto& catalog=official_module_catalog();
     const auto& widgets=recovered_widget_catalog();
-    if(unload_confirmation_preview_ || dropdown_preview_ ||
+    if(modal_input_owned() ||
        catalog_index>=catalog.size() || catalog_index==11u ||
        widget_index>=widgets.size() ||
        catalog[catalog_index].tab!=selected_ ||
@@ -966,7 +964,12 @@ bool MenuState::focus_recovered_text_preview(
         std::size_t catalog_index,std::size_t widget_index) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(dropdown_preview_ || unload_confirmation_preview_ ||
+    // R236: an active bind/dialog or a different text owner must never
+    // be silently discarded by another source hit. Repeated focus on
+    // this exact text widget remains valid for R235 atomic appends.
+    if((modal_input_owned() &&
+        (!focused_text_widget_ || *focused_text_widget_!=widget_index)) ||
+       numeric_drag_preview_ ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=selected_ ||
        !expanded_[catalog_index] ||
@@ -1111,9 +1114,7 @@ std::optional<MenuColorPopupPreview> MenuState::color_popup_model() const {
 }
 bool MenuState::open_recovered_color_popup(
         std::size_t module,std::size_t widget) noexcept {
-    if(dropdown_preview_ || unload_confirmation_preview_ ||
-       profile_action_preview_ || bind_capture_index_ ||
-       numeric_drag_preview_ ||
+    if(modal_input_owned() || numeric_drag_preview_ ||
        !color_popup_target_visible(*this,module,widget))
         return false;
     const auto value=recovered_color_overrides_[widget].value_or(
@@ -1226,8 +1227,7 @@ bool MenuState::set_recovered_color_preview(
         std::uint32_t rgb) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& widgets=recovered_widget_catalog();
-    if(rgb>0xFFFFFFu || dropdown_preview_ ||
-       unload_confirmation_preview_ ||
+    if(rgb>0xFFFFFFu || modal_input_owned() ||
        catalog_index>=catalog.size() ||
        widget_index>=widgets.size() ||
        catalog[catalog_index].tab!=selected_ ||
@@ -1271,8 +1271,7 @@ bool MenuState::set_recovered_slider_preview(
     // gameplay defaults; this function never writes ClientSettings.
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(!std::isfinite(requested_value) || dropdown_preview_ ||
-       unload_confirmation_preview_ ||
+    if(!std::isfinite(requested_value) || modal_input_owned() ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=selected_ ||
        !expanded_[catalog_index] ||
@@ -1334,7 +1333,7 @@ bool MenuState::set_recovered_range_preview(
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
     if(handle>1u || !std::isfinite(requested_value) ||
-       dropdown_preview_ || unload_confirmation_preview_ ||
+       modal_input_owned() ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=selected_ ||
        !expanded_[catalog_index] ||
