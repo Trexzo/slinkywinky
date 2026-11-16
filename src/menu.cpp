@@ -1000,23 +1000,50 @@ bool MenuState::blur_recovered_text_preview() noexcept {
 }
 bool MenuState::append_recovered_text_preview(
         std::string_view unicode_scalar) {
-    if(!focused_text_widget_ ||
-       !menu_one_printable_utf8(unicode_scalar))return false;
+    // Preserve the original one-scalar API, but share the same atomic
+    // capacity and owner checks as the source keyboard event.
+    return menu_one_printable_utf8(unicode_scalar) &&
+           append_recovered_text_event_preview(unicode_scalar);
+}
+bool MenuState::append_recovered_text_event_preview(
+        std::string_view source_bytes) {
+    if(!focused_text_widget_ || source_bytes.empty() ||
+       source_bytes.size()>4u)return false;
+    const auto chars=source_bytes.substr(0u,source_bytes.find('\0'));
+    if(chars.empty())return false;
+    // Validate every UTF-8 scalar first. A valid prefix followed by an
+    // invalid/truncated sequence must not be written to the preview.
+    for(std::size_t pos=0u;pos<chars.size();) {
+        const auto lead=static_cast<unsigned char>(chars[pos]);
+        const std::size_t width=lead<0x80u?1u:
+            ((lead&0xe0u)==0xc0u?2u:
+             ((lead&0xf0u)==0xe0u?3u:
+              ((lead&0xf8u)==0xf0u?4u:0u)));
+        if(width==0u || width>chars.size()-pos ||
+           !menu_one_printable_utf8(chars.substr(pos,width)))
+            return false;
+        pos+=width;
+    }
     const auto widgetIndex=*focused_text_widget_;
-    const auto& widget=recovered_widget_catalog()[widgetIndex];
+    const auto& all=recovered_widget_catalog();
+    if(widgetIndex>=all.size() ||
+       widgetIndex>=recovered_text_overrides_.size())return false;
+    const auto& existing=recovered_text_overrides_[widgetIndex];
+    const std::size_t used=existing?existing->size():0u;
+    // Check total event size before changing anything. Without this,
+    // "XY" at 127/128 bytes would append X and silently drop Y.
+    if(used>128u || chars.size()>128u-used)return false;
     const auto& catalog=official_module_catalog();
     std::size_t moduleIndex=catalog.size();
     for(std::size_t i=0;i<catalog.size();++i)
-        if(std::string_view(widget.module)==catalog[i].name)
+        if(std::string_view(all[widgetIndex].module)==catalog[i].name)
             {moduleIndex=i;break;}
     if(moduleIndex>=catalog.size() ||
        !focus_recovered_text_preview(moduleIndex,widgetIndex))
         return false;
     auto& value=recovered_text_overrides_[widgetIndex];
-    const std::size_t used=value?value->size():0u;
-    if(used+unicode_scalar.size()>128u)return false;
     if(!value)value.emplace();
-    value->append(unicode_scalar.data(),unicode_scalar.size());
+    value->append(chars.data(),chars.size());
     return true;
 }
 bool MenuState::erase_recovered_text_preview() noexcept {

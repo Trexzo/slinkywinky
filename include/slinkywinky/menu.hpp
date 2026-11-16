@@ -388,6 +388,9 @@ public:
         std::size_t catalog_index,std::size_t widget_index) noexcept;
     bool blur_recovered_text_preview() noexcept;
     bool append_recovered_text_preview(std::string_view unicode_scalar);
+    // R235: one source InEv.ch[4] payload is validated and committed
+    // atomically. Invalid UTF-8 or a full field cannot append a prefix.
+    bool append_recovered_text_event_preview(std::string_view source_bytes);
     bool erase_recovered_text_preview() noexcept;
     std::optional<std::size_t> focused_text_widget() const noexcept {
         return focused_text_widget_;

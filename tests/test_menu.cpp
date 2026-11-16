@@ -1,4 +1,5 @@
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <set>
 #include <filesystem>
 #include <fstream>
@@ -116,6 +117,54 @@ int main() {
     CHECK(!load_menu_appearance(file,fileCopy));
     CHECK(fileCopy.accent_rgb==stored.accent_rgb);
     std::filesystem::remove(file,ignored);
+    // R235: one native source text event is all-or-nothing, including
+    // mixed UTF-8 scalars, malformed suffixes, NUL and field capacity.
+    {
+        const auto& widgets=recovered_widget_catalog();
+        std::size_t textIndex=widgets.size();
+        for(std::size_t i=0;i<widgets.size();++i)
+            if(widgets[i].kind==RecoveredWidgetKind::Text &&
+               std::string_view(widgets[i].module)=="Auto Tool" &&
+               std::string_view(widgets[i].auxiliary)=="Search item")
+                {textIndex=i;break;}
+        CHECK(textIndex<widgets.size());
+        MenuState editor;
+        CHECK(editor.select(MenuTab::Block));
+        CHECK(editor.toggle_expanded(42u)); // Auto Tool, exact catalog
+        bool focused=false;
+        for(unsigned page=0u;page<10u && !focused;++page) {
+            focused=editor.focus_recovered_text_preview(42u,textIndex);
+            if(!focused)CHECK(editor.change_settings_page(42u,1));
+        }
+        CHECK(focused && editor.modal_input_owned());
+        CHECK(editor.append_recovered_text_event_preview("ab"));
+        CHECK(editor.append_recovered_text_event_preview("\xC3\xA4"));
+        CHECK(!editor.append_recovered_text_event_preview(
+            std::string_view("A\xC3",2u)));
+        CHECK(!editor.append_recovered_text_event_preview("\xC0\xAF"));
+        CHECK(!editor.append_recovered_text_event_preview("12345"));
+        CHECK(!editor.append_recovered_text_event_preview({}));
+        CHECK(editor.recovered_text_overrides()[textIndex] &&
+              *editor.recovered_text_overrides()[textIndex]=="ab\xC3\xA4");
+        for(unsigned n=0u;n<30u;++n)
+            CHECK(editor.append_recovered_text_event_preview("xxxx"));
+        CHECK(editor.append_recovered_text_event_preview("xxx"));
+        const std::string beforeLimit=
+            std::string("ab\xC3\xA4")+std::string(123u,'x');
+        CHECK(beforeLimit.size()==127u &&
+              *editor.recovered_text_overrides()[textIndex]==beforeLimit);
+        CHECK(!editor.append_recovered_text_event_preview("YZ"));
+        CHECK(*editor.recovered_text_overrides()[textIndex]==beforeLimit);
+        CHECK(editor.append_recovered_text_event_preview("Q"));
+        CHECK(editor.recovered_text_overrides()[textIndex]->size()==128u);
+        CHECK(!editor.append_recovered_text_event_preview("!"));
+        CHECK(*editor.recovered_text_overrides()[textIndex]==beforeLimit+"Q");
+        CHECK(editor.erase_recovered_text_preview() &&
+              *editor.recovered_text_overrides()[textIndex]==beforeLimit);
+        CHECK(editor.blur_recovered_text_preview());
+        CHECK(!editor.append_recovered_text_event_preview("K"));
+        CHECK(editor.select(MenuTab::Combat));
+    }
     // UI is strictly an inert model: no game/JVM or network dependencies.
     return 0;
 }

@@ -1681,12 +1681,31 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
                 draft->recovered_text_overrides.size()==1u &&
                 draft->recovered_text_overrides[0].widget_index==textIndex &&
                 draft->recovered_text_overrides[0].value=="aB\xC3\xA4");
+        // R235: prove a paired source event cannot write only the
+        // first byte when the 128-byte field has one byte remaining.
+        for(unsigned n=0u;n<30u;++n)type(30u,"xxxx",true);
+        type(30u,"xxx",true);
+        const std::string nearLimit=
+            std::string("aB\xC3\xA4")+std::string(123u,'x');
+        REQUIRE(nearLimit.size()==127u);
+        const auto* near=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(near && near->recovered_text_overrides.size()==1u &&
+                near->recovered_text_overrides[0].value==nearLimit);
+        type(30u,"YZ",false); // invalid total length: no partial Y
+        const auto* afterDenied=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(afterDenied &&
+                afterDenied->recovered_text_overrides[0].value==nearLimit);
+        type(30u,"Q",true);  // fill exactly 128 bytes
+        type(30u,"!",false); // refuse all further input
+        const std::string maxText=nearLimit+"Q";
         type(28u,{},true); // Enter blurs, not expand or close GUI.
         const auto* committed=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
         REQUIRE(committed && !committed->focused_text_widget &&
                 committed->recovered_text_overrides.size()==1u &&
-                committed->recovered_text_overrides[0].value=="aB\xC3\xA4" &&
+                committed->recovered_text_overrides[0].value==maxText &&
                 preview.tab()==MenuTab::Block);
         REQUIRE(preview.profile_snapshot(
             ctx.gl,ctx.dc,676,630)==nativeProfile);
@@ -1701,6 +1720,7 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
     }
     REQUIRE(glGetError()==GL_NO_ERROR);
     same(expected,snapshot());
+    std::cout<<"R235_WGL_ATOMIC_SOURCE_TEXT_EVENT_CAPACITY_PASS\n";
     std::cout<<"R234_WGL_MODULE_BIND_AND_UTF8_TEXT_KEYBOARD_COMMIT_PASS\n";
     std::cout<<"R197_WGL_NATIVE_BIND_CHIP_FOCUS_AND_TEXT_FIELD_PASS\n";
 }

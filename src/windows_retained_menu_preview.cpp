@@ -407,39 +407,11 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
             changed=menu_.blur_recovered_text_preview();
         } else if(lwjgl_key==14u) {
             changed=menu_.erase_recovered_text_preview();
-        } else if(!typed_chars.empty() && typed_chars.size()<=4u) {
-            // A source input event carries up to 4 raw UTF-8 bytes,
-            // not a character inferred from its physical keycode.
-            // Fully validate scalar boundaries before any write so
-            // malformed/truncated UTF-8 cannot partially mutate text.
-            const auto chars=typed_chars.substr(
-                0u,typed_chars.find('\0'));
-            std::array<std::string_view,4> scalars{};
-            std::size_t count=0u;
-            bool valid=true;
-            for(std::size_t pos=0u;pos<chars.size();) {
-                const auto first=static_cast<unsigned char>(chars[pos]);
-                const std::size_t bytes=first<0x80u?1u:
-                    ((first&0xe0u)==0xc0u?2u:
-                     ((first&0xf0u)==0xe0u?3u:
-                      ((first&0xf8u)==0xf0u?4u:0u)));
-                if(bytes==0u || pos+bytes>chars.size() ||
-                   count>=scalars.size()) {
-                    valid=false;
-                    break;
-                }
-                const auto scalar=chars.substr(pos,bytes);
-                if(!menu_one_printable_utf8(scalar)) {
-                    valid=false;
-                    break;
-                }
-                scalars[count++]=scalar;
-                pos+=bytes;
-            }
-            if(valid)
-                for(std::size_t i=0u;i<count;++i)
-                    if(menu_.append_recovered_text_preview(scalars[i]))
-                        changed=true;
+        } else if(!typed_chars.empty()) {
+            // R235: validate and commit the entire bounded source event
+            // together, including the 128-byte limit. Never append a
+            // partial prefix after invalid UTF-8 or at field capacity.
+            changed=menu_.append_recovered_text_event_preview(typed_chars);
         }
         if(changed)invalidate_painted_input();
         return {MenuKeyDelivery::MenuExclusive,false,changed};
