@@ -249,7 +249,9 @@ public:
                unload_confirmation_preview_ ||
                profile_action_preview_.has_value() ||
                profile_name_focused_ ||
-               profile_bind_capture_index_.has_value();
+               profile_bind_capture_index_.has_value() ||
+               bind_capture_index_.has_value() ||
+               focused_text_widget_.has_value();
     }
     bool set_profile_icon_hover(
         std::optional<MenuProfileIconHover> hover) noexcept;

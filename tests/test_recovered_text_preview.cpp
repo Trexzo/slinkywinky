@@ -115,14 +115,27 @@ int main() {
         CHECK(menu.blur_recovered_text_preview());
         CHECK(!menu.append_recovered_text_preview("x"));
         CHECK(menu.focus_recovered_text_preview(42u,searchItem));
-        // The source fixture for Auto Tool spans six visible callsites;
-        // moving away from page one must drop keyboard focus.
+        // R234: an active source text field cannot be silently
+        // dismissed by background navigation or another popup.
+        CHECK(menu.modal_input_owned() && nav.color_modal_open());
+        CHECK(!nav.select_tab(MenuTab::Combat));
+        CHECK(!nav.apply(MenuNavAction::NextTab));
+        CHECK(!menu.scroll_by(1));
+        CHECK(!menu.change_settings_page(42u,1));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(menu.focused_text_widget()==searchItem);
+        // Once explicitly blurred, the six-callsites source editor
+        // can be paged normally without leaving a stale text owner.
+        CHECK(menu.blur_recovered_text_preview());
         CHECK(menu.change_settings_page(42u,1));
         CHECK(!menu.focused_text_widget());
         CHECK(!menu.focus_recovered_text_preview(42u,searchItem));
         CHECK(!menu.erase_recovered_text_preview());
         CHECK(menu.change_settings_page(42u,-1));
         CHECK(menu.focus_recovered_text_preview(42u,searchItem));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(menu.focused_text_widget()==searchItem);
+        CHECK(menu.blur_recovered_text_preview());
         CHECK(menu.open_unload_confirmation_preview());
         CHECK(!menu.focused_text_widget());
         CHECK(!menu.focus_recovered_text_preview(42u,searchItem));

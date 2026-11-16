@@ -1541,6 +1541,37 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
         REQUIRE(preview.profile_snapshot(
             ctx.gl,ctx.dc,676,630)==nativeProfile);
         REQUIRE(!preview.preview_enabled(0u));
+        // R234: the native source bind chip now accepts a paired
+        // synthetic key commit rather than stopping at pointer focus.
+        // Background Tab, Escape and page navigation remain refused.
+        REQUIRE(!preview.apply(MenuNavAction::NextTab));
+        REQUIRE(!preview.scroll_visible(1,3u));
+        REQUIRE(!preview.fixture_navigation().select_tab(MenuTab::Move));
+        REQUIRE(preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630)==waiting);
+        const auto f6=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,676,630,1970,ledger,router,
+            64u,true,true);
+        REQUIRE(f6.delivery==MenuKeyDelivery::MenuExclusive &&
+                f6.action_applied && !f6.request_close);
+        REQUIRE(!preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630));
+        const auto f6Release=preview.fixture_keyboard_event(
+            ctx.gl,ctx.dc,676,630,1970,ledger,router,
+            64u,false,true);
+        REQUIRE(f6Release.delivery==MenuKeyDelivery::MenuExclusive &&
+                !f6Release.action_applied && !f6Release.request_close);
+        REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        const auto* bound=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(bound && !bound->bind_capture_index &&
+                bound->bind_previews[0u].code==0x75u &&
+                bound->tab==MenuTab::Combat &&
+                !preview.preview_enabled(0u));
+        REQUIRE(preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630)==nativeProfile);
+        REQUIRE(preview.apply(MenuNavAction::NextTab));
+        REQUIRE(preview.tab()==MenuTab::Move);
         REQUIRE(ledger.tracked_released());
         REQUIRE(preview.fixture_end_keyboard(ledger,router));
         REQUIRE(preview.fixture_finish_restore(
@@ -1610,6 +1641,57 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
         REQUIRE(preview.profile_snapshot(
             ctx.gl,ctx.dc,676,630)==nativeProfile);
         REQUIRE(!preview.preview_enabled(42u));
+        // R234: source UTF-8 editing is owned by the recovered text
+        // field. An untrusted physical key without typed bytes cannot
+        // invent a letter, and malformed scalar payloads are inert.
+        REQUIRE(!preview.apply(MenuNavAction::NextTab));
+        REQUIRE(!preview.scroll_visible(1,3u));
+        REQUIRE(!preview.fixture_navigation().select_tab(MenuTab::Move));
+        REQUIRE(preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630)==focused);
+        const auto type=[&](unsigned key,std::string_view bytes,
+                            bool edited) {
+            const auto result=preview.fixture_keyboard_typed_event(
+                ctx.gl,ctx.dc,676,630,1971,ledger,router,
+                key,true,true,bytes);
+            REQUIRE(result.delivery==MenuKeyDelivery::MenuExclusive &&
+                    result.action_applied==edited && !result.request_close);
+            const auto up=preview.fixture_keyboard_event(
+                ctx.gl,ctx.dc,676,630,1971,ledger,router,
+                key,false,true);
+            REQUIRE(up.delivery==MenuKeyDelivery::MenuExclusive &&
+                    !up.action_applied && !up.request_close);
+            REQUIRE(ledger.tracked_released());
+            REQUIRE(preview.draw(ctx.gl,ctx.dc,676,630));
+        };
+        type(15u,{},false);  // Tab is not a background switch.
+        type(30u,{},false);  // physical A without text cannot append.
+        type(30u,"a",true);
+        type(48u,"B",true);
+        type(18u,"\xC3\xA4",true); // Unicode ä
+        type(17u,"\xF0\x9F\x98\x80",true); // emoji
+        type(34u,"\xC0\xAF",false); // invalid UTF-8
+        type(16u,std::string_view("Z\0Q",3u),true);
+        type(14u,{},true); // Backspace Z
+        type(14u,{},true); // Backspace whole 4-byte emoji
+        const auto* draft=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(draft && draft->tab==MenuTab::Block &&
+                draft->focused_text_widget==textIndex &&
+                draft->recovered_text_overrides.size()==1u &&
+                draft->recovered_text_overrides[0].widget_index==textIndex &&
+                draft->recovered_text_overrides[0].value=="aB\xC3\xA4");
+        type(28u,{},true); // Enter blurs, not expand or close GUI.
+        const auto* committed=preview.fixture_painted_frame(
+            ctx.gl,ctx.dc,676,630);
+        REQUIRE(committed && !committed->focused_text_widget &&
+                committed->recovered_text_overrides.size()==1u &&
+                committed->recovered_text_overrides[0].value=="aB\\xC3\\xA4" &&
+                preview.tab()==MenuTab::Block);
+        REQUIRE(preview.profile_snapshot(
+            ctx.gl,ctx.dc,676,630)==nativeProfile);
+        REQUIRE(!preview.preview_enabled(42u));
+        REQUIRE(preview.fixture_navigation().select_tab(MenuTab::Combat));
         REQUIRE(ledger.tracked_released());
         REQUIRE(preview.fixture_end_keyboard(ledger,router));
         REQUIRE(preview.fixture_finish_restore(
@@ -1619,6 +1701,7 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
     }
     REQUIRE(glGetError()==GL_NO_ERROR);
     same(expected,snapshot());
+    std::cout<<"R234_WGL_MODULE_BIND_AND_UTF8_TEXT_KEYBOARD_COMMIT_PASS\n";
     std::cout<<"R197_WGL_NATIVE_BIND_CHIP_FOCUS_AND_TEXT_FIELD_PASS\n";
 }
 

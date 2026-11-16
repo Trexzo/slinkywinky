@@ -36,11 +36,9 @@ bool MenuNavigation::owner_thread() const noexcept {
 }
 bool MenuNavigation::color_modal_open() const noexcept {
     // R227: keep existing router ABI; any dropdown is modal-exclusive.
-    // R231: name-edit and bind-capture are exclusive input modes,
-    // even though neither draws a confirmation or dropdown popup.
-    return owner_thread() &&
-        (menu_.modal_input_owned() || menu_.profile_name_focused() ||
-         menu_.profile_bind_capture_index().has_value());
+    // R234: the ABI-preserved modal router predicate now covers all
+    // active source editor/keybind modes, including recovered widgets.
+    return owner_thread() && menu_.modal_input_owned();
 }
 std::optional<std::size_t> MenuNavigation::visible_focus() const {
     if(!owner_thread() || !focused_ || !profile_.owns(menu_))

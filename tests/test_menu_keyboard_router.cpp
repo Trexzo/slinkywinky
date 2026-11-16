@@ -232,6 +232,52 @@ int main() {
     REQUIRE(menu.cancel_profile_bind_capture());
     REQUIRE(navigation.apply(MenuNavAction::NextTab));
     REQUIRE(menu.tab()==MenuTab::Combat);
+    // R234: module binding and recovered text editing are exclusive
+    // keyboard modes, just like the Profiles card and color popup.
+    REQUIRE(menu.begin_bind_capture(0u));
+    REQUIRE(navigation.color_modal_open());
+    REQUIRE(routing.begin(117,true,true));
+    for(const unsigned code:{15u,28u,1u}) {
+        const auto down=deliver(code,true,true,true,true);
+        REQUIRE(down.delivery==MenuKeyDelivery::MenuExclusive &&
+                !down.action_applied && !down.request_close);
+        REQUIRE(deliver(code,false,true,true,true).delivery==
+                MenuKeyDelivery::MenuExclusive);
+    }
+    REQUIRE(menu.tab()==MenuTab::Combat &&
+            menu.bind_capture_index()==0u);
+    REQUIRE(routing.end());
+    REQUIRE(menu.cancel_bind_capture());
+    REQUIRE(navigation.select_tab(MenuTab::Block));
+    REQUIRE(navigation.focus_visible_row(42u));
+    REQUIRE(menu.toggle_expanded(42u));
+    const auto& widgets=recovered_widget_catalog();
+    std::size_t sourceText=widgets.size();
+    for(std::size_t i=0u;i<widgets.size();++i) {
+        if(widgets[i].kind==RecoveredWidgetKind::Text &&
+           std::string_view(widgets[i].module)=="Auto Tool" &&
+           std::string_view(widgets[i].auxiliary)=="Search item") {
+            sourceText=i;
+            break;
+        }
+    }
+    REQUIRE(sourceText<widgets.size());
+    REQUIRE(menu.focus_recovered_text_preview(42u,sourceText));
+    REQUIRE(navigation.color_modal_open());
+    REQUIRE(routing.begin(118,true,true));
+    for(const unsigned code:{15u,28u,1u}) {
+        const auto down=deliver(code,true,true,true,true);
+        REQUIRE(down.delivery==MenuKeyDelivery::MenuExclusive &&
+                !down.action_applied && !down.request_close);
+        REQUIRE(deliver(code,false,true,true,true).delivery==
+                MenuKeyDelivery::MenuExclusive);
+    }
+    REQUIRE(menu.tab()==MenuTab::Block &&
+            menu.focused_text_widget()==sourceText);
+    REQUIRE(routing.end());
+    REQUIRE(menu.blur_recovered_text_preview());
+    REQUIRE(navigation.select_tab(MenuTab::Combat));
+    std::cout << "R234_MODULE_BIND_AND_RECOVERED_TEXT_KEYBOARD_ISOLATION_PASS\\n";
     std::cout << "R231_PROFILE_EDIT_BIND_KEYBOARD_ISOLATION_PASS\\n";
     std::cout << "R230_UNLOAD_AND_PROFILE_KEYBOARD_MODAL_QUARANTINE_PASS\\n";
     std::cout << "R108_EXCLUSIVE_MODAL_KEYBOARD_ROUTER_SYNTHETIC_GAME_NONDELIVERY_PASS\\n"

@@ -158,6 +158,17 @@ int main() {
         CHECK(menu.bind_previews()[0].code==menu_bind_mouse5);
         CHECK(!menu.cancel_bind_capture());
         CHECK(menu.begin_bind_capture(0u));
+        // R234: source key capture exclusively owns the keyboard and
+        // background menu, until a real bind commit or explicit cancel.
+        CHECK(menu.modal_input_owned() && nav.color_modal_open());
+        CHECK(!nav.select_tab(MenuTab::Move));
+        CHECK(!nav.apply(MenuNavAction::NextTab));
+        CHECK(!menu.scroll_by(1));
+        CHECK(!menu.change_settings_page(0u,1));
+        CHECK(!menu.open_unload_confirmation_preview());
+        CHECK(menu.bind_capture_index()==0u &&
+              menu.bind_previews()[0].code==menu_bind_mouse5);
+        CHECK(menu.cancel_bind_capture());
         CHECK(menu.open_unload_confirmation_preview());
         CHECK(!menu.bind_capture_index());
         CHECK(!menu.begin_bind_capture(0u));

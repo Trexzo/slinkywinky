@@ -6,7 +6,9 @@
 #include "slinkywinky/menu_numeric_geometry.hpp"
 #include "slinkywinky/menu_dropdown_geometry.hpp"
 #include "slinkywinky/menu_color_modal_geometry.hpp"
+#include "slinkywinky/menu_text_geometry.hpp"
 #include <GL/gl.h>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -327,6 +329,10 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
     const bool profileNameEditing=menu_.profile_name_focused();
     const bool profileBindCapturing=
         menu_.profile_bind_capture_index().has_value();
+    const bool moduleBindCapturing=
+        menu_.bind_capture_index().has_value();
+    const bool recoveredTextEditing=
+        menu_.focused_text_widget().has_value();
     const bool colorModal=menu_.color_popup_owner().has_value();
     const bool searchModal=menu_.dropdown_preview() &&
         menu_.dropdown_preview()->kind==MenuDropdownKind::RecoveredChoice &&
@@ -381,6 +387,60 @@ MenuKeyOutcome WglRetainedMenuPreview::fixture_keyboard_typed_event(
         const auto code=profile_vk_from_lwjgl(lwjgl_key);
         const bool changed=code &&
             menu_.commit_profile_bind_capture(*code);
+        if(changed)invalidate_painted_input();
+        return {MenuKeyDelivery::MenuExclusive,false,changed};
+    }
+    // R234: source-key capture for module rows uses the same
+    // whitelisted LWJGL->VK mapping as Profiles, but commits ONLY
+    // to the inert module bind preview (not Minecraft keybinds).
+    if(moduleBindCapturing && rising) {
+        const auto code=profile_vk_from_lwjgl(lwjgl_key);
+        const bool changed=code && menu_.commit_bind_capture(*code);
+        if(changed)invalidate_painted_input();
+        return {MenuKeyDelivery::MenuExclusive,false,changed};
+    }
+    if(recoveredTextEditing && rising) {
+        bool changed=false;
+        if(lwjgl_key==1u || lwjgl_key==28u) {
+            // Escape/Enter release the source text owner, without
+            // changing tabs, closing the GUI, or touching gameplay.
+            changed=menu_.blur_recovered_text_preview();
+        } else if(lwjgl_key==14u) {
+            changed=menu_.erase_recovered_text_preview();
+        } else if(!typed_chars.empty() && typed_chars.size()<=4u) {
+            // A source input event carries up to 4 raw UTF-8 bytes,
+            // not a character inferred from its physical keycode.
+            // Fully validate scalar boundaries before any write so
+            // malformed/truncated UTF-8 cannot partially mutate text.
+            const auto chars=typed_chars.substr(
+                0u,typed_chars.find('\0'));
+            std::array<std::string_view,4> scalars{};
+            std::size_t count=0u;
+            bool valid=true;
+            for(std::size_t pos=0u;pos<chars.size();) {
+                const auto first=static_cast<unsigned char>(chars[pos]);
+                const std::size_t bytes=first<0x80u?1u:
+                    ((first&0xe0u)==0xc0u?2u:
+                     ((first&0xf0u)==0xe0u?3u:
+                      ((first&0xf8u)==0xf0u?4u:0u)));
+                if(bytes==0u || pos+bytes>chars.size() ||
+                   count>=scalars.size()) {
+                    valid=false;
+                    break;
+                }
+                const auto scalar=chars.substr(pos,bytes);
+                if(!menu_one_printable_utf8(scalar)) {
+                    valid=false;
+                    break;
+                }
+                scalars[count++]=scalar;
+                pos+=bytes;
+            }
+            if(valid)
+                for(std::size_t i=0u;i<count;++i)
+                    if(menu_.append_recovered_text_preview(scalars[i]))
+                        changed=true;
+        }
         if(changed)invalidate_painted_input();
         return {MenuKeyDelivery::MenuExclusive,false,changed};
     }
