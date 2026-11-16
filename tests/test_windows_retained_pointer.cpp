@@ -1686,7 +1686,7 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
             ctx.gl,ctx.dc,676,630);
         REQUIRE(committed && !committed->focused_text_widget &&
                 committed->recovered_text_overrides.size()==1u &&
-                committed->recovered_text_overrides[0].value=="aB\\xC3\\xA4" &&
+                committed->recovered_text_overrides[0].value=="aB\xC3\xA4" &&
                 preview.tab()==MenuTab::Block);
         REQUIRE(preview.profile_snapshot(
             ctx.gl,ctx.dc,676,630)==nativeProfile);
