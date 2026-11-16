@@ -70,6 +70,29 @@ Minecraft process is launched, no gameplay keyboard hook is enabled,
 no original module is executed, and no original profile I/O occurs.
 Chat 2 PR #2 remains independent and unchanged.
 
-## CI
+## Exact-commit CI verification
 
-Pending exact-commit GitHub verification.
+All workflows passed on corrected R234 implementation commit
+`b9cfd6767ff3066fa904590c385d38d701ce7cb1`:
+
+- Offline C++ core: **6/6 jobs successful**, Windows Debug/Release,
+  Ubuntu Debug/Release, Linux JNI smoke and sanitizers:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43858820970
+- Windows JNI preview artifact: Windows x64 native bridge and
+  Java 8 JNI roundtrip successful:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43858821023
+- Injectable Windows Java 8 agent: native loader/JVMTI,
+  original-style Java 8 JVM and actual Attach API tests successful:
+  https://github.com/Trexzo/slinkywinky/actions/runs/43858821032
+
+The first R234 commit had a missing recovered-settings catalog include
+in the new keyboard-router regression; the next commit fixed it.
+The first Windows GUI verification then caught a faulty fixture
+assertion whose expected string contained literal escape sequences,
+despite the pre-Enter test already verifying actual UTF-8 bytes.
+The final assertion was fixed without changing GUI runtime logic.
+All three workflows passed on the corrected commit.
+
+This checks disposable first-party GL11 input and Java loader fixtures,
+not physical Minecraft mouse/keyboard ownership, real game
+module execution, or saved original profiles.
