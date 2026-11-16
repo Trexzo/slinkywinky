@@ -1,5 +1,6 @@
 #include "slinkywinky/menu_keyboard_router.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/recovered_settings.hpp"
 #include <atomic>
 #include <stdexcept>
 #include <thread>
