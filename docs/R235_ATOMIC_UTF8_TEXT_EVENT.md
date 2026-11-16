@@ -20,3 +20,15 @@ The retained WGL recovered text field accepted up to four source-event bytes and
 ## Limits
 
 These are first-party source-informed preview model and disposable WGL regressions only. This change does not install physical Minecraft input hooks, activate gameplay modules, or imply original Slinky parity. Chat 2 PR #2 is untouched. Exact-commit CI verification is recorded separately; until complete, it is not a tested release.
+
+## Exact-commit GitHub CI
+
+On corrected R235 code commit e36248808bfefc1aa31a26d1276e89e6bc247f9e, all **8/8 GitHub checks completed successfully**, across three workflows:
+
+- Offline C++ core: Windows Debug/Release, Ubuntu Debug/Release, JNI smoke and sanitizers — 6/6 successful: https://github.com/Trexzo/slinkywinky/actions/runs/43894739443
+- Windows x64 native JNI preview bridge — successful: https://github.com/Trexzo/slinkywinky/actions/runs/43894740645
+- Injectable Windows Java 8 agent / standalone native loader — successful: https://github.com/Trexzo/slinkywinky/actions/runs/43894739409
+
+The first R235 commit failed one Windows compile fixture because the test variable `near` is an MSVC reserved identifier. The corrected commit renamed that local variable to `nearFrame` without changing production code. Every check passed on the corrected source.
+
+Passing fixture tests does not establish real original-client user input, visual interaction, original gameplay modules, or full injection fidelity. PR #1 remains draft and unmerged.
