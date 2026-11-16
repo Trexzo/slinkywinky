@@ -1688,10 +1688,11 @@ void verify_r197_native_focus_receipts(Context& ctx,const State& expected) {
         const std::string nearLimit=
             std::string("aB\xC3\xA4")+std::string(123u,'x');
         REQUIRE(nearLimit.size()==127u);
-        const auto* near=preview.fixture_painted_frame(
+        const auto* nearFrame=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
-        REQUIRE(near && near->recovered_text_overrides.size()==1u &&
-                near->recovered_text_overrides[0].value==nearLimit);
+        REQUIRE(nearFrame &&
+                nearFrame->recovered_text_overrides.size()==1u &&
+                nearFrame->recovered_text_overrides[0].value==nearLimit);
         type(30u,"YZ",false); // invalid total length: no partial Y
         const auto* afterDenied=preview.fixture_painted_frame(
             ctx.gl,ctx.dc,676,630);
