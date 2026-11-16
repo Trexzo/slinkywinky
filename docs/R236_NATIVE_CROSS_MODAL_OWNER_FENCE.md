@@ -18,6 +18,12 @@ Portable C++ tests use the actual recovered Auto Tool module and its Text, Multi
 
 This is a first-party *native reconstructed GUI model* fix, not a live original Minecraft keyboard/mouse hook. No physical input interception, game event suppression or gameplay module control was introduced. Chat 2 PR #2 remains untouched. Keep PR #1 draft and unmerged.
 
-## Verification status
+## Exact-commit GitHub CI verification
 
-Pending exact-commit CI results.
+Implementation commit `2fffb5309b40f79535e19cf2347b3c7fedaa6eca` passed **8/8 GitHub checks**, across all three workflows:
+
+- Core C++ build/test: **6/6 success** — Ubuntu Debug/Release, Windows Debug/Release, sanitizers and JNI smoke. https://github.com/Trexzo/slinkywinky/actions/runs/43965107444
+- Windows JNI native bridge: **success**. https://github.com/Trexzo/slinkywinky/actions/runs/43965107480
+- Standalone native loader / Java 8 Attach: **success**. https://github.com/Trexzo/slinkywinky/actions/runs/43965107557
+
+This validates the new in-memory GUI modal-fence regression in disposable C++/WGL/JNI builds, not physical original-Minecraft event ownership, live input suppression or commercial Slinky parity. PR #1 stays draft and unmerged.
