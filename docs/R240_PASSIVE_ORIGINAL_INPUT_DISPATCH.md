@@ -35,6 +35,25 @@ input restoration remain independently unproven. The Windows desktop
 was unavailable for live original-client input acceptance. PR #2 is
 untouched; no original game JAR or private original source is committed.
 
-## CI
+## Exact-commit CI verification
 
-Pending exact-commit verification.
+The R240 original-input diagnostic and direct-Mojang source audit passed **9/9 GitHub checks** on commit `58181cfe77d579237947d4515d797398fe3bcd30`:
+
+- Windows and Ubuntu Debug/Release, Linux sanitizers, and JNI smoke: **6/6 success** — https://github.com/Trexzo/slinkywinky/actions/runs/44083442699
+- Windows native JNI bridge: **success** — https://github.com/Trexzo/slinkywinky/actions/runs/44083442684
+- Windows standalone Java 8 loader and Attach API: **success** — https://github.com/Trexzo/slinkywinky/actions/runs/44083442674
+- Exact-original Minecraft 1.8.9 Mojang class audit: **success** — https://github.com/Trexzo/slinkywinky/actions/runs/44083442622
+
+The direct original-source audit independently printed:
+`R240_EXACT_MOJANG_189_INPUT_METHOD_ENTRY_ONE_CALL_ONLY_PASS` and
+`R240_ALL_58_ORIGINAL_INPUT_CONSUMER_SITES_UNCHANGED_PASS`.
+It also verified original game binaries were not committed or uploaded.
+
+This exact-source audit proves only that the in-memory original
+`ave.s()V` transformation adds one observer method call and preserves
+the existing dispatcher bytecode's input consumers. The actual opt-in
+R240 agent was **not physically exercised in an original Minecraft
+client** because the connected Windows desktop was offline. Minecraft
+physical input ownership, safe interception, gameplay handler suppression,
+reversible event delivery and full Slinky ClickGUI functional parity
+remain unverified. Keep PR #1 draft and unmerged; PR #2 untouched.
