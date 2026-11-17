@@ -87,6 +87,15 @@ public final class OriginalInputFrameDiagnostic {
     private static byte[] weaveOriginal(byte[] raw) {
         return weave(raw,"ave","s");
     }
+    // R240: run the *same* production weave against exact immutable
+    // original Mojang bytes in the standalone source audit; no injection.
+    public static byte[] weavePinnedOriginalForOffline(byte[] raw) {
+        if(!OriginalKeyboardBridgeWeaver.exactOriginal(raw))
+            throw new IllegalArgumentException(
+                "R240 expected exact original 1.8.9 ave.class fingerprint");
+        return weaveOriginal(raw);
+    }
+
     // Source-restricted, offline-only test path.
     static byte[] weaveFixture(byte[] raw) {
         return weave(raw,"dev/slinkywinky/instrument/R240InputFixture","tick");

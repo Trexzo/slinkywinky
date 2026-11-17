@@ -77,6 +77,15 @@ try:
             raise AssertionError("R164 offline gate tests missing from audit JAR")
     if entries.intersection(r164_source_only):
         raise AssertionError("R164 offline input gate leaked into injected agent")
+    # R240 verifier is source-audit ONLY. The production observer is
+    # separately included in instrument.jar, but the Mojang JAR audit/test
+    # class must never be injected.
+    r240_audit="dev/slinkywinky/attach/R240OriginalInputEntryWeaveAudit.class"
+    r240_prod="dev/slinkywinky/instrument/OriginalInputFrameDiagnostic.class"
+    if (r240_audit not in audit_entries or r240_audit in entries or
+            r240_prod not in entries):
+        raise AssertionError("R240 original source verifier/agent separation failed")
+    print("PASS: R240 source-only verifier separate from passive input observer")
     print("PASS: R164 method-isolation gate is confined to offline audit JAR")
     # R165's coordinator is intentionally built ONLY by CTest. It is not
     # even part of the read-only Mojang audit JAR, much less the agent.

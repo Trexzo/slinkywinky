@@ -245,6 +245,25 @@ def main():
             raise RuntimeError("R164 original Minecraft input-cut probe failed: " +
                                cut.stdout[-1700:] + cut.stderr[-1700:])
         print(cut.stdout.rstrip(), flush=True)
+        # R240: exact Mojang source, same production passive entry weaver.
+        # Requires a single added method-entry observer, with every one of
+        # 58 pre-existing original input consumer sites still unchanged.
+        passive_input = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R240OriginalInputEntryWeaveAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=45)
+        if (passive_input.returncode != 0 or
+                "R240_EXACT_MOJANG_189_INPUT_METHOD_ENTRY_ONE_CALL_ONLY_PASS"
+                not in passive_input.stdout or
+                "R240_ALL_58_ORIGINAL_INPUT_CONSUMER_SITES_UNCHANGED_PASS"
+                not in passive_input.stdout or
+                "R240_MOJANG_SOURCE_UNCHANGED_NO_LIVE_INPUT_INTERCEPTION"
+                not in passive_input.stdout):
+            raise RuntimeError("R240 Mojang original input entry audit failed: " +
+                               passive_input.stdout[-1600:] +
+                               passive_input.stderr[-1600:])
+        print(passive_input.stdout.rstrip(), flush=True)
         # R171: independently scan *every* exact original class for LWJGL2
         # and keybind consumers OUTSIDE ave.s()V. Source-only; no Attach.
         global_input = subprocess.run(
