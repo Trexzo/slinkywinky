@@ -276,6 +276,18 @@ public final class InstrumentationProbe {
     }
 
     public static void agentmain(String options, Instrumentation instrumentation) {
+        // R240: opt-in original ave.s()V method-entry counter, not an
+        // input queue hook. No vanilla event is intercepted or suppressed.
+        if("minecraft-input-dispatch-readonly-r240".equals(options)) {
+            if(!hookInstalled.compareAndSet(false,true))
+                throw new IllegalStateException("Instrumentation already active");
+            try {OriginalInputFrameDiagnostic.start(instrumentation);}
+            catch(Exception problem) {
+                throw new IllegalStateException(
+                    "R240 read-only original input dispatcher refused",problem);
+            }
+            return;
+        }
         // R103: explicit original-only, read-only render-HDC-to-HWND audit.
         // No drawing, input forwarding, focus manipulation or gameplay.
         final String windowAuditPrefix="minecraft-render-window-audit-r101|";

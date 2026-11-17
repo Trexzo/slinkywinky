@@ -662,6 +662,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderFrameGate.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalInputFrameDiagnostic.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.java"
@@ -776,6 +777,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderFrameGate.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalInputFrameDiagnostic.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.java"
@@ -794,6 +796,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/instrument-agent.mf"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes" .
+    # R240: isolate the real ASM method-entry weave in a disposable Java 8
+    # fixture, which never attaches to or modifies the original game.
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
+      -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+      -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R240InputFixture.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R240PassiveInputSmoke.java"
     # Offline tool only: exact Mojang SHA-1 before structural render lookup.
     # Keep audit code in its own JAR and out of the injected Java agent.
     COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -955,6 +964,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r206_original_input_readiness.py")
         set_tests_properties(r206_original_read_only_input_scope_negatives
           PROPERTIES TIMEOUT 25)
+      add_test(NAME r240_java8_original_input_entry_observation_fixture
+        COMMAND "${Java_JAVA_EXECUTABLE}"
+          -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes;$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+          dev.slinkywinky.instrument.R240PassiveInputSmoke)
+      set_tests_properties(r240_java8_original_input_entry_observation_fixture
+        PROPERTIES TIMEOUT 25)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}

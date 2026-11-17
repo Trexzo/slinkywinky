@@ -383,6 +383,17 @@ public final class RendererLivePreflight {
         checkEquivalentClassBytes(sourceBytes(renderer),current,BFK_SHA);
     }
 
+    // R240: source-verified already-loaded ORIGINAL input dispatcher.
+    // Unlike a raw SHA of HotSpot-transformed bytes, equivalence checks
+    // original resource hash, code-source and normalized execution shape.
+    public static void checkPinnedRuntimeInput(Class<?> game,byte[] raw)
+        throws Exception {
+        require(game!=null && "ave".equals(game.getName()),
+                "Not the original Minecraft input owner");
+        requireOriginalJarSource(game);
+        checkEquivalentClassBytes(sourceBytes(game),raw,AVE_SHA);
+    }
+
     /** Only this pinned admission is used on a live target. */
     public static void checkPinnedOriginal(byte[] ave, byte[] bfk) throws Exception {
         checkExactClasses(ave,bfk,AVE_SHA,BFK_SHA);
