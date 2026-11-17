@@ -55,6 +55,9 @@ public final class RendererWglEvidence {
     // A null pointer observation never becomes an OS background fact.
     private static native int[] nativeReadExactWindowFocusEvidence(
         long context,long dc,int width,int height);
+    // R237: non-actionable source-exact sampled left press/release counts.
+    private static native int[] nativeReadOriginalPointerEdgeEvidence(
+        long context,long dc,int width,int height);
     private static native boolean nativeEndRetainedPreview();
     private static native boolean nativeDiscardRetainedPreview();
     private static native boolean nativeOpenOperatorMenu();
@@ -109,6 +112,7 @@ public final class RendererWglEvidence {
     private int[] originalSourceTargetCounters;
     private int[] retainedFocusCycleCounters;
     private int[] exactWindowFocusCounters;
+    private int[] originalPointerEdgeCounters;
     private int acceptedOperatorEvents;
     private int rejectedOperatorEvents;
     private int lastOperatorTab=-1;
@@ -263,6 +267,23 @@ public final class RendererWglEvidence {
                os[5]<=os[0] && os[5]<=source[2] &&
                os[5]<=admitted[2] && os[5]<=hover[3] &&
                (os[4]!=0 || os[5]==0);
+    }
+
+    // R237: sampled GetKeyState transitions are NOT Minecraft's LWJGL
+    // event queue, hardware provenance or exclusive modal ownership.
+    static boolean validOriginalPointerEdgeEvidence(
+            int[] edges,int[] source,int[] hover,int[] cycle,int[] os,
+            int drawn) {
+        if(!validExactWindowFocusEvidence(os,source,hover,cycle,drawn) ||
+           edges==null || edges.length!=5)return false;
+        for(int value:edges)if(value<0)return false;
+        return edges[0]==hover[1] &&
+               edges[1]==os[0] &&
+               edges[2]<=edges[1] &&
+               edges[2]<=source[1] &&
+               edges[3]<=edges[2] &&
+               edges[4]<=edges[2] &&
+               (long)edges[3]+edges[4]<=edges[2];
     }
 
     /** R93: deterministic, input-free show/hide/show admission for 64 frames. */
@@ -556,6 +577,13 @@ public final class RendererWglEvidence {
                         poisoned=true;overlayFailed=true;invalid++;return;
                     }
                     exactWindowFocusCounters=exactWindow.clone();
+                    final int[] edges=nativeReadOriginalPointerEdgeEvidence(
+                        context,dc,width,height);
+                    if(!validOriginalPointerEdgeEvidence(
+                        edges,source,hover,cycle,exactWindow,64)) {
+                        poisoned=true;overlayFailed=true;invalid++;return;
+                    }
+                    originalPointerEdgeCounters=edges.clone();
                 }
                 if(overlayFrames>=5)retainedVerified=true;
                 return;
@@ -667,6 +695,10 @@ public final class RendererWglEvidence {
                validExactWindowFocusEvidence(
                    exactWindowFocusCounters,originalSourceTargetCounters,
                    retainedHoverCounters,retainedFocusCycleCounters,64) &&
+               validOriginalPointerEdgeEvidence(
+                   originalPointerEdgeCounters,originalSourceTargetCounters,
+                   retainedHoverCounters,retainedFocusCycleCounters,
+                   exactWindowFocusCounters,64) &&
                !poisoned && !overlayFailed;
     }
     public synchronized boolean passiveHoverVerified(){
@@ -689,6 +721,10 @@ public final class RendererWglEvidence {
     public synchronized int[] exactWindowFocusCounters(){
         return passiveHoverVerified()?
             exactWindowFocusCounters.clone():null;
+    }
+    public synchronized int[] originalPointerEdgeCounters(){
+        return passiveHoverVerified()?
+            originalPointerEdgeCounters.clone():null;
     }
     public synchronized boolean manualStopped(){return operatorStop;}
     public synchronized boolean manualFailed(){return poisoned || overlayFailed;}

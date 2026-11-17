@@ -17,6 +17,7 @@
 #include "slinkywinky/windows_insert_edge.hpp"
 #include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/windows_game_window_gate.hpp"
+#include "slinkywinky/windows_original_pointer_edge_trace.hpp"
 #include "slinkywinky/windows_menu_focus_fence.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
@@ -2781,8 +2782,59 @@ void verify_r233_wgl_piercing_controls(
     std::cout<<"R233_WGL_PIERCING_SOURCE_CONTROL_DISPATCH_PASS\\n";
 }
 
+// R237: same pure state machine used by the ORIGINAL WGL render JNI path.
+// Test simulated GetKeyState samples, not any synthetic click dispatch.
+// A source target is required at both the clean-release arm and the pair.
+void verify_r237_original_read_only_pointer_edges() {
+    using slinkywinky::GameWindowFocus;
+    using slinkywinky::OriginalPointerEdgeTrace;
+    constexpr auto foreground=GameWindowFocus::ValidForeground;
+    constexpr auto background=GameWindowFocus::ValidBackground;
+    constexpr auto refused=GameWindowFocus::Refused;
+    OriginalPointerEdgeTrace trace;
+    REQUIRE(!trace.may_deliver_minecraft_input() &&
+            !trace.may_suppress_vanilla_input());
+    REQUIRE(!trace.observe(foreground,false,true,0u));
+    REQUIRE(!trace.observe(background,true,false,1u));
+    REQUIRE(!trace.observe(foreground,true,true,32u));
+    REQUIRE(trace.observe(background,true,false,0u));
+    REQUIRE(trace.observe(foreground,true,true,1u)); // held on entry inert
+    REQUIRE(trace.counts()[2]==0u);
+    REQUIRE(trace.observe(foreground,true,true,0u)); // arm
+    REQUIRE(trace.observe(foreground,true,true,1u)); // source down
+    REQUIRE(trace.observe(foreground,true,true,1u)); // repeat held
+    REQUIRE(trace.observe(foreground,true,true,0u)); // paired release
+    REQUIRE(trace.counts()[2]==1u && trace.counts()[3]==1u &&
+            trace.counts()[4]==0u);
+    REQUIRE(trace.observe(foreground,true,true,1u));
+    REQUIRE(trace.observe(foreground,true,false,1u)); // dragged outside
+    REQUIRE(trace.observe(foreground,true,true,0u));
+    REQUIRE(trace.observe(foreground,true,true,1u));
+    REQUIRE(trace.observe(foreground,true,true,3u)); // chording cancels
+    REQUIRE(trace.observe(foreground,true,true,0u));
+    REQUIRE(trace.observe(foreground,true,true,1u));
+    REQUIRE(trace.observe(background,true,false,0u)); // revoke held
+    REQUIRE(trace.observe(foreground,true,true,0u));
+    REQUIRE(trace.observe(foreground,true,true,1u));
+    REQUIRE(trace.observe(foreground,true,true,0u)); // cannot revive
+    REQUIRE(trace.counts()[2]==4u &&
+            trace.counts()[3]==1u && trace.counts()[4]==3u);
+    std::atomic<bool> foreignRefused{false};
+    std::thread foreign([&]{
+        foreignRefused=!trace.observe(foreground,true,true,0u) &&
+            trace.counts()==std::array<std::uint64_t,5>{};
+    });
+    foreign.join();
+    REQUIRE(foreignRefused);
+    const auto counts=trace.counts();
+    REQUIRE(counts[0]==19u && counts[1]==17u &&
+            counts[2]==4u && counts[3]==1u && counts[4]==3u);
+    std::cout<<"R237_ORIGINAL_READ_ONLY_SOURCE_POINTER_EDGE_TRACE_PASS\\n";
+}
+
 int main() {
     try {
+        verify_r237_original_read_only_pointer_edges();
         Context context(676,630);
         glViewport(0,0,676,630);
         glClearColor(0.10f,0.38f,0.69f,1.0f);

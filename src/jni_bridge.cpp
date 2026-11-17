@@ -14,6 +14,7 @@
 #include "slinkywinky/windows_menu_operator_events.hpp"
 #include "slinkywinky/windows_game_window_gate.hpp"
 #include "slinkywinky/windows_original_pointer_audit.hpp"
+#include "slinkywinky/windows_original_pointer_edge_trace.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include <windows.h>
 #include <GL/gl.h>
@@ -717,6 +718,7 @@ namespace {
 std::mutex retained_preview_mutex;
 bool retained_preview_armed=false;
 std::unique_ptr<slinkywinky::WglRetainedMenuPreview> retained_preview;
+std::unique_ptr<slinkywinky::OriginalPointerEdgeTrace> original_pointer_edges;
 std::unique_ptr<slinkywinky::ModuleArrayListFeed> retained_module_feed;
 std::array<HANDLE,13> operator_events{}; // 0..8 commands, 9..10 ACK, 11 mutex, 12 poison
 bool operator_armed=false;
@@ -754,6 +756,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
     try {
         if(!retained_preview) {
             retained_preview=std::make_unique<slinkywinky::WglRetainedMenuPreview>();
+            original_pointer_edges=std::make_unique<
+                slinkywinky::OriginalPointerEdgeTrace>();
             retained_module_feed=std::make_unique<slinkywinky::ModuleArrayListFeed>();
         }
         // R175: only the exact admitted original Minecraft foreground
@@ -800,6 +804,20 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                 static_cast<unsigned>(height),
                 static_cast<slinkywinky::OriginalWindowFocusState>(
                     static_cast<int>(status)),foreground))
+                return JNI_FALSE;
+            // R237: this is a real source-admitted original renderer
+            // sample, NOT an injected click. Track only the previously
+            // GL11-painted Auto Block Range control under the same two
+            // independent exact-HWND foreground observations.
+            const auto target=retained_preview->source_hover_target(
+                gl,hdc,static_cast<unsigned>(width),
+                static_cast<unsigned>(height));
+            if(!original_pointer_edges ||
+               !original_pointer_edges->observe(
+                   status,target.has_value(),
+                   foreground && point && target &&
+                   target->contains(point->client_x,point->client_y),
+                   foreground && point?point->button_down_mask:0u))
                 return JNI_FALSE;
         }
         return drawValidatedMenuOverlay(context,dc,width,height,
@@ -1003,6 +1021,37 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadExactWindowFocusEv
         return result;
     }catch(...) {return nullptr;}
 }
+// R237: read-only sampled button transitions over the exact already-painted
+// original-client Auto Block Range source target. Never event dispatch.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeReadOriginalPointerEdgeEvidence(
+        JNIEnv* env,jclass,jlong context,jlong dc,jint width,jint height) {
+    if(!env || !context || !dc || width<320 || height<240 ||
+       width>8192 || height>8192)return nullptr;
+    std::lock_guard<std::mutex> lock(retained_preview_mutex);
+    if(!retained_preview_armed || !retained_preview ||
+       !original_pointer_edges || !retained_preview->active())
+        return nullptr;
+    try {
+        const auto hover=retained_preview->hover_evidence(
+            reinterpret_cast<HGLRC>(static_cast<std::uintptr_t>(context)),
+            reinterpret_cast<HDC>(static_cast<std::uintptr_t>(dc)),
+            static_cast<unsigned>(width),static_cast<unsigned>(height));
+        if(!hover)return nullptr;
+        const auto counts=original_pointer_edges->counts();
+        if(counts[0]!=(*hover)[1] || counts[1]>(*hover)[2] ||
+           counts[3]+counts[4]>counts[2])return nullptr;
+        jint data[5]{};
+        for(std::size_t i=0u;i<5u;++i) {
+            if(counts[i]>static_cast<std::uint64_t>(
+                    std::numeric_limits<jint>::max()))return nullptr;
+            data[i]=static_cast<jint>(counts[i]);
+        }
+        jintArray result=env->NewIntArray(5);
+        if(result)env->SetIntArrayRegion(result,0,5,data);
+        return result;
+    }catch(...) {return nullptr;}
+}
 // R158: read-only JNI transfer of the exact profile held by the original
 // render-owned retained menu. No movement/attack permission or settings
 // mutation. Rejected unless it is this session's WGL context and viewport.
@@ -1128,6 +1177,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeCloseOperatorMenu(
     close_operator_events();
     if(retained_module_feed)retained_module_feed->retire();
     retained_module_feed.reset();
+    original_pointer_edges.reset();
     retained_preview.reset();
     retained_preview_armed=false;
     operator_armed=false;
@@ -1166,6 +1216,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeEndRetainedPreview(
     }
     if(retained_module_feed)retained_module_feed->retire();
     retained_module_feed.reset();
+    original_pointer_edges.reset();
     retained_preview_armed=false;
     return JNI_TRUE;
 }
@@ -1178,6 +1229,7 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDiscardRetainedPreview
     if(!retained_preview_armed || operator_armed)return JNI_FALSE;
     if(retained_module_feed)retained_module_feed->retire();
     retained_module_feed.reset();
+    original_pointer_edges.reset();
     retained_preview.reset();
     retained_preview_armed=false;
     return JNI_TRUE;
