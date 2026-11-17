@@ -663,6 +663,11 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererFrameDiagnostic.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalInputFrameDiagnostic.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachAgent.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachTarget.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R241InputAttachLauncher.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241_input_attach_restore_smoke.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241-input-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalPointerArbitrationAudit.java"
@@ -804,6 +809,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R240InputFixture.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R240PassiveInputSmoke.java"
+    # R241: compile only disposable cross-process input Attach/restore tests.
+    # These classes NEVER enter the production instrument agent JAR.
+    COMMAND "${Java_JAVAC_EXECUTABLE}" -source 8 -target 8
+      -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes;$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+      -d "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachAgent.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachTarget.java"
     # Offline tool only: exact Mojang SHA-1 before structural render lookup.
     # Keep audit code in its own JAR and out of the injected Java agent.
     COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -906,6 +918,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/RenderAttachLauncher.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R74AttachLauncher.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglAttachLauncher.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R241InputAttachLauncher.java"
     # The test-agent bundle is deliberately NOT shipped in package artifacts.
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r66_test_agent.jar"
@@ -914,6 +927,10 @@ if(SLINKYWINKY_BUILD_ATTACH)
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r74_test_agent.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/r74-render-attach-agent.mf"
+      -C "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes" .
+    COMMAND "${Java_JAR_EXECUTABLE}" cfm
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r241_test_agent.jar"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241-input-attach-agent.mf"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes" .
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:slinkywinky_agent>"
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_agent.dll"
@@ -973,6 +990,14 @@ if(SLINKYWINKY_BUILD_ATTACH)
           dev.slinkywinky.instrument.R240PassiveInputSmoke)
       set_tests_properties(r240_java8_original_input_entry_observation_fixture
         PROPERTIES TIMEOUT 25)
+      # R241: real Java 8 Attach API and bytecode restoration in a disposable
+      # cross-process input fixture, never in a Minecraft JVM.
+      add_test(NAME r241_java8_cross_process_input_attach_restore
+        COMMAND "${Python3_EXECUTABLE}" -u
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241_input_attach_restore_smoke.py"
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+      set_tests_properties(r241_java8_cross_process_input_attach_restore
+        PROPERTIES TIMEOUT 120)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}

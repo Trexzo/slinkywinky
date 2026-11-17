@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Agent-Class: dev.slinkywinky.instrument.R241InputAttachAgent
+Can-Retransform-Classes: true
+Can-Redefine-Classes: true
+
