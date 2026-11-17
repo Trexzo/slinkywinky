@@ -70,10 +70,10 @@ public final class MouseQueueOwnerSmoke {
         Mouse.enqueue(0,true,5,629,0); // top-left 5,0
         Mouse.enqueue(0,true,5,629,0); // repeated edge
         Mouse.enqueue(-1,false,20,620,0); // move while held
-        Mouse.enqueue(-1,false,20,620,120); // wheel withheld
-        Mouse.enqueue(1,true,20,620,0); // right button withheld
+        Mouse.enqueue(0,false,21,600,0); // complete the valid left gesture
+        Mouse.enqueue(-1,false,20,620,120); // wheel withheld when idle
+        Mouse.enqueue(1,true,20,620,0); // right button withheld when idle
         Mouse.enqueue(1,false,20,620,0);
-        Mouse.enqueue(0,false,21,600,0);
         check(!MouseQueueOwner.next(),"Modal leaked to vanilla");
         check(Mouse.pending()==0,"Modal source events not consumed");
         check(received.size()==3 &&
