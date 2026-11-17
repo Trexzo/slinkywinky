@@ -29,7 +29,7 @@ public final class R209RetainedArrayListSmoke {
         RendererWglEvidence.open(argv[0]);
         Method arm=method("nativeArmRetainedPreview");
         Method draw=method("nativeDrawRetainedPreview",
-            long.class,long.class,int.class,int.class);
+            long.class,long.class,int.class,int.class,int.class);
         Method publish=method("nativePublishRetainedModuleArrayList",
             long.class,long.class,int.class,int.class,
             long.class,long.class,boolean.class,
@@ -48,7 +48,11 @@ public final class R209RetainedArrayListSmoke {
         need(!call(publish,h[0],h[1],640,480,1L,9L,true,
             names,req,onlySprint),"publisher accepted before painted owner");
         need(R76WglJvmSmoke.r209ClearFrame(),"fixture clear failed");
-        need(call(draw,h[0],h[1],640,480),
+        // Disposable WGL fixture has NO attested original ave.m state.
+        // It must send UNKNOWN, never fabricate a vanilla NO_SCREEN proof.
+        need(!call(draw,h[0],h[1],640,480,2),
+            "out-of-range original GuiScreen status accepted");
+        need(call(draw,h[0],h[1],640,480,-1),
             "first original-shaped retained menu paint failed");
         final AtomicBoolean foreign=new AtomicBoolean(true);
         Thread other=new Thread(new Runnable(){
@@ -64,7 +68,7 @@ public final class R209RetainedArrayListSmoke {
         need(call(publish,h[0],h[1],640,480,1L,9L,true,
             names,req,onlySprint),"valid owner snapshot rejected");
         need(R76WglJvmSmoke.r209ClearFrame(),"frame clear failed");
-        need(call(draw,h[0],h[1],640,480),
+        need(call(draw,h[0],h[1],640,480,-1),
             "retained menu + active module ArrayList draw rejected");
         final int accent=0xF35D12;
         need(R76WglJvmSmoke.r209Pixel(630,464)==accent,
@@ -75,13 +79,13 @@ public final class R209RetainedArrayListSmoke {
         need(call(publish,h[0],h[1],640,480,2L,9L,false,
             names,req,new boolean[]{false,false}),"world-loss retirement refused");
         need(R76WglJvmSmoke.r209ClearFrame(),"world-loss clear failed");
-        need(call(draw,h[0],h[1],640,480),"world-loss menu draw failed");
+        need(call(draw,h[0],h[1],640,480,-1),"world-loss menu draw failed");
         need(R76WglJvmSmoke.r209Pixel(630,464)!=accent,
             "stale active row survived world loss");
         need(!call(publish,h[0],h[1],640,480,2L,9L,false,
             names,req,new boolean[]{false,false}),"replayed sequence accepted");
         need(R76WglJvmSmoke.r209ClearFrame(),"post-replay clear failed");
-        need(call(draw,h[0],h[1],640,480),"empty quarantined frame failed");
+        need(call(draw,h[0],h[1],640,480,-1),"empty quarantined frame failed");
         need(R76WglJvmSmoke.r209Pixel(630,464)!=accent,
             "quarantined producer reactivated stale pixels");
         need(call(end),"retained owner release failed");
