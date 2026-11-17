@@ -287,8 +287,8 @@ public final class RendererFrameDiagnostic {
             // registering a bytecode-changing transformer. Never draw.
             evidence=contextDllPath==null?null:
                 RendererWglEvidence.open(contextDllPath,renderOverlay,multiFrame,scriptedVisibility,manualVisibility,retainedPreview,operatorMenu,windowAudit);
-            if(windowAudit) {
-                // R173: resolve the unique ALREADY LOADED original ave
+            if(windowAudit || retainedPreview) {
+                // R173/R238: resolve the unique ALREADY LOADED original ave
                 // class after R73 has pinned the full ave/bfk bytecode.
                 // No class is redefined, no screen is opened or closed.
                 Class<?> game=null;
@@ -304,7 +304,7 @@ public final class RendererFrameDiagnostic {
                    !evidence.bindOriginalGuiObserver(
                        OriginalGuiScreenProbe.bind(game,loader)))
                     throw new IllegalStateException(
-                        "R173 original GUI screen read-only binding refused");
+                        "R238 original GUI screen read-only binding refused");
             }
         } catch(RendererLivePreflight.InspectorRemovalUncertain uncertain) {
             // The read-only class inspector may still be installed. Do not

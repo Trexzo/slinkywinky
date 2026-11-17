@@ -24,8 +24,11 @@ public final class RendererWglEvidence {
     private static native boolean nativeCloseManualVisibility();
     // R99: separate finite source-pinned retained first-party preview.
     private static native boolean nativeArmRetainedPreview();
+    // R238: original loaded ave.m GuiScreen state is sampled on the
+    // source-pinned renderer thread, not inferred from the overlay.
+    // -1 unknown (operator controls only); 0 no vanilla GUI; 1 GUI open.
     private static native boolean nativeDrawRetainedPreview(
-        long context,long dc,int width,int height);
+        long context,long dc,int width,int height,int originalScreenState);
     // R209 internal owner-render callback publication entry. Not called by
     // the read-only acceptance or menu preview, and not a gameplay toggle.
     // A future admitted module manager must supply REAL active flags.
@@ -138,7 +141,8 @@ public final class RendererWglEvidence {
     // This shape check is not itself source attestation or input ownership.
     public synchronized boolean bindOriginalGuiObserver(
             OriginalGuiScreenProbe probe) {
-        if(!windowAudit || probe==null || guiScreenProbe!=null ||
+        if((!windowAudit && !retainedPreview) ||
+           probe==null || guiScreenProbe!=null ||
            attempts!=0 || owner!=null)return false;
         guiScreenProbe=probe;
         return true;
@@ -489,7 +493,11 @@ public final class RendererWglEvidence {
             // already verified source-pinned original WGL render owner.
             // No Minecraft keys, clicks, packets or gameplay module dispatch.
             if(operatorMenu && attempts>8 && preflightStable()) {
-                if(!nativeDrawRetainedPreview(context,dc,width,height)) {
+                // R238 operator control is not a GUI-screen admission:
+                // explicitly UNKNOWN so original pointer edges cannot
+                // acquire an eligible source press/release pair here.
+                if(!nativeDrawRetainedPreview(
+                    context,dc,width,height,OriginalGuiScreenProbe.REFUSED)) {
                     poisoned=true;overlayFailed=true;invalid++;return;
                 }
                 overlayDrawn=true;
@@ -526,7 +534,16 @@ public final class RendererWglEvidence {
             // internally scripted *local profile-only* navigation actions.
             // NO OS keys, mouse or original Minecraft gameplay handlers.
             if(retainedPreview && attempts>8 && preflightStable()) {
-                if(!nativeDrawRetainedPreview(context,dc,width,height)) {
+                // R238 reads the exact already-loaded original ave.m
+                // on the admitted renderer owner, once per native draw.
+                // A failed screen observation can NEVER become NO_SCREEN.
+                final int originalScreen=guiScreenProbe==null?
+                    OriginalGuiScreenProbe.REFUSED:guiScreenProbe.observe();
+                if(originalScreen==OriginalGuiScreenProbe.REFUSED) {
+                    poisoned=true;overlayFailed=true;invalid++;return;
+                }
+                if(!nativeDrawRetainedPreview(
+                    context,dc,width,height,originalScreen)) {
                     poisoned=true;overlayFailed=true;invalid++;return;
                 }
                 overlayDrawn=true;

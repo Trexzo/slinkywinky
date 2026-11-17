@@ -2794,34 +2794,34 @@ void verify_r237_original_read_only_pointer_edges() {
     OriginalPointerEdgeTrace trace;
     REQUIRE(!trace.may_deliver_minecraft_input() &&
             !trace.may_suppress_vanilla_input());
-    REQUIRE(!trace.observe(foreground,false,true,0u));
-    REQUIRE(!trace.observe(background,true,false,1u));
-    REQUIRE(!trace.observe(foreground,true,true,32u));
-    REQUIRE(trace.observe(background,true,false,0u));
-    REQUIRE(trace.observe(foreground,true,true,1u)); // held on entry inert
+    REQUIRE(!trace.observe(foreground,false,true,0u,true));
+    REQUIRE(!trace.observe(background,true,false,1u,true));
+    REQUIRE(!trace.observe(foreground,true,true,32u,true));
+    REQUIRE(trace.observe(background,true,false,0u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,true)); // held on entry inert
     REQUIRE(trace.counts()[2]==0u);
-    REQUIRE(trace.observe(foreground,true,true,0u)); // arm
-    REQUIRE(trace.observe(foreground,true,true,1u)); // source down
-    REQUIRE(trace.observe(foreground,true,true,1u)); // repeat held
-    REQUIRE(trace.observe(foreground,true,true,0u)); // paired release
+    REQUIRE(trace.observe(foreground,true,true,0u,true)); // arm
+    REQUIRE(trace.observe(foreground,true,true,1u,true)); // source down
+    REQUIRE(trace.observe(foreground,true,true,1u,true)); // repeat held
+    REQUIRE(trace.observe(foreground,true,true,0u,true)); // paired release
     REQUIRE(trace.counts()[2]==1u && trace.counts()[3]==1u &&
             trace.counts()[4]==0u);
-    REQUIRE(trace.observe(foreground,true,true,1u));
-    REQUIRE(trace.observe(foreground,true,false,1u)); // dragged outside
-    REQUIRE(trace.observe(foreground,true,true,0u));
-    REQUIRE(trace.observe(foreground,true,true,1u));
-    REQUIRE(trace.observe(foreground,true,true,3u)); // chording cancels
-    REQUIRE(trace.observe(foreground,true,true,0u));
-    REQUIRE(trace.observe(foreground,true,true,1u));
-    REQUIRE(trace.observe(background,true,false,0u)); // revoke held
-    REQUIRE(trace.observe(foreground,true,true,0u));
-    REQUIRE(trace.observe(foreground,true,true,1u));
-    REQUIRE(trace.observe(foreground,true,true,0u)); // cannot revive
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    REQUIRE(trace.observe(foreground,true,false,1u,true)); // dragged outside
+    REQUIRE(trace.observe(foreground,true,true,0u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    REQUIRE(trace.observe(foreground,true,true,3u,true)); // chording cancels
+    REQUIRE(trace.observe(foreground,true,true,0u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    REQUIRE(trace.observe(background,true,false,0u,true)); // revoke held
+    REQUIRE(trace.observe(foreground,true,true,0u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    REQUIRE(trace.observe(foreground,true,true,0u,true)); // cannot revive
     REQUIRE(trace.counts()[2]==4u &&
             trace.counts()[3]==1u && trace.counts()[4]==3u);
     std::atomic<bool> foreignRefused{false};
     std::thread foreign([&]{
-        foreignRefused=!trace.observe(foreground,true,true,0u) &&
+        foreignRefused=!trace.observe(foreground,true,true,0u,true) &&
             trace.counts()==std::array<std::uint64_t,5>{};
     });
     foreign.join();
@@ -2832,9 +2832,44 @@ void verify_r237_original_read_only_pointer_edges() {
     std::cout<<"R237_ORIGINAL_READ_ONLY_SOURCE_POINTER_EDGE_TRACE_PASS\\n";
 }
 
+// R238: an original Minecraft GuiScreen is a separate potential input
+// consumer. An overlay painted over inventory/options/menu may NOT infer
+// click ownership. Losing source ownership during a sampled hold requires
+// another clean release before new evidence can be admitted.
+void verify_r238_original_screen_overlap_fence() {
+    constexpr auto foreground=GameWindowFocus::ValidForeground;
+    OriginalPointerEdgeTrace trace;
+    REQUIRE(trace.observe(foreground,true,true,0u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,false));
+    REQUIRE(trace.observe(foreground,true,true,0u,false));
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    auto afterGui=trace.counts();
+    REQUIRE(afterGui[2]==1u && afterGui[3]==0u &&
+            afterGui[4]==1u);
+    REQUIRE(trace.observe(foreground,true,true,0u,true));
+    REQUIRE(trace.observe(foreground,true,true,1u,true));
+    REQUIRE(trace.observe(foreground,true,true,0u,true));
+    const auto full=trace.counts();
+    REQUIRE(full[0]==8u && full[1]==8u &&
+            full[2]==2u && full[3]==1u && full[4]==1u);
+    REQUIRE(!trace.may_deliver_minecraft_input() &&
+            !trace.may_suppress_vanilla_input());
+    OriginalPointerEdgeTrace initiallyGui;
+    REQUIRE(initiallyGui.observe(foreground,true,true,0u,false));
+    REQUIRE(initiallyGui.observe(foreground,true,true,1u,false));
+    REQUIRE(initiallyGui.observe(foreground,true,true,0u,true));
+    REQUIRE(initiallyGui.observe(foreground,true,true,1u,true));
+    REQUIRE(initiallyGui.observe(foreground,true,true,0u,true));
+    const auto clean=initiallyGui.counts();
+    REQUIRE(clean[2]==1u && clean[3]==1u && clean[4]==0u);
+    std::cout<<"R238_ORIGINAL_GUI_SCREEN_DOUBLE_DISPATCH_FENCE_PASS\\n";
+}
+
 int main() {
     try {
         verify_r237_original_read_only_pointer_edges();
+        verify_r238_original_screen_overlap_fence();
         Context context(676,630);
         glViewport(0,0,676,630);
         glClearColor(0.10f,0.38f,0.69f,1.0f);

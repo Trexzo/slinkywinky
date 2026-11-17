@@ -16,7 +16,8 @@ public:
     OriginalPointerEdgeTrace() noexcept : owner_(std::this_thread::get_id()) {}
 
     bool observe(GameWindowFocus focus,bool source_visible,
-                 bool on_source,std::uint32_t buttons) noexcept {
+                 bool on_source,std::uint32_t buttons,
+                 bool original_game_screen_absent) noexcept {
         if(std::this_thread::get_id()!=owner_ || samples_>=2048u ||
            buttons>31u || (focus!=GameWindowFocus::ValidForeground &&
                            buttons!=0u) ||
@@ -34,7 +35,12 @@ public:
             } else phase_=Phase::NeedRelease;
             return true;
         }
-        if(!source_visible || !on_source) {
+        // R238: an existing vanilla GuiScreen owns its own event paths.
+        // Merely painting the native overlay above it is not sufficient
+        // evidence that a sampled mouse edge belongs to the overlay.
+        // An UNKNOWN original screen is also ineligible (caller passes
+        // false). Require a fresh all-button-up sample after it closes.
+        if(!original_game_screen_absent || !source_visible || !on_source) {
             if(phase_==Phase::Held)++cancelled_;
             phase_=Phase::NeedRelease;
             return true;

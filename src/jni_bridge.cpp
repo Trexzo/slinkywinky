@@ -741,9 +741,11 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeArmRetainedPreview(
 }
 extern "C" JNIEXPORT jboolean JNICALL
 Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
-    JNIEnv*,jclass,jlong context,jlong dc,jint width,jint height) {
+    JNIEnv*,jclass,jlong context,jlong dc,jint width,jint height,
+    jint originalScreenState) {
     std::lock_guard<std::mutex> lock(retained_preview_mutex);
     if(!retained_preview_armed || !context || !dc ||
+       originalScreenState<-1 || originalScreenState>1 ||
        width<320 || width>8192 || height<240 || height>8192 ||
        wglGetCurrentContext()!=reinterpret_cast<HGLRC>(
            static_cast<std::uintptr_t>(context)) ||
@@ -817,7 +819,8 @@ Java_dev_slinkywinky_instrument_RendererWglEvidence_nativeDrawRetainedPreview(
                    status,target.has_value(),
                    foreground && point && target &&
                    target->contains(point->client_x,point->client_y),
-                   foreground && point?point->button_down_mask:0u))
+                   foreground && point?point->button_down_mask:0u,
+                   originalScreenState==0))
                 return JNI_FALSE;
         }
         return drawValidatedMenuOverlay(context,dc,width,height,
