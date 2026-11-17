@@ -219,12 +219,37 @@ public final class R165ModalInputSessionSmoke {
         check(!session.quarantined(),"Callback fault did not clear on restore");
         System.out.println("R165_CALLBACK_EXCEPTION_INPUT_LOCKOUT_PASS");
     }
+    private static void testOutsideGestureHandoff() {
+        Receipt sink=new Receipt();
+        R165ModalInputSession session=bound();
+        check(open(session,6,sink.mouseSink,sink.keySink),
+              "R239 paired owner could not enter fixture modal mode");
+        Mouse.enqueue(0,true,100,600,0);
+        Mouse.enqueue(-1,false,-20,600,0);
+        Mouse.enqueue(-1,false,100,600,0);
+        Mouse.enqueue(0,false,100,600,0);
+        check(session.poll(true) &&
+              session.phase()==R165ModalInputSession.Phase.MODAL &&
+              sink.mouse.size()==2 &&
+              "0:100:29".equals(sink.mouse.get(0)) &&
+              "3:-1:-1".equals(sink.mouse.get(1)),
+              "R239 paired modal failed to quarantine leave-and-reenter");
+        check(session.beginClose(true) &&
+              session.drain(true,true,true) &&
+              session.phase()==R165ModalInputSession.Phase.PASSIVE,
+              "R239 drained close did not safely restore paired ownership");
+        check(session.restore(true,true,true,true) &&
+              session.phase()==R165ModalInputSession.Phase.UNBOUND,
+              "R239 tested source restore after canceled mouse gesture");
+        System.out.println("R239_JAVA8_PAIRED_MOUSE_CANCEL_SAFE_DRAIN_PASS");
+    }
     public static void main(String[] args)throws Exception {
         check(args.length==0,"No original-game binary or process expected");
         testNormalModalNormal();
         testPartialArmRecovery();
         testFocusFaultRollback();
         testCallbackFault();
+        testOutsideGestureHandoff();
         System.out.println("R165_ONLY_SYNTHETIC_JAVA8_INPUT_OWNERSHIP_FIXTURES");
         System.out.println("R165_NO_ORIGINAL_CLIENT_INPUT_HOOK");
     }

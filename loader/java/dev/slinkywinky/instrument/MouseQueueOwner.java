@@ -15,7 +15,10 @@ public final class MouseQueueOwner {
         // x/y are top-left CLIENT pixel coordinates, never screen coords.
         void onPointer(int phase,int x,int y);
     }
-    public static final int DOWN=0, MOVE=1, UP=2;
+    // Exact first-party retained pointer phases: Down, Move, Up, Cancel.
+    // CANCEL has no usable coordinates; native preview cancels the
+    // pending gesture without executing a source click on mouse Up.
+    public static final int DOWN=0, MOVE=1, UP=2, CANCEL=3;
     private static final int MAX_POLL=128;
     private static final int MAX_BUTTONS=8;
     private static final long FOCUS_AGE_NS=250000000L;
@@ -28,6 +31,7 @@ public final class MouseQueueOwner {
     private static long lastEpoch, focusTime;
     private static int width,height;
     private static final boolean[] held=new boolean[MAX_BUTTONS];
+    private static boolean pointerActive;
 
     private MouseQueueOwner() {}
     private static boolean ownerThread() {
@@ -36,6 +40,10 @@ public final class MouseQueueOwner {
     private static boolean allReleased() {
         for(boolean down:held)if(down)return false;
         return true;
+    }
+    private static boolean otherButtonHeld() {
+        for(int b=1;b<held.length;b++)if(held[b])return true;
+        return false;
     }
     private static boolean methodOk(Method m,Class<?> returns) {
         return Modifier.isPublic(m.getModifiers()) &&
@@ -64,6 +72,7 @@ public final class MouseQueueOwner {
                 return false;
             nextMethod=n;buttonMethod=b;stateMethod=s;
             xMethod=x;yMethod=y;wheelMethod=wheel;
+            pointerActive=false;
             owner=Thread.currentThread();
             mode=Mode.VANILLA;
             return true;
@@ -74,7 +83,10 @@ public final class MouseQueueOwner {
             return false;
         if(!focused) {
             focusTime=0;
-            if(mode==Mode.MODAL || mode==Mode.DRAINING)mode=Mode.REFUSED;
+            if(mode==Mode.MODAL || mode==Mode.DRAINING) {
+                pointerActive=false;
+                mode=Mode.REFUSED;
+            }
             return false;
         }
         focusTime=System.nanoTime();
@@ -100,6 +112,7 @@ public final class MouseQueueOwner {
             return false;
         lastEpoch=epoch;
         width=clientWidth;height=clientHeight;
+        pointerActive=false;
         sink=callback;
         mode=Mode.MODAL;
         return true;
@@ -132,21 +145,48 @@ public final class MouseQueueOwner {
                 int x=((Integer)xMethod.invoke(null)).intValue();
                 int y=((Integer)yMethod.invoke(null)).intValue();
                 int wheel=((Integer)wheelMethod.invoke(null)).intValue();
-                // Mouse origin is bottom-left in LWJGL2; native menu origin
-                // is top-left. Mismatched viewport is never guessed.
-                if(button<-1 || button>=MAX_BUTTONS ||
-                   x<0 || x>=width || y<0 || y>=height) {
-                    mode=Mode.REFUSED;return false;
+                // R239: out-of-client coordinates are normal during a
+                // drag, not proof that the whole original input queue was
+                // compromised. Quarantine the mouse gesture, not its
+                // release. Never hand raw off-window points to the menu.
+                if(button<-1 || button>=MAX_BUTTONS) {
+                    mode=Mode.REFUSED;pointerActive=false;return false;
                 }
+                final boolean inside=x>=0 && x<width &&
+                                     y>=0 && y<height;
                 if(button>=0) {
-                    boolean edge=held[button]!=down;
+                    final boolean edge=held[button]!=down;
                     held[button]=down;
-                    if(edge && mode==Mode.MODAL && button==0)
-                        sink.onPointer(down?DOWN:UP,x,height-1-y);
-                } else if(mode==Mode.MODAL && wheel==0 && held[0]) {
-                    sink.onPointer(MOVE,x,height-1-y);
+                    if(mode==Mode.MODAL && edge) {
+                        if(button==0) {
+                            if(down) {
+                                // An initially held/outside/chorded left
+                                // press can never become a native gesture
+                                // merely by moving the cursor back inside.
+                                if(inside && !otherButtonHeld()) {
+                                    pointerActive=true;
+                                    sink.onPointer(DOWN,x,height-1-y);
+                                } else pointerActive=false;
+                            } else if(pointerActive) {
+                                pointerActive=false;
+                                if(inside && !otherButtonHeld())
+                                    sink.onPointer(UP,x,height-1-y);
+                                else sink.onPointer(CANCEL,-1,-1);
+                            }
+                        } else if(down && pointerActive) {
+                            pointerActive=false;
+                            sink.onPointer(CANCEL,-1,-1);
+                        }
+                    }
+                } else if(mode==Mode.MODAL && pointerActive && held[0]) {
+                    if(!inside || wheel!=0 || otherButtonHeld()) {
+                        pointerActive=false;
+                        sink.onPointer(CANCEL,-1,-1);
+                    } else sink.onPointer(MOVE,x,height-1-y);
                 }
-                // Wheel, right-click and non-left presses are withheld.
+                // Non-left buttons/wheel never reach gameplay or the GUI.
+                // A cancelled pointer cannot be revived by a later move
+                // or release, and draining still tracks held button-ups.
             }
             if(mode==Mode.DRAINING && exhausted && allReleased()) {
                 mode=Mode.VANILLA;
@@ -161,6 +201,7 @@ public final class MouseQueueOwner {
                                                boolean keyboardQuarantined) {
         if(!ownerThread() || mode!=Mode.MODAL ||
            !menuHidden || !keyboardQuarantined)return false;
+        pointerActive=false;
         mode=Mode.DRAINING;
         return true;
     }
@@ -177,6 +218,7 @@ public final class MouseQueueOwner {
         mode=Mode.UNBOUND;owner=null;nextMethod=null;
         buttonMethod=null;stateMethod=null;xMethod=null;yMethod=null;
         wheelMethod=null;sink=null;focusTime=0;width=height=0;
+        pointerActive=false;
         Arrays.fill(held,false);
         return true;
     }

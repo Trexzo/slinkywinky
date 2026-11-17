@@ -124,22 +124,73 @@ public final class MouseQueueOwnerSmoke {
         check(Mouse.pending()==0,"Unbind failed to quarantine release");
         check(unbind(),"Independent rollback failed");
 
-        // Bad bounds and unknown button must fail closed.
+        // R239: a pointer leaving the client during a held left click
+        // cancels the *source GUI gesture*, but release remains drainable
+        // by this same original queue owner. It must NOT turn into a new
+        // DOWN when the cursor crosses back into bounds.
         check(MouseQueueOwner.bind(Mouse.class,Mouse.class.getClassLoader(),true),
-              "Bounds bind failed");
+              "R239 bounds bind failed");
         focus();
-        check(arm(4,sink),"Bounds arm refused");
-        Mouse.enqueue(0,true,-1,12,0);
-        check(!MouseQueueOwner.next(),"Bad bounds leaked");
-        check("REFUSED".equals(MouseQueueOwner.state()),"Bad bounds not revoked");
+        check(arm(4,sink),"R239 bounds arm refused");
+        final int beforeOutside=received.size();
+        Mouse.enqueue(0,true,-1,12,0);  // left press outside: quarantine
+        Mouse.enqueue(-1,false,30,30,0); // reenter still held
+        Mouse.enqueue(0,false,30,30,0);
+        check(!MouseQueueOwner.next() && Mouse.pending()==0,
+              "Out-of-client event escaped source quarantine");
+        check("MODAL".equals(MouseQueueOwner.state()) &&
+              received.size()==beforeOutside,
+              "Outside DOWN was promoted on reentry");
+        Mouse.enqueue(0,true,5,629,0);
+        Mouse.enqueue(-1,false,-5,625,0); // held pointer leaves client
+        Mouse.enqueue(-1,false,20,625,0); // reentry cannot revive
+        Mouse.enqueue(0,false,20,625,0);
+        check(!MouseQueueOwner.next() && Mouse.pending()==0,
+              "Outside gesture was not bounded");
+        check(received.size()==beforeOutside+2 &&
+              "0:5:0".equals(received.get(beforeOutside)) &&
+              "3:-1:-1".equals(received.get(beforeOutside+1)),
+              "Expected one DOWN then CANCEL, no unsafe UP/replay");
+        Mouse.enqueue(0,true,5,629,0);
+        Mouse.enqueue(1,true,7,628,0); // chord cancels active left
+        Mouse.enqueue(1,false,7,628,0);
+        Mouse.enqueue(0,false,7,628,0);
+        check(!MouseQueueOwner.next() && Mouse.pending()==0 &&
+              received.size()==beforeOutside+4 &&
+              "0:5:0".equals(received.get(beforeOutside+2)) &&
+              "3:-1:-1".equals(received.get(beforeOutside+3)),
+              "Chord did not cancel only once");
+        Mouse.enqueue(0,true,5,629,0);
+        Mouse.enqueue(0,false,6,629,0);
+        check(!MouseQueueOwner.next() && received.size()==beforeOutside+6 &&
+              "0:5:0".equals(received.get(beforeOutside+4)) &&
+              "2:6:0".equals(received.get(beforeOutside+5)),
+              "Fresh pair could not recover after cancellation");
+        check(MouseQueueOwner.close(true,true),"R239 outside close");
+        Mouse.enqueue(0,true,-3,-5,0);
+        Mouse.enqueue(0,false,-3,-5,0);
+        check(!MouseQueueOwner.next() &&
+              "VANILLA".equals(MouseQueueOwner.state()),
+              "Outside held release did not drain safely");
+        check(unbind(),"R239 outside rollback failed");
+
+        // Invalid button codes are still a genuine source-shape fault.
+        check(MouseQueueOwner.bind(Mouse.class,Mouse.class.getClassLoader(),true),
+              "Invalid code bind failed");
+        focus();
+        check(arm(5,sink),"Invalid code arm refused");
+        Mouse.enqueue(8,true,5,629,0);
+        check(!MouseQueueOwner.next() &&
+              "REFUSED".equals(MouseQueueOwner.state()),
+              "Unknown button was not revoked");
         Mouse.reset();
-        check(unbind(),"Bounds clean rollback failed");
+        check(unbind(),"Invalid code rollback failed");
 
         // A sink exception is contained and denies subsequent events.
         check(MouseQueueOwner.bind(Mouse.class,Mouse.class.getClassLoader(),true),
               "Callback bind failed");
         focus();
-        check(arm(5,new MouseQueueOwner.PointerSink(){
+        check(arm(6,new MouseQueueOwner.PointerSink(){
             @Override public void onPointer(int phase,int x,int y) {
                 throw new IllegalStateException("synthetic callback fault");
             }
@@ -154,7 +205,7 @@ public final class MouseQueueOwnerSmoke {
         check(MouseQueueOwner.bind(Mouse.class,Mouse.class.getClassLoader(),true),
               "Flood bind failed");
         focus();
-        check(arm(6,sink),"Flood arm failed");
+        check(arm(7,sink),"Flood arm failed");
         for(int i=0;i<160;i++)Mouse.enqueue(-1,false,15,25,120);
         check(!MouseQueueOwner.next() && Mouse.pending()==32,
               "Unbounded first drain");
@@ -166,6 +217,7 @@ public final class MouseQueueOwnerSmoke {
         check(unbind(),"Flood unbind refused");
         System.out.println("R160_JAVA8_MOUSE_LWJGL_SOURCE_SHAPE_EDGE_COORDS_PASS");
         System.out.println("R160_MODAL_DRAIN_ROLLBACK_FOCUS_AND_OVERFLOW_PASS");
+        System.out.println("R239_JAVA8_OUTSIDE_CHORD_CANCEL_AND_FRESH_PAIR_PASS");
         System.out.println("R160_NO_ORIGINAL_GAME_MOUSE_HOOK_ATTACHED");
     }
 }
