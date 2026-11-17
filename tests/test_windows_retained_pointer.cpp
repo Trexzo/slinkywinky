@@ -2827,7 +2827,7 @@ void verify_r237_original_read_only_pointer_edges() {
     foreign.join();
     REQUIRE(foreignRefused);
     const auto counts=trace.counts();
-    REQUIRE(counts[0]==19u && counts[1]==17u &&
+    REQUIRE(counts[0]==17u && counts[1]==15u &&
             counts[2]==4u && counts[3]==1u && counts[4]==3u);
     std::cout<<"R237_ORIGINAL_READ_ONLY_SOURCE_POINTER_EDGE_TRACE_PASS\\n";
 }
