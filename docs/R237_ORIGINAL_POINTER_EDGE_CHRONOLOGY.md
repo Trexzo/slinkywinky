@@ -21,6 +21,14 @@ The new Windows native regression simulates original-state samples and verifies 
 
 No modification to Chat 2 PR #2. Draft/unmerged until actual original-client input ownership and reversible restoration are independently certified.
 
-## CI
+## Exact-commit CI verification
 
-Pending exact-commit verification.
+All **8/8 GitHub checks passed** on corrected R237 implementation commit `b32cb99208ffb14eb310b16235c987f26e6a2917`:
+
+- Offline C++ core: Windows Debug/Release, Ubuntu Debug/Release, Linux sanitizers and JNI smoke — **6/6 success**: https://github.com/Trexzo/slinkywinky/actions/runs/44066369470
+- Windows native JNI bridge build and roundtrip — **success**: https://github.com/Trexzo/slinkywinky/actions/runs/44066369431
+- Injectable Java 8 agent, native loader, actual Attach API regression and packaging — **success**: https://github.com/Trexzo/slinkywinky/actions/runs/44066369358
+
+The first R237 implementation commit was followed by a targeted correction to the test's expected number of valid focus samples (17 total, 15 foreground); production logic did not change. All three workflows passed on the corrected commit.
+
+This does **not** mean a genuine hardware mouse press/release was witnessed in an original vanilla Minecraft session. The connected Windows desktop was offline during R237, so live foreground physical input acceptance remains outstanding. PR #1 stays draft and unmerged.
