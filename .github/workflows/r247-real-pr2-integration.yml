@@ -1,0 +1,43 @@
+name: R247 pinned PR2 native GUI integration
+
+on:
+  push:
+    branches:
+      - reconstruction/r1-core-fidelity
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native-real-owner-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR1 GUI and adapter
+        uses: actions/checkout@v4
+        with:
+          path: shell
+          persist-credentials: false
+      - name: Checkout actual pinned PR2 native manager
+        uses: actions/checkout@v4
+        with:
+          repository: Trexzo/slinkywinky
+          ref: 7f457376058ad42e0a0e0323ed874d7e5b2ae03a
+          path: pr2-pin
+          persist-credentials: false
+      - name: Strict PR2 source commit preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C pr2-pin rev-parse HEAD)" = "7f457376058ad42e0a0e0323ed874d7e5b2ae03a"
+          test -f pr2-pin/reference_compat/include/slinkywinky/sprint_observation_preview.hpp
+          test -f pr2-pin/include/slinkywinky/module_control_contract.hpp
+          test -f shell/include/slinkywinky/native_module_snapshot_adapter.hpp
+          echo R247_PINNED_PR2_SOURCE_CHECKOUT_PASS
+      - name: Configure first-party source integration
+        run: cmake -S shell -B build-r247 -DCMAKE_BUILD_TYPE=Release -DSLINKYWINKY_R247_PR2_ROOT="$GITHUB_WORKSPACE/pr2-pin"
+      - name: Build only actual native integration test
+        run: cmake --build build-r247 --target slinkywinky_r247_real_native_module_test --parallel 2
+      - name: Execute source-backed owner integration
+        run: ctest --test-dir build-r247 -R '^r247_real_pr2_native_gui_owner_runtime_roundtrip$' --output-on-failure

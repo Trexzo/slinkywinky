@@ -306,6 +306,39 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME r246_native_three_module_owner_snapshot_and_gui_ack
     COMMAND slinkywinky_r246_owner_adapter_tests)
+  # R247: optional exact-commit PR #2 source integration, not a mock.
+  # Ordinary PR #1 builds remain independent of PR #2. No game is loaded.
+  set(SLINKYWINKY_R247_PR2_ROOT "" CACHE PATH
+      "Checked-out, exact pinned PR #2 source root for R247 integration")
+  if(NOT "${SLINKYWINKY_R247_PR2_ROOT}" STREQUAL "")
+    if(NOT EXISTS
+        "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include/slinkywinky/sprint_observation_preview.hpp"
+        OR NOT EXISTS
+        "${SLINKYWINKY_R247_PR2_ROOT}/include/slinkywinky/module_control_contract.hpp")
+      message(FATAL_ERROR "R247 real PR2 source headers absent")
+    endif()
+    find_package(Git REQUIRED)
+    execute_process(
+      COMMAND "${GIT_EXECUTABLE}" -C "${SLINKYWINKY_R247_PR2_ROOT}"
+              rev-parse HEAD
+      RESULT_VARIABLE R247_GIT_EXIT
+      OUTPUT_VARIABLE R247_PR2_HEAD
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT R247_GIT_EXIT EQUAL 0 OR
+       NOT R247_PR2_HEAD STREQUAL "7f457376058ad42e0a0e0323ed874d7e5b2ae03a")
+      message(FATAL_ERROR "R247 PR2 checkout does not match pinned source commit")
+    endif()
+    add_executable(slinkywinky_r247_real_native_module_test
+      tests/test_r247_real_pr2_native_module_adapter.cpp)
+    target_include_directories(slinkywinky_r247_real_native_module_test PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include")
+    target_link_libraries(slinkywinky_r247_real_native_module_test
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r247_real_native_module_test
+      PRIVATE cxx_std_17)
+    add_test(NAME r247_real_pr2_native_gui_owner_runtime_roundtrip
+      COMMAND slinkywinky_r247_real_native_module_test)
+  endif()
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)
