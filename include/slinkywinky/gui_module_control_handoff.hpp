@@ -12,7 +12,9 @@ class MenuNavigation;
 
 // R210: copy-only first-party GUI -> admitted module-owner request transport.
 // A request is NEVER an activation acknowledgement or a gameplay action.
-// Only source-backed Sprint is admitted until the full 66/67 mapping is pinned.
+// R245: only the three source-backed PR #2 R211 native controls
+// (No Jump Delay, No Slow, Sprint) are admitted. The R244 66-entry
+// native identity fence applies to all requested names. Others are previews.
 struct GuiModuleControlRequest {
     std::uint64_t id=0;
     std::uint64_t observed_source_sequence=0;

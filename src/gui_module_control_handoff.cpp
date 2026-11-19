@@ -29,8 +29,13 @@ bool GuiModuleControlHandoff::request_focused_toggle(
     const auto focus=navigation.visible_focus();
     const auto& catalog=official_module_catalog();
     if(!focus || *focus>=catalog.size() ||
-       catalog[*focus].tab!=menu.tab() ||
-       std::string_view(catalog[*focus].name)!="Sprint")
+       catalog[*focus].tab!=menu.tab())return false;
+    const std::string_view selected=catalog[*focus].name;
+    // R245: PR #2 R211 has exactly three independently controllable
+    // native JNI modules. Other source labels are not runtime controls.
+    if((selected!="No Jump Delay" && selected!="No Slow" &&
+        selected!="Sprint") ||
+       !candidate_native_manager_registered(selected))
         return false;
     // A snapshot may be read off the module owner, but cannot be forged
     // from MenuState::preview_enabled or interpreted as an acknowledgement.
@@ -39,8 +44,8 @@ bool GuiModuleControlHandoff::request_focused_toggle(
        (expected_source_sequence &&
         copy->source_sequence!=expected_source_sequence))return false;
     const auto it=std::find_if(copy->modules.begin(),copy->modules.end(),
-        [](const ModuleArrayListState& row){
-            return row.canonical_name=="Sprint";
+        [selected](const ModuleArrayListState& row){
+            return std::string_view(row.canonical_name)==selected;
         });
     if(it==copy->modules.end())return false;
     std::lock_guard<std::mutex> guard(mutex_);
@@ -55,7 +60,7 @@ bool GuiModuleControlHandoff::request_focused_toggle(
     request.id=next_request_id_++;
     request.observed_source_sequence=copy->source_sequence;
     request.world_generation=copy->world_generation;
-    request.canonical_name="Sprint";
+    request.canonical_name=std::string(selected);
     request.enable=!it->requested_enabled;
     view_.request=std::move(request);
     view_.phase=GuiModuleControlPhase::Pending;

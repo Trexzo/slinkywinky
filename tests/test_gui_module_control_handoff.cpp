@@ -22,6 +22,53 @@ static bool admit_on_worker(GuiModuleControlHandoff& handoff,
     module.join();
     return result;
 }
+
+static void r245_three_module_request_fixture(const char* name,
+        std::size_t row,std::size_t catalog_index,bool world_ready) {
+    MenuState menu;
+    MenuProfileBridge profile(menu);
+    MenuNavigation nav(menu,profile);
+    CHECK(nav.select_tab(MenuTab::Move));
+    for(std::size_t i=0;i<row;i++)CHECK(nav.apply(MenuNavAction::NextRow));
+    CHECK(nav.visible_focus() && *nav.visible_focus()==catalog_index);
+    ModuleArrayListSnapshot source;
+    source.source_sequence=31u;
+    source.world_generation=4u;
+    source.world_ready=world_ready;
+    source.modules={{name,false,false,4u}};
+    ModuleArrayListFeed feed;
+    CHECK(feed.publish(source));
+    GuiModuleControlHandoff enable;
+    CHECK(enable.request_focused_toggle(menu,nav,feed,31u));
+    CHECK(enable.view().request &&
+          enable.view().request->canonical_name==name &&
+          enable.view().request->enable);
+    CHECK(menu.toggle_preview(catalog_index));
+    CHECK(menu.preview_enabled(catalog_index));
+    CHECK(make_module_arraylist_display(*feed.latest())->active_names.empty());
+    source.source_sequence=32u;
+    source.modules[0].requested_enabled=true;
+    source.modules[0].active_in_world=world_ready;
+    CHECK(admit_on_worker(enable,feed,source,true));
+    CHECK(enable.view().phase==GuiModuleControlPhase::Acknowledged);
+    CHECK(enable.view().last_confirmed_active==world_ready);
+    const auto display=make_module_arraylist_display(*feed.latest());
+    CHECK(display && display->active_names.size()==(world_ready?1u:0u));
+    if(world_ready)CHECK(display->active_names[0]==name);
+    CHECK(menu.preview_enabled(catalog_index));
+    GuiModuleControlHandoff disable;
+    CHECK(disable.request_focused_toggle(menu,nav,feed,32u));
+    CHECK(disable.view().request &&
+          disable.view().request->canonical_name==name &&
+          !disable.view().request->enable);
+    source.source_sequence=33u;
+    source.modules[0].requested_enabled=false;
+    source.modules[0].active_in_world=false;
+    CHECK(admit_on_worker(disable,feed,source,true));
+    CHECK(make_module_arraylist_display(*feed.latest())->active_names.empty());
+    CHECK(menu.preview_enabled(catalog_index)); // preview stays inert
+}
+
 int main() {
     MenuState menu;
     MenuProfileBridge profile(menu);
@@ -134,4 +181,30 @@ int main() {
     foreign.retire();
     foreignFeed.retire();
     std::cout<<"R210_DENIAL_OWNER_THREAD_AND_UNSUPPORTED_FOCUS_PASS\n";
+
+    // R245 original Move source order: No Jump Delay 21, No Slow 22,
+    // Sprint 25. PR #2 R211 admits those three native controls only.
+    r245_three_module_request_fixture("No Jump Delay",4u,21u,true);
+    r245_three_module_request_fixture("No Slow",5u,22u,false);
+
+    MenuState unsupported;
+    MenuProfileBridge unsupportedProfile(unsupported);
+    MenuNavigation unsupportedNav(unsupported,unsupportedProfile);
+    CHECK(unsupportedNav.select_tab(MenuTab::Move));
+    for(int i=0;i<9;i++)CHECK(unsupportedNav.apply(MenuNavAction::NextRow));
+    CHECK(unsupportedNav.visible_focus() &&
+          *unsupportedNav.visible_focus()==26u); // Strafe is not R211
+    ModuleArrayListSnapshot unsupportedSource;
+    unsupportedSource.source_sequence=41u;
+    unsupportedSource.world_generation=5u;
+    unsupportedSource.world_ready=true;
+    unsupportedSource.modules={{"Strafe",false,false,5u}};
+    ModuleArrayListFeed unsupportedFeed;
+    CHECK(unsupportedFeed.publish(unsupportedSource));
+    GuiModuleControlHandoff unsupportedControl;
+    CHECK(!unsupportedControl.request_focused_toggle(
+        unsupported,unsupportedNav,unsupportedFeed));
+    CHECK(unsupportedControl.view().phase==GuiModuleControlPhase::Idle);
+    std::cout<<"R245_THREE_MODULE_SOURCE_GUI_REQUEST_AND_ACK_PASS\n";
+    std::cout<<"R245_OTHER_MODULES_REMAIN_PREVIEW_ONLY_PASS\n";
 }
