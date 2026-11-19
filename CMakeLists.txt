@@ -298,6 +298,14 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME r210_gui_module_request_ack_owner_lifecycle
     COMMAND slinkywinky_gui_module_control_tests)
+  # R246: owner-thread copy-only bridge matching PR #2's real R211
+  # request_module/control_states/generation contract. No game hooks.
+  add_executable(slinkywinky_r246_owner_adapter_tests
+    tests/test_r246_native_module_snapshot_adapter.cpp)
+  target_link_libraries(slinkywinky_r246_owner_adapter_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME r246_native_three_module_owner_snapshot_and_gui_ack
+    COMMAND slinkywinky_r246_owner_adapter_tests)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)
