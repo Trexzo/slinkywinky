@@ -331,7 +331,8 @@ if(BUILD_TESTING)
     add_executable(slinkywinky_r247_real_native_module_test
       tests/test_r247_real_pr2_native_module_adapter.cpp)
     target_include_directories(slinkywinky_r247_real_native_module_test PRIVATE
-      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include")
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
     target_link_libraries(slinkywinky_r247_real_native_module_test
       PRIVATE slinkywinky_core)
     target_compile_features(slinkywinky_r247_real_native_module_test
