@@ -7,6 +7,20 @@
 #include <string_view>
 
 namespace slinkywinky {
+
+// Pinned Skid-Technology/OpenSlinky fd9c592, PR #2 R193: the corrected
+// 66-entry native manager excludes an extra Chest Stealer pointer. The
+// candidate decrypted GUI inventory still has all 67 source descriptors.
+// Do not equate a visible menu label with a registered runtime module.
+bool candidate_native_manager_registered(std::string_view name) noexcept {
+    if(name.empty() || name=="Chest Stealer")return false;
+    const auto& catalog=official_module_catalog();
+    return std::any_of(catalog.begin(),catalog.end(),
+        [name](const MenuModule& module){
+            return std::string_view(module.name)==name;
+        });
+}
+
 std::optional<ModuleArrayListDisplay> make_module_arraylist_display(
         const ModuleArrayListSnapshot& snapshot) {
     constexpr std::uint32_t version=1u;
@@ -30,7 +44,9 @@ std::optional<ModuleArrayListDisplay> make_module_arraylist_display(
             [&state](const MenuModule& module){
                 return std::string_view(module.name)==state.canonical_name;
             });
-        if(it==catalog.end())return std::nullopt;
+        if(it==catalog.end() ||
+           !candidate_native_manager_registered(state.canonical_name))
+            return std::nullopt;
         const std::size_t index=static_cast<std::size_t>(
             std::distance(catalog.begin(),it));
         if(seen[index])return std::nullopt;

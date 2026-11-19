@@ -2,6 +2,7 @@
 #include "slinkywinky/menu.hpp"
 #include <algorithm>
 #include <iostream>
+#include <string_view>
 #include <stdexcept>
 #include <string>
 using namespace slinkywinky;
@@ -52,6 +53,46 @@ int main() {
         fixture.modules.push_back({item.name,false,false,7u});
     CHECK(fixture.modules.size()==67u);
     rejects(fixture);
+
+    // R244: original candidate descriptor count 67 is NOT the corrected
+    // 66-entry native module manager. "Chest Stealer" is the extra source
+    // descriptor and may never be asserted as an active runtime module.
+    // No GUI catalog labels or menu order are changed by this fence.
+    const auto& candidateCatalog=official_module_catalog();
+    CHECK(candidateCatalog.size()==67u);
+    std::size_t registeredCount=0u;
+    std::size_t unregisteredCount=0u;
+    std::vector<ModuleArrayListState> registeredRows;
+    for(const auto& item:candidateCatalog) {
+        const std::string_view name(item.name);
+        if(candidate_native_manager_registered(name)) {
+            ++registeredCount;
+            registeredRows.push_back({item.name,false,false,7u});
+        } else {
+            ++unregisteredCount;
+            CHECK(name=="Chest Stealer");
+        }
+    }
+    CHECK(registeredCount==66u && unregisteredCount==1u);
+    CHECK(!candidate_native_manager_registered("Chest Stealer") &&
+          !candidate_native_manager_registered("Not Slinky") &&
+          !candidate_native_manager_registered("") &&
+          candidate_native_manager_registered("Sprint") &&
+          candidate_native_manager_registered("Auto Tool"));
+    fixture=original;
+    fixture.modules=registeredRows; // all 66, no preview false positives
+    CHECK(make_module_arraylist_display(fixture) &&
+          make_module_arraylist_display(fixture)->active_names.empty());
+    fixture.modules.push_back({"Chest Stealer",false,false,7u});
+    CHECK(fixture.modules.size()==67u);
+    rejects(fixture);
+    fixture.modules.pop_back();
+    fixture.modules.front()={"Chest Stealer",true,true,7u};
+    rejects(fixture); // 66 names, one unsupported active record
+    fixture.modules.front()={"Chest Stealer",false,false,7u};
+    rejects(fixture); // even inactive source descriptor must be rejected
+    fixture.modules={{"Chest Stealer",true,true,7u}};
+    rejects(fixture); // no source tag can certify absent native registration
     fixture=original;fixture.modules.clear();
     CHECK(make_module_arraylist_display(fixture)->active_names.empty());
 
@@ -96,6 +137,16 @@ int main() {
     for(auto& row:next.modules)row.world_generation=7u;
     CHECK(!oldWorld.publish(next)); // world-generation regression
     CHECK(oldWorld.retired() && !oldWorld.latest());
+    ModuleArrayListFeed unregistered;
+    CHECK(unregistered.publish(original));
+    auto untrusted=original;
+    untrusted.source_sequence=11u;
+    untrusted.modules.push_back({"Chest Stealer",false,false,7u});
+    CHECK(!unregistered.publish(untrusted));
+    CHECK(unregistered.retired() && !unregistered.latest());
+    std::cout<<"R244_NATIVE_66_REGISTRATION_ONLY_PASS\n";
+    std::cout<<"R244_UNREGISTERED_CHEST_STEALER_FEED_QUARANTINE_PASS\n";
+
     ModuleArrayListFeed malformed;
     auto bad=original;
     bad.contract_version=2u;

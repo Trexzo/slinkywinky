@@ -3,6 +3,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace slinkywinky {
@@ -36,6 +37,13 @@ struct ModuleArrayListDisplay {
 // inactive/out-of-world snapshot. No module behavior is executed here.
 std::optional<ModuleArrayListDisplay> make_module_arraylist_display(
     const ModuleArrayListSnapshot& snapshot);
+
+// R244: source-pinned 66-registration boundary. The candidate GUI displays
+// 67 descriptor labels, but the corrected native manager registers only 66:
+// the extra "Chest Stealer" descriptor is NOT a native module owner.
+// A false return forbids runtime activation/publication; it does not remove
+// the corresponding label from the candidate GUI preview.
+bool candidate_native_manager_registered(std::string_view name) noexcept;
 
 // R208: bounded, value-only handoff from a module-owner producer to a
 // renderer consumer. Publishes whole snapshots, never Java/game pointers.
