@@ -666,10 +666,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachAgent.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachTarget.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R242InputAttachTarget.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R243InputAttachTarget.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R241InputAttachLauncher.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R242InputAttachLauncher.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241_input_attach_restore_smoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r242_input_failure_restore_smoke.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r243_input_transformer_fault_smoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241-input-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
@@ -820,6 +822,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachAgent.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R242InputAttachTarget.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R243InputAttachTarget.java"
     # Offline tool only: exact Mojang SHA-1 before structural render lookup.
     # Keep audit code in its own JAR and out of the injected Java agent.
     COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -1010,6 +1013,14 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/r242_input_failure_restore_smoke.py"
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(r242_java8_input_failure_restore_negatives
+        PROPERTIES TIMEOUT 120)
+      # R243: exact PID, real Java8 Attach and fault-injected failure
+      # boundaries; all targets are disposable JVMs, never Minecraft.
+      add_test(NAME r243_java8_input_transformer_failure_boundaries
+        COMMAND "${Python3_EXECUTABLE}" -u
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/r243_input_transformer_fault_smoke.py"
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+      set_tests_properties(r243_java8_input_transformer_failure_boundaries
         PROPERTIES TIMEOUT 120)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
