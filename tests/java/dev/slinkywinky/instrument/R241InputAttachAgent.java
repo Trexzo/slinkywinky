@@ -31,12 +31,23 @@ public final class R241InputAttachAgent {
     public static void agentmain(String options,final Instrumentation inst)
         throws Exception {
         if(!"R241_DISPOSABLE_INPUT_ONLY".equals(options) ||
-           !"1".equals(System.getenv("SLINKYWINKY_R241_DISPOSABLE_FIXTURE")))
+           !"1".equals(System.getenv("SLINKYWINKY_R241_DISPOSABLE_FIXTURE"))) {
+            if("R242_BAD_OPTION".equals(options) &&
+               "1".equals(System.getenv("SLINKYWINKY_R242_DISPOSABLE_NEGATIVE"))) {
+                System.out.println("R242_INVALID_AGENT_OPTIONS_REFUSED");
+                System.out.flush();
+            }
             throw new IllegalArgumentException("R241 disposable JVM opt-in required");
+        }
         if(!inst.isRetransformClassesSupported())
             throw new IllegalStateException("R241 retransform unsupported");
-        if(!admitted.compareAndSet(false,true))
+        if(!admitted.compareAndSet(false,true)) {
+            if("1".equals(System.getenv("SLINKYWINKY_R242_DISPOSABLE_NEGATIVE"))) {
+                System.out.println("R242_DUPLICATE_ATTACH_REFUSED");
+                System.out.flush();
+            }
             throw new IllegalStateException("R241 duplicate attach refused");
+        }
         Class<?> found=null;
         for(Class<?> type:inst.getAllLoadedClasses()) {
             if(TARGET.equals(type.getName())){
@@ -78,9 +89,11 @@ public final class R241InputAttachAgent {
             throw new IllegalStateException("R241 no active disposable observer");
         ready=false;
         final int[] counts=OriginalInputFrameDiagnostic.fixtureEnd();
-        if(counts[0]!=8 || counts[1]!=0)
-            throw new IllegalStateException("R241 owner entry count mismatch");
-        System.out.println("R241_OWNER_INPUT_ENTRY_COUNT_PASS count="+counts[0]);
+        // R242: wrong-thread or malformed observations must NOT strand the
+        // disposable JVM with woven bytes. Restore before reporting rejection.
+        final boolean countsValid=(counts[0]==8 && counts[1]==0);
+        if(countsValid)
+            System.out.println("R241_OWNER_INPUT_ENTRY_COUNT_PASS count="+counts[0]);
         final Instrumentation inst=installed;
         final Class<?> target=exactTarget;
         final byte[] expected=baselineHash;
@@ -106,6 +119,12 @@ public final class R241InputAttachAgent {
         exactTarget=null;installed=null;baselineHash=null;
         System.out.println("R241_REAL_JAVA8_INPUT_BYTECODE_RESTORE_SHA256_PASS");
         System.out.flush();
+        if(!countsValid) {
+            System.out.println("R242_RESTORED_BEFORE_INVALID_COUNT_REJECTION entries="+
+                counts[0]+" foreign="+counts[1]);
+            System.out.flush();
+            throw new IllegalStateException("R241 owner entry count mismatch");
+        }
     }
     private R241InputAttachAgent(){}
 }
