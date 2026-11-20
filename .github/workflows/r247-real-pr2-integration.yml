@@ -1,4 +1,4 @@
-name: R247-R248 pinned PR2 native GUI integration
+name: R247-R249 pinned PR2 native GUI integration
 
 on:
   push:
@@ -37,7 +37,7 @@ jobs:
           echo R247_PINNED_PR2_SOURCE_CHECKOUT_PASS
       - name: Configure first-party source integration
         run: cmake -S shell -B build-r247 -DCMAKE_BUILD_TYPE=Release -DSLINKYWINKY_R247_PR2_ROOT="$GITHUB_WORKSPACE/pr2-pin"
-      - name: Build both real PR2 native integration tests
-        run: cmake --build build-r247 --target slinkywinky_r247_real_native_module_test slinkywinky_r248_real_three_module_test --parallel 2
-      - name: Execute actual PR2 owner and three-module source integration
-        run: ctest --test-dir build-r247 -R '^r24(7|8)_real_pr2_' --output-on-failure
+      - name: Build real PR2 integration and failure-boundary tests
+        run: cmake --build build-r247 --target slinkywinky_r247_real_native_module_test slinkywinky_r248_real_three_module_test slinkywinky_r249_native_failure_tests --parallel 2
+      - name: Execute real native owner and uncertain-result integration
+        run: ctest --test-dir build-r247 -R '^r24(7|8|9)_real_pr2_' --output-on-failure

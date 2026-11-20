@@ -28,14 +28,21 @@ public:
     bool publish_on_owner(const NativeOwner& native, ModuleArrayListFeed& feed,
             std::uint64_t sequence,bool world_ready) {
         if(!on_owner() || retired_)return false;
-        auto snapshot=copy_state(native,sequence,world_ready);
-        if(!snapshot || sequence<=last_sequence_ ||
-           !feed.publish(*snapshot)) {
+        try {
+            auto snapshot=copy_state(native,sequence,world_ready);
+            if(!snapshot || sequence<=last_sequence_ ||
+               !feed.publish(*snapshot)) {
+                retire_owner(feed);
+                return false;
+            }
+            last_sequence_=sequence;
+            return true;
+        } catch(...) {
+            // An owner read may fail after observing a partial session
+            // transition. Never retain earlier active HUD rows.
             retire_owner(feed);
             return false;
         }
-        last_sequence_=sequence;
-        return true;
     }
 
     // The GUI must already have authenticated the gesture. This function
@@ -45,6 +52,9 @@ public:
             GuiModuleControlHandoff& handoff,ModuleArrayListFeed& feed,
             std::uint64_t response_sequence,bool world_ready) {
         if(!on_owner() || retired_)return false;
+        // R249: catch even ambiguous state/read exceptions. The native
+        // request itself might already have changed module selections.
+        try {
         const auto request=handoff.take_on_module_owner();
         if(!request)return false;
         const auto prior=feed.latest();
@@ -68,8 +78,16 @@ public:
         // without reproducing its header or wrapping a gameplay API.
         if(!native.request_module({std::string_view(request->canonical_name),
                                    request->enable})) {
-            // The native owner explicitly denied this unmodified request.
-            handoff.deny_on_module_owner(request->id);
+            // A false return alone is NOT proof that the native owner
+            // left its state untouched. Re-read the entire source state,
+            // including generation, before publishing a safe denial.
+            const auto denied=copy_state(
+                native,prior->source_sequence,prior->world_ready);
+            if(!denied || !same(*prior,*denied) ||
+               !handoff.deny_on_module_owner(request->id)) {
+                handoff.retire();
+                retire_owner(feed);
+            }
             return false;
         }
         const auto next=copy_state(native,response_sequence,world_ready);
@@ -85,6 +103,14 @@ public:
         }
         last_sequence_=response_sequence;
         return true;
+        } catch(...) {
+            // A throw before/after a native mutation, or during an
+            // acknowledgement, is an UNKNOWN outcome; it is neither
+            // a safe denial nor a successful game-state rollback.
+            handoff.retire();
+            retire_owner(feed);
+            return false;
+        }
     }
 
     bool retire_owner(ModuleArrayListFeed& feed) {

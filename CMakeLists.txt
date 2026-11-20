@@ -353,6 +353,19 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r248_real_pr2_three_module_gui_world_lifecycle
       COMMAND slinkywinky_r248_real_three_module_test)
+    # R249: actual PR2 manager with boundary-injected native failures,
+    # including uncertain returns, throws and interrupted ACK.
+    add_executable(slinkywinky_r249_native_failure_tests
+      tests/test_r249_real_pr2_native_failure_boundaries.cpp)
+    target_include_directories(slinkywinky_r249_native_failure_tests PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r249_native_failure_tests
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r249_native_failure_tests
+      PRIVATE cxx_std_17)
+    add_test(NAME r249_real_pr2_native_uncertain_acknowledgement_fence
+      COMMAND slinkywinky_r249_native_failure_tests)
   endif()
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
