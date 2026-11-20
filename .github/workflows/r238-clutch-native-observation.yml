@@ -1,0 +1,34 @@
+name: R238 native Clutch observation gate
+on:
+  push:
+    paths:
+      - 'reference_compat/include/slinkywinky/clutch_observation_bridge.hpp'
+      - 'reference_compat/include/slinkywinky/clutch_candidate_planner.hpp'
+      - 'reference_compat/tests/test_clutch_world_observation_bridge.cpp'
+      - 'reference_compat/CMakeLists.txt'
+      - '.github/workflows/r238-clutch-native-observation.yml'
+  pull_request:
+    paths:
+      - 'reference_compat/include/slinkywinky/clutch_observation_bridge.hpp'
+      - 'reference_compat/include/slinkywinky/clutch_candidate_planner.hpp'
+      - 'reference_compat/tests/test_clutch_world_observation_bridge.cpp'
+      - 'reference_compat/CMakeLists.txt'
+      - '.github/workflows/r238-clutch-native-observation.yml'
+jobs:
+  native-source-receipt:
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+        mode: [Debug, Release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure independent native compatibility tests
+        env:
+          CXX: ${{ matrix.compiler }}
+        run: cmake -S reference_compat -B build/r238 -DCMAKE_BUILD_TYPE=${{ matrix.mode }}
+      - name: Build Clutch source receipt test
+        run: cmake --build build/r238 --target slinkywinky_clutch_world_observation_test --parallel 2
+      - name: Run native Clutch admission regressions
+        run: ctest --test-dir build/r238 -R '^r238_native_clutch_observation_planner_gate$' --output-on-failure
