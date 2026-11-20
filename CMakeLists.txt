@@ -393,6 +393,21 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r252_real_pr2_jvm_witnessed_native_recovery
       COMMAND slinkywinky_r252_witnessed_recovery_tests)
+    if(WIN32)
+      # R253 source-pinned actual native manager + kernel process HANDLE
+      # witness. Driven only by separate explicitly-owned Java8 test JVMs.
+      add_executable(slinkywinky_r253_windows_kernel_recovery_probe
+        tests/r253_windows_kernel_process_recovery.cpp)
+      target_include_directories(
+        slinkywinky_r253_windows_kernel_recovery_probe PRIVATE
+        "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+        "${SLINKYWINKY_R247_PR2_ROOT}/include")
+      target_link_libraries(
+        slinkywinky_r253_windows_kernel_recovery_probe PRIVATE
+        slinkywinky_core advapi32)
+      target_compile_features(
+        slinkywinky_r253_windows_kernel_recovery_probe PRIVATE cxx_std_17)
+    endif()
   endif()
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)

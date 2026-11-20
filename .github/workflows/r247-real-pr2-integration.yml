@@ -1,4 +1,4 @@
-name: R247-R252 pinned PR2 native GUI integration
+name: R247-R253 pinned PR2 native GUI integration
 
 on:
   push:
@@ -41,3 +41,53 @@ jobs:
         run: cmake --build build-r247 --target slinkywinky_r247_real_native_module_test slinkywinky_r248_real_three_module_test slinkywinky_r249_native_failure_tests slinkywinky_r250_native_recovery_test slinkywinky_r252_witnessed_recovery_tests --parallel 2
       - name: Execute all real native owner lifecycle integration tests
         run: ctest --test-dir build-r247 -R '^r2(47|48|49|50|52)_real_pr2_' --output-on-failure
+
+  real-windows-java8-kernel-recovery:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR1 source
+        uses: actions/checkout@v4
+        with:
+          path: shell
+          persist-credentials: false
+      - name: Checkout pinned PR2 native manager
+        uses: actions/checkout@v4
+        with:
+          repository: Trexzo/slinkywinky
+          ref: 7f457376058ad42e0a0e0323ed874d7e5b2ae03a
+          path: pr2-pin
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Pin and verify source checkout
+        shell: pwsh
+        run: |
+          if ((git -C pr2-pin rev-parse HEAD).Trim() -ne "7f457376058ad42e0a0e0323ed874d7e5b2ae03a") { throw 'R253 pinned PR2 source drift' }
+          if (!(Test-Path -LiteralPath 'shell/include/slinkywinky/windows_jvm_kernel_exit_witness.hpp')) { throw 'R253 source absent' }
+      - name: Compile actual PR2 native manager and kernel process verifier
+        shell: pwsh
+        run: |
+          cmake -S shell -B build-r253 -A x64 -DSLINKYWINKY_R247_PR2_ROOT="$env:GITHUB_WORKSPACE/pr2-pin"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-r253 --config Release --target slinkywinky_r253_windows_kernel_recovery_probe --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compile disposable R251 Java8 Attach fixture only
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build-r253/lease-classes | Out-Null
+          & "$env:JAVA_HOME/bin/javac.exe" -source 8 -target 8 -d build-r253/lease-classes shell/tests/java/dev/slinkywinky/instrument/R251LeaseTarget.java shell/tests/java/dev/slinkywinky/instrument/R251LeaseAgent.java
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:JAVA_HOME/bin/javac.exe" -source 8 -target 8 -cp "$env:JAVA_HOME/lib/tools.jar" -d build-r253/lease-classes shell/tests/java/dev/slinkywinky/attach/R251LeaseLauncher.java
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & "$env:JAVA_HOME/bin/jar.exe" cfm build-r253/slinkywinky_r251_test_agent.jar shell/tests/r251-lease-attach-agent.mf -C build-r253/lease-classes .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prove actual Java8 Attach PID birth and pinned native recovery
+        shell: pwsh
+        run: |
+          python -u shell/tests/r253_windows_kernel_recovery_attach.py build-r253/Release/slinkywinky_r253_windows_kernel_recovery_probe.exe "$env:JAVA_HOME" build-r253/lease-classes build-r253/slinkywinky_r251_test_agent.jar
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
