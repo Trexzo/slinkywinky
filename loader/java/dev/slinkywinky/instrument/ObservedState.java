@@ -16,9 +16,17 @@ public final class ObservedState {
         public final int flags; // world=1, player=2, ray-selected entity=4
         public final double[] xyz; // player eye XYZ, selected entity XYZ
         public final float[] angles; // yaw, pitch
-
+        public final boolean sprintKnown,sprinting,lastAttackerTimeKnown;
+        public final int lastAttackerTime;
         Frame(long t, long g, int f, double[] p, float[] a) {
+            this(t,g,f,p,a,false,false,false,0);
+        }
+        Frame(long t,long g,int f,double[] p,float[] a,
+              boolean sprintAvailable,boolean sprint,
+              boolean timeAvailable,int lastTime) {
             timeMs=t; generation=g; flags=f; xyz=p; angles=a;
+            sprintKnown=sprintAvailable;sprinting=sprint;
+            lastAttackerTimeKnown=timeAvailable;lastAttackerTime=lastTime;
         }
     }
 
@@ -41,13 +49,19 @@ public final class ObservedState {
         final Class<?> type;
         final PositionFields position;
         final Field yaw, pitch;
-        final Method eyeHeight;
+        final Method eyeHeight,sprintMethod,lastAttackerTimeMethod;
         PlayerFields(Class<?> cls) throws NoSuchFieldException, NoSuchMethodException {
             type=cls;
             position=new PositionFields(cls);
             yaw=choose(cls,"y","rotationYaw","field_70177_z");
             pitch=choose(cls,"z","rotationPitch","field_70125_A");
             eyeHeight=eyeHeightMethod(cls);
+            // Official 1.8.9: pk.aw()Z / Entity.isSprinting,
+            // pr.bg()I / EntityLivingBase.getLastAttackerTime.
+            sprintMethod=optionalCombatMethod(cls,"pk","aw",
+                "isSprinting","func_70051_ag",Boolean.TYPE);
+            lastAttackerTimeMethod=optionalCombatMethod(cls,"pr","bg",
+                "getLastAttackerTime","func_142013_aG",Integer.TYPE);
         }
     }
     private static final class TargetFields {
@@ -143,6 +157,27 @@ public final class ObservedState {
         return n;
     }
 
+    private static Method optionalCombatMethod(Class<?> type,
+            String obfOwner,String obfMethod,String named,String srg,
+            Class<?> resultType) {
+        for(Class<?> c=type;c!=null;c=c.getSuperclass()){
+            if(vanillaObfuscated && !obfOwner.equals(c.getName()))
+                continue;
+            for(String candidate:(vanillaObfuscated?
+                    new String[]{obfMethod}:new String[]{named,srg})){
+                try {
+                    Method method=c.getDeclaredMethod(candidate);
+                    if(Modifier.isStatic(method.getModifiers()) ||
+                       method.getReturnType()!=resultType ||
+                       method.getParameterTypes().length!=0)continue;
+                    method.setAccessible(true);
+                    return method;
+                }catch(NoSuchMethodException ignored){}
+            }
+        }
+        return null; // absence stays unknown, not false/zero
+    }
+
     private static float eyeHeight(PlayerFields fields,Object player)
             throws ReflectiveOperationException {
         Object value=fields.eyeHeight.invoke(player);
@@ -193,10 +228,27 @@ public final class ObservedState {
             throw new IllegalStateException("Player exists without world");
 
         int flags=(world==null?0:1)|(player==null?0:2);
+        boolean sprintAvailable=false,sprint=false,attackerTimeAvailable=false;
+        int attackerTime=0;
         double[] xyz=new double[6];
         float[] camera=new float[2];
         if(world!=null && player!=null) {
             PlayerFields bound=playerBinding(player);
+            if(bound.sprintMethod!=null){
+                Object value=bound.sprintMethod.invoke(player);
+                if(!(value instanceof Boolean))
+                    throw new IllegalStateException("R259 sprint type mismatch");
+                sprintAvailable=true;sprint=((Boolean)value).booleanValue();
+            }
+            if(bound.lastAttackerTimeMethod!=null){
+                Object value=bound.lastAttackerTimeMethod.invoke(player);
+                if(!(value instanceof Integer))
+                    throw new IllegalStateException("R259 attack time type mismatch");
+                attackerTime=((Integer)value).intValue();
+                if(attackerTime<0)
+                    throw new IllegalStateException("R259 negative attacker time");
+                attackerTimeAvailable=true;
+            }
             xyz[0]=numeric(bound.position.x,player);
             xyz[1]=numeric(bound.position.y,player)+eyeHeight(bound,player);
             xyz[2]=numeric(bound.position.z,player);
@@ -228,7 +280,8 @@ public final class ObservedState {
             oldWorld=world;
             oldPlayer=player;
         }
-        return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera);
+        return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera,
+                         sprintAvailable,sprint,attackerTimeAvailable,attackerTime);
     }
 
     /** Clear all strong world/player, reflection, and classloader references. */

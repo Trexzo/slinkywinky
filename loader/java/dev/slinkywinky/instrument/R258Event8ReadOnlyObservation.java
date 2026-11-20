@@ -15,7 +15,8 @@ public final class R258Event8ReadOnlyObservation {
         public final int flags;
         public final double eyeX,eyeY,eyeZ,targetX,targetY,targetZ;
         public final float yaw,pitch;
-
+        public final boolean sprintKnown,sprinting,lastAttackerTimeKnown;
+        public final int lastAttackerTime;
         private Receipt(long seq,ObservedState.Frame frame) {
             sequence=seq;
             generation=frame.generation;
@@ -24,6 +25,9 @@ public final class R258Event8ReadOnlyObservation {
             eyeX=frame.xyz[0];eyeY=frame.xyz[1];eyeZ=frame.xyz[2];
             targetX=frame.xyz[3];targetY=frame.xyz[4];targetZ=frame.xyz[5];
             yaw=frame.angles[0];pitch=frame.angles[1];
+            sprintKnown=frame.sprintKnown;sprinting=frame.sprinting;
+            lastAttackerTimeKnown=frame.lastAttackerTimeKnown;
+            lastAttackerTime=frame.lastAttackerTime;
         }
         public boolean worldAndPlayer() {return (flags&3)==3;}
         public boolean targetSelected() {return (flags&4)!=0;}
@@ -32,6 +36,13 @@ public final class R258Event8ReadOnlyObservation {
         // held item category, friend flags or source module settings.
         public boolean hasAllSourceEvent8Inputs(){return false;}
 
+        public String r259Evidence() {
+            // Raw state only: incoming-attacker timestamp != outgoing hit.
+            return "R259_REACH_EVIDENCE "+sequence+" "+generation+
+                " "+(sprintKnown?(sprinting?"1":"0"):"-1")+
+                " "+(lastAttackerTimeKnown?
+                      Integer.toString(lastAttackerTime):"-1");
+        }
         public String envelope() {
             // Only event/session metadata; never print eye/target locations.
             return "R258_EVENT8_OBS "+sequence+" "+generation+" "+flags+
