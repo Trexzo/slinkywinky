@@ -360,6 +360,9 @@ static void prior_ray_preflight_regression() {
     w.source_solid[1]=false;
     w.min_height=2.0f;
     w.ground_by_depth[0]=true;
+    // The real sampler exits before collecting candidate IDs when the
+    // minimum-height ground probe is occupied.
+    w.source_solid[0].reset();
     request=clutch_prior_ray_preflight(w,initial);
     CHECK(request.admitted && !request.needs_ray);
     w.ground_by_depth[0].reset();
