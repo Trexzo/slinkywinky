@@ -47,6 +47,9 @@ public final class ClutchWorldSampler implements AutoCloseable {
         public final int range;
         public final float minHeight;
         public final Pos previous;
+        public double[] boxLo() {return lo==null?null:lo.clone();}
+        public double[] boxHi() {return hi==null?null:hi.clone();}
+        public double[] eye() {return eye==null?null:eye.clone();}
         public Request(long generation,long tick,double[] lo,double[] hi,
                        double[] eye,int range,float minHeight,Pos previous) {
             this.generation=generation;
