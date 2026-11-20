@@ -158,6 +158,23 @@ def main():
             raise RuntimeError("Original 1.8.9 renderer fingerprint changed")
         print(result.stdout.rstrip(), flush=True)
         print("R71_OFFLINE_ORIGINAL_JAR_RENDER_PREFLIGHT_PASS", flush=True)
+        # R260: source-pin actual outgoing attack-ATTEMPT call graph,
+        # without setting Reach cooldown or executing any Minecraft code.
+        outbound = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.R260OutgoingAttackCallsiteAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40)
+        if (outbound.returncode != 0 or
+                outbound.stdout.count(
+                    "R260_ORIGINAL_189_OUTGOING_ATTACK_CALLSITE_PASS ") != 1 or
+                "R260_ATTACK_ATTEMPT_ONLY_NO_CONFIRMED_HIT_OR_SERVER_ACK"
+                not in outbound.stdout or
+                "R260_ORIGINAL_JAR_READONLY_NO_GAME_ATTACH"
+                not in outbound.stdout):
+            raise RuntimeError("R260 original attack attempt callsite mismatch: " +
+                               outbound.stdout[-1600:] + outbound.stderr[-1400:])
+        print(outbound.stdout.rstrip(), flush=True)
         # R107: source-pin the NORMAL Minecraft keyboard dispatch owner.
         # This is an offline audit only, NOT a modal/no-pass-through test.
         keyboard = subprocess.run(

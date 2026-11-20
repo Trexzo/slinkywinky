@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/original-189-audit.yml'
       - 'tests/official_189_render_audit.py'
+      - 'tests/java/dev/slinkywinky/attach/R260OutgoingAttackCallsiteAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/R260OutgoingAttackCallsiteSmoke.java'
       - 'tests/original_189_live_render_acceptance.py'
       - 'tests/test_original_189_live_acceptance.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
@@ -61,6 +63,8 @@ on:
     paths:
       - '.github/workflows/original-189-audit.yml'
       - 'tests/official_189_render_audit.py'
+      - 'tests/java/dev/slinkywinky/attach/R260OutgoingAttackCallsiteAudit.java'
+      - 'tests/java/dev/slinkywinky/attach/R260OutgoingAttackCallsiteSmoke.java'
       - 'tests/original_189_live_render_acceptance.py'
       - 'tests/test_original_189_live_acceptance.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
