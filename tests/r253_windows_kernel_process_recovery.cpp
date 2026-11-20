@@ -2,8 +2,10 @@
 // + R252 source recovery + actual PR2 SprintObservationPreview.
 // Disposable targets only. No Minecraft or gameplay input.
 #ifdef _WIN32
-#include "slinkywinky/windows_jvm_kernel_exit_witness.hpp"
+// PR2's clutch planner has a local variable named 'far'; windows.h
+// defines a legacy 'far' macro, so parse the actual PR2 headers first.
 #include "slinkywinky/sprint_observation_preview.hpp"
+#include "slinkywinky/windows_jvm_kernel_exit_witness.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <string>
