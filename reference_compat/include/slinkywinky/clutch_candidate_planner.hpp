@@ -233,23 +233,23 @@ inline ClutchCandidatePlan clutch_plan_original(
                 (*samples)[0],(*samples)[1],(*samples)[2],
                 in.multipoint,previous.last_aim);
             if(!aim)return refuse();
-            const ClutchCandidatePos observed=previous.ray_hit.value_or(
-                previous.block);
             if(aim->cost<=in.max_aim_degrees &&
                clutch_source_reachable(in.eye,aim->target)) {
                 if(!previous.ray_known)return refuse();
+                const ClutchCandidatePos observed=previous.ray_hit.value_or(
+                    previous.block);
                 if(observed==previous.block) {
-                have_best=true;
-                best_rank=clutch_candidate_rank(rel)-2;
-                best_cost=aim->cost;
-                best.found=true;
-                best.preserved_prior=true;
-                best.face_up=false;
-                best.selected=previous.block;
-                best.aim=aim->target;
-                best.aim_yaw_diff=aim->yaw_diff;
-                best.aim_pitch_diff=aim->pitch_diff;
-                best.angular_cost=aim->cost;
+                    have_best=true;
+                    best_rank=clutch_candidate_rank(rel)-2;
+                    best_cost=aim->cost;
+                    best.found=true;
+                    best.preserved_prior=true;
+                    best.face_up=false;
+                    best.selected=previous.block;
+                    best.aim=aim->target;
+                    best.aim_yaw_diff=aim->yaw_diff;
+                    best.aim_pitch_diff=aim->pitch_diff;
+                    best.angular_cost=aim->cost;
                 }
             }
         }
