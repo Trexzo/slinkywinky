@@ -27,6 +27,7 @@ if(BUILD_TESTING)
     reference_compat/tests/test_clutch_click_gate.cpp)
   target_include_directories(slinkywinky_clutch_click_gate_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_clutch_click_gate_tests PRIVATE cxx_std_17)
   add_test(NAME r247_offline_clutch_click_source_gate
     COMMAND slinkywinky_clutch_click_gate_tests)
   add_executable(slinkywinky_bridge_tests tests/test_bridge.cpp)
