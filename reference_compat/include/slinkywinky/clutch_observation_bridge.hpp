@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <thread>
 #include <vector>
@@ -48,6 +49,7 @@ public:
 
     std::optional<ClutchCandidateWorld> consume(
         const ClutchObservedFrame& f) noexcept {
+        const std::lock_guard<std::mutex> lock(mutex_);
         if(closed_ || std::this_thread::get_id()!=owner_thread_) {
             closed_=true;
             return std::nullopt;
@@ -155,10 +157,17 @@ public:
         return w;
     }
 
-    bool closed() const noexcept {return closed_;}
-    void close() noexcept {closed_=true;}
+    bool closed() const noexcept {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        return closed_;
+    }
+    void close() noexcept {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        closed_=true;
+    }
 
 private:
+    mutable std::mutex mutex_{};
     const std::thread::id owner_thread_;
     std::uint64_t generation_=0,last_tick_=0;
     std::uint64_t world_token_=0,player_token_=0;
