@@ -5,6 +5,7 @@ import dev.slinkywinky.HostSettings;
 import dev.slinkywinky.NativeEngine;
 import dev.slinkywinky.OwnedModuleActions;
 import dev.slinkywinky.SprintObservationProbe;
+import dev.slinkywinky.ClutchWorldSampler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -68,6 +69,11 @@ public final class ForgePreview {
     private boolean r209TickReceipt;
     // R224: source-grounded real Forge PlayerTick -> read-only Strafe JNI.
     private boolean r224ForwardArmed,r224ReceiptEmitted,r224CleanupDone;
+    // R237 source-ordered real-world block observations. Read-only.
+    private ClutchWorldSampler r237Sampler;
+    private Object r237World,r237Player;
+    private long r237Generation=1,r237Tick;
+    private int r237Samples,r237NonAir;
     private int r224WorldSamples,r224MotionSamples,r224Proposals;
     private double r224StartX,r224StartZ,r224LastX,r224LastZ;
     private long r213InWorldTicks;
@@ -92,6 +98,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r209PlayerTickTest");
     private static final boolean R224_LOCAL_STRAFE_TEST =
         Boolean.getBoolean("slinkywinky.r224LocalStrafeReadOnlyTest");
+    private static final boolean R237_CLUTCH_READONLY =
+        Boolean.getBoolean("slinkywinky.r237ClutchReadOnlyProbe");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
     private static final boolean R217_ITEM_CATEGORIES_TEST =
@@ -211,6 +219,22 @@ public final class ForgePreview {
             if(R224_LOCAL_STRAFE_TEST)
                 mc.gameSettings.pauseOnLostFocus=false;
         }
+        // R237 is never admitted in ordinary profiles or action-test modes.
+        // The operator must independently enter a local offline world and
+        // press F9; this option does not create worlds or modify keys.
+        if(R237_CLUTCH_READONLY) {
+            final Minecraft mc=Minecraft.getMinecraft();
+            final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
+            final String temp=System.getProperty("java.io.tmpdir").replace('\\','/');
+            if(!SPRINT_OBSERVATION || R212_ACTION_TEST ||
+               R208_LOCAL_WORLD_TEST || !home.startsWith(temp) ||
+               !home.contains("/slinkywinky-r237-independent-forge-") ||
+               mc.getSession()==null ||
+               !"R237Offline".equals(mc.getSession().getUsername()))
+                throw new IllegalStateException(
+                    "R237 requires isolated TEMP offline read-only Forge");
+            System.out.println("[SlinkyWinkyPreview] R237_CLUTCH_ISOLATION_GATE_PASS");
+        }
         // Diagnostic only: enable with -Dslinkywinky.startupProbe=true in an isolated
         // Forge 1.8.9 development JVM. It never issues game actions or packets.
         if (Boolean.getBoolean("slinkywinky.startupProbe")) {
@@ -234,6 +258,8 @@ public final class ForgePreview {
 
     private void stop() {
         enabled=false;
+        if(r237Sampler!=null) {r237Sampler.close();r237Sampler=null;}
+        r237World=r237Player=null;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
             r214Active=null;
         try {
@@ -296,6 +322,8 @@ public final class ForgePreview {
                         SprintObservationProbe.NO_JUMP_DELAY,false);
             }
             enabled=true;
+            r237Samples=r237NonAir=0;
+            r237Tick=0;
             observations=0;
             sprintGeneration=1;
             sprintWorld=sprintPlayer=null;
@@ -949,6 +977,8 @@ public final class ForgePreview {
                 sampleReadOnlySprint(mc,frame);
                 if(R224_LOCAL_STRAFE_TEST)
                     sampleR224ReadOnlyStrafe(mc,frame);
+                if(R237_CLUTCH_READONLY)
+                    sampleR237ReadOnlyClutch(mc,frame);
             }
         } catch (RuntimeException | LinkageError problem) {
             try {stop();} catch (RuntimeException ignored) { }
@@ -1018,6 +1048,43 @@ public final class ForgePreview {
      * Forge PlayerTickEvent.END is not authenticated original native
      * event-21 timing and still requires separate gameplay acceptance.
      */
+    /**
+     * A real, source-ordered 167-cell block-ID observation. Does NOT
+     * execute Clutch's planner, raycast, mouse, rotation or placement.
+     * Native R235 still needs a two-phase ownership-checked JNI handoff.
+     */
+    private void sampleR237ReadOnlyClutch(Minecraft mc,GameHost.Frame frame) {
+        if(r237Samples>=20)return;
+        if(!mc.isSingleplayer() || mc.theWorld==null ||
+            mc.thePlayer==null || !mc.theWorld.isRemote ||
+            frame.worldToken!=mc.theWorld || frame.playerToken!=mc.thePlayer)
+            throw new IllegalStateException("R237 read-only world admission denied");
+        if(r237Sampler==null || r237World!=mc.theWorld ||
+            r237Player!=mc.thePlayer) {
+            if(r237Sampler!=null)r237Sampler.close();
+            r237Sampler=new ClutchWorldSampler();
+            r237World=mc.theWorld;r237Player=mc.thePlayer;
+            ++r237Generation;r237Tick=0;
+        }
+        final net.minecraft.util.AxisAlignedBB box=
+            mc.thePlayer.getEntityBoundingBox();
+        final ClutchWorldSampler.Request request=new ClutchWorldSampler.Request(
+            r237Generation,++r237Tick,
+            new double[]{box.minX,box.minY,box.minZ},
+            new double[]{box.maxX,box.maxY,box.maxZ},
+            new double[]{frame.eyeX,frame.eyeY,frame.eyeZ},
+            7,0.0f,null);
+        final ClutchWorldSampler.Snapshot snapshot=r237Sampler.capture(
+            new ForgeClutchWorldPort(mc),request);
+        for(int id:snapshot.candidateBlockIds())if(id!=0)++r237NonAir;
+        ++r237Samples;
+        if(r237Samples==20)
+            System.out.println("[SlinkyWinkyPreview] " +
+                "R237_REAL_WORLD_CLUTCH_167_READONLY_PASS samples=20" +
+                " candidateReads=3340 nonAir="+r237NonAir+
+                " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END");
+    }
+
     private void sampleOwnedModuleActions(Minecraft mc, GameHost.Frame frame) {
         if(!R212_ACTION_TEST || moduleActions==null || sprintProbe==null ||
            mc.theWorld==null || mc.thePlayer==null || !mc.isSingleplayer())
