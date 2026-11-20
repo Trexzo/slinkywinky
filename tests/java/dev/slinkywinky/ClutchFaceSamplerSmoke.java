@@ -77,7 +77,7 @@ public final class ClutchFaceSamplerSmoke {
         final boolean[] denied={false};
         Thread worker=new Thread(()->{
             try {thread.capture(own,req(1,1,true));}
-            catch(IllegalStateException expected){denied[0]=true;}
+            catch(IllegalStateException deniedOwner){denied[0]=true;}
         });worker.start();worker.join();
         check(denied[0] && own.calls==0,"no foreign thread I/O");
         Fake edge=new Fake();edge.set(999999,64,3,5);
