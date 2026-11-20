@@ -117,6 +117,25 @@ def main():
         if last_error is not None:
             raise RuntimeError("Both official Mojang download endpoints failed") from last_error
         print("R71_ORIGINAL_MOJANG_SHA1_AND_SIZE_PASS", flush=True)
+        # R259: inspect actual SHA-1 and size-pinned Mojang 1.8.9
+        # classfile descriptors and inheritance without class loading.
+        import re
+        javap = java.with_name("javap.exe" if os.name == "nt" else "javap")
+        if not javap.is_file():
+            raise RuntimeError("R259 full JDK javap required")
+        proof = subprocess.run(
+            [str(javap), "-classpath", str(destination),
+             "-p", "-s", "pk", "pr"], check=False,
+            capture_output=True, text=True, timeout=45)
+        if (proof.returncode != 0 or
+                not re.search(r"\bclass pr extends pk\b", proof.stdout) or
+                not re.search(r"\bboolean aw\(\);\s+descriptor: \(\)Z",
+                              proof.stdout) or
+                not re.search(r"\bint bg\(\);\s+descriptor: \(\)I",
+                              proof.stdout)):
+            raise RuntimeError("R259 original pk.aw/pr.bg ABI mismatch: " +
+                               proof.stdout[-1800:] + proof.stderr[-600:])
+        print("R259_ORIGINAL_189_PK_AW_AND_PR_BG_EXACT_ABI_PASS", flush=True)
         cp = str(audit) + os.pathsep + str(instrument)
         result = subprocess.run(
             [str(java), "-cp", cp,

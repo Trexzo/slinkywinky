@@ -948,6 +948,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/HookAdmissionSmoke.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pr.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java")
   # R76: disposable Java 8 JNI -> current-WGL validation only.
   # Deliberately built in testing mode; excluded from any runtime release.
@@ -1120,6 +1121,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/ave.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/bfk.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pk.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/pr.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/auh.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/AttachTarget.java"
     # R66: test-only Java8 Attach launcher compiled using the full tools.jar.
