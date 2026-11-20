@@ -339,6 +339,20 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r247_real_pr2_native_gui_owner_runtime_roundtrip
       COMMAND slinkywinky_r247_real_native_module_test)
+    # R248: independently exercise all THREE actual PR2 R211 module
+    # controls through source-focused PR1 GUI, state publication and
+    # native offline decisions in one owner/session and world lifecycle.
+    add_executable(slinkywinky_r248_real_three_module_test
+      tests/test_r248_real_pr2_three_module_cycles.cpp)
+    target_include_directories(slinkywinky_r248_real_three_module_test PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r248_real_three_module_test
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r248_real_three_module_test
+      PRIVATE cxx_std_17)
+    add_test(NAME r248_real_pr2_three_module_gui_world_lifecycle
+      COMMAND slinkywinky_r248_real_three_module_test)
   endif()
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
