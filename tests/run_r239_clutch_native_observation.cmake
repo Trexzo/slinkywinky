@@ -32,7 +32,8 @@ execute_process(
   ERROR_VARIABLE runtime_err
 )
 if(NOT exec_status EQUAL 0 OR
-   NOT runtime_out MATCHES "R239_JAVA8_NATIVE_CLUTCH_SOURCE_PLANNER_PASS")
+   NOT runtime_out MATCHES "R239_JAVA8_NATIVE_CLUTCH_SOURCE_PLANNER_PASS" OR
+   NOT runtime_out MATCHES "R244_JAVA8_NATIVE_CLUTCH_PRIOR_RAY_PASS")
   message(FATAL_ERROR "R239 native Clutch JNI smoke failed (${exec_status}): ${runtime_out}\n${runtime_err}")
 endif()
 message(STATUS "${runtime_out}")
