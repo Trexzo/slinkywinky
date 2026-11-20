@@ -11,9 +11,17 @@ public final class R251LeaseTarget {
         ManagementFactory.getRuntimeMXBean().getStartTime();
     private static final long PID = resolvePid();
     private static final Thread OWNER = Thread.currentThread();
-    private static long generation = 1L;
-    private static String challenge = newChallenge();
-    private static boolean terminal = false;
+    // R251.1: atomically published immutable proof avoids monitor inversion:
+    // synchronized agentmain -> target.matches used to acquire target class
+    // while target.rotate -> synchronized Agent.release acquires agent class.
+    // A lock-free proof read prevents this two-monitor deadlock scenario.
+    private static final class Epoch {
+        final long generation;
+        final String challenge;
+        Epoch(long gen,String nonce){generation=gen;challenge=nonce;}
+    }
+    private static volatile Epoch current = new Epoch(1L,newChallenge());
+    private static volatile boolean terminal = false;
 
     private static long resolvePid() {
         String name=ManagementFactory.getRuntimeMXBean().getName();
@@ -32,21 +40,23 @@ public final class R251LeaseTarget {
         }
         return out.toString();
     }
-    static synchronized boolean matches(long pid,long birth,long epoch,String token){
+    static boolean matches(long pid,long birth,long epoch,String token){
+        final Epoch observed=current; // coherent version and challenge
         return !terminal && pid==PID && birth==PROCESS_START &&
-            epoch==generation && challenge.equals(token);
+            epoch==observed.generation && observed.challenge.equals(token);
     }
-    static synchronized long generation(){return generation;}
+    static long generation(){return current.generation;}
     static boolean isOwnerThread(){return Thread.currentThread()==OWNER;}
     private static synchronized void rotate() {
         if(Thread.currentThread()!=OWNER || terminal ||
            !R251LeaseAgent.retireOnTargetOwner())
             throw new IllegalStateException("R251 unsafe rotation refused");
-        generation++;
-        challenge=newChallenge();
+        current=new Epoch(current.generation+1L,newChallenge());
     }
     private static synchronized String receipt(){
-        return PID+" "+PROCESS_START+" "+generation+" "+challenge;
+        final Epoch observed=current;
+        return PID+" "+PROCESS_START+" "+observed.generation+
+            " "+observed.challenge;
     }
     public static void main(String[] args) throws Exception {
         if(args.length!=0 ||

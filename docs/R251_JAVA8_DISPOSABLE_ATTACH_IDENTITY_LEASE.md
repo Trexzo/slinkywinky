@@ -23,7 +23,11 @@ R251 adds **test-only**, first-party, Java 8 `Attach` components:
   currently issued challenge and generation, and exact system-loaded
   target class identity before an exclusive lease can be admitted.
   A duplicate owner cannot take an active lease. An uncertain owner
-  permanently locks the old JVM's admission gate.
+  permanently locks the old JVM's admission gate. R251.1 uses an
+  immutable, volatile epoch/challenge pair so the Attach agent can
+  inspect a consistent target proof without taking the target monitor
+  while holding the agent monitor; this removes a potential
+  Attach-versus-owner-rotation lock-order inversion.
 - `R251LeaseLauncher`: invokes Java 8's real
   `com.sun.tools.attach.VirtualMachine.attach(targetPid)` and
   `loadAgent`, **only** against an orchestrator-owned target PID.
