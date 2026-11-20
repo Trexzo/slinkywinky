@@ -216,8 +216,11 @@ inline ClutchCandidatePlan clutch_plan_original(
             return refuse();
         if(!previous.solid_known)return refuse();
         if(previous.solid) {
-            if(!clutch_valid_vec(previous.last_aim) ||
-               !previous.ray_known)return refuse();
+            // The original only calls world ray tracing AFTER the
+            // prior candidate passes angle and strict reach. Requiring
+            // a ray result before those guards rejects otherwise valid
+            // fallback candidates when no ray trace was needed.
+            if(!clutch_valid_vec(previous.last_aim))return refuse();
             const auto rel=ClutchCandidatePos{
                 previous.block.x-base.x,
                 previous.block.y-base.y,
@@ -233,8 +236,9 @@ inline ClutchCandidatePlan clutch_plan_original(
             const ClutchCandidatePos observed=previous.ray_hit.value_or(
                 previous.block);
             if(aim->cost<=in.max_aim_degrees &&
-               clutch_source_reachable(in.eye,aim->target) &&
-               observed==previous.block) {
+               clutch_source_reachable(in.eye,aim->target)) {
+                if(!previous.ray_known)return refuse();
+                if(observed==previous.block) {
                 have_best=true;
                 best_rank=clutch_candidate_rank(rel)-2;
                 best_cost=aim->cost;
@@ -246,6 +250,7 @@ inline ClutchCandidatePlan clutch_plan_original(
                 best.aim_yaw_diff=aim->yaw_diff;
                 best.aim_pitch_diff=aim->pitch_diff;
                 best.angular_cost=aim->cost;
+                }
             }
         }
     }
