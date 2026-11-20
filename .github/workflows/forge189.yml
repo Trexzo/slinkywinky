@@ -8,6 +8,7 @@ on:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'java/dev/slinkywinky/ClutchWorldSampler.java'
       - 'java/dev/slinkywinky/ClutchFaceSampler.java'
+      - 'java/dev/slinkywinky/ClutchFaceReceiptStatus.java'
       - 'java/dev/slinkywinky/ClutchNativePreview.java'
       - '.github/workflows/forge189.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'java/dev/slinkywinky/ClutchWorldSampler.java'
       - 'java/dev/slinkywinky/ClutchFaceSampler.java'
+      - 'java/dev/slinkywinky/ClutchFaceReceiptStatus.java'
       - 'java/dev/slinkywinky/ClutchNativePreview.java'
       - '.github/workflows/forge189.yml'
 

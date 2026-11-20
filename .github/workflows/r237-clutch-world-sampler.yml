@@ -4,10 +4,12 @@ on:
     paths:
       - 'java/dev/slinkywinky/ClutchWorldSampler.java'
       - 'java/dev/slinkywinky/ClutchFaceSampler.java'
+      - 'java/dev/slinkywinky/ClutchFaceReceiptStatus.java'
       - 'java/dev/slinkywinky/ClutchRayReceiptStatus.java'
       - 'tests/java/dev/slinkywinky/ClutchRayReceiptStatusSmoke.java'
       - 'tests/java/dev/slinkywinky/ClutchWorldSamplerSmoke.java'
       - 'tests/java/dev/slinkywinky/ClutchFaceSamplerSmoke.java'
+      - 'tests/java/dev/slinkywinky/ClutchFaceReceiptStatusSmoke.java'
       - 'reference_compat/include/slinkywinky/clutch_candidate_table.hpp'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
@@ -17,10 +19,12 @@ on:
     paths:
       - 'java/dev/slinkywinky/ClutchWorldSampler.java'
       - 'java/dev/slinkywinky/ClutchFaceSampler.java'
+      - 'java/dev/slinkywinky/ClutchFaceReceiptStatus.java'
       - 'java/dev/slinkywinky/ClutchRayReceiptStatus.java'
       - 'tests/java/dev/slinkywinky/ClutchRayReceiptStatusSmoke.java'
       - 'tests/java/dev/slinkywinky/ClutchWorldSamplerSmoke.java'
       - 'tests/java/dev/slinkywinky/ClutchFaceSamplerSmoke.java'
+      - 'tests/java/dev/slinkywinky/ClutchFaceReceiptStatusSmoke.java'
       - 'reference_compat/include/slinkywinky/clutch_candidate_table.hpp'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
@@ -51,10 +55,13 @@ jobs:
           javac --release 8 -d build/r237 \
             java/dev/slinkywinky/ClutchWorldSampler.java \
             java/dev/slinkywinky/ClutchFaceSampler.java \
+            java/dev/slinkywinky/ClutchFaceReceiptStatus.java \
             java/dev/slinkywinky/ClutchRayReceiptStatus.java \
             tests/java/dev/slinkywinky/ClutchWorldSamplerSmoke.java \
             tests/java/dev/slinkywinky/ClutchFaceSamplerSmoke.java \
+            tests/java/dev/slinkywinky/ClutchFaceReceiptStatusSmoke.java \
             tests/java/dev/slinkywinky/ClutchRayReceiptStatusSmoke.java
           java -cp build/r237 dev.slinkywinky.ClutchWorldSamplerSmoke
           java -cp build/r237 dev.slinkywinky.ClutchFaceSamplerSmoke
+          java -cp build/r237 dev.slinkywinky.ClutchFaceReceiptStatusSmoke
           java -cp build/r237 dev.slinkywinky.ClutchRayReceiptStatusSmoke
