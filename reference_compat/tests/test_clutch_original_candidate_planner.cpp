@@ -282,6 +282,91 @@ static void previous_and_ground() {
     CHECK(!clutch_plan_original(w,missing).admitted);
     CHECK(missing.rng_state()==snapshot);
 }
+// R243: the prior ray phase is a source-exact pure preflight, not a
+// speculative visibility assumption or a second live RNG draw.
+static void prior_ray_preflight_regression() {
+    SourceWalkBank<8> initial;
+    CHECK(initial.configure(seed));
+    auto w=basic();
+    w.range_index=0;
+    const auto starting_rng=initial.rng_state();
+    auto request=clutch_prior_ray_preflight(w,initial);
+    CHECK(request.admitted && !request.needs_ray);
+    CHECK(initial.rng_state()==starting_rng);
+
+    ClutchSourcePrior old{};
+    old.block={-1,63,0};
+    old.last_aim={0,63.5,.5};
+    old.solid_known=old.solid=true;
+    w.prior=old;
+    request=clutch_prior_ray_preflight(w,initial);
+    CHECK(request.admitted && request.needs_ray);
+    CHECK((request.expected_block==old.block));
+    nearly(request.from.x,w.eye.x);
+    nearly(request.from.y,w.eye.y);
+    nearly(request.from.z,w.eye.z);
+    CHECK(clutch_valid_vec(request.to));
+    CHECK(clutch_source_reachable(request.from,request.to));
+    CHECK(initial.rng_state()==starting_rng);
+
+    // No-hit evidence is a verified null ray, which original logic treats
+    // as the previous block; only phase two consumes planner randomness.
+    SourceWalkBank<8> phase_two=initial;
+    w.prior->ray_known=true;
+    w.prior->ray_hit.reset();
+    const auto selected=clutch_plan_original(w,phase_two);
+    CHECK(selected.admitted && selected.found &&
+          selected.preserved_prior && (selected.selected==old.block));
+    nearly(selected.aim.x,request.to.x);
+    nearly(selected.aim.y,request.to.y);
+    nearly(selected.aim.z,request.to.z);
+    CHECK(initial.rng_state()==starting_rng);
+    CHECK(phase_two.rng_state()!=starting_rng);
+
+    // A real ray hit on a different block MUST revoke the prior.
+    SourceWalkBank<8> obstruction=initial;
+    w.prior->ray_hit=ClutchCandidatePos{2,63,0};
+    const auto blocked=clutch_plan_original(w,obstruction);
+    CHECK(blocked.admitted && !blocked.preserved_prior && !blocked.found);
+    w.prior->ray_known=false;
+    w.prior->ray_hit.reset();
+    CHECK(clutch_prior_ray_preflight(w,initial).needs_ray);
+
+    // Far prior target cannot trigger a ray; the source scan may fall
+    // through to an alternative block without any visibility evidence.
+    w.range_index=1;
+    w.source_solid[5]=true;
+    w.prior->block={20,63,0};
+    w.prior->last_aim={20,63.5,.5};
+    request=clutch_prior_ray_preflight(w,initial);
+    CHECK(request.admitted && !request.needs_ray);
+    SourceWalkBank<8> fallback=initial;
+    const auto alternative=clutch_plan_original(w,fallback);
+    CHECK(alternative.admitted && alternative.found &&
+          !alternative.preserved_prior && alternative.source_index==5);
+
+    // Unknown prior block and pre-supplied ray results are not a
+    // valid first phase, even if the caller invents a plausible aim.
+    w.prior->solid_known=false;
+    CHECK(!clutch_prior_ray_preflight(w,initial).admitted);
+    w.prior->solid_known=true;
+    w.prior->ray_known=true;
+    CHECK(!clutch_prior_ray_preflight(w,initial).admitted);
+    w.prior->ray_known=false;
+    w.prior->block={-1,63,0};
+    w.prior->last_aim={0,63.5,.5};
+    w.source_solid[1].reset();
+    CHECK(!clutch_prior_ray_preflight(w,initial).admitted);
+    w.source_solid[1]=false;
+    w.min_height=2.0f;
+    w.ground_by_depth[0]=true;
+    request=clutch_prior_ray_preflight(w,initial);
+    CHECK(request.admitted && !request.needs_ray);
+    w.ground_by_depth[0].reset();
+    CHECK(!clutch_prior_ray_preflight(w,initial).admitted);
+    CHECK(initial.rng_state()==starting_rng);
+}
+
 static ClutchLateInput late_input() {
     ClutchLateInput v{};
     v.in_game=true;
@@ -367,6 +452,7 @@ int main() {
         target_geometry();
         source_priority();
         previous_and_ground();
+        prior_ray_preflight_regression();
         controller_bridge_and_global();
         std::cout<<"R235_ORIGINAL_CLUTCH_167_CANDIDATES_SOURCE_RANKING_PASS "
            "face=top_and_side reach=strict4.49 prior=ray_checked "
