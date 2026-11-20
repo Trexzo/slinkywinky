@@ -1,6 +1,7 @@
 package dev.slinkywinky;
 
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * R237: source-ordered, read-only Clutch world observation for Minecraft 1.8.9.
@@ -68,16 +69,43 @@ public final class ClutchWorldSampler implements AutoCloseable {
         public final int previousBlockId;
         public final boolean groundBlocked;
         private final int[] ids,ground;
-        private final double[] eye;
+        private final double[] lo,hi,eye;
+        private final int range;
+        private final float minHeight;
+        private final boolean previousRequested;
+        // Value-only identities issued by the sampler; never JVM addresses.
+        private final long nativeWorldToken,nativePlayerToken;
         private Snapshot(Request r,int x,int y,int z,int previousBlockId,
-                         boolean groundBlocked,int[] ids,int[] ground) {
+                         boolean groundBlocked,int[] ids,int[] ground,
+                         long nativeWorldToken,long nativePlayerToken) {
             this.generation=r.generation; this.tick=r.tick;
             baseX=x;baseY=y;baseZ=z;
             this.previousBlockId=previousBlockId;
             this.groundBlocked=groundBlocked;
             this.ids=ids.clone();this.ground=ground.clone();
+            this.lo=r.lo.clone();this.hi=r.hi.clone();
             this.eye=r.eye.clone();
+            this.range=r.range;this.minHeight=r.minHeight;
+            this.previousRequested=r.previous!=null;
+            this.nativeWorldToken=nativeWorldToken;
+            this.nativePlayerToken=nativePlayerToken;
         }
+        // Package-private: bind the native receipt to the exact captured
+        // geometry, source range and prior request, not to caller substitutions.
+        boolean nativeMatches(Request r) {
+            return r!=null && r.previous==null && !previousRequested &&
+                r.generation==generation && r.tick==tick &&
+                r.range==range &&
+                Float.floatToIntBits(r.minHeight)==
+                    Float.floatToIntBits(minHeight) &&
+                Arrays.equals(r.lo,lo) && Arrays.equals(r.hi,hi) &&
+                Arrays.equals(r.eye,eye);
+        }
+        double[] nativeBoxLo() {return lo.clone();}
+        double[] nativeBoxHi() {return hi.clone();}
+        double[] nativeEye() {return eye.clone();}
+        long nativeWorldToken() {return nativeWorldToken;}
+        long nativePlayerToken() {return nativePlayerToken;}
         public int[] candidateBlockIds() { return ids.clone(); }
         /** -1 means not read because the source exited first. */
         public int[] groundBlockIds() { return ground.clone(); }
@@ -88,6 +116,17 @@ public final class ClutchWorldSampler implements AutoCloseable {
         private RayReceipt(long tick,Pos hit) {this.tick=tick;this.hit=hit;}
     }
 
+    // Each new Java world/player observation owner receives a distinct pair
+    // of opaque positive session tokens. The native gate can now reject a
+    // second sampler, even if its generation/ticks match and it observes
+    // the very same Minecraft world. Overflow refuses new sessions.
+    private static final AtomicLong NEXT_SCOPE=new AtomicLong(1);
+    private final long nativeWorldToken=NEXT_SCOPE.getAndAdd(2);
+    private final long nativePlayerToken=nativeWorldToken+1;
+    public ClutchWorldSampler() {
+        if(nativeWorldToken<=0 || nativePlayerToken<=0)
+            throw new IllegalStateException("Clutch native scope exhausted");
+    }
     private final Thread owner=Thread.currentThread();
     private Object world,player;
     private long generation,lastTick;
@@ -174,7 +213,8 @@ public final class ClutchWorldSampler implements AutoCloseable {
                 }
             }
             same(port);
-            Snapshot snapshot=new Snapshot(r,x,y,z,previousId,blocked,ids,ground);
+            Snapshot snapshot=new Snapshot(r,x,y,z,previousId,blocked,ids,ground,
+                nativeWorldToken,nativePlayerToken);
             latest=snapshot;lastTick=r.tick;rayUsed=false;
             return snapshot;
         } catch(RuntimeException error) {

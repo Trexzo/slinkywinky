@@ -54,14 +54,14 @@ public final class ClutchNativePreview implements AutoCloseable {
             float maxAim,float randomisation,double clock) {
         owner();
         if(request==null || snapshot==null ||
-           request.previous!=null || snapshot.previousBlockId!=-1 ||
-           request.generation!=snapshot.generation ||
-           request.tick!=snapshot.tick ||
+           !snapshot.nativeMatches(request) ||
+           snapshot.previousBlockId!=-1 ||
            !Float.isFinite(yaw) || !Float.isFinite(pitch) ||
            !Float.isFinite(maxAim) || !Float.isFinite(randomisation) ||
            !Double.isFinite(clock))
             throw new IllegalArgumentException("R239 requires source read-only snapshot without prior");
-        final double[] lo=request.boxLo(),hi=request.boxHi(),eye=request.eye();
+        final double[] lo=snapshot.nativeBoxLo(),hi=snapshot.nativeBoxHi(),
+            eye=snapshot.nativeEye();
         if(lo==null || hi==null || eye==null)
             throw new IllegalArgumentException("Clutch geometry missing");
         final double[] geo={
@@ -72,7 +72,8 @@ public final class ClutchNativePreview implements AutoCloseable {
         // Native session lifetime is one ClutchWorldSampler identity.
         // Opaque tokens are constants within this session, not JVM addresses.
         final long[] scope={
-            snapshot.generation,snapshot.tick,1,1,
+            snapshot.generation,snapshot.tick,
+            snapshot.nativeWorldToken(),snapshot.nativePlayerToken(),
             snapshot.baseX,snapshot.baseY,snapshot.baseZ,
             request.range,snapshot.groundBlocked?1:0,
             snapshot.previousBlockId
