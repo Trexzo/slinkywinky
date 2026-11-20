@@ -73,6 +73,7 @@ public final class ClutchWorldSampler implements AutoCloseable {
         private final int range;
         private final float minHeight;
         private final boolean previousRequested;
+        private final Pos previous;
         // Value-only identities issued by the sampler; never JVM addresses.
         private final long nativeWorldToken,nativePlayerToken;
         private Snapshot(Request r,int x,int y,int z,int previousBlockId,
@@ -87,19 +88,31 @@ public final class ClutchWorldSampler implements AutoCloseable {
             this.eye=r.eye.clone();
             this.range=r.range;this.minHeight=r.minHeight;
             this.previousRequested=r.previous!=null;
+            this.previous=r.previous==null?null:
+                new Pos(r.previous.x,r.previous.y,r.previous.z);
             this.nativeWorldToken=nativeWorldToken;
             this.nativePlayerToken=nativePlayerToken;
         }
         // Package-private: bind the native receipt to the exact captured
         // geometry, source range and prior request, not to caller substitutions.
-        boolean nativeMatches(Request r) {
-            return r!=null && r.previous==null && !previousRequested &&
+        private boolean nativeSame(Request r) {
+            return r!=null &&
                 r.generation==generation && r.tick==tick &&
                 r.range==range &&
                 Float.floatToIntBits(r.minHeight)==
                     Float.floatToIntBits(minHeight) &&
                 Arrays.equals(r.lo,lo) && Arrays.equals(r.hi,hi) &&
                 Arrays.equals(r.eye,eye);
+        }
+        boolean nativeMatches(Request r) {
+            return nativeSame(r) && r.previous==null && !previousRequested;
+        }
+        boolean nativeMatchesWithPrior(Request r) {
+            return nativeSame(r) && previousRequested &&
+                r.previous!=null && previous!=null &&
+                r.previous.x==previous.x &&
+                r.previous.y==previous.y &&
+                r.previous.z==previous.z;
         }
         double[] nativeBoxLo() {return lo.clone();}
         double[] nativeBoxHi() {return hi.clone();}
