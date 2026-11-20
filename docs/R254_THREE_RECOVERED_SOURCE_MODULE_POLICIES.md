@@ -46,7 +46,7 @@ active state, snapshot publication and reset/unload isolation.
   `NoHitDelayController`, `SafeWalkController` and
   `FastPlaceController` from exact PR2 commit
   `7f457376058ad42e0a0e0323ed874d7e5b2ae03a`. New `r254_real_pr2_three_module_policy_parity`
-  runs **1,536 No Hit Delay cases, 7,680 Safe Walk combinations,
+  runs **768 No Hit Delay cases, 3,840 Safe Walk combinations,
   4,320 stateful Fast Place source-order ticks**, plus
   invalid-settings negatives. It checks behavior rather than
   merely compiling the headers.

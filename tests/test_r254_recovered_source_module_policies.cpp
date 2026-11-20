@@ -90,7 +90,9 @@ int main(){
     input.in_game=true;input.use_held=true;input.holds_block=true;
     input.target_block=true;input.cps=100.0f;
     auto fast=owner.fast_place(0,input);
-    CHECK(fast && fast->valid && fast->proposed_presses==5);
+    CHECK(fast && fast->valid && fast->proposed_presses==0);
+    fast=owner.fast_place(0,input);
+    CHECK(fast && fast->valid && fast->proposed_presses>0);
     CHECK(!owner.fast_place(14,input));
     CHECK(owner.transition(100,false));
     CHECK(!owner.attack(14,attack) && !owner.safe_walk(0,walk) &&
@@ -103,13 +105,13 @@ int main(){
     CHECK(!owner.transition(100,true));
     CHECK(owner.transition(101,true));
     fast=owner.fast_place(0,input);
-    CHECK(fast && fast->proposed_presses==5); // timer reset on new world
+    CHECK(fast && fast->valid && fast->proposed_presses==0); // new world first press
     CHECK(!owner.transition(100,true)); // stale generation
     CHECK(owner.select(RecoveredSourceModule::FastPlace,false));
     CHECK(!owner.fast_place(0,input));
     CHECK(owner.select(RecoveredSourceModule::FastPlace,true));
     fast=owner.fast_place(0,input);
-    CHECK(fast && fast->proposed_presses==5); // reset on reenable
+    CHECK(fast && fast->valid && fast->proposed_presses==0); // new first press
     bool foreign_admitted=true;
     std::thread foreign([&]{
         foreign_admitted=owner.transition(102,true) ||

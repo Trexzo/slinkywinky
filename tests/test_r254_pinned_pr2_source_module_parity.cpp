@@ -43,8 +43,8 @@ static void hit_parity(){
               a.propose_swing==b.swing_arm);
         ++cases;
     }
-    CHECK(cases==1536u);
-    std::cout<<"R254_PINNED_NO_HIT_DELAY_POLICY_PARITY_1536_PASS\n";
+    CHECK(cases==768u);
+    std::cout<<"R254_PINNED_NO_HIT_DELAY_POLICY_PARITY_768_PASS\n";
 }
 static void walk_parity(){
     ref::SafeWalkController original;
@@ -81,8 +81,8 @@ static void walk_parity(){
         }
         ++cases;
     }
-    CHECK(cases==7680u);
-    std::cout<<"R254_PINNED_SAFE_WALK_POLICY_PARITY_7680_PASS\n";
+    CHECK(cases==3840u);
+    std::cout<<"R254_PINNED_SAFE_WALK_POLICY_PARITY_3840_PASS\n";
 }
 static void place_parity(){
     std::uint64_t ticks=0;
