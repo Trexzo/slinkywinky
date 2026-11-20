@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <stdexcept>
 #include <vector>
 
 namespace {
