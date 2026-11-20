@@ -1067,6 +1067,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ClassLoaderSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R258Event8ObservationSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R259CombatMappingSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeHudIpcSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/Vanilla189MappingSmoke.java"
@@ -1246,6 +1247,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "$<TARGET_FILE:slinkywinky_r258_readonly_event8_probe>")
       set_tests_properties(r258_java8_mapped_event8_readonly_native_evidence
         PROPERTIES TIMEOUT 90)
+      add_test(NAME r259_java8_obfuscated_readonly_reach_evidence
+        COMMAND "${Java_JAVA_EXECUTABLE}"
+          -cp "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes;$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+          dev.slinkywinky.attach.R259CombatMappingSmoke)
+      set_tests_properties(r259_java8_obfuscated_readonly_reach_evidence
+        PROPERTIES TIMEOUT 30)
       # R251: actual Java 8 Attach to caller-owned disposable JVMs.
       # PID/start-time/challenge/generation, old-owner quiescence, replay,
       # foreign thread and uncertain-lease tests; NEVER Minecraft.
