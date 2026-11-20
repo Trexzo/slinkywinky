@@ -2,6 +2,20 @@ name: Experimental Forge 1.8.9 JAR build
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
+      - 'java/dev/slinkywinky/ClutchWorldSampler.java'
+      - 'java/dev/slinkywinky/ClutchNativePreview.java'
+      - '.github/workflows/forge189.yml'
+  pull_request:
+    paths:
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
+      - 'java/dev/slinkywinky/ClutchWorldSampler.java'
+      - 'java/dev/slinkywinky/ClutchNativePreview.java'
+      - '.github/workflows/forge189.yml'
 
 jobs:
   forge-java8:
