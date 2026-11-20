@@ -72,5 +72,12 @@ public final class R251LeaseAgent {
         return "active="+active+" poisoned="+poisoned+
             " lastGeneration="+lastClaimedGeneration;
     }
+    // R252: read-only test-side evidence; status comes from the actual
+    // Java Attach owner state, never from the external claim strings.
+    static synchronized String ownerReceipt(){
+        if(!R251LeaseTarget.isOwnerThread() || !active || poisoned)
+            return null;
+        return R251LeaseTarget.fixtureReceipt();
+    }
     private R251LeaseAgent(){}
 }

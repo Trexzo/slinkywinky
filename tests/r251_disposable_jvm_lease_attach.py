@@ -83,8 +83,11 @@ def check_status(child, active, poisoned, generation):
 
 
 def main():
-    if len(sys.argv) != 3:
-        raise ValueError('Expected built loader path and explicit JDK directory')
+    if len(sys.argv) != 4:
+        raise ValueError('Expected built loader, JDK, and native R252 probe')
+    probe = Path(sys.argv[3]).resolve()
+    if not probe.is_file():
+        raise ValueError('R252 native C++ ABI probe not built')
     loader = Path(sys.argv[1]).resolve()
     home = Path(sys.argv[2]).resolve()
     staged = loader.parent
@@ -107,6 +110,34 @@ def main():
 
     env = os.environ.copy()
     env['SLINKYWINKY_R251_DISPOSABLE_FIXTURE'] = '1'
+
+    def verify_native_receipt(receipt, proof):
+        pid, birth, generation, challenge = proof
+        invocation = [str(probe), str(pid), str(birth),
+                      str(generation), challenge, receipt]
+        result = subprocess.run(
+            invocation, capture_output=True, encoding='utf-8', timeout=10)
+        if result.returncode or (
+                'R252_JAVA8_ACTUAL_R251_RECEIPT_NATIVE_ABI_PASS'
+                not in result.stdout):
+            raise AssertionError('R252 C++ verification of actual Java'
+                                 ' lease failed: ' + result.stdout +
+                                 result.stderr)
+        # Tampering with the source-approved receipt must NEVER be
+        # silently accepted by the C++ bridge parser.
+        for changed in (
+                (pid + 1, birth, generation, challenge),
+                (pid, birth + 1, generation, challenge),
+                (pid, birth, generation + 1, challenge),
+                (pid, birth, generation, 'f' * 32)):
+            invalid = [str(probe), str(changed[0]), str(changed[1]),
+                       str(changed[2]), changed[3], receipt]
+            denied = subprocess.run(
+                invalid, capture_output=True, encoding='utf-8', timeout=10)
+            if denied.returncode == 0:
+                raise AssertionError('R252 native parser accepted '
+                                     'mismatched JVM evidence')
+        print('R252_REAL_JAVA8_RECEIPT_CROSS_LANGUAGE_VALIDATED')
 
     def attempt(child, proof, claimed_pid=None):
         pid, birth, generation, challenge = proof
@@ -135,6 +166,8 @@ def main():
         check_status(first, False, False, 0)
         attempt(first, one)
         check_status(first, True, False, 1)
+        verify_native_receipt(
+            first.send('ATTEST', 'R252_LEASE_RECEIPT '), one)
         attempt(first, one)  # competing controller must not steal the lease
         check_status(first, True, False, 1)
         first.send('FOREIGN_RELEASE', 'R251_FOREIGN_RELEASE_DENIED')
@@ -143,14 +176,18 @@ def main():
         assert next_proof[0:2] == one[0:2]
         assert next_proof[2] == 2 and next_proof[3] != one[3]
         check_status(first, False, False, 1)
+        first.send('ATTEST', 'R252_LEASE_REFUSED')
         attempt(first, one)  # stale generation and old challenge
         check_status(first, False, False, 1)
         attempt(first, (one[0], one[1]+1, 2, next_proof[3]))
         check_status(first, False, False, 1)
         attempt(first, next_proof)
         check_status(first, True, False, 2)
+        verify_native_receipt(
+            first.send('ATTEST', 'R252_LEASE_RECEIPT '), next_proof)
         first.send('POISON', 'R251_UNCERTAIN_OWNER_LOCKED')
         check_status(first, True, True, 2)
+        first.send('ATTEST', 'R252_LEASE_REFUSED')
         attempt(first, next_proof)
         check_status(first, True, True, 2)
         first.close()
@@ -165,6 +202,8 @@ def main():
         check_status(second, False, False, 0)
         attempt(second, new)
         check_status(second, True, False, 1)
+        verify_native_receipt(
+            second.send('ATTEST', 'R252_LEASE_RECEIPT '), new)
         second.send('ROTATE', 'R251_TARGET_NEW_EPOCH ')
         check_status(second, False, False, 1)
         second.close()

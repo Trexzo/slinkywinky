@@ -47,6 +47,11 @@ public final class R251LeaseTarget {
     }
     static long generation(){return current.generation;}
     static boolean isOwnerThread(){return Thread.currentThread()==OWNER;}
+    static String fixtureReceipt(){
+        final Epoch snapshot=current;
+        return "R252_LEASE_RECEIPT "+PID+" "+PROCESS_START+" "+
+            snapshot.generation+" "+snapshot.challenge;
+    }
     private static synchronized void rotate() {
         if(Thread.currentThread()!=OWNER || terminal ||
            !R251LeaseAgent.retireOnTargetOwner())
@@ -69,6 +74,10 @@ public final class R251LeaseTarget {
         while((command=stdin.readLine())!=null){
             if("STATUS".equals(command)){
                 System.out.println("R251_STATUS "+R251LeaseAgent.status());
+            } else if("ATTEST".equals(command)){
+                final String receipt=R251LeaseAgent.ownerReceipt();
+                System.out.println(receipt==null?
+                    "R252_LEASE_REFUSED":receipt);
             } else if("ROTATE".equals(command)){
                 rotate();
                 System.out.println("R251_TARGET_NEW_EPOCH "+receipt());

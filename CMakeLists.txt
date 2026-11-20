@@ -380,6 +380,19 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r250_real_pr2_quarantined_owner_recovery
       COMMAND slinkywinky_r250_native_recovery_test)
+    # R252: signed-in-process witness contract (fixture only) must hold
+    # across the actual PR2 native manager R250 recovery operation.
+    add_executable(slinkywinky_r252_witnessed_recovery_tests
+      tests/test_r252_real_pr2_jvm_witnessed_recovery.cpp)
+    target_include_directories(slinkywinky_r252_witnessed_recovery_tests PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r252_witnessed_recovery_tests
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r252_witnessed_recovery_tests
+      PRIVATE cxx_std_17)
+    add_test(NAME r252_real_pr2_jvm_witnessed_native_recovery
+      COMMAND slinkywinky_r252_witnessed_recovery_tests)
   endif()
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
@@ -713,6 +726,13 @@ if(SLINKYWINKY_BUILD_ATTACH)
   if(NOT EXISTS "${SW_TOOLS_JAR}")
     message(FATAL_ERROR "The standalone loader requires a full Java 8 JDK containing lib/tools.jar")
   endif()
+  # R252: standalone disposable Java8 receipt parser, never packaged
+  # with the production agent or the standalone preview artifact.
+  add_executable(slinkywinky_r252_receipt_probe
+    tests/r252_java_receipt_probe.cpp)
+  target_include_directories(slinkywinky_r252_receipt_probe PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  target_compile_features(slinkywinky_r252_receipt_probe PRIVATE cxx_std_17)
   # Pin the BSD-licensed ASM 5.2 dependency to a known SHA-256.
   set(SW_ASM_JAR "${CMAKE_CURRENT_BINARY_DIR}/thirdparty/asm-5.2.jar")
   set(SW_ASM_HASH "3e5ea0d7da2c5155ef4f470d9092d42de34e3f53db6589c7c07d6721adf4ba3e")
@@ -759,6 +779,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R251LeaseTarget.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R251LeaseLauncher.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251_disposable_jvm_lease_attach.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/slinkywinky/jvm_witnessed_native_recovery.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r252_java_receipt_probe.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251-lease-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241-input-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
@@ -1125,7 +1147,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
       add_test(NAME r251_java8_disposable_jvm_exclusive_attach_lease
         COMMAND "${Python3_EXECUTABLE}" -u
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251_disposable_jvm_lease_attach.py"
-          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}"
+          "$<TARGET_FILE:slinkywinky_r252_receipt_probe>")
       set_tests_properties(r251_java8_disposable_jvm_exclusive_attach_lease
         PROPERTIES TIMEOUT 180)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
