@@ -6,6 +6,7 @@ import dev.slinkywinky.NativeEngine;
 import dev.slinkywinky.OwnedModuleActions;
 import dev.slinkywinky.SprintObservationProbe;
 import dev.slinkywinky.ClutchWorldSampler;
+import dev.slinkywinky.ClutchNativePreview;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -71,6 +72,8 @@ public final class ForgePreview {
     private boolean r224ForwardArmed,r224ReceiptEmitted,r224CleanupDone;
     // R237 source-ordered real-world block observations. Read-only.
     private ClutchWorldSampler r237Sampler;
+    private ClutchNativePreview r239Native;
+    private int r239NativePlans;
     private Object r237World,r237Player;
     private long r237Generation=1,r237Tick;
     private int r237Samples,r237NonAir;
@@ -258,6 +261,7 @@ public final class ForgePreview {
 
     private void stop() {
         enabled=false;
+        if(r239Native!=null) {r239Native.close();r239Native=null;}
         if(r237Sampler!=null) {r237Sampler.close();r237Sampler=null;}
         r237World=r237Player=null;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
@@ -322,7 +326,7 @@ public final class ForgePreview {
                         SprintObservationProbe.NO_JUMP_DELAY,false);
             }
             enabled=true;
-            r237Samples=r237NonAir=0;
+            r237Samples=r237NonAir=r239NativePlans=0;
             r237Tick=0;
             observations=0;
             sprintGeneration=1;
@@ -1061,8 +1065,10 @@ public final class ForgePreview {
             throw new IllegalStateException("R237 read-only world admission denied");
         if(r237Sampler==null || r237World!=mc.theWorld ||
             r237Player!=mc.thePlayer) {
+            if(r239Native!=null){r239Native.close();r239Native=null;}
             if(r237Sampler!=null)r237Sampler.close();
             r237Sampler=new ClutchWorldSampler();
+            r239Native=new ClutchNativePreview();
             r237World=mc.theWorld;r237Player=mc.thePlayer;
             ++r237Generation;r237Tick=0;
         }
@@ -1077,12 +1083,23 @@ public final class ForgePreview {
         final ClutchWorldSampler.Snapshot snapshot=r237Sampler.capture(
             new ForgeClutchWorldPort(mc),request);
         for(int id:snapshot.candidateBlockIds())if(id!=0)++r237NonAir;
+        // R239: actual Java 8/JNI receipt into R235 native Clutch
+        // value-only planner. Never send its candidate to gameplay.
+        final ClutchNativePreview.Decision plan=r239Native.observe(
+            request,snapshot,frame.yaw,frame.pitch,300.0f,1.0f,
+            System.nanoTime()*1e-9);
+        if(!plan.admitted)throw new IllegalStateException(
+            "R239 native Clutch decision not admitted");
+        if(plan.found)++r239NativePlans;
         ++r237Samples;
         if(r237Samples==20)
             System.out.println("[SlinkyWinkyPreview] " +
                 "R237_REAL_WORLD_CLUTCH_167_READONLY_PASS samples=20" +
                 " candidateReads=3340 nonAir="+r237NonAir+
-                " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END");
+                " nativePlans="+r239NativePlans+
+                " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END" +
+                "_JNI_NATIVE_R235");
+
     }
 
     private void sampleOwnedModuleActions(Minecraft mc, GameHost.Frame frame) {
