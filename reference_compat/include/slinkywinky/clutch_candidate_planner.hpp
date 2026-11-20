@@ -156,6 +156,95 @@ inline std::optional<std::array<float,3>> clutch_draw_face(
         .1f+*inset*randomisation,*x*randomisation,
         *z*randomisation};
 }
+// R243: first phase of the original prior-block raycast transaction.
+// This is deliberately value-only. The caller must obtain the actual ray
+// result from its authenticated game-thread world, then replay the unchanged
+// frame through clutch_plan_original with ray_known=true. No RNG is committed.
+struct ClutchPriorRayPreflight {
+    bool admitted=false,needs_ray=false;
+    ClutchCandidatePos expected_block{};
+    BlockInVec3 from{},to{};
+};
+inline ClutchPriorRayPreflight clutch_prior_ray_preflight(
+    const ClutchCandidateWorld& in,
+    const SourceWalkBank<8>& owner) noexcept {
+    ClutchPriorRayPreflight reject{};
+    if(!owner.configured() ||
+       in.range_index>=kClutchDistanceCounts.size() ||
+       !clutch_valid_vec(in.box_lo)||!clutch_valid_vec(in.box_hi)||
+       !clutch_valid_vec(in.eye)||
+       in.box_lo.x>in.box_hi.x||in.box_lo.y>in.box_hi.y||
+       in.box_lo.z>in.box_hi.z||
+       !std::isfinite(in.current_yaw)||!std::isfinite(in.current_pitch)||
+       !std::isfinite(in.min_height)||in.min_height<0.0f||
+       in.min_height>8.0f||
+       !std::isfinite(in.max_aim_degrees)||
+       in.max_aim_degrees<0.0f||in.max_aim_degrees>500.0f||
+       !std::isfinite(in.randomisation)||
+       in.randomisation<0.0f||in.randomisation>1.0f||
+       !std::isfinite(in.clock_seconds)||
+       in.clock_seconds<0.0||in.clock_seconds>1e12)
+        return reject;
+    const BlockInVec3 center={
+        (in.box_lo.x+in.box_hi.x)*.5,
+        in.box_lo.y-.99,
+        (in.box_lo.z+in.box_hi.z)*.5};
+    if(!clutch_valid_vec(center))return reject;
+    const ClutchCandidatePos base={
+        static_cast<int>(std::floor(center.x)),
+        static_cast<int>(std::floor(center.y)),
+        static_cast<int>(std::floor(center.z))};
+    // Avoid requesting a ray on a frame whose necessary source-world
+    // observations are missing; never guess unobserved solidity.
+    for(std::size_t i=0;i<kClutchDistanceCounts[in.range_index];++i)
+        if(!in.source_solid[i])return reject;
+    if(in.min_height>0.0f) {
+        for(unsigned depth=1;depth<=8;++depth) {
+            if(!in.ground_by_depth[depth-1])return reject;
+            if(*in.ground_by_depth[depth-1])
+                return {true,false,{},{},{}}; // source aborts at ground
+            if(!(in.min_height>static_cast<float>(depth)))break;
+        }
+    }
+    ClutchPriorRayPreflight out{};
+    out.admitted=true;
+    if(!in.prior || in.prior->block.y>center.y)
+        return out;
+    const auto& prior=*in.prior;
+    if(!prior.solid_known || prior.ray_known || prior.ray_hit)
+        return reject; // phase one accepts only raw world evidence
+    if(!prior.solid)return out;
+    if(std::fabs(static_cast<double>(prior.block.x))>1000000.0||
+       std::fabs(static_cast<double>(prior.block.y))>1000000.0||
+       std::fabs(static_cast<double>(prior.block.z))>1000000.0||
+       !clutch_valid_vec(prior.last_aim))
+        return reject;
+    const ClutchCandidatePos relative={
+        prior.block.x-base.x,
+        prior.block.y-base.y,
+        prior.block.z-base.z};
+    // Original planner consumes precisely these three samples before
+    // testing cost/reach. Preview a COPY to preserve exact phase-two RNG.
+    SourceWalkBank<8> preview=owner;
+    const auto samples=clutch_draw_face(
+        preview,false,in.clock_seconds,in.randomisation);
+    if(!samples)return reject;
+    const auto aim=clutch_source_side_aim(
+        relative,base,center,in.eye,
+        in.current_yaw,in.current_pitch,
+        (*samples)[0],(*samples)[1],(*samples)[2],
+        in.multipoint,prior.last_aim);
+    if(!aim)return reject;
+    if(aim->cost<=in.max_aim_degrees &&
+       clutch_source_reachable(in.eye,aim->target)) {
+        out.needs_ray=true;
+        out.expected_block=prior.block;
+        out.from=in.eye;
+        out.to=aim->target;
+    }
+    return out;
+}
+
 inline ClutchCandidatePlan clutch_plan_original(
     const ClutchCandidateWorld& in,SourceWalkBank<8>& owner) noexcept {
     ClutchCandidatePlan rejected{};
