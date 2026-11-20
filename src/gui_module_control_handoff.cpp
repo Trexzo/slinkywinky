@@ -31,10 +31,15 @@ bool GuiModuleControlHandoff::request_focused_toggle(
     if(!focus || *focus>=catalog.size() ||
        catalog[*focus].tab!=menu.tab())return false;
     const std::string_view selected=catalog[*focus].name;
-    // R245: PR #2 R211 has exactly three independently controllable
-    // native JNI modules. Other source labels are not runtime controls.
-    if((selected!="No Jump Delay" && selected!="No Slow" &&
-        selected!="Sprint") ||
+    // R255: three real PR2 R211 controls plus three R254 owner-gated
+    // source policies. The latter are strictly OFFLINE decision models,
+    // never live native/JNI Minecraft module activations. All other
+    // recovered catalog labels remain inert preview-only.
+    const bool native_r211=selected=="No Jump Delay" ||
+         selected=="No Slow" || selected=="Sprint";
+    const bool offline_r254=selected=="No Hit Delay" ||
+         selected=="Safe Walk" || selected=="Fast Place";
+    if((!native_r211 && !offline_r254) ||
        !candidate_native_manager_registered(selected))
         return false;
     // A snapshot may be read off the module owner, but cannot be forged

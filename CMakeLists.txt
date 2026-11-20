@@ -431,6 +431,16 @@ if(BUILD_TESTING)
   target_compile_features(slinkywinky_r254_source_module_tests PRIVATE cxx_std_17)
   add_test(NAME r254_recovered_utility_movement_block_decision_owner
     COMMAND slinkywinky_r254_source_module_tests)
+  # R255: source GUI controls for three additional offline policies,
+  # through native-owner requests, source snapshots and real ACK.
+  add_executable(slinkywinky_r255_offline_source_gui_tests
+    tests/test_r255_source_gui_to_offline_module_owner.cpp)
+  target_link_libraries(slinkywinky_r255_offline_source_gui_tests
+    PRIVATE slinkywinky_core)
+  target_compile_features(slinkywinky_r255_offline_source_gui_tests
+    PRIVATE cxx_std_17)
+  add_test(NAME r255_three_source_gui_offline_policy_owner_ack
+    COMMAND slinkywinky_r255_offline_source_gui_tests)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)

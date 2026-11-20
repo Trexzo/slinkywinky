@@ -12,9 +12,12 @@ class MenuNavigation;
 
 // R210: copy-only first-party GUI -> admitted module-owner request transport.
 // A request is NEVER an activation acknowledgement or a gameplay action.
-// R245: only the three source-backed PR #2 R211 native controls
-// (No Jump Delay, No Slow, Sprint) are admitted. The R244 66-entry
-// native identity fence applies to all requested names. Others are previews.
+// R255: three source-backed PR #2 R211 native controls
+// (No Jump Delay, No Slow, Sprint) and three independently modeled
+// OFFLINE R254 policies (No Hit Delay, Safe Walk, Fast Place) have
+// source-authoritative request paths. The latter do NOT attach to a
+// Minecraft JVM. R244 registration identity applies to all names.
+// The remaining catalog items are still preview-only.
 struct GuiModuleControlRequest {
     std::uint64_t id=0;
     std::uint64_t observed_source_sequence=0;
