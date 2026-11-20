@@ -74,6 +74,43 @@ static void unit_policy() {
     c.reset();
     CHECK(!c.on_rotation_flag().override_yaw && !c.planned());
 
+    // R248: a real ray face, when present, owns the only valid adjacent
+    // coordinate; a caller cannot forge an arbitrary next block.
+    ClutchController verified;
+    auto selected=late_aim();
+    CHECK(verified.on_late(selected).planned);
+    auto vf=click();vf.observed_face=5; // contradicts legacy top flag
+    CHECK(!verified.on_tick(vf).admitted &&
+          verified.cooldown()==0.0f);
+    vf.observed_face=1;vf.adjacent={2,2,3};
+    CHECK(!verified.on_tick(vf).admitted &&
+          (verified.planned_block()==ClutchBlock{1,2,3}) &&
+          verified.cooldown()==0.0f);
+    vf.adjacent={1,3,3};
+    auto exact=verified.on_tick(vf);
+    CHECK(exact.admitted && exact.proposed_use_click &&
+          exact.cooldown_after==2.0f &&
+          (exact.new_planned_block==ClutchBlock{1,3,3}));
+    exact=verified.on_tick(vf);
+    CHECK(exact.admitted && !exact.proposed_use_click &&
+          exact.cooldown_after==1.0f);
+    verified.reset();
+    selected=late_aim();selected.face_up=false;
+    CHECK(verified.on_late(selected).planned);
+    vf=click();vf.hit_top=false;vf.observed_face=5;
+    vf.adjacent={2,2,3};
+    exact=verified.on_tick(vf);
+    CHECK(exact.admitted && exact.proposed_use_click &&
+          (exact.new_planned_block==ClutchBlock{2,2,3}));
+    verified.reset();
+    selected=late_aim();
+    CHECK(verified.on_late(selected).planned);
+    vf=click();vf.observed_face=1;vf.hit_is_block=false;
+    CHECK(!verified.on_tick(vf).admitted);
+    vf=click();vf.observed_face=7;
+    CHECK(!verified.on_tick(vf).admitted);
+    vf.observed_face=1;vf.clicks_per_second=21.0f;
+    CHECK(!verified.on_tick(vf).admitted);
     // Source still advances click cooldown when no block is planned.
     auto empty=c.on_tick(click());
     CHECK(empty.admitted && !empty.proposed_use_click &&

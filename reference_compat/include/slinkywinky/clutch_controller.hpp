@@ -11,6 +11,7 @@
 #include <cstdint>
 #include "slinkywinky/source_walk_bank.hpp"
 #include "slinkywinky/clutch_candidate_planner.hpp"
+#include "slinkywinky/clutch_click_gate.hpp"
 
 namespace slinkywinky::reference_compat {
 struct ClutchBlock {
@@ -24,6 +25,9 @@ struct ClutchClickInput {
     bool in_game=false,hit_is_block=false,hit_top=false;
     ClutchBlock hit{},adjacent{};
     float clicks_per_second=10.0f;
+    // R248: -1 is legacy offline-only evidence. A nonnegative face
+    // must be the real observed ray side, never a guessed facing.
+    int observed_face=-1;
 };
 struct ClutchClickDecision {
     bool admitted=false,proposed_use_click=false;
@@ -142,6 +146,38 @@ public:
 
     ClutchClickDecision on_tick(const ClutchClickInput& in) noexcept {
         ClutchClickDecision out;
+        // R248: opt-in authenticated ray face. Reuse the independent
+        // source-ordered event-0 gate instead of trusting the supplied
+        // adjacent coordinate, and never mutate state on a contradiction.
+        if(in.observed_face!=-1) {
+            if(!in.hit_is_block || in.observed_face<0 ||
+               in.observed_face>5 ||
+               ((in.observed_face==1)!=in.hit_top))
+                return out;
+            const ClutchClickState state{
+                cooldown_,planned_,face_up_,
+                {block_.x,block_.y,block_.z}};
+            const ClutchClickObservation evidence{
+                in.clicks_per_second,in.in_game,
+                ClutchClickHit{true,{in.hit.x,in.hit.y,in.hit.z},
+                              in.observed_face}};
+            const auto result=evaluate_clutch_click(state,evidence);
+            if(!result)return out;
+            if(result->press_proposed &&
+               !(in.adjacent==ClutchBlock{
+                   result->next.target.x,result->next.target.y,
+                   result->next.target.z}))
+                return out;
+            cooldown_=result->next.timer;
+            out.admitted=true;
+            out.cooldown_after=cooldown_;
+            out.proposed_use_click=result->press_proposed;
+            if(result->press_proposed) {
+                block_=in.adjacent;
+                out.new_planned_block=block_;
+            }
+            return out;
+        }
         if(!std::isfinite(in.clicks_per_second) ||
            in.clicks_per_second<1.0f || in.clicks_per_second>100.0f)
             return out;
