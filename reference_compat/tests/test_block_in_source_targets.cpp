@@ -134,10 +134,18 @@ static void check_controller() {
     CHECK(decision.admitted && decision.proposed_click &&
           decision.proposed_placement_bit==0u);
     point(decision.proposed_world_target,.5,63,1.825);
-    CHECK(decision.proposed_absolute_yaw==0 &&
-          decision.proposed_absolute_pitch==0 &&
-          decision.proposed_yaw_delta==0 &&
-          decision.proposed_pitch_delta==0);
+    // Cross-compiler trig/atan2 differences can produce sub-ULP
+    // residuals, even for a mathematically zero look delta.
+    // Assert the decision exists and compare with the same source
+    // geometry tolerance as check_aim(), not exact float equality.
+    CHECK(decision.proposed_absolute_yaw &&
+          decision.proposed_absolute_pitch &&
+          decision.proposed_yaw_delta &&
+          decision.proposed_pitch_delta);
+    close(*decision.proposed_absolute_yaw,0);
+    close(*decision.proposed_absolute_pitch,0);
+    close(*decision.proposed_yaw_delta,0);
+    close(*decision.proposed_pitch_delta,0);
     CHECK(c.placed_mask()==1ull);
     const int previous_mode=c.movement_mode();
     // Even a valid source geometry input that collides with its
