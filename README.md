@@ -8,6 +8,29 @@ See [native injection architecture, build and explicit limitations](docs/R24_NAT
 
 The tested C++ combat decision engine, native C API, Java JNI smoke bridge, session and input ownership regressions remain available. They are not yet connected to live vanilla Minecraft client hooks or an in-game GUI. The supplied candidate decrypted DLL is a local research reference, not redistributed or verified as an official artifact; OpenSlinky+ 2.2 is excluded.
 
+## R237–R239 — Clutch real-world read-only JNI pathway
+
+The `integration/openslinky-fd9c592-reference` branch now has a
+source-ordered 167-block Minecraft 1.8.9 observation sampler (Java8),
+a real `WorldClient` block-ID adapter (Forge experimental harness),
+an owner/thread/tick/generation-fenced native C++ world receipt adapter,
+and a separate Java8 JNI entry point that invokes the existing
+first-party Clutch source candidate planner.
+
+**R237 Java8 source-table and smoke CI passed.** The first R238
+cross-compiler matrix passed on GCC/Clang in Debug/Release; a later
+thread-safe quarantine change has a separate run pending. R239 JNI
+compilation/roundtrip and real offline Forge world acceptance are
+**not verified yet** and must not be inferred from source commits.
+
+This is a **read-only candidate proposal**, not Clutch placement,
+source event-18 hooks, production JNI/vanilla injection, authenticated
+decrypted binary parity, or completed Slinky module recovery. Prior
+candidate raycast timing and any real game actions remain disabled.
+See `docs/R237_CLUTCH_REAL_WORLD_OBSERVATION.md`,
+`docs/R238_CLUTCH_NATIVE_WORLD_RECEIPT.md`, and
+`docs/R239_REAL_CLUTCH_JNI_SOURCE_PLANNER.md`.
+
 ## R86 — native menu-to-profile settings bridge (still not playable)
 
 The first-party native C++ GUI previews now connect seven **existing engine configuration fields** to menu switches: Aim Assist, Auto Block, Auto Clicker, Backtrack, Hit Select, Reach and Velocity. The remaining **58 catalog names** are explicitly unavailable, rather than falsely showing working modules. The two native preview programs share a local versioned profile at `%LOCALAPPDATA%\\SlinkyWinky\\module-profile-preview.conf`; press **P** to save and **L** to load. Profile appearance remains independent, and corrupt profile loads are rejected.
