@@ -755,6 +755,11 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241_input_attach_restore_smoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r242_input_failure_restore_smoke.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r243_input_transformer_fault_smoke.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R251LeaseAgent.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R251LeaseTarget.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R251LeaseLauncher.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251_disposable_jvm_lease_attach.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251-lease-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241-input-attach-agent.mf"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererWglEvidence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/OriginalGuiScreenProbe.java"
@@ -906,6 +911,8 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R241InputAttachTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R242InputAttachTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R243InputAttachTarget.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R251LeaseAgent.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/instrument/R251LeaseTarget.java"
     # Offline tool only: exact Mojang SHA-1 before structural render lookup.
     # Keep audit code in its own JAR and out of the injected Java agent.
     COMMAND ${CMAKE_COMMAND} -E make_directory
@@ -1010,6 +1017,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R77WglAttachLauncher.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R241InputAttachLauncher.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R242InputAttachLauncher.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R251LeaseLauncher.java"
     # The test-agent bundle is deliberately NOT shipped in package artifacts.
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r66_test_agent.jar"
@@ -1022,6 +1030,12 @@ if(SLINKYWINKY_BUILD_ATTACH)
     COMMAND "${Java_JAR_EXECUTABLE}" cfm
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r241_test_agent.jar"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/r241-input-attach-agent.mf"
+      -C "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes" .
+    # R251: separate test-only Java8 Attach-agent JAR; not in production
+    # agent nor in the allowlisted standalone preview package.
+    COMMAND "${Java_JAR_EXECUTABLE}" cfm
+      "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_r251_test_agent.jar"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251-lease-attach-agent.mf"
       -C "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes" .
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:slinkywinky_agent>"
       "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_agent.dll"
@@ -1105,6 +1119,15 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(r243_java8_input_transformer_failure_boundaries
         PROPERTIES TIMEOUT 120)
+      # R251: actual Java 8 Attach to caller-owned disposable JVMs.
+      # PID/start-time/challenge/generation, old-owner quiescence, replay,
+      # foreign thread and uncertain-lease tests; NEVER Minecraft.
+      add_test(NAME r251_java8_disposable_jvm_exclusive_attach_lease
+        COMMAND "${Python3_EXECUTABLE}" -u
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/r251_disposable_jvm_lease_attach.py"
+          "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
+      set_tests_properties(r251_java8_disposable_jvm_exclusive_attach_lease
+        PROPERTIES TIMEOUT 180)
       add_test(NAME r162_java8_original_input_instruction_order_fixture
         COMMAND "${CMAKE_COMMAND}"
           -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}

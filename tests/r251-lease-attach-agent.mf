@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Agent-Class: dev.slinkywinky.instrument.R251LeaseAgent
+Can-Retransform-Classes: false
+Can-Redefine-Classes: false
+
