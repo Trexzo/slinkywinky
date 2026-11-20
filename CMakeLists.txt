@@ -406,6 +406,17 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r254_real_pr2_three_module_policy_parity
       COMMAND slinkywinky_r254_pr2_module_parity_tests)
+    add_executable(slinkywinky_r257_pr2_event8_parity_tests
+      tests/test_r257_pinned_pr2_reach_event8_parity.cpp)
+    target_include_directories(slinkywinky_r257_pr2_event8_parity_tests PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r257_pr2_event8_parity_tests
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r257_pr2_event8_parity_tests
+      PRIVATE cxx_std_17)
+    add_test(NAME r257_real_pr2_reach_event8_140_frame_parity
+      COMMAND slinkywinky_r257_pr2_event8_parity_tests)
     if(WIN32)
       # R253 source-pinned actual native manager + kernel process HANDLE
       # witness. Driven only by separate explicitly-owned Java8 test JVMs.
@@ -450,6 +461,15 @@ if(BUILD_TESTING)
   target_compile_features(slinkywinky_r256_entity_query_tests PRIVATE cxx_std_17)
   add_test(NAME r256_source_hitboxes_ghost_hand_reach_query_event8
     COMMAND slinkywinky_r256_entity_query_tests)
+  # R257: existing first-party ReachController + R256 entity models
+  # share one owner-authorized typed event-8 envelope and source snapshot.
+  add_executable(slinkywinky_r257_event8_tests
+    tests/test_r257_reach_hitboxes_ghost_hand_event8.cpp)
+  target_link_libraries(slinkywinky_r257_event8_tests
+    PRIVATE slinkywinky_core)
+  target_compile_features(slinkywinky_r257_event8_tests PRIVATE cxx_std_17)
+  add_test(NAME r257_reach_hitboxes_ghost_hand_shared_event8_owner
+    COMMAND slinkywinky_r257_event8_tests)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)
