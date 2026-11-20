@@ -77,6 +77,10 @@ public final class ForgePreview {
     private Object r237World,r237Player;
     private long r237Generation=1,r237Tick;
     private int r237Samples,r237NonAir;
+    // R245: opt-in real Forge world ray observations; never execute Clutch.
+    private ClutchWorldSampler.Pos r245Previous;
+    private double[] r245PreviousAim;
+    private int r245Raycasts,r245Retained,r245PriorRequests;
     private int r224WorldSamples,r224MotionSamples,r224Proposals;
     private double r224StartX,r224StartZ,r224LastX,r224LastZ;
     private long r213InWorldTicks;
@@ -103,6 +107,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r224LocalStrafeReadOnlyTest");
     private static final boolean R237_CLUTCH_READONLY =
         Boolean.getBoolean("slinkywinky.r237ClutchReadOnlyProbe");
+    private static final boolean R245_CLUTCH_PRIOR_READONLY =
+        Boolean.getBoolean("slinkywinky.r245ClutchPriorReadOnlyProbe");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
     private static final boolean R217_ITEM_CATEGORIES_TEST =
@@ -225,6 +231,9 @@ public final class ForgePreview {
         // R237 is never admitted in ordinary profiles or action-test modes.
         // The operator must independently enter a local offline world and
         // press F9; this option does not create worlds or modify keys.
+        if(R245_CLUTCH_PRIOR_READONLY && !R237_CLUTCH_READONLY)
+            throw new IllegalStateException(
+                "R245 previous Clutch observation requires R237 offline admission");
         if(R237_CLUTCH_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
@@ -264,6 +273,7 @@ public final class ForgePreview {
         if(r239Native!=null) {r239Native.close();r239Native=null;}
         if(r237Sampler!=null) {r237Sampler.close();r237Sampler=null;}
         r237World=r237Player=null;
+        r245Previous=null;r245PreviousAim=null;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
             r214Active=null;
         try {
@@ -327,6 +337,8 @@ public final class ForgePreview {
             }
             enabled=true;
             r237Samples=r237NonAir=r239NativePlans=r241AimReceipts=0;
+            r245Raycasts=r245Retained=r245PriorRequests=0;
+            r245Previous=null;r245PreviousAim=null;
             r237Tick=0;
             observations=0;
             sprintGeneration=1;
@@ -1053,9 +1065,10 @@ public final class ForgePreview {
      * event-21 timing and still requires separate gameplay acceptance.
      */
     /**
-     * A real, source-ordered 167-cell block-ID observation. Does NOT
-     * execute Clutch's planner, raycast, mouse, rotation or placement.
-     * Native R235 still needs a two-phase ownership-checked JNI handoff.
+     * R237/R239/R241 real-world source-ordered read-only Clutch preview.
+     * R245 explicitly opts into native prior ray preflight and a real
+     * Minecraft block ray on the same client thread. Never rotates,
+     * places blocks, presses keys, sends packets or modifies the world.
      */
     private void sampleR237ReadOnlyClutch(Minecraft mc,GameHost.Frame frame) {
         if(r237Samples>=20)return;
@@ -1071,23 +1084,66 @@ public final class ForgePreview {
             r239Native=new ClutchNativePreview();
             r237World=mc.theWorld;r237Player=mc.thePlayer;
             ++r237Generation;r237Tick=0;
+            r245Previous=null;r245PreviousAim=null;
         }
         final net.minecraft.util.AxisAlignedBB box=
             mc.thePlayer.getEntityBoundingBox();
+        final boolean hasPrior=R245_CLUTCH_PRIOR_READONLY &&
+            r245Previous!=null && r245PreviousAim!=null;
         final ClutchWorldSampler.Request request=new ClutchWorldSampler.Request(
             r237Generation,++r237Tick,
             new double[]{box.minX,box.minY,box.minZ},
             new double[]{box.maxX,box.maxY,box.maxZ},
             new double[]{frame.eyeX,frame.eyeY,frame.eyeZ},
-            7,0.0f,null);
+            7,0.0f,hasPrior?r245Previous:null);
+        final ForgeClutchWorldPort worldPort=new ForgeClutchWorldPort(mc);
+        // Keep the real Minecraft world/raycast adapter unchanged and
+        // count only source-authorized rayTrace calls for diagnostics.
+        final ClutchWorldSampler.Port port;
+        if(R245_CLUTCH_PRIOR_READONLY) {
+            port=new ClutchWorldSampler.Port() {
+                @Override public boolean onClientThread() {
+                    return worldPort.onClientThread();
+                }
+                @Override public Object worldIdentity() {
+                    return worldPort.worldIdentity();
+                }
+                @Override public Object playerIdentity() {
+                    return worldPort.playerIdentity();
+                }
+                @Override public int blockId(int x,int y,int z) {
+                    return worldPort.blockId(x,y,z);
+                }
+                @Override public ClutchWorldSampler.Pos rayTrace(
+                        double[] from,double[] to) {
+                    ++r245Raycasts;
+                    return worldPort.rayTrace(from,to);
+                }
+            };
+        } else port=worldPort;
         final ClutchWorldSampler.Snapshot snapshot=r237Sampler.capture(
-            new ForgeClutchWorldPort(mc),request);
+            port,request);
         for(int id:snapshot.candidateBlockIds())if(id!=0)++r237NonAir;
-        // R239: actual Java 8/JNI receipt into R235 native Clutch
-        // value-only planner. Never send its candidate to gameplay.
-        final ClutchNativePreview.Decision plan=r239Native.observe(
-            request,snapshot,frame.yaw,frame.pitch,300.0f,1.0f,
-            System.nanoTime()*1e-9);
+        // One native planner receipt per observed Minecraft player tick.
+        // This never acts on the returned candidate or rotation.
+        final double clock=System.nanoTime()*1e-9;
+        final ClutchNativePreview.Decision plan;
+        if(hasPrior) {
+            ++r245PriorRequests;
+            plan=r239Native.observePrior(r237Sampler,port,request,snapshot,
+                r245PreviousAim,frame.yaw,frame.pitch,300.0f,1.0f,clock);
+        } else {
+            plan=r239Native.observe(request,snapshot,frame.yaw,frame.pitch,
+                300.0f,1.0f,clock);
+        }
+        if(R245_CLUTCH_PRIOR_READONLY) {
+            if(plan.preservedPrior)++r245Retained;
+            r245Previous=plan.found?
+                new ClutchWorldSampler.Pos(
+                    plan.blockX,plan.blockY,plan.blockZ):null;
+            r245PreviousAim=plan.found?
+                new double[]{plan.aimX,plan.aimY,plan.aimZ}:null;
+        }
         if(!plan.admitted)throw new IllegalStateException(
             "R239 native Clutch decision not admitted");
         if(plan.found) {
@@ -1107,8 +1163,13 @@ public final class ForgePreview {
                 " candidateReads=3340 nonAir="+r237NonAir+
                 " nativePlans="+r239NativePlans+
                 " aimReceipts="+r241AimReceipts+
-                " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END" +
-                "_JNI_NATIVE_R235");
+                (R245_CLUTCH_PRIOR_READONLY?
+                    " gameplayWrites=0 raycasts="+r245Raycasts+
+                    " priorRequests="+r245PriorRequests+
+                    " retainedPrior="+r245Retained+
+                    " source=Forge_PlayerTick_END_JNI_NATIVE_R244" :
+                    " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END" +
+                    "_JNI_NATIVE_R235"));
 
     }
 
