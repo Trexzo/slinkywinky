@@ -237,13 +237,23 @@ option(SLINKYWINKY_BUILD_JNI "Build optional JVM integration smoke bridge" OFF)
 if(SLINKYWINKY_BUILD_JNI)
   find_package(JNI REQUIRED)
   add_library(slinkywinky_jni SHARED src/jni_bridge.cpp src/bridge.cpp
-    reference_compat/src/sprint_observation_jni.cpp)
+    reference_compat/src/sprint_observation_jni.cpp
+    reference_compat/src/clutch_world_observation_jni.cpp)
   target_compile_definitions(slinkywinky_jni PRIVATE SLINKYWINKY_BRIDGE_BUILD)
   target_link_libraries(slinkywinky_jni PRIVATE slinkywinky_core)
   target_include_directories(slinkywinky_jni PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R239: Java8 -> JNI -> the existing R235 native source Clutch planner.
+    # This is a read-only synthetic-world smoke, not Minecraft acceptance.
+    add_test(NAME r239_java8_native_clutch_source_planner COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r239_clutch_native_observation.cmake)
     # R204: actual Java 8 -> first-party native read-only policy roundtrip.
     # This test never loads Minecraft or calls a game input setter.
     add_test(NAME r204_java8_native_sprint_observation_roundtrip COMMAND ${CMAKE_COMMAND}
