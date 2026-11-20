@@ -7,6 +7,7 @@ import dev.slinkywinky.OwnedModuleActions;
 import dev.slinkywinky.SprintObservationProbe;
 import dev.slinkywinky.ClutchWorldSampler;
 import dev.slinkywinky.ClutchNativePreview;
+import dev.slinkywinky.ClutchRayReceiptStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -1080,6 +1081,10 @@ public final class ForgePreview {
             r237Player!=mc.thePlayer) {
             if(r239Native!=null){r239Native.close();r239Native=null;}
             if(r237Sampler!=null)r237Sampler.close();
+            // R246: never aggregate live-ray evidence across world/player
+            // owners; each completed 20-tick certificate is one identity.
+            r237Samples=r237NonAir=r239NativePlans=r241AimReceipts=0;
+            r245Raycasts=r245Retained=r245PriorRequests=0;
             r237Sampler=new ClutchWorldSampler();
             r239Native=new ClutchNativePreview();
             r237World=mc.theWorld;r237Player=mc.thePlayer;
@@ -1157,9 +1162,16 @@ public final class ForgePreview {
             ++r241AimReceipts;
         }
         ++r237Samples;
-        if(r237Samples==20)
-            System.out.println("[SlinkyWinkyPreview] " +
-                "R237_REAL_WORLD_CLUTCH_167_READONLY_PASS samples=20" +
+        if(r237Samples==20) {
+            // R246: a full candidate scan without any real prior ray is
+            // INCONCLUSIVE for R245, not a false-positive ray PASS.
+            final String marker=R245_CLUTCH_PRIOR_READONLY ?
+                ClutchRayReceiptStatus.classify(
+                    r237Samples,r239NativePlans,r241AimReceipts,
+                    r245PriorRequests,r245Raycasts,r245Retained) :
+                "R237_REAL_WORLD_CLUTCH_167_READONLY_PASS";
+            System.out.println("[SlinkyWinkyPreview] " + marker +
+                " samples=20" +
                 " candidateReads=3340 nonAir="+r237NonAir+
                 " nativePlans="+r239NativePlans+
                 " aimReceipts="+r241AimReceipts+
@@ -1170,7 +1182,7 @@ public final class ForgePreview {
                     " source=Forge_PlayerTick_END_JNI_NATIVE_R244" :
                     " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END" +
                     "_JNI_NATIVE_R235"));
-
+        }
     }
 
     private void sampleOwnedModuleActions(Minecraft mc, GameHost.Frame frame) {
