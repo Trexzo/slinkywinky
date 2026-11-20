@@ -441,6 +441,15 @@ if(BUILD_TESTING)
     PRIVATE cxx_std_17)
   add_test(NAME r255_three_source_gui_offline_policy_owner_ack
     COMMAND slinkywinky_r255_offline_source_gui_tests)
+  # R256: two more exact-original event-8 reach-query module policies.
+  # C++17 first-party owner simulation only; no JVM callback installed.
+  add_executable(slinkywinky_r256_entity_query_tests
+    tests/test_r256_entity_query_policies.cpp)
+  target_link_libraries(slinkywinky_r256_entity_query_tests
+    PRIVATE slinkywinky_core)
+  target_compile_features(slinkywinky_r256_entity_query_tests PRIVATE cxx_std_17)
+  add_test(NAME r256_source_hitboxes_ghost_hand_reach_query_event8
+    COMMAND slinkywinky_r256_entity_query_tests)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)
