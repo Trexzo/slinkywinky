@@ -393,6 +393,19 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r252_real_pr2_jvm_witnessed_native_recovery
       COMMAND slinkywinky_r252_witnessed_recovery_tests)
+    # R254: compile original three independently-authored PR2 policies
+    # from exact pinned source; compare all PR1 source state decisions.
+    add_executable(slinkywinky_r254_pr2_module_parity_tests
+      tests/test_r254_pinned_pr2_source_module_parity.cpp)
+    target_include_directories(slinkywinky_r254_pr2_module_parity_tests PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r254_pr2_module_parity_tests
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r254_pr2_module_parity_tests
+      PRIVATE cxx_std_17)
+    add_test(NAME r254_real_pr2_three_module_policy_parity
+      COMMAND slinkywinky_r254_pr2_module_parity_tests)
     if(WIN32)
       # R253 source-pinned actual native manager + kernel process HANDLE
       # witness. Driven only by separate explicitly-owned Java8 test JVMs.
@@ -409,6 +422,15 @@ if(BUILD_TESTING)
         slinkywinky_r253_windows_kernel_recovery_probe PRIVATE cxx_std_17)
     endif()
   endif()
+  # R254: three newly restored first-party module decision policies,
+  # always built with PR1 alone, including source catalog and lifecycle.
+  add_executable(slinkywinky_r254_source_module_tests
+    tests/test_r254_recovered_source_module_policies.cpp)
+  target_link_libraries(slinkywinky_r254_source_module_tests
+    PRIVATE slinkywinky_core)
+  target_compile_features(slinkywinky_r254_source_module_tests PRIVATE cxx_std_17)
+  add_test(NAME r254_recovered_utility_movement_block_decision_owner
+    COMMAND slinkywinky_r254_source_module_tests)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)

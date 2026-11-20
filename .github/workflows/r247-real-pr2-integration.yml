@@ -1,4 +1,4 @@
-name: R247-R253 pinned PR2 native GUI integration
+name: R247-R254 pinned PR2 native GUI integration
 
 on:
   push:
@@ -38,9 +38,9 @@ jobs:
       - name: Configure first-party source integration
         run: cmake -S shell -B build-r247 -DCMAKE_BUILD_TYPE=Release -DSLINKYWINKY_R247_PR2_ROOT="$GITHUB_WORKSPACE/pr2-pin"
       - name: Build real PR2 integration failure and recovery tests
-        run: cmake --build build-r247 --target slinkywinky_r247_real_native_module_test slinkywinky_r248_real_three_module_test slinkywinky_r249_native_failure_tests slinkywinky_r250_native_recovery_test slinkywinky_r252_witnessed_recovery_tests --parallel 2
+        run: cmake --build build-r247 --target slinkywinky_r247_real_native_module_test slinkywinky_r248_real_three_module_test slinkywinky_r249_native_failure_tests slinkywinky_r250_native_recovery_test slinkywinky_r252_witnessed_recovery_tests slinkywinky_r254_pr2_module_parity_tests --parallel 2
       - name: Execute all real native owner lifecycle integration tests
-        run: ctest --test-dir build-r247 -R '^r2(47|48|49|50|52)_real_pr2_' --output-on-failure
+        run: ctest --test-dir build-r247 -R '^r2(47|48|49|50|52|54)_real_pr2_' --output-on-failure
 
   real-windows-java8-kernel-recovery:
     runs-on: windows-latest
