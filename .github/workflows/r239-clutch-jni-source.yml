@@ -1,0 +1,39 @@
+name: R239 JNI Clutch source plan
+on:
+  push:
+    paths:
+      - 'java/dev/slinkywinky/ClutchWorldSampler.java'
+      - 'java/dev/slinkywinky/ClutchNativePreview.java'
+      - 'tests/java/dev/slinkywinky/ClutchNativePreviewSmoke.java'
+      - 'reference_compat/src/clutch_world_observation_jni.cpp'
+      - 'reference_compat/include/slinkywinky/clutch_observation_bridge.hpp'
+      - 'CMakeLists.txt'
+      - 'tests/run_r239_clutch_native_observation.cmake'
+      - '.github/workflows/r239-clutch-jni-source.yml'
+  pull_request:
+    paths:
+      - 'java/dev/slinkywinky/ClutchWorldSampler.java'
+      - 'java/dev/slinkywinky/ClutchNativePreview.java'
+      - 'tests/java/dev/slinkywinky/ClutchNativePreviewSmoke.java'
+      - 'reference_compat/src/clutch_world_observation_jni.cpp'
+      - 'reference_compat/include/slinkywinky/clutch_observation_bridge.hpp'
+      - 'CMakeLists.txt'
+      - 'tests/run_r239_clutch_native_observation.cmake'
+      - '.github/workflows/r239-clutch-jni-source.yml'
+jobs:
+  native-jni-readonly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify hosted Java and JNI headers
+        shell: bash
+        run: |
+          java -version
+          javac -version
+          echo "JAVA_HOME=$(dirname $(dirname $(readlink -f $(which javac))))" >> "$GITHUB_ENV"
+      - name: Configure project JNI and CTest
+        run: cmake -S . -B build/r239 -DSLINKYWINKY_BUILD_JNI=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build real first-party JNI library
+        run: cmake --build build/r239 --target slinkywinky_jni --parallel 2
+      - name: Verify Java 8 API JNI-to-native source Clutch
+        run: ctest --test-dir build/r239 -R '^r239_java8_native_clutch_source_planner$' --output-on-failure
