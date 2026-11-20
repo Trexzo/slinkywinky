@@ -24,6 +24,8 @@ identity parser and `JvmWitnessedNativeRecovery`. It requires:
 - no replay of an already admitted native recovery, no foreign-thread
   admission, and fail-closed publication retirement if the witness
   returns false or throws after a native snapshot was published;
+  a refusal before any publication remains retryable rather than
+  needlessly poisoning the native view;
 - R250's full old-owner native shutdown, discarded GUI/feed, new native
   world-generation/sequence, and fresh adapter/feed rules remain in
   force. The **actual PR2 source manager** is used in the pinned CI

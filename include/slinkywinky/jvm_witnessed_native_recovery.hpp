@@ -106,7 +106,8 @@ public:
            !old_identity.well_formed() ||
            !next_identity.well_formed() ||
            old_identity==next_identity ||
-           old_identity.challenge_hex==next_identity.challenge_hex)
+           old_identity.challenge_hex==next_identity.challenge_hex ||
+           !world_ready)
             return false;
 
         // A lease can rotate in the same JVM only when the R251 epoch
@@ -134,10 +135,11 @@ public:
                     return published;
                 });
             if(!witnessed || !called || !published){
-                if(called){
-                    // Witness revoked midway or gave an ambiguous result.
-                    // A source snapshot may already have been published:
-                    // clear it and never retry using these objects.
+                // An ordinary preflight or witness denial which never
+                // published source state remains retryable with a valid
+                // exclusive lease. Only an attempted publication followed
+                // by a revoked/ambiguous lease is permanently quarantined.
+                if(called && (published || next_feed.latest().has_value())){
                     poisoned_=true;
                     next_adapter.retire_owner(next_feed);
                 }
@@ -146,7 +148,7 @@ public:
             used_=true;
             return true;
         } catch(...) {
-            if(called){
+            if(called && (published || next_feed.latest().has_value())){
                 poisoned_=true;
                 next_adapter.retire_owner(next_feed);
             }
