@@ -47,6 +47,9 @@ public final class InstrumentationProbe {
     private static native double[] nativeReadPublishedStatus(long handle);
     private static volatile long nativeContext;
     private static volatile boolean nativeSessionCloseOk;
+    // R258: one read-only source envelope per actual admitted Minecraft
+    // client-thread tick; never produces module actions or game writes.
+    private static R258Event8ReadOnlyObservation event8Observation;
     // R60: counters are owned solely by the admitted Minecraft client thread.
     // They record validated read-only frames, never entity identities or locations.
     private static int acceptedFrames, worldPlayerFrames, rayTargetFrames, generationChanges;
@@ -106,8 +109,20 @@ public final class InstrumentationProbe {
             nativeOk=nativeContext!=0 && nativeObserveFrame(nativeContext,
                 observed.timeMs,observed.generation,observed.flags,
                 observed.xyz,observed.angles)==1;
+            if(nativeOk) {
+                if(event8Observation==null)
+                    event8Observation=new R258Event8ReadOnlyObservation();
+                R258Event8ReadOnlyObservation.Receipt event8=
+                    event8Observation.capture(observed);
+                if(event8.hasAllSourceEvent8Inputs())
+                    throw new IllegalStateException("R258 incomplete source evidence promoted");
+                if(event8.sequence==1)
+                    System.out.println(PREFIX+"R258_READ_ONLY_EVENT8_OBSERVED_PASS"+
+                        " flags="+event8.flags+" generation="+event8.generation);
+            }
         }
         catch (Throwable failure) {
+            nativeOk=false;
             System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
         }
         if (nativeOk && observed != null) {
@@ -162,6 +177,15 @@ public final class InstrumentationProbe {
             System.out.println(PREFIX+"NATIVE_OBSERVATION_SUMMARY accepted="+acceptedFrames+
                 " worldPlayer="+worldPlayerFrames+" rayEntity="+rayTargetFrames+
                 " generations="+generationChanges);
+            // R258: retire the event-8 metadata view before releasing the
+            // original world/player reflection cache, on its owning thread.
+            if(event8Observation!=null) {
+                try { event8Observation.close(); }
+                catch(RuntimeException failure) {
+                    closed=false;
+                    System.err.println(PREFIX+"R258_EVENT8_CLOSE_FAIL "+failure);
+                } finally {event8Observation=null;}
+            }
             // Drop Java world, player and reflection references on the exact client
             // thread before the asynchronous class restoration worker begins.
             ObservedState.release();

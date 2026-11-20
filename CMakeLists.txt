@@ -470,6 +470,15 @@ if(BUILD_TESTING)
   target_compile_features(slinkywinky_r257_event8_tests PRIVATE cxx_std_17)
   add_test(NAME r257_reach_hitboxes_ghost_hand_shared_event8_owner
     COMMAND slinkywinky_r257_event8_tests)
+  # R258: read-only Java8 source-sampled event-8 metadata intake. The
+  # native fixture cannot infer missing Sprint/Reach/held-item flags.
+  add_executable(slinkywinky_r258_readonly_event8_probe
+    tests/test_r258_readonly_event8_observation.cpp)
+  target_include_directories(slinkywinky_r258_readonly_event8_probe PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  target_compile_features(slinkywinky_r258_readonly_event8_probe PRIVATE cxx_std_17)
+  add_test(NAME r258_event8_readonly_observation_native_replay_fence
+    COMMAND slinkywinky_r258_readonly_event8_probe)
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
   add_test(NAME observation_ledger COMMAND slinkywinky_observation_tests)
@@ -837,6 +846,11 @@ if(SLINKYWINKY_BUILD_ATTACH)
   set_property(SOURCE src/windows_loader.cpp APPEND PROPERTY OBJECT_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/ObservedState.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/R258Event8ReadOnlyObservation.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R258Event8ObservationSmoke.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/slinkywinky/r258_readonly_event8_observation.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_r258_readonly_event8_observation.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/r258_java8_readonly_event8_interop.py"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderFrameGate.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java"
@@ -970,6 +984,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       -d "$<TARGET_FILE_DIR:slinkywinky_loader>/instrument-classes"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/InstrumentationProbe.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/ObservedState.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/R258Event8ReadOnlyObservation.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderFrameGate.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RenderCallbackFence.java"
@@ -1050,6 +1065,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/net/minecraft/launchwrapper/LaunchClassLoader.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ClassLoaderSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ObservationSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R258Event8ObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeHudIpcSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/Vanilla189MappingSmoke.java"
@@ -1217,6 +1233,17 @@ if(SLINKYWINKY_BUILD_ATTACH)
           "$<TARGET_FILE:slinkywinky_loader>" "${SW_JDK_HOME}")
       set_tests_properties(r243_java8_input_transformer_failure_boundaries
         PROPERTIES TIMEOUT 120)
+      # R258: real Java 8 mapped sampler -> native read-only event-8
+      # metadata envelope. No source module may be evaluated from it.
+      add_test(NAME r258_java8_mapped_event8_readonly_native_evidence
+        COMMAND "${Python3_EXECUTABLE}" -u
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/r258_java8_readonly_event8_interop.py"
+          "${Java_JAVA_EXECUTABLE}"
+          "$<TARGET_FILE_DIR:slinkywinky_loader>/attach-test-classes"
+          "$<TARGET_FILE_DIR:slinkywinky_loader>/slinkywinky_instrument.jar"
+          "$<TARGET_FILE:slinkywinky_r258_readonly_event8_probe>")
+      set_tests_properties(r258_java8_mapped_event8_readonly_native_evidence
+        PROPERTIES TIMEOUT 90)
       # R251: actual Java 8 Attach to caller-owned disposable JVMs.
       # PID/start-time/challenge/generation, old-owner quiescence, replay,
       # foreign thread and uncertain-lease tests; NEVER Minecraft.
