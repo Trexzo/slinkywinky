@@ -212,6 +212,40 @@ static void previous_and_ground() {
     selected=clutch_plan_original(w,unseen);
     CHECK(!selected.admitted && unseen.rng_state()==before);
 
+    // R236: original call order. An unreachable old block must NOT
+    // demand a raycast result; the candidate scan may still find a
+    // different, reachable block. Before R236 this was rejected.
+    SourceWalkBank<8> unreachable_prior;
+    CHECK(unreachable_prior.configure(seed));
+    auto fallback_world=basic();
+    fallback_world.source_solid[5]=true;
+    ClutchSourcePrior far_old{};
+    far_old.block={20,63,0};
+    far_old.last_aim={20,63.5,.5};
+    far_old.solid_known=far_old.solid=true;
+    far_old.ray_known=false; // no source raycast is necessary
+    fallback_world.prior=far_old;
+    selected=clutch_plan_original(fallback_world,unreachable_prior);
+    CHECK(selected.admitted && selected.found &&
+          !selected.preserved_prior && selected.source_index==5 &&
+          (selected.selected==ClutchCandidatePos{1,63,0}));
+
+    // The same missing ray evidence MUST still reject a genuinely
+    // reachable previous candidate; otherwise an unverified block
+    // could silently be retained as though it were visible.
+    SourceWalkBank<8> reachable_prior;
+    CHECK(reachable_prior.configure(seed));
+    auto requires_ray=basic();
+    ClutchSourcePrior near_old{};
+    near_old.block={-1,63,0};
+    near_old.last_aim={0,63.5,.5};
+    near_old.solid_known=near_old.solid=true;
+    near_old.ray_known=false;
+    requires_ray.prior=near_old;
+    const auto owned_rng=reachable_prior.rng_state();
+    selected=clutch_plan_original(requires_ray,reachable_prior);
+    CHECK(!selected.admitted && reachable_prior.rng_state()==owned_rng);
+
     SourceWalkBank<8> ground;
     CHECK(ground.configure(seed));
     w=basic();
