@@ -831,4 +831,15 @@ if(BUILD_TESTING)
   set_tests_properties(r200_native_toggle_owner_thread_and_lifecycle
     PROPERTIES TIMEOUT 15)
 
+  # R238: native first-party source-order world receipt -> original Clutch
+  # planner input with thread, generation and exact-prefix guards. Offline only.
+  add_executable(slinkywinky_clutch_world_observation_test
+    tests/test_clutch_world_observation_bridge.cpp)
+  target_link_libraries(slinkywinky_clutch_world_observation_test PRIVATE
+    slinkywinky_reference_event_model Threads::Threads)
+  add_test(NAME r238_native_clutch_observation_planner_gate
+    COMMAND slinkywinky_clutch_world_observation_test)
+  set_tests_properties(r238_native_clutch_observation_planner_gate
+    PROPERTIES TIMEOUT 15)
+
 endif()
