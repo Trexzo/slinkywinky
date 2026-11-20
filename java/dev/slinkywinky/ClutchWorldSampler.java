@@ -43,7 +43,7 @@ public final class ClutchWorldSampler implements AutoCloseable {
     }
     public static final class Request {
         public final long generation,tick;
-        public final double[] lo,hi,eye;
+        private final double[] lo,hi,eye;
         public final int range;
         public final float minHeight;
         public final Pos previous;
