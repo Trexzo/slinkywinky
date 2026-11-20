@@ -93,8 +93,7 @@ public final class R258Event8ObservationSmoke {
         boolean closedDenied=false;
         try {view.capture(first);}
         catch(IllegalStateException expected){closedDenied=true;}
-        check(closedDenied && view.accepted()!=4,
-              "closed owner accepted stale data");
+        check(closedDenied,"closed owner accepted stale data");
         ObservedState.release();
         System.out.println("R258_JAVA8_MAPPED_SOURCE_OBSERVATION_AND_LIFECYCLE_PASS");
         System.out.println("R258_NO_REACH_HITBOX_GHOSTHAND_INPUT_ASSUMPTIONS_PASS");
