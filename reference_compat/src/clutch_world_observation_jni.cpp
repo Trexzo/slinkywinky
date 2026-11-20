@@ -10,14 +10,21 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <stdexcept>
 #include <vector>
 
 namespace {
 using namespace slinkywinky::reference_compat;
+struct PendingClutchRay {
+    std::uint64_t tick=0;
+    ClutchCandidateWorld world{};
+    ClutchPriorRayPreflight preflight{};
+};
 struct ClutchPreviewSession {
     std::thread::id owner=std::this_thread::get_id();
+    std::optional<PendingClutchRay> pending{};
     ClutchObservationOwner gate{};
     SourceWalkBank<8> rng{};
     ClutchPreviewSession() {
@@ -39,6 +46,24 @@ bool valid_integer(jlong n,jlong lo,jlong hi) noexcept {
 bool valid_float(double x) noexcept {
     return std::isfinite(x) &&
         std::fabs(x)<=static_cast<double>(std::numeric_limits<float>::max());
+}
+jdoubleArray encode_clutch_plan(JNIEnv* env,const ClutchCandidatePlan& plan) {
+    const jdouble value[15]{
+        1.0,plan.found?1.0:0.0,plan.face_up?1.0:0.0,
+        static_cast<jdouble>(plan.source_index),
+        static_cast<jdouble>(plan.selected.x),
+        static_cast<jdouble>(plan.selected.y),
+        static_cast<jdouble>(plan.selected.z),
+        static_cast<jdouble>(plan.visited),
+        static_cast<jdouble>(plan.angular_cost),
+        plan.aim.x,plan.aim.y,plan.aim.z,
+        static_cast<jdouble>(plan.aim_yaw_diff),
+        static_cast<jdouble>(plan.aim_pitch_diff),
+        plan.preserved_prior?1.0:0.0
+    };
+    jdoubleArray result=env->NewDoubleArray(15);
+    if(result)env->SetDoubleArrayRegion(result,0,15,value);
+    return result;
 }
 } // namespace
 
@@ -140,6 +165,12 @@ Java_dev_slinkywinky_ClutchNativePreview_nativeEvaluate(
         for(unsigned i=0;i<8;++i)f.ground_block_ids[i]=ground_ids[i];
 
         auto& session=*it->second;
+        if(session.pending) {
+            session.gate.close();
+            fail(env,"java/lang/IllegalStateException",
+                "Clutch pending ray cannot be bypassed");
+            return nullptr;
+        }
         const auto world=session.gate.consume(f);
         if(!world) {
             fail(env,"java/lang/IllegalStateException",
@@ -157,31 +188,206 @@ Java_dev_slinkywinky_ClutchNativePreview_nativeEvaluate(
                 "Native Clutch planner refused supplied world evidence");
             return nullptr;
         }
-        // R241: preserve native source-computed aim and signed rotation
-        // deltas as read-only values. This is NOT a camera write.
-        const jdouble value[15]{
-            1.0,
-            plan.found?1.0:0.0,
-            plan.face_up?1.0:0.0,
-            static_cast<jdouble>(plan.source_index),
-            static_cast<jdouble>(plan.selected.x),
-            static_cast<jdouble>(plan.selected.y),
-            static_cast<jdouble>(plan.selected.z),
-            static_cast<jdouble>(plan.visited),
-            static_cast<jdouble>(plan.angular_cost),
-            plan.aim.x,plan.aim.y,plan.aim.z,
-            static_cast<jdouble>(plan.aim_yaw_diff),
-            static_cast<jdouble>(plan.aim_pitch_diff),
-            plan.preserved_prior?1.0:0.0
-        };
-        jdoubleArray result=env->NewDoubleArray(15);
-        if(result)env->SetDoubleArrayRegion(result,0,15,value);
-        return result;
+        // The same encoded receipt is used by no-prior and the
+        // authenticated two-phase prior ray transaction.
+        return encode_clutch_plan(env,plan);
     } catch(...) {
         fail(env,"java/lang/IllegalStateException",
             "Native Clutch read-only evaluation failed");
         return nullptr;
     }
+}
+
+// R244 phase one: a single coherent sampler snapshot is consumed before
+// obtaining source-world ray evidence. The C++ source-walk owner is copied,
+// never advanced, while its exact target is computed.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_ClutchNativePreview_nativePreparePrior(
+    JNIEnv* env,jclass,jlong handle,jlongArray scope,
+    jdoubleArray geometry,jintArray candidates,jintArray ground,
+    jintArray previous,jdoubleArray lastAim) {
+    if(!scope||!geometry||!candidates||!ground||!previous||!lastAim||
+       env->GetArrayLength(scope)!=10||
+       env->GetArrayLength(geometry)!=15||
+       env->GetArrayLength(ground)!=8||
+       env->GetArrayLength(previous)!=3||
+       env->GetArrayLength(lastAim)!=3) {
+        fail(env,"java/lang/IllegalArgumentException",
+            "Malformed prior Clutch JNI snapshot");
+        return nullptr;
+    }
+    jlong s[10]{};
+    jdouble g[15]{},aim[3]{};
+    jint pos[3]{},ground_ids[8]{};
+    env->GetLongArrayRegion(scope,0,10,s);
+    env->GetDoubleArrayRegion(geometry,0,15,g);
+    env->GetIntArrayRegion(ground,0,8,ground_ids);
+    env->GetIntArrayRegion(previous,0,3,pos);
+    env->GetDoubleArrayRegion(lastAim,0,3,aim);
+    if(env->ExceptionCheck())return nullptr;
+    if(!valid_integer(s[0],1,std::numeric_limits<jlong>::max())||
+       !valid_integer(s[1],1,std::numeric_limits<jlong>::max())||
+       !valid_integer(s[2],1,std::numeric_limits<jlong>::max())||
+       !valid_integer(s[3],1,std::numeric_limits<jlong>::max())||
+       !valid_integer(s[4],-999999,999999)||
+       !valid_integer(s[5],-999999,999999)||
+       !valid_integer(s[6],-999999,999999)||
+       !valid_integer(s[7],0,7)||
+       !valid_integer(s[8],0,1)||
+       !valid_integer(s[9],-1,4095)||
+       env->GetArrayLength(candidates)!=static_cast<jsize>(
+            kClutchDistanceCounts[static_cast<std::size_t>(s[7])])) {
+        fail(env,"java/lang/IllegalArgumentException",
+            "Malformed previous-block JNI scope");
+        return nullptr;
+    }
+    for(double v:g)if(!valid_float(v)) {
+        fail(env,"java/lang/IllegalArgumentException",
+            "Nonfinite Clutch geometry");
+        return nullptr;
+    }
+    for(double v:aim)if(!valid_float(v)||std::fabs(v)>=1e6) {
+        fail(env,"java/lang/IllegalArgumentException",
+            "Invalid previous Clutch aim");
+        return nullptr;
+    }
+    for(jint v:pos)if(v<=-1000000 || v>=1000000) {
+        fail(env,"java/lang/IllegalArgumentException",
+            "Previous Clutch block outside world bounds");
+        return nullptr;
+    }
+    std::vector<jint> observed(static_cast<std::size_t>(
+        env->GetArrayLength(candidates)));
+    env->GetIntArrayRegion(candidates,0,
+        static_cast<jsize>(observed.size()),observed.data());
+    if(env->ExceptionCheck())return nullptr;
+    try {
+        std::lock_guard<std::mutex> lock(g_clutch_mutex);
+        const auto it=g_clutch.find(handle);
+        if(it==g_clutch.end()||
+           it->second->owner!=std::this_thread::get_id()) {
+            fail(env,"java/lang/IllegalStateException",
+                "Stale or foreign prior ray owner");
+            return nullptr;
+        }
+        auto& session=*it->second;
+        if(session.pending) {
+            session.gate.close();
+            fail(env,"java/lang/IllegalStateException",
+                "Unfinished previous Clutch ray transaction");
+            return nullptr;
+        }
+        ClutchObservedFrame f{};
+        f.generation=static_cast<std::uint64_t>(s[0]);
+        f.tick=static_cast<std::uint64_t>(s[1]);
+        f.world_token=static_cast<std::uint64_t>(s[2]);
+        f.player_token=static_cast<std::uint64_t>(s[3]);
+        f.base_x=static_cast<int>(s[4]);
+        f.base_y=static_cast<int>(s[5]);
+        f.base_z=static_cast<int>(s[6]);
+        f.range_index=static_cast<unsigned>(s[7]);
+        f.ground_blocked=s[8]==1;
+        f.previous_block_id=static_cast<int>(s[9]);
+        f.box_lo={g[0],g[1],g[2]};
+        f.box_hi={g[3],g[4],g[5]};
+        f.eye={g[6],g[7],g[8]};
+        f.current_yaw=static_cast<float>(g[9]);
+        f.current_pitch=static_cast<float>(g[10]);
+        f.min_height=static_cast<float>(g[11]);
+        f.max_aim_degrees=static_cast<float>(g[12]);
+        f.randomisation=static_cast<float>(g[13]);
+        f.clock_seconds=g[14];
+        f.candidate_block_ids.assign(observed.begin(),observed.end());
+        for(unsigned i=0;i<8;++i)f.ground_block_ids[i]=ground_ids[i];
+        ClutchSourcePrior prior{};
+        prior.block={pos[0],pos[1],pos[2]};
+        prior.last_aim={aim[0],aim[1],aim[2]};
+        f.previous=prior;
+        const auto world=session.gate.consume(f);
+        if(!world) {
+            fail(env,"java/lang/IllegalStateException",
+                "Prior JNI snapshot ownership or evidence refused");
+            return nullptr;
+        }
+        const auto preflight=clutch_prior_ray_preflight(*world,session.rng);
+        if(!preflight.admitted) {
+            session.gate.close();
+            fail(env,"java/lang/IllegalStateException",
+                "Prior Clutch preflight refused incomplete evidence");
+            return nullptr;
+        }
+        session.pending=PendingClutchRay{
+            static_cast<std::uint64_t>(s[1]),*world,preflight};
+        const jdouble value[7]{
+            preflight.needs_ray?1.0:0.0,
+            preflight.from.x,preflight.from.y,preflight.from.z,
+            preflight.to.x,preflight.to.y,preflight.to.z
+        };
+        jdoubleArray result=env->NewDoubleArray(7);
+        if(result)env->SetDoubleArrayRegion(result,0,7,value);
+        return result;
+    } catch(...) {
+        fail(env,"java/lang/IllegalStateException",
+            "Prior Clutch JNI preflight failed");
+        return nullptr;
+    }
+}
+
+// R244 phase two: only the matching tick's real ray response can finish the
+// native plan. The expected target and frame were retained in C++ phase one.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_ClutchNativePreview_nativeFinishPrior(
+    JNIEnv* env,jclass,jlong handle,jlong tick,jintArray hit) {
+    std::lock_guard<std::mutex> lock(g_clutch_mutex);
+    const auto it=g_clutch.find(handle);
+    if(it==g_clutch.end()||
+       it->second->owner!=std::this_thread::get_id()) {
+        fail(env,"java/lang/IllegalStateException",
+            "Unknown or foreign pending Clutch ray");
+        return nullptr;
+    }
+    auto& session=*it->second;
+    const auto deny=[&](const char* message)->jdoubleArray {
+        session.pending.reset();
+        session.gate.close();
+        fail(env,"java/lang/IllegalStateException",message);
+        return nullptr;
+    };
+    if(!session.pending || tick<=0 ||
+       session.pending->tick!=static_cast<std::uint64_t>(tick))
+        return deny("Missing, stale or replayed Clutch ray transaction");
+    const auto pending=*session.pending;
+    session.pending.reset();
+    if(pending.preflight.needs_ray != (hit!=nullptr))
+        return deny("Clutch ray evidence missing or unsolicited");
+    auto world=pending.world;
+    if(pending.preflight.needs_ray) {
+        if(!world.prior || !world.prior->solid_known ||
+           !world.prior->solid)return deny("Prior target lost ownership");
+        const jsize size=env->GetArrayLength(hit);
+        if(size!=0 && size!=3)
+            return deny("Clutch ray hit is not null or one block");
+        world.prior->ray_known=true;
+        if(size==3) {
+            jint p[3]{};
+            env->GetIntArrayRegion(hit,0,3,p);
+            if(env->ExceptionCheck()) {
+                session.gate.close();
+                return nullptr;
+            }
+            for(jint n:p)
+                if(n<=-1000000 || n>=1000000)
+                    return deny("Clutch ray hit outside world bounds");
+            world.prior->ray_hit=ClutchCandidatePos{p[0],p[1],p[2]};
+        } else world.prior->ray_hit.reset();
+    }
+    const auto rng_before=session.rng;
+    const auto plan=clutch_plan_original(world,session.rng);
+    if(!plan.admitted) {
+        session.rng=rng_before;
+        return deny("Clutch ray was inconsistent with native source plan");
+    }
+    return encode_clutch_plan(env,plan);
 }
 
 extern "C" JNIEXPORT void JNICALL
