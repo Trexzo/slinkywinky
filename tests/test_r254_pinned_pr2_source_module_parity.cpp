@@ -38,7 +38,8 @@ static void hit_parity(){
         source.left_click_counter=counter;source.mode=mode;
         source.target_present=target;source.target_type_ordinal=ordinal;
         source.player_using_item=item;
-        auto a=decide_no_hit_delay(input),b=original.evaluate(source);
+        const auto a=decide_no_hit_delay(input);
+        const auto b=original.evaluate(source);
         CHECK(a.reset_counter==b.clear_click_counter &&
               a.propose_swing==b.swing_arm);
         ++cases;
@@ -71,7 +72,8 @@ static void walk_parity(){
         theirs.on_ground=ground;theirs.motion_x=0.8;
         theirs.motion_y=0.25;theirs.motion_z=-0.4;
         theirs.settings={look,no_forward,require_blocks,multiplier};
-        const auto a=decide_safe_walk(ours),b=original.evaluate(theirs);
+        const auto a=decide_safe_walk(ours);
+        const auto b=original.evaluate(theirs);
         CHECK(a.edge_guard==b.proposed_edge_guard_active);
         CHECK(a.motion.has_value()==b.proposed_motion.has_value());
         if(a.motion){
@@ -116,7 +118,8 @@ static void place_parity(){
             b.held_ladder=a.item_is_ladder;
             b.random_bypass=a.random_bypass_granted;
             b.cps=cps;b.activation_ticks=delay;
-            const auto expected=original.evaluate(a),actual=ours.tick(b);
+            const auto expected=original.evaluate(a);
+            const auto actual=ours.tick(b);
             CHECK(actual.proposed_presses==expected.extra_use_press_count);
             CHECK(actual.valid==expected.admitted);
             CHECK(eq(actual.timer,expected.timer_after));
