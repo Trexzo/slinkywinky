@@ -194,10 +194,6 @@ inline ClutchPriorRayPreflight clutch_prior_ray_preflight(
         static_cast<int>(std::floor(center.x)),
         static_cast<int>(std::floor(center.y)),
         static_cast<int>(std::floor(center.z))};
-    // Avoid requesting a ray on a frame whose necessary source-world
-    // observations are missing; never guess unobserved solidity.
-    for(std::size_t i=0;i<kClutchDistanceCounts[in.range_index];++i)
-        if(!in.source_solid[i])return reject;
     if(in.min_height>0.0f) {
         for(unsigned depth=1;depth<=8;++depth) {
             if(!in.ground_by_depth[depth-1])return reject;
@@ -206,6 +202,11 @@ inline ClutchPriorRayPreflight clutch_prior_ray_preflight(
             if(!(in.min_height>static_cast<float>(depth)))break;
         }
     }
+    // The original exits on obstructing ground before inspecting candidate
+    // blocks. In that case the Minecraft sampler correctly did not read them.
+    // Once ground is clear, insist on complete source-prefix evidence.
+    for(std::size_t i=0;i<kClutchDistanceCounts[in.range_index];++i)
+        if(!in.source_solid[i])return reject;
     ClutchPriorRayPreflight out{};
     out.admitted=true;
     if(!in.prior || in.prior->block.y>center.y)
