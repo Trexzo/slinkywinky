@@ -36,6 +36,7 @@ public:
                 return false;
             }
             last_sequence_=sequence;
+            last_confirmed_generation_=snapshot->world_generation;
             return true;
         } catch(...) {
             // An owner read may fail after observing a partial session
@@ -102,6 +103,7 @@ public:
             return false;
         }
         last_sequence_=response_sequence;
+        last_confirmed_generation_=next->world_generation;
         return true;
         } catch(...) {
             // A throw before/after a native mutation, or during an
@@ -120,6 +122,14 @@ public:
         return true;
     }
     bool retired() const noexcept {return retired_;}
+    // R250: provenance floors are read only after the old owner has
+    // completely quiesced; never concurrently access these non-atomics.
+    std::uint64_t last_confirmed_world_generation() const noexcept {
+        return last_confirmed_generation_;
+    }
+    std::uint64_t last_confirmed_source_sequence() const noexcept {
+        return last_sequence_;
+    }
 private:
     bool on_owner() const noexcept {
         return std::this_thread::get_id()==owner_;
@@ -179,6 +189,7 @@ private:
     const std::thread::id owner_;
     bool retired_=false;
     std::uint64_t last_sequence_=0;
+    std::uint64_t last_confirmed_generation_=0;
 };
 
 } // namespace slinkywinky

@@ -366,6 +366,20 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r249_real_pr2_native_uncertain_acknowledgement_fence
       COMMAND slinkywinky_r249_native_failure_tests)
+    # R250: a new PR2 native owner and new PR1 view/channel may resume
+    # only after the quarantined owner's successful shutdown, with a
+    # strictly newer world generation and source sequence.
+    add_executable(slinkywinky_r250_native_recovery_test
+      tests/test_r250_real_pr2_owner_recovery.cpp)
+    target_include_directories(slinkywinky_r250_native_recovery_test PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r250_native_recovery_test
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r250_native_recovery_test
+      PRIVATE cxx_std_17)
+    add_test(NAME r250_real_pr2_quarantined_owner_recovery
+      COMMAND slinkywinky_r250_native_recovery_test)
   endif()
   add_executable(slinkywinky_observation_tests tests/test_observation.cpp)
   target_link_libraries(slinkywinky_observation_tests PRIVATE slinkywinky_core)
