@@ -165,9 +165,15 @@ static void check_controller() {
     c.reset();
     w.diff_yaw=177.0f;w.diff_pitch=66.0f;
     const auto overridden=c.on_tick(w);
+    // The source-derived zero-angle solution can be a sub-ULP
+    // residual on some Linux Release libm/optimizer combinations.
+    // Keep the admission/click checks strict, but apply the same
+    // geometry tolerance already required above for initial proposals.
     CHECK(overridden.admitted && overridden.proposed_click &&
-          overridden.proposed_yaw_delta==0.0f &&
-          overridden.proposed_pitch_delta==0.0f);
+          overridden.proposed_yaw_delta &&
+          overridden.proposed_pitch_delta);
+    close(*overridden.proposed_yaw_delta,0);
+    close(*overridden.proposed_pitch_delta,0);
     // If no source aim evidence, the R230 typed-diff API is kept
     // independently, without fabricating a source world target.
     c.reset();
