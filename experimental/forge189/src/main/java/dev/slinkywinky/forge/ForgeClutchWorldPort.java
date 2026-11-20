@@ -1,6 +1,7 @@
 package dev.slinkywinky.forge;
 
 import dev.slinkywinky.ClutchWorldSampler;
+import dev.slinkywinky.ClutchFaceSampler;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -14,7 +15,7 @@ import net.minecraft.util.Vec3;
  * Uses Minecraft's real client world; no world writes, key events, packet
  * sends, rotation changes, or native hooks. Never retain past world swaps.
  */
-public final class ForgeClutchWorldPort implements ClutchWorldSampler.Port {
+public final class ForgeClutchWorldPort implements ClutchWorldSampler.Port, ClutchFaceSampler.Port {
     private final Minecraft mc;
     private final WorldClient world;
     private final EntityPlayerSP player;
@@ -59,4 +60,24 @@ public final class ForgeClutchWorldPort implements ClutchWorldSampler.Port {
         return new ClutchWorldSampler.Pos(
             block.getX(),block.getY(),block.getZ());
     }
+    /**
+     * R250: current Minecraft cursor hit, read once and never synthesized.
+     * Forge PlayerTick.END may observe a previously rendered cursor result,
+     * so this is NOT certified event-0 placement timing.
+     */
+    @Override public ClutchFaceSampler.Hit cursorBlockHit() {
+        requireCurrent();
+        final MovingObjectPosition hit=mc.objectMouseOver;
+        requireCurrent();
+        if(hit==null || hit.typeOfHit!=MovingObjectPosition.MovingObjectType.BLOCK)
+            return null;
+        if(hit.getBlockPos()==null || hit.sideHit==null)
+            throw new IllegalStateException("Malformed Minecraft cursor block");
+        final BlockPos pos=hit.getBlockPos();
+        final int face=hit.sideHit.ordinal();
+        requireCurrent();
+        return new ClutchFaceSampler.Hit(
+            new ClutchFaceSampler.Pos(pos.getX(),pos.getY(),pos.getZ()),face);
+    }
+
 }
