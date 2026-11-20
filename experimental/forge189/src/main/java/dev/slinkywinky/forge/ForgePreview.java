@@ -73,7 +73,7 @@ public final class ForgePreview {
     // R237 source-ordered real-world block observations. Read-only.
     private ClutchWorldSampler r237Sampler;
     private ClutchNativePreview r239Native;
-    private int r239NativePlans;
+    private int r239NativePlans,r241AimReceipts;
     private Object r237World,r237Player;
     private long r237Generation=1,r237Tick;
     private int r237Samples,r237NonAir;
@@ -326,7 +326,7 @@ public final class ForgePreview {
                         SprintObservationProbe.NO_JUMP_DELAY,false);
             }
             enabled=true;
-            r237Samples=r237NonAir=r239NativePlans=0;
+            r237Samples=r237NonAir=r239NativePlans=r241AimReceipts=0;
             r237Tick=0;
             observations=0;
             sprintGeneration=1;
@@ -1090,13 +1090,23 @@ public final class ForgePreview {
             System.nanoTime()*1e-9);
         if(!plan.admitted)throw new IllegalStateException(
             "R239 native Clutch decision not admitted");
-        if(plan.found)++r239NativePlans;
+        if(plan.found) {
+            ++r239NativePlans;
+            // R241 exposes the source-computed aim, but never applies it.
+            if(!Double.isFinite(plan.aimX) || !Double.isFinite(plan.aimY) ||
+               !Double.isFinite(plan.aimZ) ||
+               !Double.isFinite(plan.yawDelta) ||
+               !Double.isFinite(plan.pitchDelta))
+                throw new IllegalStateException("Invalid native aim receipt");
+            ++r241AimReceipts;
+        }
         ++r237Samples;
         if(r237Samples==20)
             System.out.println("[SlinkyWinkyPreview] " +
                 "R237_REAL_WORLD_CLUTCH_167_READONLY_PASS samples=20" +
                 " candidateReads=3340 nonAir="+r237NonAir+
                 " nativePlans="+r239NativePlans+
+                " aimReceipts="+r241AimReceipts+
                 " gameplayWrites=0 raycasts=0 source=Forge_PlayerTick_END" +
                 "_JNI_NATIVE_R235");
 

@@ -17,8 +17,11 @@ public final class ClutchNativePreview implements AutoCloseable {
         public final boolean admitted,found,faceUp;
         public final int sourceIndex,blockX,blockY,blockZ,visited;
         public final double angularCost;
+        public final double aimX,aimY,aimZ,yawDelta,pitchDelta;
+        // Preserved-prior remains unsupported until the two-phase ray gate.
+        public final boolean preservedPrior;
         private Decision(double[] raw) {
-            if(raw==null || raw.length!=9)
+            if(raw==null || raw.length!=15)
                 throw new IllegalStateException("Malformed native Clutch receipt");
             for(double v:raw)if(!Double.isFinite(v))
                 throw new IllegalStateException("Nonfinite native Clutch receipt");
@@ -29,15 +32,30 @@ public final class ClutchNativePreview implements AutoCloseable {
                raw[4]!=Math.rint(raw[4]) || raw[5]!=Math.rint(raw[5]) ||
                raw[6]!=Math.rint(raw[6]) ||
                Math.abs(raw[4])>=1000000 || Math.abs(raw[5])>=1000000 ||
-               Math.abs(raw[6])>=1000000 || raw[8]<0 || raw[8]>1000)
+               Math.abs(raw[6])>=1000000 || raw[8]<0 || raw[8]>1000 ||
+               Math.abs(raw[9])>=1000000 || Math.abs(raw[10])>=1000000 ||
+               Math.abs(raw[11])>=1000000 || raw[14]!=0 ||
+               Math.abs(raw[12])>180.01 || Math.abs(raw[13])>500.01)
                 throw new IllegalStateException("Invalid native Clutch proposal");
             admitted=true;found=raw[1]==1;faceUp=raw[2]==1;
             sourceIndex=(int)raw[3];
             blockX=(int)raw[4];blockY=(int)raw[5];blockZ=(int)raw[6];
             visited=(int)raw[7];angularCost=raw[8];
+            aimX=raw[9];aimY=raw[10];aimZ=raw[11];
+            yawDelta=raw[12];pitchDelta=raw[13];
+            preservedPrior=raw[14]==1;
             if(!found && (faceUp || sourceIndex!=0 || blockX!=0 ||
-                blockY!=0 || blockZ!=0 || angularCost!=0))
+                blockY!=0 || blockZ!=0 || angularCost!=0 ||
+                aimX!=0 || aimY!=0 || aimZ!=0 ||
+                yawDelta!=0 || pitchDelta!=0))
                 throw new IllegalStateException("Unexpected missing-block data");
+            if(found && (aimX<blockX-.001 || aimX>blockX+1.001 ||
+                aimY<blockY-.001 || aimY>blockY+1.001 ||
+                aimZ<blockZ-.001 || aimZ>blockZ+1.001 ||
+                (faceUp && Math.abs(aimY-(blockY+1.0))>.001) ||
+                Math.abs(Math.abs(yawDelta)+Math.abs(pitchDelta)-
+                    angularCost)>.02))
+                throw new IllegalStateException("Inconsistent native Clutch aim");
         }
     }
     public ClutchNativePreview() {

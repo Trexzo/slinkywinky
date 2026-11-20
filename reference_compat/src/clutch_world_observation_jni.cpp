@@ -157,7 +157,9 @@ Java_dev_slinkywinky_ClutchNativePreview_nativeEvaluate(
                 "Native Clutch planner refused supplied world evidence");
             return nullptr;
         }
-        const jdouble value[9]{
+        // R241: preserve native source-computed aim and signed rotation
+        // deltas as read-only values. This is NOT a camera write.
+        const jdouble value[15]{
             1.0,
             plan.found?1.0:0.0,
             plan.face_up?1.0:0.0,
@@ -166,10 +168,14 @@ Java_dev_slinkywinky_ClutchNativePreview_nativeEvaluate(
             static_cast<jdouble>(plan.selected.y),
             static_cast<jdouble>(plan.selected.z),
             static_cast<jdouble>(plan.visited),
-            static_cast<jdouble>(plan.angular_cost)
+            static_cast<jdouble>(plan.angular_cost),
+            plan.aim.x,plan.aim.y,plan.aim.z,
+            static_cast<jdouble>(plan.aim_yaw_diff),
+            static_cast<jdouble>(plan.aim_pitch_diff),
+            plan.preserved_prior?1.0:0.0
         };
-        jdoubleArray result=env->NewDoubleArray(9);
-        if(result)env->SetDoubleArrayRegion(result,0,9,value);
+        jdoubleArray result=env->NewDoubleArray(15);
+        if(result)env->SetDoubleArrayRegion(result,0,15,value);
         return result;
     } catch(...) {
         fail(env,"java/lang/IllegalStateException",

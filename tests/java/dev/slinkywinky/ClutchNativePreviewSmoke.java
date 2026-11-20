@@ -63,13 +63,37 @@ public final class ClutchNativePreviewSmoke {
             badArgument(()->nativeOwner.observe(
                 modifiedRange,first,-90,70,300,1,1.1),
                 "same-tick range substitution");
+            check(!d.preservedPrior && d.aimX>=d.blockX &&
+                d.aimX<=d.blockX+1 && d.aimY>=d.blockY &&
+                d.aimY<=d.blockY+1 &&
+                d.aimZ>=d.blockZ && d.aimZ<=d.blockZ+1 &&
+                Math.abs(Math.abs(d.yawDelta)+Math.abs(d.pitchDelta)-
+                    d.angularCost)<.02,
+                "source-native aim and signed rotation in JNI receipt");
+            // Fresh native source-walk owners use identical test seeds.
+            // Validate that the JNI receipt preserves the deterministic
+            // source calculation, not merely a block index.
+            try(ClutchWorldSampler repeated=new ClutchWorldSampler();
+                ClutchNativePreview repeatedNative=new ClutchNativePreview()){
+                final ClutchWorldSampler.Request rr=request(1,0);
+                final ClutchNativePreview.Decision again=repeatedNative.observe(
+                    rr,repeated.capture(p,rr),-90,70,300,1,1.1);
+                check(again.found && again.aimX==d.aimX &&
+                    again.aimY==d.aimY && again.aimZ==d.aimZ &&
+                    again.yawDelta==d.yawDelta &&
+                    again.pitchDelta==d.pitchDelta &&
+                    again.angularCost==d.angularCost,
+                    "native source-walk aim replay parity");
+            }
 
             p.stone=false;
             r=request(2,0);
             snap=sampler.capture(p,r);
             d=nativeOwner.observe(r,snap,-90,70,300,1,2.2);
-            check(d.admitted && !d.found && d.visited==6,
-                "observed air produces no placement");
+            check(d.admitted && !d.found && d.visited==6 &&
+                d.aimX==0 && d.aimY==0 && d.aimZ==0 &&
+                d.yawDelta==0 && d.pitchDelta==0,
+                "observed air produces no aim or placement");
 
             final ClutchWorldSampler.Request replay=r;
             final ClutchWorldSampler.Snapshot prior=snap;
