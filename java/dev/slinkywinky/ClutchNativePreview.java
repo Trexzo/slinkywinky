@@ -29,7 +29,7 @@ public final class ClutchNativePreview implements AutoCloseable {
                raw[4]!=Math.rint(raw[4]) || raw[5]!=Math.rint(raw[5]) ||
                raw[6]!=Math.rint(raw[6]) ||
                Math.abs(raw[4])>=1000000 || Math.abs(raw[5])>=1000000 ||
-               Math.abs(raw[6])>=1000000 || raw[8]<0 || raw[8]>500)
+               Math.abs(raw[6])>=1000000 || raw[8]<0 || raw[8]>1000)
                 throw new IllegalStateException("Invalid native Clutch proposal");
             admitted=true;found=raw[1]==1;faceUp=raw[2]==1;
             sourceIndex=(int)raw[3];
@@ -81,7 +81,9 @@ public final class ClutchNativePreview implements AutoCloseable {
             snapshot.candidateBlockIds(),snapshot.groundBlockIds()));
     }
     @Override public synchronized void close() {
-        owner();
+        if(owner!=Thread.currentThread())
+            throw new IllegalStateException("Foreign Clutch native close");
+        if(handle==0)return;
         long old=handle;handle=0;nativeClose(old);
     }
 }
