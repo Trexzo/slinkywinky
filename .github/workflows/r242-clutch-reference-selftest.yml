@@ -1,0 +1,24 @@
+name: R242 decrypted Clutch reference self-test
+on:
+  push:
+    paths:
+      - 'reference_compat/include/slinkywinky/clutch_candidate_table.hpp'
+      - 'tools/verify_r242_clutch_reference.py'
+      - '.github/workflows/r242-clutch-reference-selftest.yml'
+  pull_request:
+    paths:
+      - 'reference_compat/include/slinkywinky/clutch_candidate_table.hpp'
+      - 'tools/verify_r242_clutch_reference.py'
+      - '.github/workflows/r242-clutch-reference-selftest.yml'
+jobs:
+  source-reference-negative-controls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify isolated table parser and negative controls
+        run: python3 tools/verify_r242_clutch_reference.py --self-test
+      - name: Confirm the reference archive is not distributed
+        shell: bash
+        run: |
+          test ! -e 'decrypted files.zip'
+          test ! -e 'decrypted files/slinky.dll'
