@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R272: recovered Piercing decision policy (no game ray writes).
+  add_executable(slinkywinky_piercing_source_tests
+    reference_compat/tests/test_piercing_controller.cpp)
+  target_include_directories(slinkywinky_piercing_source_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_piercing_source_tests PRIVATE cxx_std_17)
+  add_test(NAME r272_piercing_source_rank
+    COMMAND slinkywinky_piercing_source_tests)
   # R271: Anti Bot and Teams on the same validated offline event0.
   add_executable(slinkywinky_antibot_event_bridge_tests
     reference_compat/tests/test_anti_bot_event_bridge.cpp)
