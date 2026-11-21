@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R261: source-derived Auto Weapon and Weapons event25/26 offline binding.
+  add_executable(slinkywinky_auto_weapon_bridge_tests
+    reference_compat/tests/test_auto_weapon_weapons_bridge.cpp)
+  target_link_libraries(slinkywinky_auto_weapon_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_auto_weapon_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_auto_weapon_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r261_offline_auto_weapon_weapons_event25_event26
+    COMMAND slinkywinky_auto_weapon_bridge_tests)
   # R260: source Weapons slot selection feeds read-only Auto Weapon.
   add_executable(slinkywinky_weapons_tests
     reference_compat/tests/test_weapons_controller.cpp)

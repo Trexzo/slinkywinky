@@ -20,6 +20,8 @@
 #include "slinkywinky/fast_mine_controller.hpp"
 #include "slinkywinky/bridge_assist_controller.hpp"
 #include "slinkywinky/auto_tool_controller.hpp"
+#include "slinkywinky/auto_weapon_controller.hpp"
+#include "slinkywinky/weapons_controller.hpp"
 #include "slinkywinky/clutch_controller.hpp"
 #include "slinkywinky/free_look_controller.hpp"
 #include "slinkywinky/ghost_hand_controller.hpp"
@@ -174,6 +176,22 @@ struct AutoToolInventoryPayload {
     AutoToolTickDecision decision{};
     unsigned executions=0;
 };
+// R261: supplies exact hotbar/setting value snapshots to the first-party
+// Weapons selector, so the Auto Weapon event does NOT trust caller-provided
+// first_allowed_slot or current_is_weapon hints.
+struct AutoWeaponInventoryPayload {
+    AutoWeaponInput input{};
+    WeaponsInventory inventory{};
+    WeaponsSettings settings{};
+    WeaponsChoice source_choice{};
+    bool source_current_is_weapon=false;
+    AutoWeaponDecision decision{};
+    unsigned executions=0;
+};
+struct WeaponsClearExtrasPayload {
+    bool proposed_clear_extra_items=false;
+    unsigned executions=0;
+};
 struct AutoToolShutdownPayload {
     AutoToolShutdownDecision decision{};
     unsigned executions=0;
@@ -302,6 +320,8 @@ struct ExecutionFrame {
     std::optional<BridgeAssistTickPayload> bridge_tick{};
     std::optional<BridgeAssistLatePayload> bridge_late{};
     std::optional<AutoToolInventoryPayload> auto_tool_inventory{};
+    std::optional<AutoWeaponInventoryPayload> auto_weapon_inventory{};
+    std::optional<WeaponsClearExtrasPayload> weapons_clear_extras{};
     std::optional<AutoToolShutdownPayload> auto_tool_shutdown{};
     std::optional<ClutchClickPayload> clutch_click{};
     std::optional<ClutchRotationPayload> clutch_rotation{};
@@ -975,6 +995,67 @@ public:
         return false;
     }
 
+    // R261: Auto Weapon Java source listens to event25/category COMBAT.
+    // Priority is not established: fixture ordering follows metadata.
+    // Source firstAllowedSlot and isWeapon are calculated here from the
+    // actual value-only Weapons inventory, never an untrusted hint.
+    bool bind_auto_weapon(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Auto Weapon" ||
+           definitions_[id].category!=0 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kAutoToolInventoryEvent ||
+           callbacks_[id][kAutoToolInventoryEvent])return false;
+        return bind(id,kAutoToolInventoryEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.auto_weapon_inventory)return;
+                auto& p=*frame.auto_weapon_inventory;
+                ++p.executions;
+                p.source_choice=WeaponsController::first_allowed_slot(
+                    p.inventory,p.settings);
+                if(!p.source_choice.admitted)return;
+                const auto slot=p.input.current_slot;
+                if(slot<0 || slot>=9)return;
+                p.source_current_is_weapon=WeaponsController::allowed_current(
+                    p.inventory.slots[static_cast<std::size_t>(slot)],
+                    slot,p.settings);
+                AutoWeaponInput verified=p.input;
+                verified.first_allowed_slot=p.source_choice.first_allowed_slot;
+                verified.current_is_weapon=p.source_current_is_weapon;
+                p.decision=auto_weapon_.on_event25(verified);
+            });
+    }
+    bool bind_auto_weapon_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Auto Weapon")
+                return bind_auto_weapon(id);
+        return false;
+    }
+    // Weapons source listens to event26 and clears its extra-item names.
+    // Here it emits an explicit value-only request; no settings are changed.
+    bool bind_weapons(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Weapons" ||
+           definitions_[id].category!=0 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kAutoToolShutdownEvent ||
+           callbacks_[id][kAutoToolShutdownEvent])return false;
+        return bind(id,kAutoToolShutdownEvent,
+            [](const Delivery&,ExecutionFrame& frame){
+                if(!frame.weapons_clear_extras)return;
+                auto& p=*frame.weapons_clear_extras;
+                ++p.executions;
+                p.proposed_clear_extra_items=
+                    WeaponsController::event26_requests_clear_extras(true);
+            });
+    }
+    bool bind_weapons_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Weapons")
+                return bind_weapons(id);
+        return false;
+    }
+
     // R229: pinned Clutch Block-category descriptor has native event 0
     // click priority0; event13 rotation-flag priority-100; event18 late
     // phase priority-1000. No original client input or rotation writes.
@@ -1422,6 +1503,10 @@ public:
             return false;
         if (frame.auto_tool_inventory &&
             frame.event!=kAutoToolInventoryEvent)return false;
+        if (frame.auto_weapon_inventory &&
+            frame.event!=kAutoToolInventoryEvent)return false;
+        if (frame.weapons_clear_extras &&
+            frame.event!=kAutoToolShutdownEvent)return false;
         if (frame.auto_tool_shutdown &&
             frame.event!=kAutoToolShutdownEvent)return false;
         if(frame.clutch_click && frame.event!=kSafeWalkEvent)return false;
@@ -1481,6 +1566,8 @@ public:
             static_cast<unsigned>(frame.bridge_tick.has_value()) +
             static_cast<unsigned>(frame.bridge_late.has_value()) +
             static_cast<unsigned>(frame.auto_tool_inventory.has_value()) +
+            static_cast<unsigned>(frame.auto_weapon_inventory.has_value()) +
+            static_cast<unsigned>(frame.weapons_clear_extras.has_value()) +
             static_cast<unsigned>(frame.auto_tool_shutdown.has_value()) +
             static_cast<unsigned>(frame.clutch_click.has_value()) +
             static_cast<unsigned>(frame.clutch_rotation.has_value()) +
@@ -1528,6 +1615,14 @@ public:
             typed_count>=2 && typed_count<=3 &&
             frame.event==kKeepSprintPostEvent &&
             attack_post_count==typed_count;
+        // Both reconstructed modules subscribe to semantic event25, but
+        // block and entity cursor observations must not contradict.
+        const bool combined_inventory =
+            typed_count==2 && frame.event==kAutoToolInventoryEvent &&
+            frame.auto_tool_inventory && frame.auto_weapon_inventory;
+        const bool combined_cleanup =
+            typed_count==2 && frame.event==kAutoToolShutdownEvent &&
+            frame.auto_tool_shutdown && frame.weapons_clear_extras;
         const bool combined_reach_ghost =
             typed_count==2 && frame.event==kReachQueryEvent &&
             frame.reach && frame.ghost_hand;
@@ -1598,8 +1693,17 @@ public:
             !combined_movement_sprint && !combined_steering_accel &&
             !combined_edge_place && !combined_outgoing_packet &&
             !combined_late_tick && !combined_toggle &&
-            !combined_rotation && !combined_reach_ghost)
+            !combined_rotation && !combined_reach_ghost &&
+            !combined_inventory && !combined_cleanup)
             return false;
+        if(combined_inventory) {
+            const auto& tool=frame.auto_tool_inventory->input;
+            const auto& weapon=frame.auto_weapon_inventory->input;
+            if(tool.current_slot!=weapon.current_slot ||
+               tool.using_item!=weapon.is_using_item ||
+               (tool.look_at_block && weapon.hit_is_entity))
+                return false;
+        }
         if (combined_edge_place) {
             const bool state=frame.safe_walk ?
                 frame.safe_walk->input.in_game :
@@ -1752,6 +1856,16 @@ public:
             frame.auto_tool_inventory->decision={};
             frame.auto_tool_inventory->executions=0;
         }
+        if(frame.auto_weapon_inventory) {
+            frame.auto_weapon_inventory->source_choice={};
+            frame.auto_weapon_inventory->source_current_is_weapon=false;
+            frame.auto_weapon_inventory->decision={};
+            frame.auto_weapon_inventory->executions=0;
+        }
+        if(frame.weapons_clear_extras) {
+            frame.weapons_clear_extras->proposed_clear_extra_items=false;
+            frame.weapons_clear_extras->executions=0;
+        }
         if(frame.auto_tool_shutdown) {
             frame.auto_tool_shutdown->decision={};
             frame.auto_tool_shutdown->executions=0;
@@ -1829,9 +1943,21 @@ public:
             ~ClearFrame() { self.active_frame_ = nullptr; }
         } guard{*this};
         active_frame_ = &frame;
-        if(!shared_source_rng_enabled_)
-            return replay_.dispatch(frame.event,
-                frame.notification_target,frame.notification_new_state);
+        // R261: even outside the global RNG transaction, an exception in
+        // a later offline observer must not commit an Auto Weapon delay.
+        const AutoWeaponController auto_weapon_before=auto_weapon_;
+        if(!shared_source_rng_enabled_) {
+            try {
+                const bool delivered=replay_.dispatch(
+                    frame.event,frame.notification_target,
+                    frame.notification_new_state);
+                if(!delivered)auto_weapon_=auto_weapon_before;
+                return delivered;
+            } catch(...) {
+                auto_weapon_=auto_weapon_before;
+                throw;
+            }
+        }
         // R234 frame-atomic shared RNG transaction. Each module retains
         // its OWN walk timing state, but draws and optional random_chance
         // advance exactly one bridge-owned xoshiro generator in source
@@ -1848,6 +1974,7 @@ public:
             clutch_=previous_clutch;
             block_in_=previous_block;
             free_look_=previous_free_look;
+            auto_weapon_=auto_weapon_before;
         };
         try {
             const bool delivered=replay_.dispatch(frame.event,
@@ -1867,6 +1994,7 @@ public:
     bool apply(bool world, bool player) {
         if(stopped_ || active_frame_ || !replay_.apply(world,player))return false;
         if(!free_look_bound_enabled())free_look_.reset();
+        if(!auto_weapon_bound_enabled())auto_weapon_.reset();
         return true;
     }
 
@@ -1883,6 +2011,7 @@ public:
     void reset_fast_mine_world_state() noexcept { fast_mine_.reset(); }
     void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
     void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
+    void reset_auto_weapon_world_state() noexcept { auto_weapon_.reset(); }
     void reset_clutch_world_state() noexcept { clutch_.reset(); }
     void reset_free_look_world_state() noexcept { free_look_.reset(); }
     void reset_block_in_world_state() noexcept { block_in_.reset(); }
@@ -1956,6 +2085,7 @@ public:
         fast_mine_.reset();
         bridge_assist_.reset();
         auto_tool_.reset();
+        auto_weapon_.reset();
         clutch_.reset();
         block_in_.reset();
         free_look_.reset();
@@ -1972,6 +2102,14 @@ public:
     int reach_cooldown_ticks() const noexcept { return controller_.cooldown_ticks(); }
 
 private:
+    bool auto_weapon_bound_enabled() const noexcept {
+        for(std::size_t i=0;i<definitions_.size();++i)
+            if(definitions_[i].name=="Auto Weapon" &&
+               definitions_[i].category==0 &&
+               callbacks_[i][kAutoToolInventoryEvent] &&
+               replay_.enabled(i))return true;
+        return false;
+    }
     bool free_look_bound_enabled() const noexcept {
         for(std::size_t i=0;i<definitions_.size();++i)
             if(definitions_[i].name=="Free Look" &&
@@ -1998,6 +2136,7 @@ private:
     FastMineController fast_mine_;
     BridgeAssistController bridge_assist_;
     AutoToolController auto_tool_;
+    AutoWeaponController auto_weapon_;
     ClutchController clutch_;
     BlockInController block_in_;
     FreeLookController free_look_;

@@ -14,7 +14,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `aim_assist` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
-| combat | `auto_weapon` | Offline C++ event-25 delay model (no hotbar writes) | Reconstruct Weapons slot selector and real event-25 host hook |
+| combat | `auto_weapon` | Offline C++ event-25 bridge + Weapons slot policy (no hotbar writes) | Restore source per-tick cache semantics and verify real Minecraft target ownership |
 | combat | `backtrack` | Not implemented | Identify state, host events and reference traces |
 | combat | `criticals` | Not implemented | Identify state, host events and reference traces |
 | combat | `hit_select` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
@@ -27,7 +27,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `sprint_reset` | Not implemented | Identify state, host events and reference traces |
 | combat | `timer_range` | Not implemented | Identify state, host events and reference traces |
 | combat | `velocity` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
-| combat | `weapons` | Offline C++ hotbar item/slot policy (no game writes) | Verify native settings, source cache timing, and live inventory read-only snapshots |
+| combat | `weapons` | Offline C++ item/slot policy + event-26 clearing proposal | Verify source per-tick cache, host settings and real hotbar read-only snapshots |
 | move | `fast_accel` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | move | `instant_stop` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | move | `inv_walk` | Not implemented | Identify state, host events and reference traces |
