@@ -83,6 +83,11 @@ struct TeamsEvent0Payload {
     TeamsOwnerName owner{};
     TeamsSettings settings{};
     std::vector<TeamsEntityName> other_players{};
+    // R275: optional for a standalone Teams fixture, but mandatory
+    // when Teams and Anti Bot share a physical event-0 snapshot.
+    std::uint64_t source_world_token=0;
+    AntiBotUuid source_owner_uuid{};
+    std::vector<AntiBotUuid> other_player_uuids{};
     std::vector<TeamsDecision> decisions{};
     unsigned executions=0;
 };
@@ -1905,17 +1910,23 @@ public:
             !combined_rotation && !combined_source_query &&
             !combined_inventory && !combined_cleanup)
             return false;
-        // Both Java modules iterate the same world.playerEntities roster.
-        // An offline test must not join different roster snapshots and
-        // present the resulting bit-1 and bit-2 relationships as a whole.
+        // Both recovered Java modules iterate the SAME playerEntities
+        // collection. Equal names do not prove equal players: duplicate
+        // display names or a reordered roster can be mistaken as the
+        // same event. Bind world, local owner and every UUID explicitly.
         if(frame.teams_event0 && frame.anti_bot_event0) {
             const auto& teams=*frame.teams_event0;
             const auto& bots=*frame.anti_bot_event0;
             if(teams.world_ready!=bots.context_ready ||
-               teams.other_players.size()!=bots.other_players.size())
+               bots.world_token==0 ||
+               teams.source_world_token!=bots.world_token ||
+               !(teams.source_owner_uuid==bots.local_player) ||
+               teams.other_players.size()!=bots.other_players.size() ||
+               teams.other_player_uuids.size()!=bots.other_players.size())
                 return false;
             for(std::size_t i=0;i<teams.other_players.size();++i)
-                if(teams.other_players[i].raw_name!=bots.other_players[i].name)
+                if(teams.other_players[i].raw_name!=bots.other_players[i].name ||
+                   !(teams.other_player_uuids[i]==bots.other_players[i].uuid))
                     return false;
         }
         if(combined_inventory) {

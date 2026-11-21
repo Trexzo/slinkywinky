@@ -26,3 +26,12 @@ not-ready sources, foreign events, Clutch co-delivery, disable,
 identity/UUID mode behavior (source-verified equality branch), transactional rollback, malformed
 metadata and stop. No remote or local Minecraft player object
 is accessed or written.
+
+## R275 identity strengthening
+
+A shared frame requires the same explicit nonzero source-world token, local
+owner UUID and one ordered remote-player UUID per corresponding name.
+Display names alone are not unique and cannot authenticate roster identity.
+Standalone Teams frames remain independently testable, but a combined frame
+with missing or mismatched provenance is refused before any callback runs.
+No game objects or relationship bits are changed.

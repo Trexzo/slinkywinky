@@ -1,6 +1,7 @@
 #include "slinkywinky/module_execution_bridge.hpp"
 #include <iostream>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 using namespace slinkywinky::reference_compat;
 static void ck(bool yes,const char* what,int line) {
@@ -28,6 +29,9 @@ static ExecutionFrame frame(bool both=true,int uuidMode=2) {
         teams.owner.entity.raw_name=u"\u00a79Self";
         teams.other_players={TeamsEntityName{friendPlayer.name,std::nullopt},
                              TeamsEntityName{enemyPlayer.name,std::nullopt}};
+        teams.source_world_token=anti.world_token;
+        teams.source_owner_uuid=anti.local_player;
+        teams.other_player_uuids={friendPlayer.uuid,enemyPlayer.uuid};
         teams.settings.match_self_color=true;
         f.teams_event0=teams;
     }
@@ -67,6 +71,22 @@ int main() {
     CHECK(!b.dispatch(f) && f.anti_bot_event0->executions==0);
     f=frame();f.teams_event0->world_ready=false;
     CHECK(!b.dispatch(f));
+    // A display-name comparison alone is insufficient. Identical
+    // names with different UUID ordering must also fail closed.
+    f=frame();
+    f.teams_event0->other_players[0].raw_name=u"Shared";
+    f.teams_event0->other_players[1].raw_name=u"Shared";
+    f.anti_bot_event0->other_players[0].name=u"Shared";
+    f.anti_bot_event0->other_players[1].name=u"Shared";
+    std::swap(f.teams_event0->other_player_uuids[0],
+              f.teams_event0->other_player_uuids[1]);
+    CHECK(!b.dispatch(f) && f.executed_modules.empty());
+    f=frame();f.teams_event0->source_world_token=99;
+    CHECK(!b.dispatch(f) && f.executed_modules.empty());
+    f=frame();f.teams_event0->source_owner_uuid={0,42};
+    CHECK(!b.dispatch(f) && f.executed_modules.empty());
+    f=frame();f.teams_event0->other_player_uuids.clear();
+    CHECK(!b.dispatch(f) && f.executed_modules.empty());
     f=frame();f.event=8;
     CHECK(!b.dispatch(f));
     f=frame(false);f.clutch_click=ClutchClickPayload{};
