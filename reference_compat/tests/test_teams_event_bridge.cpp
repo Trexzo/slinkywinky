@@ -14,9 +14,9 @@ static ExecutionFrame query(bool ready=true) {
     f.world_present=f.player_present=true;
     TeamsEvent0Payload p;
     p.world_ready=ready;
-    p.owner.entity.raw_name=u"§9Self";
-    p.other_players.push_back(TeamsEntityName{u"§9Friend",std::nullopt});
-    p.other_players.push_back(TeamsEntityName{u"§cEnemy",std::nullopt});
+    p.owner.entity.raw_name=u"\u00A79Self";
+    p.other_players.push_back(TeamsEntityName{u"\u00A79Friend",std::nullopt});
+    p.other_players.push_back(TeamsEntityName{u"\u00A7cEnemy",std::nullopt});
     p.settings.match_self_color=true;
     f.teams_event0=p;
     return f;
