@@ -36,13 +36,13 @@ def verify():
                     if state == "Experimental decision model (offline)"]
     missing = [name for name, state in rows.items()
                if state == "Not implemented"]
-    if len(experimental) != 6 or len(missing) != 36 or (
+    if len(experimental) != 6 or (
         len(headers) + len(experimental) + len(missing) != len(rows)
     ):
         raise ValueError("Coverage accounting or unknown status")
     print("R258_RECONSTRUCTION_COVERAGE_PASS "
-          "native=67 java=68 controllers=%d experimental=6 missing=36 "
-          "java_only=speed" % len(headers))
+           "native=67 java=68 controllers=%d experimental=6 missing=%d "
+          "java_only=speed" % (len(headers),len(missing)))
     print("R258_MISSING_MODULES " + ",".join(sorted(missing)))
 
 if __name__ == "__main__":

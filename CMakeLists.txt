@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R259: source-derived Auto Weapon event25, read-only.
+  add_executable(slinkywinky_auto_weapon_tests
+    reference_compat/tests/test_auto_weapon_controller.cpp)
+  target_include_directories(slinkywinky_auto_weapon_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_auto_weapon_tests PRIVATE cxx_std_17)
+  add_test(NAME r259_auto_weapon_event25_delay
+    COMMAND slinkywinky_auto_weapon_tests)
   # R257: recovered No Hurt Cam field restoration, offline only.
   add_executable(slinkywinky_no_hurt_cam_tests
     reference_compat/tests/test_no_hurt_cam_controller.cpp)

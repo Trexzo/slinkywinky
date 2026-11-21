@@ -14,7 +14,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `aim_assist` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
-| combat | `auto_weapon` | Not implemented | Identify state, host events and reference traces |
+| combat | `auto_weapon` | Offline C++ event-25 delay model (no hotbar writes) | Reconstruct Weapons slot selector and real event-25 host hook |
 | combat | `backtrack` | Not implemented | Identify state, host events and reference traces |
 | combat | `criticals` | Not implemented | Identify state, host events and reference traces |
 | combat | `hit_select` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R257 verifies 25 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R259 verifies 26 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
