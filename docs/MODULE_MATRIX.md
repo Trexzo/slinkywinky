@@ -10,7 +10,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | block | `clutch` | Offline C++ controller + opt-in Forge read-only observations | Validate host event timing, settings and world-owner lifecycle |
 | block | `fast_mine` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | block | `fast_place` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
-| block | `ghost_hand` | Not implemented | Identify state, host events and reference traces |
+| block | `ghost_hand` | Offline C++ policy model (no verified live integration) | Recover exact event-8 dispatch and Minecraft target context; validate settings |
 | combat | `aim_assist` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R253 verifies 23 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R255 verifies 24 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.

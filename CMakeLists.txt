@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R255: reconstructed Ghost Hand interaction predicate (offline-only).
+  add_executable(slinkywinky_ghost_hand_tests
+    reference_compat/tests/test_ghost_hand_controller.cpp)
+  target_include_directories(slinkywinky_ghost_hand_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_ghost_hand_tests PRIVATE cxx_std_17)
+  add_test(NAME r255_ghost_hand_source_filter
+    COMMAND slinkywinky_ghost_hand_tests)
   # R254: Free Look source event13 bridge, tested offline on Win/Linux.
   add_executable(slinkywinky_free_look_bridge_tests
     reference_compat/tests/test_free_look_event_bridge.cpp)
