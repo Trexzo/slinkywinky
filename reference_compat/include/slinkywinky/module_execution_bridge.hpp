@@ -28,6 +28,7 @@
 #include "slinkywinky/ghost_hand_controller.hpp"
 #include "slinkywinky/hitboxes_controller.hpp"
 #include "slinkywinky/teams_controller.hpp"
+#include "slinkywinky/anti_bot_controller.hpp"
 #include "slinkywinky/block_in_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
@@ -78,6 +79,15 @@ struct TeamsEvent0Payload {
     TeamsSettings settings{};
     std::vector<TeamsEntityName> other_players{};
     std::vector<TeamsDecision> decisions{};
+    unsigned executions=0;
+};
+struct AntiBotEvent0Payload {
+    bool context_ready=false;
+    std::uint64_t world_token=0;
+    AntiBotUuid local_player{};
+    AntiBotSettings settings{};
+    std::vector<AntiBotPlayer> other_players{};
+    AntiBotFrameResult decision{};
     unsigned executions=0;
 };
 
@@ -321,6 +331,7 @@ struct ExecutionFrame {
     std::optional<GhostHandQueryPayload> ghost_hand{};
     std::optional<HitboxesQueryPayload> hitboxes{};
     std::optional<TeamsEvent0Payload> teams_event0{};
+    std::optional<AntiBotEvent0Payload> anti_bot_event0{};
     std::optional<JumpDelayTickPayload> jump_delay{};
     std::optional<NullMoveTickPayload> null_move{};
     std::optional<InstantStopTickPayload> instant_stop{};
@@ -518,6 +529,32 @@ public:
         for(std::size_t id=0;id<definitions_.size();++id)
             if(definitions_[id].name=="Teams")
                 return bind_teams(id);
+        return false;
+    }
+
+    // R271: Anti Bot's reconstructed Java module is UTILITY/event0.
+    // Never infer its original native callback priority or write flags.
+    bool bind_anti_bot(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Anti Bot" ||
+           definitions_[id].category!=4 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kSafeWalkEvent ||
+           callbacks_[id][kSafeWalkEvent])return false;
+        return bind(id,kSafeWalkEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.anti_bot_event0)return;
+                auto& p=*frame.anti_bot_event0;
+                ++p.executions;
+                p.decision=anti_bot_.on_event0(p.world_token,
+                    p.context_ready,p.local_player,p.settings,
+                    p.other_players);
+            });
+    }
+    bool bind_anti_bot_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Anti Bot")
+                return bind_anti_bot(id);
         return false;
     }
 
@@ -1584,6 +1621,7 @@ public:
         if (frame.ghost_hand && frame.event != kReachQueryEvent) return false;
         if (frame.hitboxes && frame.event != kReachQueryEvent) return false;
         if (frame.teams_event0 && frame.event != kSafeWalkEvent) return false;
+        if (frame.anti_bot_event0 && frame.event != kSafeWalkEvent) return false;
         if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
         if (frame.null_move && frame.event != kMovementTickEvent) return false;
         if (frame.instant_stop && frame.event != kMovementTickEvent) return false;
@@ -1665,6 +1703,7 @@ public:
             static_cast<unsigned>(frame.ghost_hand.has_value()) +
             static_cast<unsigned>(frame.hitboxes.has_value()) +
             static_cast<unsigned>(frame.teams_event0.has_value()) +
+            static_cast<unsigned>(frame.anti_bot_event0.has_value()) +
             static_cast<unsigned>(frame.jump_delay.has_value()) +
             static_cast<unsigned>(frame.null_move.has_value()) +
             static_cast<unsigned>(frame.instant_stop.has_value()) +
@@ -1786,9 +1825,10 @@ public:
             static_cast<unsigned>(frame.fast_mine_early.has_value()) +
             static_cast<unsigned>(frame.clutch_click.has_value()) +
             static_cast<unsigned>(frame.block_in_empty.has_value()) +
-            static_cast<unsigned>(frame.teams_event0.has_value());
+            static_cast<unsigned>(frame.teams_event0.has_value()) +
+            static_cast<unsigned>(frame.anti_bot_event0.has_value());
         const bool combined_edge_place =
-            typed_count>=2 && typed_count<=6 &&
+            typed_count>=2 && typed_count<=7 &&
             frame.event==kSafeWalkEvent &&
             typed_count==edge_place_count;
         const bool combined_outgoing_packet =
@@ -1820,6 +1860,19 @@ public:
             !combined_rotation && !combined_source_query &&
             !combined_inventory && !combined_cleanup)
             return false;
+        // Both Java modules iterate the same world.playerEntities roster.
+        // An offline test must not join different roster snapshots and
+        // present the resulting bit-1 and bit-2 relationships as a whole.
+        if(frame.teams_event0 && frame.anti_bot_event0) {
+            const auto& teams=*frame.teams_event0;
+            const auto& bots=*frame.anti_bot_event0;
+            if(teams.world_ready!=bots.context_ready ||
+               teams.other_players.size()!=bots.other_players.size())
+                return false;
+            for(std::size_t i=0;i<teams.other_players.size();++i)
+                if(teams.other_players[i].raw_name!=bots.other_players[i].name)
+                    return false;
+        }
         if(combined_inventory) {
             const auto& tool=frame.auto_tool_inventory->input;
             const auto& weapon=frame.auto_weapon_inventory->input;
@@ -1915,6 +1968,10 @@ public:
         if (frame.teams_event0) {
             frame.teams_event0->decisions.clear();
             frame.teams_event0->executions=0;
+        }
+        if (frame.anti_bot_event0) {
+            frame.anti_bot_event0->decision={};
+            frame.anti_bot_event0->executions=0;
         }
         if (frame.jump_delay) {
             frame.jump_delay->proposed_jump_ticks.reset();
@@ -2089,6 +2146,7 @@ public:
         // a later offline observer must not commit an Auto Weapon delay.
         const AutoWeaponController auto_weapon_before=auto_weapon_;
         const WeaponsTickCache weapons_cache_before=weapons_tick_cache_;
+        const AntiBotController anti_bot_before=anti_bot_;
         if(!shared_source_rng_enabled_) {
             try {
                 const bool delivered=replay_.dispatch(
@@ -2097,11 +2155,13 @@ public:
                 if(!delivered) {
                     auto_weapon_=auto_weapon_before;
                     weapons_tick_cache_=weapons_cache_before;
+                    anti_bot_=anti_bot_before;
                 }
                 return delivered;
             } catch(...) {
                 auto_weapon_=auto_weapon_before;
                 weapons_tick_cache_=weapons_cache_before;
+                anti_bot_=anti_bot_before;
                 throw;
             }
         }
@@ -2123,6 +2183,7 @@ public:
             free_look_=previous_free_look;
             auto_weapon_=auto_weapon_before;
             weapons_tick_cache_=weapons_cache_before;
+            anti_bot_=anti_bot_before;
         };
         try {
             const bool delivered=replay_.dispatch(frame.event,
@@ -2146,6 +2207,7 @@ public:
             auto_weapon_.reset();
             weapons_tick_cache_.reset();
         }
+        if(!anti_bot_bound_enabled())anti_bot_.reset();
         return true;
     }
 
@@ -2166,6 +2228,7 @@ public:
         auto_weapon_.reset();
         weapons_tick_cache_.reset();
     }
+    void reset_anti_bot_world_state() noexcept { anti_bot_.reset(); }
     void reset_clutch_world_state() noexcept { clutch_.reset(); }
     void reset_free_look_world_state() noexcept { free_look_.reset(); }
     void reset_block_in_world_state() noexcept { block_in_.reset(); }
@@ -2241,6 +2304,7 @@ public:
         auto_tool_.reset();
         auto_weapon_.reset();
         weapons_tick_cache_.reset();
+        anti_bot_.reset();
         clutch_.reset();
         block_in_.reset();
         free_look_.reset();
@@ -2257,6 +2321,14 @@ public:
     int reach_cooldown_ticks() const noexcept { return controller_.cooldown_ticks(); }
 
 private:
+    bool anti_bot_bound_enabled() const noexcept {
+        for(std::size_t i=0;i<definitions_.size();++i)
+            if(definitions_[i].name=="Anti Bot" &&
+               definitions_[i].category==4 &&
+               callbacks_[i][kSafeWalkEvent] &&
+               replay_.enabled(i))return true;
+        return false;
+    }
     bool auto_weapon_bound_enabled() const noexcept {
         for(std::size_t i=0;i<definitions_.size();++i)
             if(definitions_[i].name=="Auto Weapon" &&
@@ -2293,6 +2365,7 @@ private:
     AutoToolController auto_tool_;
     AutoWeaponController auto_weapon_;
     WeaponsTickCache weapons_tick_cache_;
+    AntiBotController anti_bot_;
     ClutchController clutch_;
     BlockInController block_in_;
     FreeLookController free_look_;

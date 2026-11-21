@@ -38,7 +38,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | move | `safe_walk` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | move | `sprint` | Offline C++ controller + limited Forge diagnostics | Validate host event timing, settings and world-owner lifecycle |
 | move | `strafe` | Offline C++ controller + limited Forge diagnostics | Validate host event timing, settings and world-owner lifecycle |
-| utility | `anti_bot` | Offline C++ per-UUID event-0 history and relationship-bit-2 model | Verify original native setting defaults, event order and game player snapshots |
+| utility | `anti_bot` | Offline per-UUID history + event-0 Teams-aware bit-2 bridge (no game writes) | Validate original native event precedence and host player roster ownership |
 | utility | `auto_pot` | Not implemented | Identify state, host events and reference traces |
 | utility | `auto_rod` | Not implemented | Identify state, host events and reference traces |
 | utility | `auto_soup` | Not implemented | Identify state, host events and reference traces |

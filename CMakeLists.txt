@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R271: Anti Bot and Teams on the same validated offline event0.
+  add_executable(slinkywinky_antibot_event_bridge_tests
+    reference_compat/tests/test_anti_bot_event_bridge.cpp)
+  target_link_libraries(slinkywinky_antibot_event_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_antibot_event_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_antibot_event_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r271_antibot_teams_event0_bit_isolation
+    COMMAND slinkywinky_antibot_event_bridge_tests)
   # R270: recovered Anti Bot per-UUID history and relationship flag policy.
   add_executable(slinkywinky_antibot_tests
     reference_compat/tests/test_anti_bot_controller.cpp)
