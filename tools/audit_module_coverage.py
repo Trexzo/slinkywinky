@@ -30,7 +30,10 @@ def verify():
     if headers - set(rows):
         raise ValueError("Controller missing native inventory row")
     for name, state in rows.items():
-        if (state.startswith("Offline C++")) != (name in headers):
+        # Coverage is established by matching a real controller header,
+        # not by the prose after the documented 'Offline ' status prefix.
+        # R263's 'Offline event-25 bridge' is still a controller model.
+        if (state.startswith("Offline ")) != (name in headers):
             raise ValueError("Controller status drift: " + name + ": " + state)
     experimental = [name for name, state in rows.items()
                     if state == "Experimental decision model (offline)"]
