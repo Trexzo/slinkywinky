@@ -10,6 +10,7 @@ import dev.slinkywinky.ClutchNativePreview;
 import dev.slinkywinky.ClutchRayReceiptStatus;
 import dev.slinkywinky.ClutchFaceSampler;
 import dev.slinkywinky.ClutchFaceReceiptStatus;
+import dev.slinkywinky.ClutchCadenceObserver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -88,6 +89,8 @@ public final class ForgePreview {
     private ClutchFaceSampler r251Sampler;
     private int r251PriorSamples,r251HitBlocks,r251Matches;
     private boolean r251PriorCentered;
+    private ClutchCadenceObserver r252Cadence;
+    private int r252Due,r252PressProposals;
     private int r224WorldSamples,r224MotionSamples,r224Proposals;
     private double r224StartX,r224StartZ,r224LastX,r224LastZ;
     private long r213InWorldTicks;
@@ -118,6 +121,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r245ClutchPriorReadOnlyProbe");
     private static final boolean R251_CLUTCH_FACE_READONLY =
         Boolean.getBoolean("slinkywinky.r251ClutchCursorFaceReadOnlyProbe");
+    private static final boolean R252_CLUTCH_CADENCE_READONLY =
+        Boolean.getBoolean("slinkywinky.r252ClutchCadenceReadOnlyProbe");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
     private static final boolean R217_ITEM_CATEGORIES_TEST =
@@ -247,6 +252,9 @@ public final class ForgePreview {
            (!R245_CLUTCH_PRIOR_READONLY || !R237_CLUTCH_READONLY))
             throw new IllegalStateException(
                 "R251 cursor-face needs both R237 and R245 offline admission");
+        if(R252_CLUTCH_CADENCE_READONLY && !R251_CLUTCH_FACE_READONLY)
+            throw new IllegalStateException(
+                "R252 source cadence requires R251 isolated face observations");
         if(R237_CLUTCH_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
@@ -286,6 +294,7 @@ public final class ForgePreview {
         if(r239Native!=null) {r239Native.close();r239Native=null;}
         if(r237Sampler!=null) {r237Sampler.close();r237Sampler=null;}
         if(r251Sampler!=null) {r251Sampler.close();r251Sampler=null;}
+        if(r252Cadence!=null) {r252Cadence.close();r252Cadence=null;}
         r237World=r237Player=null;
         r245Previous=null;r245PreviousAim=null;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
@@ -353,6 +362,7 @@ public final class ForgePreview {
             r237Samples=r237NonAir=r239NativePlans=r241AimReceipts=0;
             r245Raycasts=r245Retained=r245PriorRequests=0;
             r251PriorSamples=r251HitBlocks=r251Matches=0;
+            r252Due=r252PressProposals=0;
             r251PriorCentered=false;
             if(r251Sampler!=null){r251Sampler.close();r251Sampler=null;}
             r245Previous=null;r245PreviousAim=null;
@@ -1102,7 +1112,11 @@ public final class ForgePreview {
             r237Samples=r237NonAir=r239NativePlans=r241AimReceipts=0;
             r245Raycasts=r245Retained=r245PriorRequests=0;
             r251PriorSamples=r251HitBlocks=r251Matches=0;
+            r252Due=r252PressProposals=0;
             if(r251Sampler!=null)r251Sampler.close();
+            if(r252Cadence!=null)r252Cadence.close();
+            r252Cadence=R252_CLUTCH_CADENCE_READONLY?
+                new ClutchCadenceObserver():null;
             r251Sampler=R251_CLUTCH_FACE_READONLY?new ClutchFaceSampler():null;
             r251PriorCentered=false;
             r237Sampler=new ClutchWorldSampler();
@@ -1124,10 +1138,11 @@ public final class ForgePreview {
         final ForgeClutchWorldPort worldPort=new ForgeClutchWorldPort(mc);
         // R251 samples only an actual previous native candidate, never a
         // synthesized cursor target. PlayerTick.END is observational timing.
+        ClutchFaceSampler.Receipt cursor=null;
         if(R251_CLUTCH_FACE_READONLY && hasPrior) {
             if(r251Sampler==null)throw new IllegalStateException(
                 "Missing R251 face owner");
-            final ClutchFaceSampler.Receipt cursor=r251Sampler.capture(
+            cursor=r251Sampler.capture(
                 worldPort,new ClutchFaceSampler.Request(
                     r237Generation,r237Tick,
                     new ClutchFaceSampler.Pos(r245Previous.x,r245Previous.y,
@@ -1135,6 +1150,18 @@ public final class ForgePreview {
             ++r251PriorSamples;
             if(cursor.hitBlock)++r251HitBlocks;
             if(cursor.matchesPlannedFace())++r251Matches;
+        }
+        if(R252_CLUTCH_CADENCE_READONLY) {
+            if(r252Cadence==null)throw new IllegalStateException(
+                "R252 cadence owner unavailable");
+            final ClutchCadenceObserver.Step proposal=r252Cadence.advance(
+                worldPort,r237Generation,r237Tick,10.0f,
+                mc.inGameHasFocus && mc.currentScreen==null,
+                hasPrior?new ClutchFaceSampler.Pos(
+                    r245Previous.x,r245Previous.y,r245Previous.z):null,
+                r251PriorCentered,cursor);
+            if(proposal.timerDue)++r252Due;
+            if(proposal.wouldPress)++r252PressProposals;
         }
         // Keep the real Minecraft world/raycast adapter unchanged and
         // count only source-authorized rayTrace calls for diagnostics.
@@ -1205,6 +1232,17 @@ public final class ForgePreview {
                     r237Samples,r239NativePlans,r241AimReceipts,
                     r245PriorRequests,r245Raycasts,r245Retained) :
                 "R237_REAL_WORLD_CLUTCH_167_READONLY_PASS";
+            if(R252_CLUTCH_CADENCE_READONLY) {
+                if(r252PressProposals>r252Due || r252Due>r237Samples)
+                    throw new IllegalStateException("R252 invalid proposal counts");
+                System.out.println("[SlinkyWinkyPreview] " +
+                    (r252PressProposals>0?
+                        "R252_CLUTCH_WOULD_PRESS_READONLY_NOT_PLACEMENT" :
+                        "R252_CLUTCH_CADENCE_INCONCLUSIVE_NO_PRESS")+
+                    " ticks="+r237Samples+" timerDue="+r252Due+
+                    " pressProposals="+r252PressProposals+
+                    " cpsFixture=10 actions=0 source=Forge_PlayerTick_END");
+            }
             if(R251_CLUTCH_FACE_READONLY)
                 System.out.println("[SlinkyWinkyPreview] " +
                     ClutchFaceReceiptStatus.classify(r237Samples,

@@ -35,10 +35,13 @@ public final class ClutchFaceSampler implements AutoCloseable {
     public static final class Receipt {
         public final long generation,tick;
         public final boolean hitBlock,matchedTarget,matchedFace;
-        public final Pos observed,adjacent;
+        public final Pos observed,adjacent,target;
+        public final boolean centered;
         public final int observedFace;
         private Receipt(Request r,Hit hit,boolean target,boolean face,Pos next){
             generation=r.generation;tick=r.tick;hitBlock=hit!=null;
+            target=new Pos(r.target.x,r.target.y,r.target.z);
+            centered=r.centered;
             matchedTarget=target;matchedFace=face;
             observed=hit==null?null:new Pos(hit.block.x,hit.block.y,hit.block.z);
             observedFace=hit==null?-1:hit.face;
