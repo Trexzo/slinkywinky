@@ -18,7 +18,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `backtrack` | Not implemented | Identify state, host events and reference traces |
 | combat | `criticals` | Not implemented | Identify state, host events and reference traces |
 | combat | `hit_select` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
-| combat | `hitboxes` | Offline C++ event-8 expansion proposal (no entity writes) | Authenticate native callback priority, slider bounds and host ray/box result |
+| combat | `hitboxes` | Offline C++ controller + event-8 bridge (no entity writes) | Authenticate native event ordering and Minecraft collision query |
 | combat | `knockback_delay` | Not implemented | Identify state, host events and reference traces |
 | combat | `knockback_displace` | Not implemented | Identify state, host events and reference traces |
 | combat | `lag_range` | Not implemented | Identify state, host events and reference traces |

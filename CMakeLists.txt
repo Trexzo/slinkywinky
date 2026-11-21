@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R265: Hitboxes, Reach and Ghost Hand share source event8 offline.
+  add_executable(slinkywinky_hitboxes_event_bridge_tests
+    reference_compat/tests/test_hitboxes_event_bridge.cpp)
+  target_link_libraries(slinkywinky_hitboxes_event_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_hitboxes_event_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_hitboxes_event_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r265_hitboxes_reach_ghost_event8
+    COMMAND slinkywinky_hitboxes_event_bridge_tests)
   # R264: exact float-to-double Hitboxes event8 expansion proposal.
   add_executable(slinkywinky_hitboxes_tests
     reference_compat/tests/test_hitboxes_controller.cpp)
