@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R266: source-derived Teams UTF-16 color parsing, offline only.
+  add_executable(slinkywinky_teams_tests
+    reference_compat/tests/test_teams_controller.cpp)
+  target_include_directories(slinkywinky_teams_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_teams_tests PRIVATE cxx_std_17)
+  add_test(NAME r266_teams_color_source_parity
+    COMMAND slinkywinky_teams_tests)
   # R265: Hitboxes, Reach and Ghost Hand share source event8 offline.
   add_executable(slinkywinky_hitboxes_event_bridge_tests
     reference_compat/tests/test_hitboxes_event_bridge.cpp)

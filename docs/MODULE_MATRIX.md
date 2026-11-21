@@ -54,7 +54,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | utility | `no_use_delay` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `ping_fix` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `refill` | Not implemented | Identify state, host events and reference traces |
-| utility | `teams` | Not implemented | Identify state, host events and reference traces |
+| utility | `teams` | Offline C++ UTF-16 color and relationship-bit decision model | Verify real player-list snapshots and source event-0 dispatch before modifying relationships |
 | utility | `timer` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | visual | `anti_debuff` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | visual | `block_esp` | Not implemented | Identify state, host events and reference traces |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R264 verifies 28 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R266 verifies 29 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
