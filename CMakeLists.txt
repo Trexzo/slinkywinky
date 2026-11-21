@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R254: Free Look source event13 bridge, tested offline on Win/Linux.
+  add_executable(slinkywinky_free_look_bridge_tests
+    reference_compat/tests/test_free_look_event_bridge.cpp)
+  target_link_libraries(slinkywinky_free_look_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_free_look_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_free_look_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r254_offline_free_look_event13_bridge
+    COMMAND slinkywinky_free_look_bridge_tests)
   # R253: reconstructed Free Look camera lifecycle (offline-only proposals).
   add_executable(slinkywinky_free_look_tests
     reference_compat/tests/test_free_look_controller.cpp)

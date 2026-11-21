@@ -21,6 +21,7 @@
 #include "slinkywinky/bridge_assist_controller.hpp"
 #include "slinkywinky/auto_tool_controller.hpp"
 #include "slinkywinky/clutch_controller.hpp"
+#include "slinkywinky/free_look_controller.hpp"
 #include "slinkywinky/block_in_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
@@ -178,6 +179,11 @@ struct ClutchRotationPayload {
     ClutchRotationDecision decision{};
     unsigned executions=0;
 };
+struct FreeLookRotationPayload {
+    FreeLookFrame input{};
+    FreeLookProposal decision{};
+    unsigned executions=0;
+};
 struct ClutchLatePayload {
     ClutchLateInput input{};
     ClutchLateDecision decision{};
@@ -290,6 +296,7 @@ struct ExecutionFrame {
     std::optional<AutoToolShutdownPayload> auto_tool_shutdown{};
     std::optional<ClutchClickPayload> clutch_click{};
     std::optional<ClutchRotationPayload> clutch_rotation{};
+    std::optional<FreeLookRotationPayload> free_look_rotation{};
     std::optional<ClutchLatePayload> clutch_late{};
     std::optional<BlockInEmptyPayload> block_in_empty{};
     std::optional<BlockInTogglePayload> block_in_toggle{};
@@ -994,6 +1001,46 @@ public:
         return false;
     }
 
+    // R254: reconstructed Java Free Look listens on event13; native
+    // priority is unknown, so preserve caller descriptor's priority.
+    bool bind_free_look(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Free Look" ||
+           definitions_[id].category!=2 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kClutchRotationFlagEvent ||
+           callbacks_[id][kClutchRotationFlagEvent])return false;
+        return bind(id,kClutchRotationFlagEvent,
+            [this](const Delivery&,ExecutionFrame& frame){
+                if(!frame.free_look_rotation)return;
+                auto& p=*frame.free_look_rotation;
+                ++p.executions;
+                p.decision=free_look_.on_event13(p.input);
+            });
+    }
+    bool bind_free_look_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Free Look")
+                return bind_free_look(id);
+        return false;
+    }
+    // Never write a live camera; these explicit lifecycle receipts are
+    // value-only and require an enabled, correctly bound module.
+    FreeLookProposal preview_free_look_enable(const FreeLookFrame& in) noexcept {
+        if(stopped_ || active_frame_ || !free_look_bound_enabled())return {};
+        return free_look_.on_enable(in);
+    }
+    FreeLookProposal preview_free_look_disable(std::uint64_t world,
+                                                std::uint64_t player) noexcept {
+        if(stopped_ || active_frame_ || !free_look_bound_enabled())return {};
+        return free_look_.on_disable(world,player);
+    }
+    FreeLookProposal preview_free_look_world_unload(std::uint64_t world,
+                                                     std::uint64_t player) noexcept {
+        if(stopped_ || active_frame_ || !free_look_bound_enabled())return {};
+        return free_look_.on_world_unload(world,player);
+    }
+
     // R230: the pinned source Block In descriptor has exactly five hooks:
     // event 0 empty (priority0); event5 toggle (0); event13 rotation
     // priority -2000; event15 keys priority -1000; event16 tick
@@ -1344,6 +1391,8 @@ public:
         if(frame.clutch_click && frame.event!=kSafeWalkEvent)return false;
         if(frame.clutch_rotation &&
            frame.event!=kClutchRotationFlagEvent)return false;
+        if(frame.free_look_rotation &&
+           frame.event!=kClutchRotationFlagEvent)return false;
         if(frame.clutch_late && frame.event!=kAntiDebuffEvent)return false;
         if(frame.block_in_empty && frame.event!=kSafeWalkEvent)return false;
         if(frame.block_in_toggle && frame.event!=kTimerToggleEvent)return false;
@@ -1398,6 +1447,7 @@ public:
             static_cast<unsigned>(frame.auto_tool_shutdown.has_value()) +
             static_cast<unsigned>(frame.clutch_click.has_value()) +
             static_cast<unsigned>(frame.clutch_rotation.has_value()) +
+            static_cast<unsigned>(frame.free_look_rotation.has_value()) +
             static_cast<unsigned>(frame.clutch_late.has_value()) +
             static_cast<unsigned>(frame.block_in_empty.has_value()) +
             static_cast<unsigned>(frame.block_in_toggle.has_value()) +
@@ -1441,9 +1491,14 @@ public:
             typed_count>=2 && typed_count<=3 &&
             frame.event==kKeepSprintPostEvent &&
             attack_post_count==typed_count;
+        const unsigned rotation_count=
+            static_cast<unsigned>(frame.clutch_rotation.has_value()) +
+            static_cast<unsigned>(frame.block_in_rotation.has_value()) +
+            static_cast<unsigned>(frame.free_look_rotation.has_value());
         const bool combined_rotation =
-            typed_count==2 && frame.event==kClutchRotationFlagEvent &&
-            frame.clutch_rotation && frame.block_in_rotation;
+            typed_count>=2 && typed_count<=3 &&
+            frame.event==kClutchRotationFlagEvent &&
+            rotation_count==typed_count;
         // Event17 can contain all three update policies together;
         // event21 contains No Slow and Sprint's movement proposals.
         const bool combined_player_update =
@@ -1664,6 +1719,10 @@ public:
             frame.clutch_rotation->decision={};
             frame.clutch_rotation->executions=0;
         }
+        if(frame.free_look_rotation) {
+            frame.free_look_rotation->decision={};
+            frame.free_look_rotation->executions=0;
+        }
         if(frame.clutch_late) {
             frame.clutch_late->decision={};
             frame.clutch_late->executions=0;
@@ -1737,11 +1796,13 @@ public:
         const BridgeAssistController previous_bridge=bridge_assist_;
         const ClutchController previous_clutch=clutch_;
         const BlockInController previous_block=block_in_;
+        const FreeLookController previous_free_look=free_look_;
         const auto rollback=[&]() noexcept {
             shared_source_rng_=previous_rng;
             bridge_assist_=previous_bridge;
             clutch_=previous_clutch;
             block_in_=previous_block;
+            free_look_=previous_free_look;
         };
         try {
             const bool delivered=replay_.dispatch(frame.event,
@@ -1759,7 +1820,9 @@ public:
     }
 
     bool apply(bool world, bool player) {
-        return !stopped_ && !active_frame_ && replay_.apply(world, player);
+        if(stopped_ || active_frame_ || !replay_.apply(world,player))return false;
+        if(!free_look_bound_enabled())free_look_.reset();
+        return true;
     }
 
     void reset_reach_world_state() noexcept { controller_.reset(); }
@@ -1776,6 +1839,7 @@ public:
     void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
     void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
     void reset_clutch_world_state() noexcept { clutch_.reset(); }
+    void reset_free_look_world_state() noexcept { free_look_.reset(); }
     void reset_block_in_world_state() noexcept { block_in_.reset(); }
     // R232: offline owner passes a reproducible seed; never infer the
     // original client's entropy-backed xoshiro128+ runtime state.
@@ -1849,6 +1913,7 @@ public:
         auto_tool_.reset();
         clutch_.reset();
         block_in_.reset();
+        free_look_.reset();
         shared_source_rng_enabled_=false;
         shared_source_rng_=SourceWalkRng{};
         callbacks_.clear();
@@ -1862,6 +1927,14 @@ public:
     int reach_cooldown_ticks() const noexcept { return controller_.cooldown_ticks(); }
 
 private:
+    bool free_look_bound_enabled() const noexcept {
+        for(std::size_t i=0;i<definitions_.size();++i)
+            if(definitions_[i].name=="Free Look" &&
+               definitions_[i].category==2 &&
+               callbacks_[i][kClutchRotationFlagEvent] &&
+               replay_.enabled(i))return true;
+        return false;
+    }
     EventReplay replay_;
     slinkywinky::ReachController controller_;
     NoJumpDelayController no_jump_delay_;
@@ -1882,6 +1955,7 @@ private:
     AutoToolController auto_tool_;
     ClutchController clutch_;
     BlockInController block_in_;
+    FreeLookController free_look_;
     SourceWalkRng shared_source_rng_{};
     bool shared_source_rng_enabled_=false;
     TimerController timer_;

@@ -60,7 +60,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | visual | `block_esp` | Not implemented | Identify state, host events and reference traces |
 | visual | `chams` | Not implemented | Identify state, host events and reference traces |
 | visual | `chest_esp` | Not implemented | Identify state, host events and reference traces |
-| visual | `free_look` | Offline C++ controller (no verified live integration) | Verify event-13 camera input/restore in an isolated game; no actual camera writes yet |
+| visual | `free_look` | Offline C++ controller + event-13 bridge (no game camera writes) | Verify event priority, settings and in-game camera restoration |
 | visual | `gui` | Not implemented | Identify state, host events and reference traces |
 | visual | `indicators` | Not implemented | Identify state, host events and reference traces |
 | visual | `item_esp` | Not implemented | Identify state, host events and reference traces |
