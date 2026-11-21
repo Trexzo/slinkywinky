@@ -59,8 +59,9 @@ public:
                 if(i+1<text.size())++i;
             } else {
                 const unsigned upper=static_cast<unsigned>(c)&0xffdfu;
-                if((upper-65u&65535u)<26u || c==u'_' ||
-                   (static_cast<unsigned>(c)-static_cast<unsigned>(u'0')&65535u)<10u)
+                if(((upper-65u)&65535u)<26u || c==u'_' ||
+                   ((static_cast<unsigned>(c)-
+                     static_cast<unsigned>(u'0'))&65535u)<10u)
                     return true;
             }
         }
