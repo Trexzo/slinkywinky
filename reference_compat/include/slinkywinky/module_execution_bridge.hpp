@@ -29,6 +29,7 @@
 #include "slinkywinky/hitboxes_controller.hpp"
 #include "slinkywinky/teams_controller.hpp"
 #include "slinkywinky/anti_bot_controller.hpp"
+#include "slinkywinky/piercing_controller.hpp"
 #include "slinkywinky/block_in_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
@@ -71,6 +72,10 @@ struct GhostHandQueryPayload {
 struct HitboxesQueryPayload {
     HitboxesObservation input{};
     HitboxesProposal decision{};
+    unsigned executions=0;
+};
+struct PiercingQueryPayload {
+    bool query_override=false;
     unsigned executions=0;
 };
 struct TeamsEvent0Payload {
@@ -330,6 +335,7 @@ struct ExecutionFrame {
     std::optional<ReachQueryPayload> reach{};
     std::optional<GhostHandQueryPayload> ghost_hand{};
     std::optional<HitboxesQueryPayload> hitboxes{};
+    std::optional<PiercingQueryPayload> piercing{};
     std::optional<TeamsEvent0Payload> teams_event0{};
     std::optional<AntiBotEvent0Payload> anti_bot_event0{};
     std::optional<JumpDelayTickPayload> jump_delay{};
@@ -500,6 +506,42 @@ public:
             if(definitions_[id].name=="Hitboxes")
                 return bind_hitboxes(id);
         return false;
+    }
+
+    // R273: Piercing Java onEvent8 only sets queryOverride; actual
+    // ray-candidate ranking is a SEPARATE source call and is never
+    // performed implicitly by this event subscription.
+    bool bind_piercing(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Piercing" ||
+           definitions_[id].category!=0 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kReachQueryEvent ||
+           callbacks_[id][kReachQueryEvent])return false;
+        return bind(id,kReachQueryEvent,
+            [](const Delivery&,ExecutionFrame& frame){
+                if(!frame.piercing)return;
+                auto& p=*frame.piercing;
+                ++p.executions;
+                p.query_override=PiercingController::on_event8(true);
+            });
+    }
+    bool bind_piercing_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Piercing")
+                return bind_piercing(id);
+        return false;
+    }
+    PiercingDecision preview_piercing_rank(
+        const PiercingSettings& settings,bool is_weapon,bool inside,
+        const PiercingEntity& first,const PiercingEntity& second) const noexcept {
+        if(stopped_ || active_frame_ || !piercing_bound_enabled())return {};
+        return PiercingController::rank(settings,is_weapon,inside,first,second);
+    }
+    bool preview_pierce_blocks(const PiercingSettings& settings,
+                               bool is_weapon) const noexcept {
+        return !stopped_ && !active_frame_ && piercing_bound_enabled() &&
+               PiercingController::pierce_blocks(settings,is_weapon);
     }
 
     // R267: Teams uses event0/category UTILITY in the recovered Java.
@@ -1620,6 +1662,7 @@ public:
         if (frame.reach && frame.event != kReachQueryEvent) return false;
         if (frame.ghost_hand && frame.event != kReachQueryEvent) return false;
         if (frame.hitboxes && frame.event != kReachQueryEvent) return false;
+        if (frame.piercing && frame.event != kReachQueryEvent) return false;
         if (frame.teams_event0 && frame.event != kSafeWalkEvent) return false;
         if (frame.anti_bot_event0 && frame.event != kSafeWalkEvent) return false;
         if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
@@ -1702,6 +1745,7 @@ public:
             static_cast<unsigned>(frame.reach.has_value()) +
             static_cast<unsigned>(frame.ghost_hand.has_value()) +
             static_cast<unsigned>(frame.hitboxes.has_value()) +
+            static_cast<unsigned>(frame.piercing.has_value()) +
             static_cast<unsigned>(frame.teams_event0.has_value()) +
             static_cast<unsigned>(frame.anti_bot_event0.has_value()) +
             static_cast<unsigned>(frame.jump_delay.has_value()) +
@@ -1784,9 +1828,10 @@ public:
         const unsigned query_count =
             static_cast<unsigned>(frame.reach.has_value()) +
             static_cast<unsigned>(frame.ghost_hand.has_value()) +
-            static_cast<unsigned>(frame.hitboxes.has_value());
+            static_cast<unsigned>(frame.hitboxes.has_value()) +
+            static_cast<unsigned>(frame.piercing.has_value());
         const bool combined_source_query =
-            typed_count>=2 && typed_count<=3 &&
+            typed_count>=2 && typed_count<=4 &&
             frame.event==kReachQueryEvent && query_count==typed_count;
         const unsigned rotation_count=
             static_cast<unsigned>(frame.clutch_rotation.has_value()) +
@@ -1964,6 +2009,10 @@ public:
         if (frame.hitboxes) {
             frame.hitboxes->decision={};
             frame.hitboxes->executions=0;
+        }
+        if (frame.piercing) {
+            frame.piercing->query_override=false;
+            frame.piercing->executions=0;
         }
         if (frame.teams_event0) {
             frame.teams_event0->decisions.clear();
@@ -2321,6 +2370,14 @@ public:
     int reach_cooldown_ticks() const noexcept { return controller_.cooldown_ticks(); }
 
 private:
+    bool piercing_bound_enabled() const noexcept {
+        for(std::size_t i=0;i<definitions_.size();++i)
+            if(definitions_[i].name=="Piercing" &&
+               definitions_[i].category==0 &&
+               callbacks_[i][kReachQueryEvent] &&
+               replay_.enabled(i))return true;
+        return false;
+    }
     bool anti_bot_bound_enabled() const noexcept {
         for(std::size_t i=0;i<definitions_.size();++i)
             if(definitions_[i].name=="Anti Bot" &&

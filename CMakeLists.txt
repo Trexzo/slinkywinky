@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R273: Piercing source query override with separate ranking preview.
+  add_executable(slinkywinky_piercing_event_bridge_tests
+    reference_compat/tests/test_piercing_event_bridge.cpp)
+  target_link_libraries(slinkywinky_piercing_event_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_piercing_event_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_piercing_event_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r273_piercing_event8_separate_rank_preview
+    COMMAND slinkywinky_piercing_event_bridge_tests)
   # R272: recovered Piercing decision policy (no game ray writes).
   add_executable(slinkywinky_piercing_source_tests
     reference_compat/tests/test_piercing_controller.cpp)

@@ -22,7 +22,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `knockback_delay` | Not implemented | Identify state, host events and reference traces |
 | combat | `knockback_displace` | Not implemented | Identify state, host events and reference traces |
 | combat | `lag_range` | Not implemented | Identify state, host events and reference traces |
-| combat | `piercing` | Offline C++ relationship/weapon-aware event-8 ranking model | Verify native sort settings and entity-ray ordering in isolated Minecraft |
+| combat | `piercing` | Offline C++ event-8 bridge + separate rank/blocks proposals | Verify original native event priority, real entity ray and cached weapon host state |
 | combat | `reach` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `sprint_reset` | Not implemented | Identify state, host events and reference traces |
 | combat | `timer_range` | Not implemented | Identify state, host events and reference traces |
