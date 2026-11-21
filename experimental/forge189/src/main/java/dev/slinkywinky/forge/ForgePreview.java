@@ -11,6 +11,7 @@ import dev.slinkywinky.ClutchRayReceiptStatus;
 import dev.slinkywinky.ClutchFaceSampler;
 import dev.slinkywinky.ClutchFaceReceiptStatus;
 import dev.slinkywinky.ClutchCadenceObserver;
+import dev.slinkywinky.RelationshipRosterSampler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -90,6 +91,8 @@ public final class ForgePreview {
     private int r251PriorSamples,r251HitBlocks,r251Matches;
     private boolean r251PriorCentered;
     private ClutchCadenceObserver r252Cadence;
+    private RelationshipRosterSampler r278RosterSampler;
+    private int r278RosterSamples;
     private int r252Due,r252PressProposals;
     private int r224WorldSamples,r224MotionSamples,r224Proposals;
     private double r224StartX,r224StartZ,r224LastX,r224LastZ;
@@ -123,6 +126,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r251ClutchCursorFaceReadOnlyProbe");
     private static final boolean R252_CLUTCH_CADENCE_READONLY =
         Boolean.getBoolean("slinkywinky.r252ClutchCadenceReadOnlyProbe");
+    private static final boolean R278_ROSTER_READONLY =
+        Boolean.getBoolean("slinkywinky.r278RosterReadOnlyProbe");
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
     private static final boolean R217_ITEM_CATEGORIES_TEST =
@@ -255,6 +260,9 @@ public final class ForgePreview {
         if(R252_CLUTCH_CADENCE_READONLY && !R251_CLUTCH_FACE_READONLY)
             throw new IllegalStateException(
                 "R252 source cadence requires R251 isolated face observations");
+        if(R278_ROSTER_READONLY && !R237_CLUTCH_READONLY)
+            throw new IllegalStateException(
+                "R278 roster requires R237 isolated TEMP offline admission");
         if(R237_CLUTCH_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
@@ -295,6 +303,9 @@ public final class ForgePreview {
         if(r237Sampler!=null) {r237Sampler.close();r237Sampler=null;}
         if(r251Sampler!=null) {r251Sampler.close();r251Sampler=null;}
         if(r252Cadence!=null) {r252Cadence.close();r252Cadence=null;}
+        if(r278RosterSampler!=null) {
+            r278RosterSampler.close();r278RosterSampler=null;
+        }
         r237World=r237Player=null;
         r245Previous=null;r245PreviousAim=null;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
@@ -344,6 +355,8 @@ public final class ForgePreview {
         try {
             host=new GameHost(new NativeEngine(new int[]{1,2,3,4}),readonlyActions);
             if(SPRINT_OBSERVATION) sprintProbe=new SprintObservationProbe();
+            if(R278_ROSTER_READONLY)
+                r278RosterSampler=new RelationshipRosterSampler();
             if(R212_ACTION_TEST) {
                 if(sprintProbe==null)
                     throw new IllegalStateException("R212 native module observer unavailable");
@@ -363,6 +376,7 @@ public final class ForgePreview {
             r245Raycasts=r245Retained=r245PriorRequests=0;
             r251PriorSamples=r251HitBlocks=r251Matches=0;
             r252Due=r252PressProposals=0;
+            r278RosterSamples=0;
             r251PriorCentered=false;
             if(r251Sampler!=null){r251Sampler.close();r251Sampler=null;}
             r245Previous=null;r245PreviousAim=null;
@@ -1022,6 +1036,8 @@ public final class ForgePreview {
                     sampleR224ReadOnlyStrafe(mc,frame);
                 if(R237_CLUTCH_READONLY)
                     sampleR237ReadOnlyClutch(mc,frame);
+                if(R278_ROSTER_READONLY)
+                    sampleR278ReadOnlyRoster(mc);
             }
         } catch (RuntimeException | LinkageError problem) {
             try {stop();} catch (RuntimeException ignored) { }
@@ -1030,7 +1046,31 @@ public final class ForgePreview {
                 System.err.println("[SlinkyWinkyPreview] R209_PLAYER_TICK_FAIL "+problem);
             if(R224_LOCAL_STRAFE_TEST)
                 System.err.println("[SlinkyWinkyPreview] R224_READONLY_STRAFE_FAIL "+problem);
+            if(R278_ROSTER_READONLY)
+                System.err.println("[SlinkyWinkyPreview] R278_ROSTER_READONLY_FAIL "+problem);
         }
+    }
+
+    // R278 real local singleplayer roster receipt. No relationship writes.
+    private void sampleR278ReadOnlyRoster(Minecraft mc) {
+        if(r278RosterSampler==null || mc.theWorld==null ||
+           mc.thePlayer==null || !mc.theWorld.isRemote ||
+           !mc.isSingleplayer())
+            throw new IllegalStateException("R278 roster not local/ready");
+        final RelationshipRosterSampler.Receipt receipt=
+            r278RosterSampler.observe(new ForgeRelationshipRosterPort(mc),
+                                      mc.thePlayer.ticksExisted);
+        if(receipt.worldToken<=0 || receipt.ownerToken<=0 ||
+           receipt.worldToken==receipt.ownerToken)
+            throw new IllegalStateException("R278 invalid owner receipt");
+        ++r278RosterSamples;
+        if(r278RosterSamples==20)
+            System.out.println("[SlinkyWinkyPreview] "+
+                "R278_FORGE_ROSTER_READONLY_RECEIPT "+
+                "samples="+r278RosterSamples+
+                " remoteCount="+receipt.remote.size()+
+                " generation="+receipt.generation+
+                " writes=0 source=Forge_PlayerTick_END");
     }
 
     // R213's acceptance manipulates only the freshly created TEMP
