@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R256: Ghost Hand source event8 + Reach shared query, offline only.
+  add_executable(slinkywinky_ghost_hand_bridge_tests
+    reference_compat/tests/test_ghost_hand_event_bridge.cpp)
+  target_link_libraries(slinkywinky_ghost_hand_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_ghost_hand_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_ghost_hand_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r256_offline_ghost_hand_shared_reach_event8
+    COMMAND slinkywinky_ghost_hand_bridge_tests)
   # R255: reconstructed Ghost Hand interaction predicate (offline-only).
   add_executable(slinkywinky_ghost_hand_tests
     reference_compat/tests/test_ghost_hand_controller.cpp)

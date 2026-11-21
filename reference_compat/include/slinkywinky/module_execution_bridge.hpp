@@ -22,6 +22,7 @@
 #include "slinkywinky/auto_tool_controller.hpp"
 #include "slinkywinky/clutch_controller.hpp"
 #include "slinkywinky/free_look_controller.hpp"
+#include "slinkywinky/ghost_hand_controller.hpp"
 #include "slinkywinky/block_in_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
@@ -53,6 +54,13 @@ struct ReachQueryPayload {
     slinkywinky::ReachSettings settings{};
     std::optional<double> proposed_distance{};
     unsigned executions = 0;
+};
+struct GhostHandQueryPayload {
+    GhostHandObservation input{};
+    GhostHandSettings settings{};
+    GhostHandDecision decision{};
+    bool query_override=false;
+    unsigned executions=0;
 };
 
 struct JumpDelayTickPayload {
@@ -273,6 +281,7 @@ struct ExecutionFrame {
     std::size_t notification_target=0;
     bool notification_new_state=false;
     std::optional<ReachQueryPayload> reach{};
+    std::optional<GhostHandQueryPayload> ghost_hand{};
     std::optional<JumpDelayTickPayload> jump_delay{};
     std::optional<NullMoveTickPayload> null_move{};
     std::optional<InstantStopTickPayload> instant_stop{};
@@ -384,6 +393,32 @@ public:
                         reach.proposed_distance = controller_.evaluate(
                             reach.input, reach.settings);
                     });
+    }
+
+    // R256: reconstructed Ghost Hand event8 query override. Native
+    // callback priority is unverified; descriptor order is a fixture.
+    bool bind_ghost_hand(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Ghost Hand" ||
+           definitions_[id].category!=0 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kReachQueryEvent ||
+           callbacks_[id][kReachQueryEvent])return false;
+        return bind(id,kReachQueryEvent,
+            [](const Delivery&,ExecutionFrame& frame){
+                if(!frame.ghost_hand)return;
+                auto& q=*frame.ghost_hand;
+                ++q.executions;
+                q.query_override=GhostHandController::on_event8(true);
+                q.decision=GhostHandController::can_interact_through(
+                    q.settings,q.input);
+            });
+    }
+    bool bind_ghost_hand_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Ghost Hand")
+                return bind_ghost_hand(id);
+        return false;
     }
 
     // Second independent offline decision implementation. Native candidate:
@@ -1350,6 +1385,7 @@ public:
         // Fail closed: only the recognized typed payload for event 8 is
         // allowed; other event slots may be observed with an empty payload.
         if (frame.reach && frame.event != kReachQueryEvent) return false;
+        if (frame.ghost_hand && frame.event != kReachQueryEvent) return false;
         if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
         if (frame.null_move && frame.event != kMovementTickEvent) return false;
         if (frame.instant_stop && frame.event != kMovementTickEvent) return false;
@@ -1424,6 +1460,7 @@ public:
         // or fabricated game-state inputs on the same movement tick.
         const unsigned typed_count =
             static_cast<unsigned>(frame.reach.has_value()) +
+            static_cast<unsigned>(frame.ghost_hand.has_value()) +
             static_cast<unsigned>(frame.jump_delay.has_value()) +
             static_cast<unsigned>(frame.null_move.has_value()) +
             static_cast<unsigned>(frame.instant_stop.has_value()) +
@@ -1491,6 +1528,9 @@ public:
             typed_count>=2 && typed_count<=3 &&
             frame.event==kKeepSprintPostEvent &&
             attack_post_count==typed_count;
+        const bool combined_reach_ghost =
+            typed_count==2 && frame.event==kReachQueryEvent &&
+            frame.reach && frame.ghost_hand;
         const unsigned rotation_count=
             static_cast<unsigned>(frame.clutch_rotation.has_value()) +
             static_cast<unsigned>(frame.block_in_rotation.has_value()) +
@@ -1558,7 +1598,7 @@ public:
             !combined_movement_sprint && !combined_steering_accel &&
             !combined_edge_place && !combined_outgoing_packet &&
             !combined_late_tick && !combined_toggle &&
-            !combined_rotation)
+            !combined_rotation && !combined_reach_ghost)
             return false;
         if (combined_edge_place) {
             const bool state=frame.safe_walk ?
@@ -1626,6 +1666,11 @@ public:
         if (frame.reach) {
             frame.reach->proposed_distance.reset();
             frame.reach->executions = 0;
+        }
+        if (frame.ghost_hand) {
+            frame.ghost_hand->decision={};
+            frame.ghost_hand->query_override=false;
+            frame.ghost_hand->executions=0;
         }
         if (frame.jump_delay) {
             frame.jump_delay->proposed_jump_ticks.reset();

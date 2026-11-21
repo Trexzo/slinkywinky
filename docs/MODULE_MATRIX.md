@@ -10,7 +10,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | block | `clutch` | Offline C++ controller + opt-in Forge read-only observations | Validate host event timing, settings and world-owner lifecycle |
 | block | `fast_mine` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | block | `fast_place` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
-| block | `ghost_hand` | Offline C++ policy model (no verified live integration) | Recover exact event-8 dispatch and Minecraft target context; validate settings |
+| combat | `ghost_hand` | Offline C++ policy + event-8 bridge (no game interactions) | Authenticate original callback priority; test real Minecraft entity/ray context |
 | combat | `aim_assist` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
