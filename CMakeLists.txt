@@ -32,6 +32,14 @@ if(BUILD_TESTING)
       -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r276_roster_readonly.cmake)
     set_tests_properties(r276_java8_readonly_roster_owner_receipt PROPERTIES TIMEOUT 35)
+    # R279: real R277 Port compiles against isolated Java 8 API stubs.
+    add_test(NAME r279_java8_forge_roster_stub_source COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r279_forge_roster_stub.cmake)
+    set_tests_properties(r279_java8_forge_roster_stub_source PROPERTIES TIMEOUT 35)
   endif()
   # R273: Piercing source query override with separate ranking preview.
   add_executable(slinkywinky_piercing_event_bridge_tests
