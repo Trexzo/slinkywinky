@@ -1,8 +1,11 @@
 # Experimental Minecraft Forge 1.8.9 read-only preview (R10)
 
-**Not yet built or launched against actual Minecraft/Forge.** This is an optional
-integration candidate, deliberately excluded from primary R1-R9 CI. It is not a
-playable Slinky replacement, and no proprietary Minecraft/game jar is bundled.
+**Built by the separate GitHub ForgeGradle 2.1 / JDK 8 workflow, but not
+yet launched or validated in a real Minecraft 1.8.9 game session.**
+The reobfuscated preview JAR is an optional, read-only integration candidate,
+not a playable Slinky replacement; no proprietary game jar is bundled.
+R280 checks that ForgePreview, ForgeRelationshipRosterPort and
+RelationshipRosterSampler classes are actually packaged.
 
 - Intended JVM: Java 8, Forge 1.8.9 (11.15.1.2318).
 - ForgeGradle 2.1 / Gradle 2.x required; build network and dependencies are not
@@ -13,7 +16,7 @@ playable Slinky replacement, and no proprietary Minecraft/game jar is bundled.
 - Missing native library or invalid observations disables preview rather than
   enabling incomplete behavior.
 
-**Acceptance pending:** clean Java 8 Forge compilation, actual 1.8.9 launch,
+**Acceptance pending:** actual 1.8.9 game launch,
 Minecraft client-thread callbacks, world swaps, disconnect/shutdown, OptiFine
 coexistence, HUD rendering and safe disable.
 

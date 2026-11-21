@@ -18,7 +18,9 @@ UUIDs, locations or raw game objects. A stale or invalid receipt
 stops the preview; no relationship flags, entities, inventory,
 rotation, input or packets are mutated.
 
-This Forge preview source is NOT part of the default GitHub CI.
-R276's separately tested fake-port owner guards do not establish
-that Forge 1.8.9 compiles or the game fires this callback.
-Real isolated Forge build and runtime receipt are still REQUIRED.
+The separate GitHub ForgeGradle 2.1 / JDK 8 workflow successfully
+built and reobfuscated the R278 Forge 1.8.9 preview JAR, and R280
+adds explicit packaging checks for the new roster classes.
+This does NOT establish that a real Minecraft game fired the
+PlayerTickEvent callback or emitted a correct live roster receipt.
+An isolated runtime launch and observation are still REQUIRED.
