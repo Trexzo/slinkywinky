@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R253: reconstructed Free Look camera lifecycle (offline-only proposals).
+  add_executable(slinkywinky_free_look_tests
+    reference_compat/tests/test_free_look_controller.cpp)
+  target_include_directories(slinkywinky_free_look_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_free_look_tests PRIVATE cxx_std_17)
+  add_test(NAME r253_offline_source_free_look_lifecycle
+    COMMAND slinkywinky_free_look_tests)
   # R247 recovered Clutch click schedule, offline-only proposal and negative controls.
   add_executable(slinkywinky_clutch_click_gate_tests
     reference_compat/tests/test_clutch_click_gate.cpp)
