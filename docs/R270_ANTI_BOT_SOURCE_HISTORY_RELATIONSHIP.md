@@ -9,8 +9,10 @@ but original native event priority and defaults remain uncertain.
 
 The first-party C++ controller models the Java's exact ordered gates:
 travelledSquared accumulates (prevX-x)^2+(prevZ-z)^2 each event,
-always_stationary when <1, invalid UUID version when (low-msb &
-0xf000)!=0x2000 with the mode1/mode2 movement distinction,
+always_stationary when <1, then the original's **counterintuitive**
+UUID guard: a version nibble ==0x2000 is rejected by mode1 until
+travelledSquared>=1 and always rejected by mode2, whereas a different
+nibble proceeds past this particular gate,
 sleeping, always invisible without ever-seen armor, fractional
 minimum ticksExisted, and the source's permissive validName scanner
 (skips section-sign formatting and accepts *any* ASCII letter,

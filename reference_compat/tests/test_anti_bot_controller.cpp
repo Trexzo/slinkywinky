@@ -36,15 +36,26 @@ int main() {
     p.x=0.9;p.previous_x=0;
     r=run(c,cfg,p);
     CHECK(!r.proposals[0].rejected && r.proposals[0].travelled_squared>1.0);
+    // Exact reconstructed Java truth table: the nibble == 0x2000
+    // causes rejection in modes 1/2 (unless movement permits mode1).
+    // A different nibble is NOT rejected by this particular gate.
+    for(int mode=0;mode<=2;++mode) {
+        for(int version=0;version<2;++version) {
+            for(int moved=0;moved<2;++moved) {
+                c.reset();
+                cfg={};cfg.invalid_uuid_mode=mode;
+                p=player(version==0?0x2000u:0x5000u);
+                p.x=moved==0?0.0:2.0;
+                const bool expected_reject=(mode!=0 && version==0 &&
+                                             (mode==2 || moved==0));
+                const auto result=run(c,cfg,p);
+                CHECK(result.admitted && result.proposals.size()==1);
+                CHECK(result.proposals[0].rejected==expected_reject);
+            }
+        }
+    }
     c.reset();
-    cfg={};cfg.invalid_uuid_mode=1;
-    p=player(0x5000);p.x=0;
-    CHECK(run(c,cfg,p).proposals[0].rejected);
-    p.x=2;
-    CHECK(!run(c,cfg,p).proposals[0].rejected);
-    cfg.invalid_uuid_mode=2;
-    CHECK(run(c,cfg,p).proposals[0].rejected);
-    cfg.invalid_uuid_mode=0;cfg.sleeping=true;p.sleeping=true;
+    cfg={};cfg.sleeping=true;p=player();p.sleeping=true;
     CHECK(run(c,cfg,p).proposals[0].rejected);
     cfg.sleeping=false;
     CHECK(!run(c,cfg,p).proposals[0].rejected);

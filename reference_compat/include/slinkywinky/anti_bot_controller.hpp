@@ -20,7 +20,7 @@ struct AntiBotUuid {
 };
 struct AntiBotSettings {
     bool always_stationary=false;
-    int invalid_uuid_mode=0;   // 0=off; 1=invalid until movement; 2=always
+    int invalid_uuid_mode=0;   // 0=off; 1=version-2 until movement; 2=version-2 always
     bool sleeping=false;
     bool always_invis=false;
     float min_age=0.0f;
@@ -105,8 +105,12 @@ public:
             bool reject=false;
             if(settings.always_stationary && travelled<1.0)
                 reject=true;
+            // Preserve the recovered Java's unusual predicate EXACTLY:
+            // mode!=0 AND UUID version nibble == 0x2000 AND
+            // (mode==2 OR travelledSquared<1) => rejected.
+            // A DIFFERENT nibble is explicitly admitted by this gate.
             else if(settings.invalid_uuid_mode!=0 &&
-                    (p.uuid.msb&0xf000u)!=0x2000u &&
+                    (static_cast<std::uint32_t>(p.uuid.msb)&0xf000u)==0x2000u &&
                     (settings.invalid_uuid_mode==2 || travelled<1.0))
                 reject=true;
             else if(settings.sleeping && p.sleeping)

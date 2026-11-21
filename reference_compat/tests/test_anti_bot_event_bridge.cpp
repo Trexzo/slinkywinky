@@ -51,8 +51,10 @@ int main() {
     CHECK(f.anti_bot_event0->executions==1 &&
           f.anti_bot_event0->decision.admitted &&
           f.anti_bot_event0->decision.proposals.size()==2);
-    CHECK(!f.anti_bot_event0->decision.proposals[0].rejected &&
-          f.anti_bot_event0->decision.proposals[1].rejected);
+    // The recovered Java UUID guard rejects nibble 0x2000 when
+    // mode2 is enabled; a different nibble is admitted by that gate.
+    CHECK(f.anti_bot_event0->decision.proposals[0].rejected &&
+          !f.anti_bot_event0->decision.proposals[1].rejected);
     CHECK(f.teams_event0->executions==1 &&
           f.teams_event0->decisions.size()==2 &&
           f.teams_event0->decisions[0].proposed_team_member &&
@@ -79,6 +81,7 @@ int main() {
           f.teams_event0->decisions.size()==2);
     CHECK(b.request(bot,true)&&b.apply(true,true));
     f=frame(false,1);
+    f.anti_bot_event0->other_players[1].uuid.msb=0x2000u;
     f.anti_bot_event0->other_players[1].x=2.0;
     CHECK(b.dispatch(f) &&
           !f.anti_bot_event0->decision.proposals[1].rejected);
@@ -94,11 +97,13 @@ int main() {
     }));
     CHECK(tx.request(tbot,true)&&tx.apply(true,true));
     f=frame(false,1);
+    f.anti_bot_event0->other_players[1].uuid.msb=0x2000u;
     f.anti_bot_event0->other_players[1].x=2.0;
     bool thrown=false;
     try{tx.dispatch(f);}catch(const std::runtime_error&){thrown=true;}
     CHECK(thrown);
     f=frame(false,1);
+    f.anti_bot_event0->other_players[1].uuid.msb=0x2000u;
     CHECK(tx.dispatch(f));
     CHECK(f.anti_bot_event0->decision.admitted &&
           f.anti_bot_event0->decision.proposals[1].rejected);

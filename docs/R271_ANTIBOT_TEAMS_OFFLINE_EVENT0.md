@@ -23,6 +23,6 @@ value-only, fail-closed result.
 
 CTest verifies separate friend/blocked outputs, mismatched rosters,
 not-ready sources, foreign events, Clutch co-delivery, disable,
-identity/UUID mode behavior, transactional rollback, malformed
+identity/UUID mode behavior (source-verified equality branch), transactional rollback, malformed
 metadata and stop. No remote or local Minecraft player object
 is accessed or written.
