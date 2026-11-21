@@ -27,6 +27,7 @@
 #include "slinkywinky/free_look_controller.hpp"
 #include "slinkywinky/ghost_hand_controller.hpp"
 #include "slinkywinky/hitboxes_controller.hpp"
+#include "slinkywinky/teams_controller.hpp"
 #include "slinkywinky/block_in_controller.hpp"
 #include "slinkywinky/timer_controller.hpp"
 #include "slinkywinky/keep_sprint_controller.hpp"
@@ -69,6 +70,14 @@ struct GhostHandQueryPayload {
 struct HitboxesQueryPayload {
     HitboxesObservation input{};
     HitboxesProposal decision{};
+    unsigned executions=0;
+};
+struct TeamsEvent0Payload {
+    bool world_ready=false;
+    TeamsOwnerName owner{};
+    TeamsSettings settings{};
+    std::vector<TeamsEntityName> other_players{};
+    std::vector<TeamsDecision> decisions{};
     unsigned executions=0;
 };
 
@@ -311,6 +320,7 @@ struct ExecutionFrame {
     std::optional<ReachQueryPayload> reach{};
     std::optional<GhostHandQueryPayload> ghost_hand{};
     std::optional<HitboxesQueryPayload> hitboxes{};
+    std::optional<TeamsEvent0Payload> teams_event0{};
     std::optional<JumpDelayTickPayload> jump_delay{};
     std::optional<NullMoveTickPayload> null_move{};
     std::optional<InstantStopTickPayload> instant_stop{};
@@ -478,6 +488,36 @@ public:
         for(std::size_t id=0;id<definitions_.size();++id)
             if(definitions_[id].name=="Hitboxes")
                 return bind_hitboxes(id);
+        return false;
+    }
+
+    // R267: Teams uses event0/category UTILITY in the recovered Java.
+    // Native callback priority is unknown: preserve caller descriptor
+    // as a test fixture, never assert it is commercially authenticated.
+    bool bind_teams(std::size_t id) {
+        if(stopped_ || active_frame_ || id>=definitions_.size() ||
+           definitions_[id].name!="Teams" ||
+           definitions_[id].category!=4 ||
+           definitions_[id].subscriptions.size()!=1u ||
+           definitions_[id].subscriptions[0].event!=kSafeWalkEvent ||
+           callbacks_[id][kSafeWalkEvent])return false;
+        return bind(id,kSafeWalkEvent,
+            [](const Delivery&,ExecutionFrame& frame){
+                if(!frame.teams_event0)return;
+                auto& p=*frame.teams_event0;
+                ++p.executions;
+                if(!p.world_ready || p.other_players.size()>256u)return;
+                p.decisions.reserve(p.other_players.size());
+                for(const auto& player:p.other_players)
+                    p.decisions.push_back(TeamsController::on_event0(
+                        true,p.owner,player,p.settings));
+                // No RelationshipService.set(1) or player memory writes.
+            });
+    }
+    bool bind_teams_from_catalog() {
+        for(std::size_t id=0;id<definitions_.size();++id)
+            if(definitions_[id].name=="Teams")
+                return bind_teams(id);
         return false;
     }
 
@@ -1543,6 +1583,7 @@ public:
         if (frame.reach && frame.event != kReachQueryEvent) return false;
         if (frame.ghost_hand && frame.event != kReachQueryEvent) return false;
         if (frame.hitboxes && frame.event != kReachQueryEvent) return false;
+        if (frame.teams_event0 && frame.event != kSafeWalkEvent) return false;
         if (frame.jump_delay && frame.event != kPlayerUpdateEvent) return false;
         if (frame.null_move && frame.event != kMovementTickEvent) return false;
         if (frame.instant_stop && frame.event != kMovementTickEvent) return false;
@@ -1623,6 +1664,7 @@ public:
             static_cast<unsigned>(frame.reach.has_value()) +
             static_cast<unsigned>(frame.ghost_hand.has_value()) +
             static_cast<unsigned>(frame.hitboxes.has_value()) +
+            static_cast<unsigned>(frame.teams_event0.has_value()) +
             static_cast<unsigned>(frame.jump_delay.has_value()) +
             static_cast<unsigned>(frame.null_move.has_value()) +
             static_cast<unsigned>(frame.instant_stop.has_value()) +
@@ -1743,9 +1785,10 @@ public:
             static_cast<unsigned>(frame.fast_place.has_value()) +
             static_cast<unsigned>(frame.fast_mine_early.has_value()) +
             static_cast<unsigned>(frame.clutch_click.has_value()) +
-            static_cast<unsigned>(frame.block_in_empty.has_value());
+            static_cast<unsigned>(frame.block_in_empty.has_value()) +
+            static_cast<unsigned>(frame.teams_event0.has_value());
         const bool combined_edge_place =
-            typed_count>=2 && typed_count<=5 &&
+            typed_count>=2 && typed_count<=6 &&
             frame.event==kSafeWalkEvent &&
             typed_count==edge_place_count;
         const bool combined_outgoing_packet =
@@ -1786,16 +1829,24 @@ public:
                 return false;
         }
         if (combined_edge_place) {
-            const bool state=frame.safe_walk ?
-                frame.safe_walk->input.in_game :
-                frame.fast_place ? frame.fast_place->input.in_game :
-                frame.fast_mine_early->input.in_game;
-            if((frame.safe_walk && frame.safe_walk->input.in_game!=state) ||
-               (frame.fast_place && frame.fast_place->input.in_game!=state) ||
-               (frame.fast_mine_early &&
-                frame.fast_mine_early->input.in_game!=state) ||
-               (frame.clutch_click &&
-                frame.clutch_click->input.in_game!=state))
+            // Only action policies own in_game evidence. Teams and
+            // Block In empty-event callbacks have no such field.
+            // Avoid dereferencing a missing Fast Mine payload when
+            // the frame contains only Clutch, Block In and/or Teams.
+            std::optional<bool> state;
+            if(frame.safe_walk)state=frame.safe_walk->input.in_game;
+            else if(frame.fast_place)state=frame.fast_place->input.in_game;
+            else if(frame.fast_mine_early)
+                state=frame.fast_mine_early->input.in_game;
+            else if(frame.clutch_click)
+                state=frame.clutch_click->input.in_game;
+            if(state &&
+               ((frame.safe_walk && frame.safe_walk->input.in_game!=*state) ||
+                (frame.fast_place && frame.fast_place->input.in_game!=*state) ||
+                (frame.fast_mine_early &&
+                 frame.fast_mine_early->input.in_game!=*state) ||
+                (frame.clutch_click &&
+                 frame.clutch_click->input.in_game!=*state)))
                 return false;
         }
         if(frame.fast_mine_late && frame.no_use_delay &&
@@ -1860,6 +1911,10 @@ public:
         if (frame.hitboxes) {
             frame.hitboxes->decision={};
             frame.hitboxes->executions=0;
+        }
+        if (frame.teams_event0) {
+            frame.teams_event0->decisions.clear();
+            frame.teams_event0->executions=0;
         }
         if (frame.jump_delay) {
             frame.jump_delay->proposed_jump_ticks.reset();

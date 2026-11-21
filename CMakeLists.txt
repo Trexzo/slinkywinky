@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R267: Teams source event0 joins offline Clutch/Block In/Safe Walk.
+  add_executable(slinkywinky_teams_bridge_tests
+    reference_compat/tests/test_teams_event_bridge.cpp)
+  target_link_libraries(slinkywinky_teams_bridge_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_teams_bridge_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_teams_bridge_tests PRIVATE cxx_std_17)
+  add_test(NAME r267_teams_source_event0_bridge
+    COMMAND slinkywinky_teams_bridge_tests)
   # R266: source-derived Teams UTF-16 color parsing, offline only.
   add_executable(slinkywinky_teams_tests
     reference_compat/tests/test_teams_controller.cpp)

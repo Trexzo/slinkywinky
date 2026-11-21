@@ -54,7 +54,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | utility | `no_use_delay` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `ping_fix` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `refill` | Not implemented | Identify state, host events and reference traces |
-| utility | `teams` | Offline C++ UTF-16 color and relationship-bit decision model | Verify real player-list snapshots and source event-0 dispatch before modifying relationships |
+| utility | `teams` | Offline C++ Teams color policy + event-0 bridge (no relationship writes) | Validate owner-safe player-list snapshots and original callback priority |
 | utility | `timer` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | visual | `anti_debuff` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | visual | `block_esp` | Not implemented | Identify state, host events and reference traces |
