@@ -22,6 +22,17 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R276: host-free Java 8 owner-bound roster receipts.
+  find_package(Java COMPONENTS Runtime Development QUIET)
+  if(Java_FOUND)
+    add_test(NAME r276_java8_readonly_roster_owner_receipt COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r276_roster_readonly.cmake)
+    set_tests_properties(r276_java8_readonly_roster_owner_receipt PROPERTIES TIMEOUT 35)
+  endif()
   # R273: Piercing source query override with separate ranking preview.
   add_executable(slinkywinky_piercing_event_bridge_tests
     reference_compat/tests/test_piercing_event_bridge.cpp)
