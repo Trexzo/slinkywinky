@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <initializer_list>
 using namespace slinkywinky::reference_compat;
 #define CHECK(x) do{if(!(x)){\
  std::fprintf(stderr,"R264 Hitboxes line %d: %s\n",__LINE__,#x);\
