@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R262: original WeaponsModule.Cache tick semantics with owner fence.
+  add_executable(slinkywinky_weapons_tick_cache_tests
+    reference_compat/tests/test_weapons_tick_cache.cpp)
+  target_include_directories(slinkywinky_weapons_tick_cache_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_weapons_tick_cache_tests PRIVATE cxx_std_17)
+  add_test(NAME r262_weapons_source_tick_cache
+    COMMAND slinkywinky_weapons_tick_cache_tests)
   # R261: source-derived Auto Weapon and Weapons event25/26 offline binding.
   add_executable(slinkywinky_auto_weapon_bridge_tests
     reference_compat/tests/test_auto_weapon_weapons_bridge.cpp)
