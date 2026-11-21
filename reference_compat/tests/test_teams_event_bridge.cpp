@@ -91,9 +91,13 @@ int main(){
     CHECK(!wrong.bind_teams(badName) && !wrong.bind_teams(badCategory));
     ModuleExecutionBridge wrongEvent;
     const auto badEvent=wrongEvent.add({"Teams",4,{{8,0}},true});
-    const auto extra=wrongEvent.add({"Teams",4,{{0,0},{5,0}},true});
-    CHECK(!wrongEvent.bind_teams(badEvent) &&
-          !wrongEvent.bind_teams(extra));
+    CHECK(!wrongEvent.bind_teams(badEvent));
+    // A second Teams descriptor must live in a separate isolated
+    // fixture: ModuleExecutionBridge intentionally rejects duplicate
+    // names before bind_teams() can validate subscription metadata.
+    ModuleExecutionBridge wrongExtra;
+    const auto extra=wrongExtra.add({"Teams",4,{{0,0},{5,0}},true});
+    CHECK(!wrongExtra.bind_teams(extra));
     b.stop();
     f=query();
     CHECK(!b.dispatch(f) && !b.bind_teams(teams));
