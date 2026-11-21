@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R257: recovered No Hurt Cam field restoration, offline only.
+  add_executable(slinkywinky_no_hurt_cam_tests
+    reference_compat/tests/test_no_hurt_cam_controller.cpp)
+  target_include_directories(slinkywinky_no_hurt_cam_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_no_hurt_cam_tests PRIVATE cxx_std_17)
+  add_test(NAME r257_no_hurt_cam_recovery_safety
+    COMMAND slinkywinky_no_hurt_cam_tests)
   # R256: Ghost Hand source event8 + Reach shared query, offline only.
   add_executable(slinkywinky_ghost_hand_bridge_tests
     reference_compat/tests/test_ghost_hand_event_bridge.cpp)
