@@ -58,8 +58,8 @@ public:
                                  const PiercingEntity& second) noexcept {
         PiercingDecision result;
         if(s.sort_by<0 || s.sort_by>2 ||
-           !std::isfinite(first.health) && !std::isnan(first.health) ||
-           !std::isfinite(second.health) && !std::isnan(second.health))
+           (!std::isfinite(first.health) && !std::isnan(first.health)) ||
+           (!std::isfinite(second.health) && !std::isnan(second.health)))
             return result;
         result.admitted=true;
         if(!s.enabled || (!inside_bb && s.require_inside_bb) ||
