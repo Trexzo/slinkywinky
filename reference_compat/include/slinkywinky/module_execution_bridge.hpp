@@ -22,6 +22,7 @@
 #include "slinkywinky/auto_tool_controller.hpp"
 #include "slinkywinky/auto_weapon_controller.hpp"
 #include "slinkywinky/weapons_controller.hpp"
+#include "slinkywinky/weapons_tick_cache.hpp"
 #include "slinkywinky/clutch_controller.hpp"
 #include "slinkywinky/free_look_controller.hpp"
 #include "slinkywinky/ghost_hand_controller.hpp"
@@ -183,7 +184,10 @@ struct AutoWeaponInventoryPayload {
     AutoWeaponInput input{};
     WeaponsInventory inventory{};
     WeaponsSettings settings{};
+    int player_ticks_existed=0;
     WeaponsChoice source_choice{};
+    WeaponsTickReceipt source_cache{};
+    bool source_cache_queried=false;
     bool source_current_is_weapon=false;
     AutoWeaponDecision decision{};
     unsigned executions=0;
@@ -1011,17 +1015,52 @@ public:
                 if(!frame.auto_weapon_inventory)return;
                 auto& p=*frame.auto_weapon_inventory;
                 ++p.executions;
-                p.source_choice=WeaponsController::first_allowed_slot(
-                    p.inventory,p.settings);
-                if(!p.source_choice.admitted)return;
-                const auto slot=p.input.current_slot;
-                if(slot<0 || slot>=9)return;
-                p.source_current_is_weapon=WeaponsController::allowed_current(
-                    p.inventory.slots[static_cast<std::size_t>(slot)],
-                    slot,p.settings);
                 AutoWeaponInput verified=p.input;
-                verified.first_allowed_slot=p.source_choice.first_allowed_slot;
-                verified.current_is_weapon=p.source_current_is_weapon;
+                verified.current_is_weapon=false; // never trust caller's hint
+                verified.first_allowed_slot=-1;   // never trust caller's slot
+                // Java AutoWeaponModule tests the player/target gates
+                // BEFORE calling WeaponsModule.isWeapon. Cache must not
+                // advance on a missed or friendly target.
+                const bool could_query=verified.input_ready &&
+                    !verified.is_using_item &&
+                    (!verified.require_mouse_pressed || verified.mouse_pressed) &&
+                    verified.hit_is_entity && verified.remote_other_player &&
+                    verified.hostile;
+                if(could_query) {
+                    if(verified.current_slot<0 || verified.current_slot>=9) {
+                        auto_weapon_.reset();
+                        return;
+                    }
+                    const WeaponsTickCache before=weapons_tick_cache_;
+                    WeaponsTickObservation observed;
+                    observed.world_token=verified.world_token;
+                    observed.player_token=verified.player_token;
+                    observed.player_ticks_existed=p.player_ticks_existed;
+                    observed.current_slot=verified.current_slot;
+                    observed.inventory=p.inventory;
+                    observed.settings=p.settings;
+                    p.source_cache_queried=true;
+                    p.source_cache=weapons_tick_cache_.on_query(observed);
+                    if(!p.source_cache.admitted) {
+                        auto_weapon_.reset();
+                        return;
+                    }
+                    verified.current_is_weapon=p.source_cache.cached_allowed;
+                    p.source_current_is_weapon=verified.current_is_weapon;
+                    // The source only reads firstAllowedSlot after
+                    // isWeapon returned false.
+                    if(!verified.current_is_weapon) {
+                        p.source_choice=WeaponsController::first_allowed_slot(
+                            p.inventory,p.settings);
+                        if(!p.source_choice.admitted) {
+                            weapons_tick_cache_=before;
+                            auto_weapon_.reset();
+                            return;
+                        }
+                        verified.first_allowed_slot=
+                            p.source_choice.first_allowed_slot;
+                    }
+                }
                 p.decision=auto_weapon_.on_event25(verified);
             });
     }
@@ -1858,6 +1897,8 @@ public:
         }
         if(frame.auto_weapon_inventory) {
             frame.auto_weapon_inventory->source_choice={};
+            frame.auto_weapon_inventory->source_cache={};
+            frame.auto_weapon_inventory->source_cache_queried=false;
             frame.auto_weapon_inventory->source_current_is_weapon=false;
             frame.auto_weapon_inventory->decision={};
             frame.auto_weapon_inventory->executions=0;
@@ -1946,15 +1987,20 @@ public:
         // R261: even outside the global RNG transaction, an exception in
         // a later offline observer must not commit an Auto Weapon delay.
         const AutoWeaponController auto_weapon_before=auto_weapon_;
+        const WeaponsTickCache weapons_cache_before=weapons_tick_cache_;
         if(!shared_source_rng_enabled_) {
             try {
                 const bool delivered=replay_.dispatch(
                     frame.event,frame.notification_target,
                     frame.notification_new_state);
-                if(!delivered)auto_weapon_=auto_weapon_before;
+                if(!delivered) {
+                    auto_weapon_=auto_weapon_before;
+                    weapons_tick_cache_=weapons_cache_before;
+                }
                 return delivered;
             } catch(...) {
                 auto_weapon_=auto_weapon_before;
+                weapons_tick_cache_=weapons_cache_before;
                 throw;
             }
         }
@@ -1975,6 +2021,7 @@ public:
             block_in_=previous_block;
             free_look_=previous_free_look;
             auto_weapon_=auto_weapon_before;
+            weapons_tick_cache_=weapons_cache_before;
         };
         try {
             const bool delivered=replay_.dispatch(frame.event,
@@ -1994,7 +2041,10 @@ public:
     bool apply(bool world, bool player) {
         if(stopped_ || active_frame_ || !replay_.apply(world,player))return false;
         if(!free_look_bound_enabled())free_look_.reset();
-        if(!auto_weapon_bound_enabled())auto_weapon_.reset();
+        if(!auto_weapon_bound_enabled()) {
+            auto_weapon_.reset();
+            weapons_tick_cache_.reset();
+        }
         return true;
     }
 
@@ -2011,7 +2061,10 @@ public:
     void reset_fast_mine_world_state() noexcept { fast_mine_.reset(); }
     void reset_bridge_assist_world_state() noexcept { bridge_assist_.reset(); }
     void reset_auto_tool_world_state() noexcept { auto_tool_.reset(); }
-    void reset_auto_weapon_world_state() noexcept { auto_weapon_.reset(); }
+    void reset_auto_weapon_world_state() noexcept {
+        auto_weapon_.reset();
+        weapons_tick_cache_.reset();
+    }
     void reset_clutch_world_state() noexcept { clutch_.reset(); }
     void reset_free_look_world_state() noexcept { free_look_.reset(); }
     void reset_block_in_world_state() noexcept { block_in_.reset(); }
@@ -2086,6 +2139,7 @@ public:
         bridge_assist_.reset();
         auto_tool_.reset();
         auto_weapon_.reset();
+        weapons_tick_cache_.reset();
         clutch_.reset();
         block_in_.reset();
         free_look_.reset();
@@ -2137,6 +2191,7 @@ private:
     BridgeAssistController bridge_assist_;
     AutoToolController auto_tool_;
     AutoWeaponController auto_weapon_;
+    WeaponsTickCache weapons_tick_cache_;
     ClutchController clutch_;
     BlockInController block_in_;
     FreeLookController free_look_;

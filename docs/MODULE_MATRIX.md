@@ -14,7 +14,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `aim_assist` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
-| combat | `auto_weapon` | Offline C++ event-25 bridge + Weapons slot policy (no hotbar writes) | Restore source per-tick cache semantics and verify real Minecraft target ownership |
+| combat | `auto_weapon` | Offline event-25 bridge + source Weapons tick cache (no hotbar writes) | Verify host callback priority and real Minecraft player-tick observations |
 | combat | `backtrack` | Not implemented | Identify state, host events and reference traces |
 | combat | `criticals` | Not implemented | Identify state, host events and reference traces |
 | combat | `hit_select` | Experimental decision model (offline) | Compare branch-by-branch and host timing |

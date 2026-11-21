@@ -21,6 +21,7 @@ static AutoWeaponInventoryPayload weapon_frame(float delay=1.5f) {
     p.input.world_token=43;p.input.player_token=56;
     p.input.current_slot=0;
     p.input.activation_time=delay;
+    p.player_ticks_existed=1;
     p.input.current_is_weapon=true; // forged untrusted caller hint
     p.input.first_allowed_slot=8;    // must be ignored
     p.settings.swords=true;
@@ -77,6 +78,7 @@ int main(){
     // Source Weapon rule forbids changing hotbar when current qualifies.
     f=frame25(0.0f);
     f.auto_weapon_inventory->settings.fists=true;
+    f.auto_weapon_inventory->player_ticks_existed=2;
     CHECK(bridge.dispatch(f));
     CHECK(f.auto_weapon_inventory->source_current_is_weapon &&
           !f.auto_weapon_inventory->decision.proposed_slot_change);
