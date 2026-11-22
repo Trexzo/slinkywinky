@@ -1,6 +1,8 @@
 #include "slinkywinky/chams_controller.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -24,6 +26,16 @@ struct Spy {
     }
 };
 int main() {
+    static_assert(ChamsController::kSourcePolygonFactor==1.0f,
+                  "recovered source Chams factor");
+    static_assert(ChamsController::kSourcePolygonUnits==-3000000.0f,
+                  "recovered source Chams units");
+    std::uint32_t factor_bits=0,unit_bits=0;
+    const float expected_factor=ChamsController::kSourcePolygonFactor;
+    const float expected_units=ChamsController::kSourcePolygonUnits;
+    std::memcpy(&factor_bits,&expected_factor,sizeof(factor_bits));
+    std::memcpy(&unit_bits,&expected_units,sizeof(unit_bits));
+    CHECK(factor_bits==0x3f800000u && unit_bits==0xca371b00u);
     static_assert(ChamsController::relationship_mask(false)==2u,
                   "source bot-only filter");
     static_assert(ChamsController::relationship_mask(true)==7u,
@@ -60,6 +72,15 @@ int main() {
           spy.calls[2]=="render" &&
           spy.calls[3]=="disable:32823");
     CHECK(spy.factor==-1.25f && spy.units==-2.5f);
+    spy.calls.clear();
+    const bool sourceSelected=ChamsController::render_source(
+        p,spy,[&] { spy.calls.push_back("render"); });
+    CHECK(sourceSelected && spy.calls.size()==4u &&
+          spy.calls[0]=="enable:32823" &&
+          spy.calls[1]=="offset" &&
+          spy.calls[2]=="render" &&
+          spy.calls[3]=="disable:32823");
+    CHECK(spy.factor==1.0f && spy.units==-3000000.0f);
     p.relationship_flags=2u;
     spy.calls.clear();ran=false;
     CHECK(!ChamsController::render(p,spy,1.0f,2.0f,[&] {

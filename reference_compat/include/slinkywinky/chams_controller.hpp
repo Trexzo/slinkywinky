@@ -12,6 +12,11 @@ struct ChamsInput {
 class ChamsController final {
 public:
     static constexpr int kPolygonOffsetFill=32823; // GL_POLYGON_OFFSET_FILL
+    // Recovered immutable RenderConstants.json little-endian float words:
+    // f(1392420=0x153f24): 00 00 80 3f -> 1.0f
+    // f(1392424=0x153f28): 00 1b 37 ca -> -3000000.0f
+    static constexpr float kSourcePolygonFactor=1.0f;
+    static constexpr float kSourcePolygonUnits=-3000000.0f;
     // The recovered Java reads:
     // (RelationshipService.flags(entity) &
     //   (flag("hide_friendlies") ? 5 : 0) + 2) == 0
@@ -38,6 +43,11 @@ public:
         }
         return selected;
     }
+    // Explicit source operand path; does not guess runtime offsets.
+    template<class Graphics>
+    static bool begin_source(const ChamsInput& in,Graphics& graphics) {
+        return begin(in,graphics,kSourcePolygonFactor,kSourcePolygonUnits);
+    }
     template<class Graphics>
     static void end(bool selected,Graphics& graphics) {
         if(selected)graphics.disable(kPolygonOffsetFill);
@@ -57,6 +67,12 @@ public:
         }
         end(selected,graphics);
         return selected;
+    }
+    template<class Graphics,class Original>
+    static bool render_source(const ChamsInput& in,Graphics& graphics,
+                              Original&& original) {
+        return render(in,graphics,kSourcePolygonFactor,kSourcePolygonUnits,
+                      std::forward<Original>(original));
     }
 };
 } // namespace slinkywinky::reference_compat

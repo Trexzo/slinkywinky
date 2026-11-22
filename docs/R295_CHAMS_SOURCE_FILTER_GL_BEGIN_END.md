@@ -24,8 +24,8 @@ Source-like end behavior on original-render exceptions is tested.
 Begin occurs before the source try-finally; this is captured
 rather than silently rewriting exception semantics.
 
-Exact float values of the two RenderConstants calls are NOT
-guessed. Real vanilla 1.8.9 entity rendering, GL state
+R296 has now recovered the **exact** immutable float values from
+`RenderConstants.json`; real vanilla 1.8.9 entity rendering, GL state
 restoration, graphics initialization and module GUI remain
 separate unverified integration gates. This adds one **offline**
 module policy to the source-mapping inventory, not a playable
