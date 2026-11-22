@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R297: recovered Chest ESP collection and draw-plan, fake world only.
+  add_executable(slinkywinky_chest_esp_source_tests
+    reference_compat/tests/test_chest_esp_controller.cpp)
+  target_include_directories(slinkywinky_chest_esp_source_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_chest_esp_source_tests PRIVATE cxx_std_17)
+  add_test(NAME r297_chest_esp_source_collector_and_plan
+    COMMAND slinkywinky_chest_esp_source_tests)
   # R295: Chams original Java filter+GL begin/end, fake Graphics only.
   add_executable(slinkywinky_chams_source_tests
     reference_compat/tests/test_chams_controller.cpp)
