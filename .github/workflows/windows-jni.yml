@@ -16,6 +16,35 @@ jobs:
         with:
           distribution: temurin
           java-version: '8'
+      # R292: native Windows PS5.1 ParseFile has no launcher side effects.
+      - name: R292 parse SHA-pinned Windows R289 isolated-world launcher
+        shell: powershell
+        run: |
+          $path = Join-Path $env:GITHUB_WORKSPACE 'tools/run_r207_independent_forge_loader.ps1'
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $path, [ref]$tokens, [ref]$parseErrors)
+          if ($null -ne $parseErrors -and $parseErrors.Count -gt 0) {
+            foreach ($issue in $parseErrors) { Write-Error $issue.ToString() }
+            throw 'R292 original Windows PS5.1 launcher has syntax errors'
+          }
+          $body = Get-Content -LiteralPath $path -Raw
+          foreach ($required in @(
+            'R289RosterWorldTest',
+            '37ed0d9ec4319ae7ffeefce19787394d6de1d75214c27f063b85c461ea62a807',
+            'slinkywinky.r289RosterLocalWorldTest=true',
+            'slinkywinky.r278RosterReadOnlyProbe=true',
+            'slinkywinky.r283NativeRosterReadOnlyProbe=true',
+            'R289_ROSTER_WORLD_TEST',
+            'NATIVE_JNI_SHA256',
+            'R278Offline'
+          )) {
+            if (-not $body.Contains($required)) {
+              throw ('R292 isolated launcher missing contract: ' + $required)
+            }
+          }
+          Write-Output 'R292_WINDOWS_PS51_R289_PINNED_LAUNCHER_PARSE_PASS'
       - name: Configure native library
         run: cmake -S . -B build-jni -A x64 -DSLINKYWINKY_BUILD_JNI=ON
       - name: Build Windows native bridge
