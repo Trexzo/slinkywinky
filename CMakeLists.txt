@@ -22,6 +22,15 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R281: owner-bound Java-style receipt -> existing native event0 decisions.
+  add_executable(slinkywinky_roster_event0_tests
+    reference_compat/tests/test_roster_readonly_event0.cpp)
+  target_link_libraries(slinkywinky_roster_event0_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_roster_event0_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_roster_event0_tests PRIVATE cxx_std_17)
+  add_test(NAME r281_readonly_owner_uuid_event0_proposals
+    COMMAND slinkywinky_roster_event0_tests)
   # R276: host-free Java 8 owner-bound roster receipts.
   find_package(Java COMPONENTS Runtime Development QUIET)
   if(Java_FOUND)
