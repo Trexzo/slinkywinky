@@ -2,6 +2,11 @@ name: Experimental headless Minecraft 1.8.9 startup
 
 on:
   workflow_dispatch:
+  # R286: one-time PR launch when this verification gate is edited.
+  # Avoid running expensive Xorg + full Minecraft on ordinary commits.
+  pull_request:
+    paths:
+      - '.github/workflows/forge-headless.yml'
 
 jobs:
   headless-client-startup:
@@ -41,7 +46,8 @@ jobs:
           tail -n 120 forge-client.log || true
           echo "Forge client exit status: $status"
           if [ "$status" -eq 124 ] && grep -Fq '[SlinkyWinkyPreview] initialized - read-only' forge-client.log; then
-            echo 'PASS: Forge reached mod initialization and stayed running until controlled timeout'
+            echo 'R286_HEADLESS_FORGE_189_INITIALIZED_NO_ROSTER_RECEIPT_PASS'
+            echo 'PASS: Forge reached read-only mod initialization; no F9/game roster was exercised'
             exit 0
           fi
           echo 'FAIL: no sustained, confirmed mod startup' >&2
