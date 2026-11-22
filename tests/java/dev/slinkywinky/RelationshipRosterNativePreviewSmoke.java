@@ -48,8 +48,9 @@ public final class RelationshipRosterNativePreviewSmoke {
            "source version-nibble equality semantics, not invented UUID rule");
         ck(result.remote.get(0).uuid.equals(first.remote.get(0).uuid),
            "returned UUID exact");
-        ck(nativePreview.observe(first,settings).remote.size()==2,
-           "same frame repeat owned and harmless");
+        refused(new Runnable(){public void run() {
+            nativePreview.observe(first,settings);
+        }},"same receipt cannot accumulate movement twice");
         final RelationshipRosterNativePreview.Settings moveSettings=
             new RelationshipRosterNativePreview.Settings(
                 false,1,false,false,0,false);

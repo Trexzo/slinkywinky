@@ -78,7 +78,7 @@ public:
              !(source.owner_uuid==owner_uuid_));
         if(!first && (changed ?
             source.generation<=generation_ :
-            source.generation!=generation_ || source.tick<last_tick_))
+            source.generation!=generation_ || source.tick<=last_tick_))
             return std::nullopt;
         std::set<AntiBotUuid> seen;
         for(const auto& p:source.remote) {

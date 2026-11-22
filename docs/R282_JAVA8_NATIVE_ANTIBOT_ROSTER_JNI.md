@@ -38,3 +38,11 @@ This proves a Java8-to-native executable roundtrip using FAKE roster
 objects, not a launched Minecraft process. R278 still has only a
 read-only Forge sampler; a separately gated live JNI invocation and
 real runtime acceptance remain necessary.
+
+## R284 replay hardening
+
+For an unchanged world/owner/generation, a duplicate or older tick
+is refused before the native Anti Bot controller runs. This prevents
+re-submitting an immutable player receipt from accumulating movement
+multiple times. A new owner scope with a higher generation can still
+start at tick zero. Both native C++ and JNI tests cover duplicate refusal.

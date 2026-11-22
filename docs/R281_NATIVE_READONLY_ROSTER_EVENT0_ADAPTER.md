@@ -21,7 +21,7 @@ from raw names alone. Anti Bot may be previewed independently.
 
 The native adapter verifies owner-thread affinity, nonzero distinct
 opaque world and owner tokens, generation monotonicity across owner
-changes, non-decreasing ticks per owner, unique remote UUIDs, finite
+changes, strictly increasing ticks per owner (no duplicate movement replay), unique remote UUIDs, finite
 movement positions, and internal name/UUID correspondence before
 dispatch. Proposed relationship bits stay separate and are never
 written to the game.

@@ -1,5 +1,6 @@
 #include "slinkywinky/roster_readonly_event0.hpp"
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -32,8 +33,9 @@ int main() {
     auto s=snapshot();
     CHECK(!host.observe(s,anti,teams)); // disabled unless explicitly opted in
     CHECK(host.set_enabled(true,true));
-    CHECK(host.observe(s,anti,teams).has_value());
     auto result=host.observe(s,anti,teams);
+    CHECK(result.has_value());
+    CHECK(!host.observe(s,anti,teams)); // no duplicate tick replay
     CHECK(result && result->teams_evaluated && result->antibot_evaluated);
     CHECK(result->remote.size()==2);
     CHECK(result->remote[0].uuid==s.remote[0].bot.uuid &&
@@ -42,6 +44,7 @@ int main() {
     CHECK(result->remote[1].uuid==s.remote[1].bot.uuid &&
           !result->remote[1].team_member &&
           !result->remote[1].antibot_rejected);
+    s.tick=11;
     s.complete_team_color_evidence=false;
     CHECK(!host.observe(s,anti,teams)); // no invented scoreboard metadata
     CHECK(host.set_enabled(true,false));
@@ -73,6 +76,7 @@ int main() {
     s.complete_team_color_evidence=false;
     CHECK(!host.observe(s,anti,teams));
     CHECK(host.set_enabled(false,true));
+    s.tick=2;
     s.complete_team_color_evidence=true;
     result=host.observe(s,anti,teams);
     CHECK(result && result->teams_evaluated && !result->antibot_evaluated);
