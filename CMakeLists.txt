@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R298: original Item ESP event-18 collection + order-sensitive count merge.
+  add_executable(slinkywinky_item_esp_source_tests
+    reference_compat/tests/test_item_esp_controller.cpp)
+  target_include_directories(slinkywinky_item_esp_source_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_item_esp_source_tests PRIVATE cxx_std_17)
+  add_test(NAME r298_item_esp_source_sample_and_merge
+    COMMAND slinkywinky_item_esp_source_tests)
   # R297: recovered Chest ESP collection and draw-plan, fake world only.
   add_executable(slinkywinky_chest_esp_source_tests
     reference_compat/tests/test_chest_esp_controller.cpp)
