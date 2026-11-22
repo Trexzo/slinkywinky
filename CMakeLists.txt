@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R299: Player ESP source event-18 selection, descending Java float sort.
+  add_executable(slinkywinky_player_esp_source_tests
+    reference_compat/tests/test_player_esp_controller.cpp)
+  target_include_directories(slinkywinky_player_esp_source_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_player_esp_source_tests PRIVATE cxx_std_17)
+  add_test(NAME r299_player_esp_source_rows_sort_health
+    COMMAND slinkywinky_player_esp_source_tests)
   # R298: original Item ESP event-18 collection + order-sensitive count merge.
   add_executable(slinkywinky_item_esp_source_tests
     reference_compat/tests/test_item_esp_controller.cpp)
