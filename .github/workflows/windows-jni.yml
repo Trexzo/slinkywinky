@@ -45,6 +45,31 @@ jobs:
             }
           }
           Write-Output 'R292_WINDOWS_PS51_R289_PINNED_LAUNCHER_PARSE_PASS'
+      - name: R294 parse process-identity-checked in-world receipt verifier
+        shell: powershell
+        run: |
+          $path = Join-Path $env:GITHUB_WORKSPACE 'tools/verify_r294_roster_windows.ps1'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) {
+            foreach ($issue in $errors) { Write-Host $issue.ToString() }
+            throw 'R294 verifier failed PowerShell 5.1 parsing'
+          }
+          $content = Get-Content -LiteralPath $path -Raw
+          foreach ($required in @(
+            'TestProcessId', 'Get-CimInstance Win32_Process',
+            'R278Offline', 'r289RosterLocalWorldTest=true',
+            'R291_REAL_FORGE_ROSTER_RECEIPT_PROVENANCE_PASS',
+            'R294_EXACT_TEST_JVM_REAL_ROSTER_JNI_PASS',
+            'CreationDate', 'slinkywinky_jni.dll'
+          )) {
+            if (-not $content.Contains($required)) {
+              throw ('R294 verifier missing proof check ' + $required)
+            }
+          }
+          Write-Output 'R294_WINDOWS_PS51_LIVE_JVM_VERIFIER_PARSE_PASS'
       - name: Configure native library
         run: cmake -S . -B build-jni -A x64 -DSLINKYWINKY_BUILD_JNI=ON
       - name: Build Windows native bridge
