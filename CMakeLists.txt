@@ -264,6 +264,10 @@ if(BUILD_TESTING)
       COMMAND "${Python3_EXECUTABLE}" -u
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/r224_in_world_strafe_receipt.py"
         --selftest)
+    add_test(NAME r289_roster_native_receipt_negative_controls
+      COMMAND "${Python3_EXECUTABLE}" -u
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/r289_roster_world_receipt.py"
+        --selftest)
   endif()
   add_executable(slinkywinky_piercing_preview_tests tests/test_piercing_preview.cpp)
   target_link_libraries(slinkywinky_piercing_preview_tests PRIVATE slinkywinky_core)

@@ -99,6 +99,7 @@ public final class ForgePreview {
     private RelationshipRosterNativePreview r283Native;
     private RelationshipRosterNativePreview.Settings r283Settings;
     private int r283NativeSamples;
+    private boolean r289ReceiptEmitted,r289CleanupDone,r289StartupFailed;
     private int r252Due,r252PressProposals;
     private int r224WorldSamples,r224MotionSamples,r224Proposals;
     private double r224StartX,r224StartZ,r224LastX,r224LastZ;
@@ -136,6 +137,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r278RosterReadOnlyProbe");
     private static final boolean R283_NATIVE_ROSTER_READONLY =
         Boolean.getBoolean("slinkywinky.r283NativeRosterReadOnlyProbe");
+    private static final boolean R289_ROSTER_LOCAL_WORLD_TEST =
+        Boolean.getBoolean("slinkywinky.r289RosterLocalWorldTest");
     private static final int R283_UUID_MODE =
         Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
@@ -290,6 +293,16 @@ public final class ForgePreview {
            (!R278_ROSTER_READONLY || R283_UUID_MODE<0 || R283_UUID_MODE>2))
             throw new IllegalStateException(
                 "R283 native roster requires R278 source and valid UUID mode");
+        if(R289_ROSTER_LOCAL_WORLD_TEST) {
+            if(!R278_ROSTER_READONLY || !R283_NATIVE_ROSTER_READONLY ||
+               R237_CLUTCH_READONLY || R208_LOCAL_WORLD_TEST ||
+               R212_ACTION_TEST || !SPRINT_OBSERVATION)
+                throw new IllegalStateException(
+                    "R289 requires isolated R285 TEMP roster-only profile");
+            Minecraft.getMinecraft().gameSettings.pauseOnLostFocus=false;
+            System.out.println("[SlinkyWinkyPreview] "+
+                "R289_ROSTER_WORLD_ISOLATION_GATE_PASS");
+        }
         if(R237_CLUTCH_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
@@ -426,6 +439,10 @@ public final class ForgePreview {
             status="Unavailable: native JNI library missing or incompatible";
             if (R208_LOCAL_WORLD_TEST)
                 System.err.println("[SlinkyWinkyPreview] R208_PREVIEW_START_FAIL " + error);
+            if(R289_ROSTER_LOCAL_WORLD_TEST) {
+                r289StartupFailed=true;
+                System.err.println("[SlinkyWinkyPreview] R289_PREVIEW_START_FAIL "+error);
+            }
         }
     }
 
@@ -451,13 +468,14 @@ public final class ForgePreview {
             System.out.println("[SlinkyWinkyPreview] R209_WORLD_ABSENCE_OBSERVED");
         }
         if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE &&
-            !R214_LOCAL_NO_SLOW_TEST) return;
+            !R214_LOCAL_NO_SLOW_TEST && !R289_ROSTER_LOCAL_WORLD_TEST) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_REQUESTED" :
+                (R289_ROSTER_LOCAL_WORLD_TEST ? "R289_LOCAL_WORLD_REQUESTED" :
+                 R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_REQUESTED" :
                  R217_ITEM_CATEGORIES_TEST ? "R217_LOCAL_WORLD_REQUESTED" :
                     R216_DISPLACEMENT_TEST ? "R216_LOCAL_WORLD_REQUESTED" :
                     R215_VANILLA_INPUT_TEST ? "R215_LOCAL_WORLD_REQUESTED" :
@@ -466,7 +484,8 @@ public final class ForgePreview {
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R224_LOCAL_STRAFE_TEST ?
+            final String worldName = R289_ROSTER_LOCAL_WORLD_TEST ?
+                "R289-local-only" : R224_LOCAL_STRAFE_TEST ?
                 "R224-local-only" : R217_ITEM_CATEGORIES_TEST ?
                 "R217-local-only" : R216_DISPLACEMENT_TEST ?
                 "R216-local-only" : R215_VANILLA_INPUT_TEST ?
@@ -483,14 +502,29 @@ public final class ForgePreview {
             if (!r208WorldReady) {
                 r208WorldReady=true;
                 System.out.println("[SlinkyWinkyPreview] " +
-                    (R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_PLAYER_READY_PASS" :
+                    (R289_ROSTER_LOCAL_WORLD_TEST ? "R289_LOCAL_WORLD_PLAYER_READY_PASS" :
+                     R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
                                             "R208_LOCAL_WORLD_PLAYER_READY_PASS"));
             }
             if (!enabled &&
                 !(R214_LOCAL_NO_SLOW_TEST && r214ReceiptEmitted) &&
-                !(R224_LOCAL_STRAFE_TEST && r224ReceiptEmitted))
+                !(R224_LOCAL_STRAFE_TEST && r224ReceiptEmitted) &&
+                !(R289_ROSTER_LOCAL_WORLD_TEST &&
+                  (r289ReceiptEmitted || r289StartupFailed)))
                 startPreview(); // completed TEMP-only tests never auto-restart
+            if(R289_ROSTER_LOCAL_WORLD_TEST && r289ReceiptEmitted &&
+               !r289CleanupDone) {
+                r289CleanupDone=true;
+                if(enabled)stop();
+                if(enabled || r283Native!=null || r278RosterSampler!=null ||
+                   sprintProbe!=null || host!=null)
+                    throw new IllegalStateException("R289 retained JNI owner");
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R289_ROSTER_NATIVE_CLEANUP_PASS "+
+                    "native_owner_closed=1 preview_closed=1 "+
+                    "auto_restart=0 gameWrites=0");
+            }
             if(R224_LOCAL_STRAFE_TEST && enabled &&
                !r224ReceiptEmitted && !r224ForwardArmed) {
                 if (!(mc.thePlayer.movementInput instanceof MovementInputFromOptions))
@@ -1086,6 +1120,10 @@ public final class ForgePreview {
                 System.err.println("[SlinkyWinkyPreview] R278_ROSTER_READONLY_FAIL "+problem);
             if(R283_NATIVE_ROSTER_READONLY)
                 System.err.println("[SlinkyWinkyPreview] R283_NATIVE_ROSTER_READONLY_FAIL "+problem);
+            if(R289_ROSTER_LOCAL_WORLD_TEST) {
+                r289StartupFailed=true;
+                System.err.println("[SlinkyWinkyPreview] R289_ROSTER_WORLD_FAIL "+problem);
+            }
         }
     }
 
@@ -1136,6 +1174,16 @@ public final class ForgePreview {
                     " generation="+proposal.generation+
                     " proposalsOnly=1 gameWrites=0"+
                     " source=Forge_PlayerTick_END_JNI");
+            if(R289_ROSTER_LOCAL_WORLD_TEST && r283NativeSamples==32) {
+                r289ReceiptEmitted=true;
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R289_REAL_WORLD_ANTIBOT_NATIVE_JNI_PASS "+
+                    "samples="+r283NativeSamples+
+                    " clientTicks="+r208WorldClientTicks+
+                    " remoteCount="+proposal.remote.size()+
+                    " generation="+proposal.generation+
+                    " gameWrites=0 source=Forge_PlayerTick_END_JNI");
+            }
         }
     }
 
