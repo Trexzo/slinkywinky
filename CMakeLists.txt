@@ -49,6 +49,15 @@ if(BUILD_TESTING)
       -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r279_forge_roster_stub.cmake)
     set_tests_properties(r279_java8_forge_roster_stub_source PROPERTIES TIMEOUT 35)
+    # R285: realpath TEMP root + exact dummy identity, roster only.
+    add_test(NAME r285_java8_independent_roster_temp_gate COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r285_roster_temp_gate.cmake)
+    set_tests_properties(r285_java8_independent_roster_temp_gate
+      PROPERTIES TIMEOUT 30)
   endif()
   # R273: Piercing source query override with separate ranking preview.
   add_executable(slinkywinky_piercing_event_bridge_tests

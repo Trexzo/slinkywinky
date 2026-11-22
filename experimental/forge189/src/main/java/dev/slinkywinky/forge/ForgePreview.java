@@ -13,6 +13,7 @@ import dev.slinkywinky.ClutchFaceReceiptStatus;
 import dev.slinkywinky.ClutchCadenceObserver;
 import dev.slinkywinky.RelationshipRosterSampler;
 import dev.slinkywinky.RelationshipRosterNativePreview;
+import dev.slinkywinky.RosterIsolationGate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -269,9 +270,22 @@ public final class ForgePreview {
         if(R252_CLUTCH_CADENCE_READONLY && !R251_CLUTCH_FACE_READONLY)
             throw new IllegalStateException(
                 "R252 source cadence requires R251 isolated face observations");
-        if(R278_ROSTER_READONLY && !R237_CLUTCH_READONLY)
-            throw new IllegalStateException(
-                "R278 roster requires R237 isolated TEMP offline admission");
+        if(R278_ROSTER_READONLY && !R237_CLUTCH_READONLY) {
+            // Independent roster-only profile. Retain identical TEMP,
+            // dummy-identity and read-only gates without running R237's
+            // unrelated 167-candidate Clutch world scan each tick.
+            final Minecraft mc=Minecraft.getMinecraft();
+            if(mc==null || mc.mcDataDir==null || mc.getSession()==null ||
+               !RosterIsolationGate.admitted(SPRINT_OBSERVATION,
+                   R212_ACTION_TEST,R208_LOCAL_WORLD_TEST,
+                   mc.mcDataDir.getAbsolutePath(),
+                   System.getProperty("java.io.tmpdir"),
+                   mc.getSession().getUsername()))
+                throw new IllegalStateException(
+                    "R285 roster-only preview requires isolated TEMP R278Offline");
+            System.out.println("[SlinkyWinkyPreview] "+
+                "R285_INDEPENDENT_ROSTER_TEMP_GATE_PASS");
+        }
         if(R283_NATIVE_ROSTER_READONLY &&
            (!R278_ROSTER_READONLY || R283_UUID_MODE<0 || R283_UUID_MODE>2))
             throw new IllegalStateException(
