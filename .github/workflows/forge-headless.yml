@@ -39,9 +39,21 @@ jobs:
           set -euo pipefail
           sudo Xorg :99 -config "$GITHUB_WORKSPACE/ci/xorg-dummy.conf" -noreset -nolisten tcp -logfile "$GITHUB_WORKSPACE/xorg-99.log" > /dev/null 2>&1 &
           sleep 5
+          # LWJGL 2 XRandR.java uses a STRICT ^(\\d+)x(\\d+)$
+          # active-modeline parser and requires at least one * current mode.
+          # Xorg's previous 1280x720_60.00 label made current[] empty,
+          # triggering ArrayIndexOutOfBoundsException in findPrimary().
           DISPLAY=:99 xrandr --query | tee xrandr.log
+          output=$(awk '$2 == "connected" { print $1; exit }' xrandr.log)
+          test -n "$output"
+          DISPLAY=:99 xrandr --output "$output" --primary
+          DISPLAY=:99 xrandr --query | tee xrandr.log
+          grep -Eq ' connected primary 1280x720[+]' xrandr.log
+          # Do not accept only a screen size in the header: the active
+          # mode line must use the exact LWJGL2-compatible name 1280x720.
+          awk '/^[[:space:]]+1280x720[[:space:]]/ && /[*]/ { found=1 }
+               END { exit !found }' xrandr.log
           DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 glxinfo -B | tee glxinfo.log
-          grep -q '1280x720' xrandr.log
       - name: Launch Forge 1.8.9 in read-only preview
         shell: bash
         run: |
