@@ -12,6 +12,7 @@ import dev.slinkywinky.ClutchFaceSampler;
 import dev.slinkywinky.ClutchFaceReceiptStatus;
 import dev.slinkywinky.ClutchCadenceObserver;
 import dev.slinkywinky.RelationshipRosterSampler;
+import dev.slinkywinky.RelationshipRosterNativePreview;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
 import net.minecraft.world.WorldSettings;
@@ -93,6 +94,10 @@ public final class ForgePreview {
     private ClutchCadenceObserver r252Cadence;
     private RelationshipRosterSampler r278RosterSampler;
     private int r278RosterSamples;
+    // R283: strictly read-only native source decisions; no Minecraft writes.
+    private RelationshipRosterNativePreview r283Native;
+    private RelationshipRosterNativePreview.Settings r283Settings;
+    private int r283NativeSamples;
     private int r252Due,r252PressProposals;
     private int r224WorldSamples,r224MotionSamples,r224Proposals;
     private double r224StartX,r224StartZ,r224LastX,r224LastZ;
@@ -128,6 +133,10 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r252ClutchCadenceReadOnlyProbe");
     private static final boolean R278_ROSTER_READONLY =
         Boolean.getBoolean("slinkywinky.r278RosterReadOnlyProbe");
+    private static final boolean R283_NATIVE_ROSTER_READONLY =
+        Boolean.getBoolean("slinkywinky.r283NativeRosterReadOnlyProbe");
+    private static final int R283_UUID_MODE =
+        Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
     // Default Forge preview remains read-only, including normal F9 toggle.
     private static final boolean R217_ITEM_CATEGORIES_TEST =
@@ -263,6 +272,10 @@ public final class ForgePreview {
         if(R278_ROSTER_READONLY && !R237_CLUTCH_READONLY)
             throw new IllegalStateException(
                 "R278 roster requires R237 isolated TEMP offline admission");
+        if(R283_NATIVE_ROSTER_READONLY &&
+           (!R278_ROSTER_READONLY || R283_UUID_MODE<0 || R283_UUID_MODE>2))
+            throw new IllegalStateException(
+                "R283 native roster requires R278 source and valid UUID mode");
         if(R237_CLUTCH_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
@@ -303,6 +316,9 @@ public final class ForgePreview {
         if(r237Sampler!=null) {r237Sampler.close();r237Sampler=null;}
         if(r251Sampler!=null) {r251Sampler.close();r251Sampler=null;}
         if(r252Cadence!=null) {r252Cadence.close();r252Cadence=null;}
+        if(r283Native!=null) {
+            r283Native.close();r283Native=null;r283Settings=null;
+        }
         if(r278RosterSampler!=null) {
             r278RosterSampler.close();r278RosterSampler=null;
         }
@@ -357,6 +373,11 @@ public final class ForgePreview {
             if(SPRINT_OBSERVATION) sprintProbe=new SprintObservationProbe();
             if(R278_ROSTER_READONLY)
                 r278RosterSampler=new RelationshipRosterSampler();
+            if(R283_NATIVE_ROSTER_READONLY) {
+                r283Native=new RelationshipRosterNativePreview();
+                r283Settings=new RelationshipRosterNativePreview.Settings(
+                    false,R283_UUID_MODE,false,false,0f,false);
+            }
             if(R212_ACTION_TEST) {
                 if(sprintProbe==null)
                     throw new IllegalStateException("R212 native module observer unavailable");
@@ -377,6 +398,7 @@ public final class ForgePreview {
             r251PriorSamples=r251HitBlocks=r251Matches=0;
             r252Due=r252PressProposals=0;
             r278RosterSamples=0;
+            r283NativeSamples=0;
             r251PriorCentered=false;
             if(r251Sampler!=null){r251Sampler.close();r251Sampler=null;}
             r245Previous=null;r245PreviousAim=null;
@@ -1048,6 +1070,8 @@ public final class ForgePreview {
                 System.err.println("[SlinkyWinkyPreview] R224_READONLY_STRAFE_FAIL "+problem);
             if(R278_ROSTER_READONLY)
                 System.err.println("[SlinkyWinkyPreview] R278_ROSTER_READONLY_FAIL "+problem);
+            if(R283_NATIVE_ROSTER_READONLY)
+                System.err.println("[SlinkyWinkyPreview] R283_NATIVE_ROSTER_READONLY_FAIL "+problem);
         }
     }
 
@@ -1071,6 +1095,34 @@ public final class ForgePreview {
                 " remoteCount="+receipt.remote.size()+
                 " generation="+receipt.generation+
                 " writes=0 source=Forge_PlayerTick_END");
+        if(R283_NATIVE_ROSTER_READONLY) {
+            if(r283Native==null || r283Settings==null)
+                throw new IllegalStateException("R283 native session not admitted");
+            final RelationshipRosterNativePreview.Result proposal=
+                r283Native.observe(receipt,r283Settings);
+            if(proposal.worldToken!=receipt.worldToken ||
+               proposal.ownerToken!=receipt.ownerToken ||
+               proposal.generation!=receipt.generation ||
+               proposal.tick!=receipt.tick ||
+               proposal.remote.size()!=receipt.remote.size())
+                throw new IllegalStateException("R283 native provenance mismatch");
+            int rejected=0;
+            for(int i=0;i<proposal.remote.size();++i) {
+                if(!proposal.remote.get(i).uuid.equals(receipt.remote.get(i).uuid))
+                    throw new IllegalStateException("R283 native UUID mismatch");
+                if(proposal.remote.get(i).rejected)++rejected;
+            }
+            ++r283NativeSamples;
+            if(r283NativeSamples==20)
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R283_FORGE_NATIVE_ANTIBOT_READONLY_RECEIPT "+
+                    "samples="+r283NativeSamples+
+                    " remoteCount="+proposal.remote.size()+
+                    " rejectedCount="+rejected+
+                    " generation="+proposal.generation+
+                    " proposalsOnly=1 gameWrites=0"+
+                    " source=Forge_PlayerTick_END_JNI");
+        }
     }
 
     // R213's acceptance manipulates only the freshly created TEMP
