@@ -1,9 +1,11 @@
 #include "slinkywinky/menu_hit_test.hpp"
+#include "slinkywinky/menu_source_hover_target.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_expander_geometry.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <stdexcept>
 #include <iostream>
@@ -262,6 +264,63 @@ int main() {
             pixel_y(*panel,card.y+card.height+2.0f)));
         CHECK(menu.change_settings_page(2,-1));
         CHECK(menu_expanded_height(*session.next(menu,&profile),2)==223.0f);
+        CHECK(session.detach());
+    }
+    // Source slider footprint: the actual cross-platform render-neutral
+    // hit tester must agree with all five certified physical client pixels,
+    // including the original game's 854x480 viewport. This has no OS input.
+    for(const auto dims : {std::array<unsigned,2>{676u,630u},
+                           std::array<unsigned,2>{854u,480u},
+                           std::array<unsigned,2>{1024u,768u}}) {
+        const unsigned width=dims[0],height=dims[1];
+        MenuState menu;
+        MenuProfileBridge profile(menu);
+        MenuRenderSession session;
+        CHECK(session.attach(179u,width,height));
+        const auto unexpanded=session.next(menu,&profile);
+        CHECK(unexpanded && !menu_original_auto_block_range_target(
+            *unexpanded,width,height));
+        CHECK(menu.toggle_expanded(1)); // Source-indexed Auto Block
+        const auto expanded=session.next(menu,&profile);
+        CHECK(expanded);
+        const auto source=menu_original_auto_block_range_target(
+            *expanded,width,height);
+        CHECK(source && source->left>=0 && source->top>=0 &&
+              source->right<=static_cast<int>(width) &&
+              source->bottom<=static_cast<int>(height));
+        CHECK(source->catalog_index==1);
+        const auto matches=[&](int x,int y) {
+            const auto hit=hit_test_menu(
+                *expanded,MenuPanelMode::CompactOverlay,x,y);
+            return hit && hit->kind==MenuHitKind::RecoveredSliderPreview &&
+                   hit->catalog_index==source->catalog_index &&
+                   hit->control_index==source->widget_index;
+        };
+        CHECK(matches(source->center_x,source->center_y));
+        CHECK(matches(source->left,source->top));
+        CHECK(matches(source->right-1,source->top));
+        CHECK(matches(source->left,source->bottom-1));
+        CHECK(matches(source->right-1,source->bottom-1));
+        CHECK(source->contains(source->center_x,source->center_y));
+        CHECK(!source->contains(source->left-1,source->top));
+        CHECK(!source->contains(source->right,source->top));
+        CHECK(!source->contains(source->left,source->bottom));
+        auto altered=*expanded;
+        altered.viewport_width=width+1;
+        CHECK(!menu_original_auto_block_range_target(altered,width,height));
+        altered=*expanded;
+        altered.tab=MenuTab::Visual;
+        CHECK(!menu_original_auto_block_range_target(altered,width,height));
+        altered=*expanded;
+        for(auto& item:altered.visible) {
+            if(item.catalog_index==source->catalog_index)
+                item.title="FORGED AUTO BLOCK";
+        }
+        CHECK(!menu_original_auto_block_range_target(altered,width,height));
+        CHECK(menu.toggle_expanded(1));
+        const auto collapsed=session.next(menu,&profile);
+        CHECK(collapsed && !menu_original_auto_block_range_target(
+            *collapsed,width,height));
         CHECK(session.detach());
     }
     // Consumer never reaches another thread's UI/model.
