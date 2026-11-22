@@ -22,6 +22,14 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R295: Chams original Java filter+GL begin/end, fake Graphics only.
+  add_executable(slinkywinky_chams_source_tests
+    reference_compat/tests/test_chams_controller.cpp)
+  target_include_directories(slinkywinky_chams_source_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_chams_source_tests PRIVATE cxx_std_17)
+  add_test(NAME r295_chams_source_gl_and_relationship_policy
+    COMMAND slinkywinky_chams_source_tests)
   # R281: owner-bound Java-style receipt -> existing native event0 decisions.
   add_executable(slinkywinky_roster_event0_tests
     reference_compat/tests/test_roster_readonly_event0.cpp)
