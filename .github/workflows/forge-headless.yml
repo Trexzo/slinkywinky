@@ -2,6 +2,11 @@ name: Experimental headless Minecraft 1.8.9 startup
 
 on:
   workflow_dispatch:
+  # R287: include push events for workflow-only changes on the PR
+  # integration branch. No game launch for ordinary C++/Java commits.
+  push:
+    paths:
+      - '.github/workflows/forge-headless.yml'
   # R286: one-time PR launch when this verification gate is edited.
   # Avoid running expensive Xorg + full Minecraft on ordinary commits.
   pull_request:
