@@ -219,7 +219,7 @@ def selftest():
                                "NATIVE_JNI_SHA256=bad"),
         fake_preflight.replace("PLAYER_TICK_TEST=False", "PLAYER_TICK_TEST=True"),
         fake_preflight.replace("LOGIN=OFFLINE_DUMMY", "LOGIN=ONLINE"),
-        fake_preflight.replace("STAGED_MOD=C:", "STAGED_MOD="),
+        fake_preflight.replace("STAGED_MOD=C:\\Temp\\staged.jar", "STAGED_MOD="),
     ]
     for mutant in tampered:
         denied(lambda candidate=mutant: validate_preflight(candidate))
