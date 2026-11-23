@@ -12,6 +12,7 @@ import dev.slinkywinky.ClutchFaceSampler;
 import dev.slinkywinky.ClutchFaceReceiptStatus;
 import dev.slinkywinky.ClutchCadenceObserver;
 import dev.slinkywinky.RelationshipRosterSampler;
+import dev.slinkywinky.EspWorldSnapshotSampler;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
 import net.minecraft.client.Minecraft;
@@ -95,6 +96,9 @@ public final class ForgePreview {
     private ClutchCadenceObserver r252Cadence;
     private RelationshipRosterSampler r278RosterSampler;
     private int r278RosterSamples;
+    private EspWorldSnapshotSampler r300EspSampler;
+    private Object r300World,r300Owner;
+    private int r300EspSamples;
     // R283: strictly read-only native source decisions; no Minecraft writes.
     private RelationshipRosterNativePreview r283Native;
     private RelationshipRosterNativePreview.Settings r283Settings;
@@ -139,6 +143,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r283NativeRosterReadOnlyProbe");
     private static final boolean R289_ROSTER_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r289RosterLocalWorldTest");
+    private static final boolean R300_ESP_READONLY =
+        Boolean.getBoolean("slinkywinky.r300EspReadOnlyProbe");
     private static final int R283_UUID_MODE =
         Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
@@ -303,6 +309,23 @@ public final class ForgePreview {
             System.out.println("[SlinkyWinkyPreview] "+
                 "R289_ROSTER_WORLD_ISOLATION_GATE_PASS");
         }
+        // R300: independent user-opted, read-only Forge world sampler.
+        // Never expose raw world/player observations outside a TEMP profile.
+        if(R300_ESP_READONLY) {
+            final Minecraft mc=Minecraft.getMinecraft();
+            if(mc==null||mc.mcDataDir==null||mc.getSession()==null)
+                throw new IllegalStateException("R300 no isolated game");
+            final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
+            final String temp=System.getProperty("java.io.tmpdir").replace('\\','/');
+            if(!SPRINT_OBSERVATION||R212_ACTION_TEST||R208_LOCAL_WORLD_TEST||
+               R237_CLUTCH_READONLY||R278_ROSTER_READONLY||
+               R283_NATIVE_ROSTER_READONLY||R289_ROSTER_LOCAL_WORLD_TEST||
+               !home.startsWith(temp)||
+               !home.contains("/slinkywinky-r300-independent-forge-")||
+               !"R300Offline".equals(mc.getSession().getUsername()))
+                throw new IllegalStateException("R300 TEMP-only read-only admission denied");
+            System.out.println("[SlinkyWinkyPreview] R300_ESP_TEMP_GATE_PASS");
+        }
         if(R237_CLUTCH_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             final String home=mc.mcDataDir.getAbsolutePath().replace('\\','/');
@@ -349,6 +372,8 @@ public final class ForgePreview {
         if(r278RosterSampler!=null) {
             r278RosterSampler.close();r278RosterSampler=null;
         }
+        if(r300EspSampler!=null) {r300EspSampler.close();r300EspSampler=null;}
+        r300World=r300Owner=null;
         r237World=r237Player=null;
         r245Previous=null;r245PreviousAim=null;
         if(R214_LOCAL_NO_SLOW_TEST && r214Active==this)
@@ -400,6 +425,8 @@ public final class ForgePreview {
             if(SPRINT_OBSERVATION) sprintProbe=new SprintObservationProbe();
             if(R278_ROSTER_READONLY)
                 r278RosterSampler=new RelationshipRosterSampler();
+            if(R300_ESP_READONLY)
+                r300EspSampler=new EspWorldSnapshotSampler();
             if(R283_NATIVE_ROSTER_READONLY) {
                 r283Native=new RelationshipRosterNativePreview();
                 r283Settings=new RelationshipRosterNativePreview.Settings(
@@ -425,6 +452,7 @@ public final class ForgePreview {
             r251PriorSamples=r251HitBlocks=r251Matches=0;
             r252Due=r252PressProposals=0;
             r278RosterSamples=0;
+            r300EspSamples=0;
             r283NativeSamples=0;
             r251PriorCentered=false;
             if(r251Sampler!=null){r251Sampler.close();r251Sampler=null;}
@@ -454,6 +482,14 @@ public final class ForgePreview {
         }
 
         final Minecraft mc=Minecraft.getMinecraft();
+        // A disconnected or replaced owner invalidates all R300 receipts.
+        if(r300EspSampler!=null &&
+           (mc.theWorld==null||mc.thePlayer==null||
+            (r300World!=null && (mc.theWorld!=r300World||
+                                 mc.thePlayer!=r300Owner)))) {
+            r300EspSampler.retire();
+            r300World=r300Owner=null;
+        }
         if (enabled && sprintProbe!=null && mc.thePlayer==null &&
             (sprintWorld!=null || sprintPlayer!=null)) {
             if(R212_ACTION_TEST && moduleActions!=null)
@@ -1108,6 +1144,8 @@ public final class ForgePreview {
                     sampleR237ReadOnlyClutch(mc,frame);
                 if(R278_ROSTER_READONLY)
                     sampleR278ReadOnlyRoster(mc);
+                if(R300_ESP_READONLY)
+                    sampleR300ReadOnlyEsp(mc);
             }
         } catch (RuntimeException | LinkageError problem) {
             try {stop();} catch (RuntimeException ignored) { }
@@ -1118,6 +1156,8 @@ public final class ForgePreview {
                 System.err.println("[SlinkyWinkyPreview] R224_READONLY_STRAFE_FAIL "+problem);
             if(R278_ROSTER_READONLY)
                 System.err.println("[SlinkyWinkyPreview] R278_ROSTER_READONLY_FAIL "+problem);
+            if(R300_ESP_READONLY)
+                System.err.println("[SlinkyWinkyPreview] R300_ESP_READONLY_FAIL "+problem);
             if(R283_NATIVE_ROSTER_READONLY)
                 System.err.println("[SlinkyWinkyPreview] R283_NATIVE_ROSTER_READONLY_FAIL "+problem);
             if(R289_ROSTER_LOCAL_WORLD_TEST) {
@@ -1125,6 +1165,31 @@ public final class ForgePreview {
                 System.err.println("[SlinkyWinkyPreview] R289_ROSTER_WORLD_FAIL "+problem);
             }
         }
+    }
+
+    // R300: source-order raw observations only, no GL, Java action or JNI.
+    // Forge PlayerTick.END is diagnostic cadence, not original ESP event 18/0.
+    private void sampleR300ReadOnlyEsp(Minecraft mc) {
+        if(r300EspSampler==null||mc.theWorld==null||mc.thePlayer==null||
+           !mc.theWorld.isRemote||!mc.isSingleplayer())
+            throw new IllegalStateException("R300 world not ready");
+        final EspWorldSnapshotSampler.Receipt receipt=
+            r300EspSampler.observe(new ForgeEspWorldSnapshotPort(mc),
+                                   mc.thePlayer.ticksExisted);
+        if(receipt.worldToken<=0||receipt.playerToken<=0||
+           receipt.worldToken==receipt.playerToken||receipt.players.isEmpty())
+            throw new IllegalStateException("R300 invalid ownership receipt");
+        r300World=mc.theWorld;r300Owner=mc.thePlayer;
+        ++r300EspSamples;
+        if(r300EspSamples==20)
+            System.out.println("[SlinkyWinkyPreview] "+
+                "R300_FORGE_ESP_WORLD_SNAPSHOT_RECEIPT "+
+                "snapshots="+r300EspSamples+
+                " tiles="+receipt.tiles.size()+
+                " drops="+receipt.drops.size()+
+                " players="+receipt.players.size()+
+                " generation="+receipt.generation+
+                " writes=0 cadence=Forge_PlayerTick_END");
     }
 
     // R278 real local singleplayer roster receipt. No relationship writes.

@@ -5,6 +5,8 @@ on:
   push:
     paths:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeRelationshipRosterPort.java'
       - 'java/dev/slinkywinky/RelationshipRosterSampler.java'
@@ -19,6 +21,8 @@ on:
   pull_request:
     paths:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeRelationshipRosterPort.java'
       - 'java/dev/slinkywinky/RelationshipRosterSampler.java'
@@ -60,7 +64,9 @@ jobs:
           for class in \
             dev/slinkywinky/forge/ForgePreview.class \
             dev/slinkywinky/forge/ForgeRelationshipRosterPort.class \
+            dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.class \
             dev/slinkywinky/RelationshipRosterSampler.class \
+            dev/slinkywinky/EspWorldSnapshotSampler.class \
             dev/slinkywinky/RelationshipRosterNativePreview.class \
             dev/slinkywinky/RosterIsolationGate.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
