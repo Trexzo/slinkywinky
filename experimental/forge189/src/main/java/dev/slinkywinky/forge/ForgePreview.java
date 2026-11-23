@@ -13,6 +13,7 @@ import dev.slinkywinky.ClutchFaceReceiptStatus;
 import dev.slinkywinky.ClutchCadenceObserver;
 import dev.slinkywinky.RelationshipRosterSampler;
 import dev.slinkywinky.EspWorldSnapshotSampler;
+import dev.slinkywinky.EspNativeReadOnlyPreview;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
 import net.minecraft.client.Minecraft;
@@ -97,8 +98,9 @@ public final class ForgePreview {
     private RelationshipRosterSampler r278RosterSampler;
     private int r278RosterSamples;
     private EspWorldSnapshotSampler r300EspSampler;
+    private EspNativeReadOnlyPreview r301EspNative;
     private Object r300World,r300Owner;
-    private int r300EspSamples;
+    private int r300EspSamples,r301EspSamples;
     // R283: strictly read-only native source decisions; no Minecraft writes.
     private RelationshipRosterNativePreview r283Native;
     private RelationshipRosterNativePreview.Settings r283Settings;
@@ -145,6 +147,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r289RosterLocalWorldTest");
     private static final boolean R300_ESP_READONLY =
         Boolean.getBoolean("slinkywinky.r300EspReadOnlyProbe");
+    private static final boolean R301_NATIVE_ESP_READONLY =
+        Boolean.getBoolean("slinkywinky.r301NativeEspReadOnlyProbe");
     private static final int R283_UUID_MODE =
         Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
@@ -311,6 +315,8 @@ public final class ForgePreview {
         }
         // R300: independent user-opted, read-only Forge world sampler.
         // Never expose raw world/player observations outside a TEMP profile.
+        if(R301_NATIVE_ESP_READONLY && !R300_ESP_READONLY)
+            throw new IllegalStateException("R301 requires R300 TEMP world admission");
         if(R300_ESP_READONLY) {
             final Minecraft mc=Minecraft.getMinecraft();
             if(mc==null||mc.mcDataDir==null||mc.getSession()==null)
@@ -372,6 +378,7 @@ public final class ForgePreview {
         if(r278RosterSampler!=null) {
             r278RosterSampler.close();r278RosterSampler=null;
         }
+        if(r301EspNative!=null) {r301EspNative.close();r301EspNative=null;}
         if(r300EspSampler!=null) {r300EspSampler.close();r300EspSampler=null;}
         r300World=r300Owner=null;
         r237World=r237Player=null;
@@ -427,6 +434,8 @@ public final class ForgePreview {
                 r278RosterSampler=new RelationshipRosterSampler();
             if(R300_ESP_READONLY)
                 r300EspSampler=new EspWorldSnapshotSampler();
+            if(R301_NATIVE_ESP_READONLY)
+                r301EspNative=new EspNativeReadOnlyPreview();
             if(R283_NATIVE_ROSTER_READONLY) {
                 r283Native=new RelationshipRosterNativePreview();
                 r283Settings=new RelationshipRosterNativePreview.Settings(
@@ -452,7 +461,7 @@ public final class ForgePreview {
             r251PriorSamples=r251HitBlocks=r251Matches=0;
             r252Due=r252PressProposals=0;
             r278RosterSamples=0;
-            r300EspSamples=0;
+            r300EspSamples=r301EspSamples=0;
             r283NativeSamples=0;
             r251PriorCentered=false;
             if(r251Sampler!=null){r251Sampler.close();r251Sampler=null;}
@@ -1158,6 +1167,8 @@ public final class ForgePreview {
                 System.err.println("[SlinkyWinkyPreview] R278_ROSTER_READONLY_FAIL "+problem);
             if(R300_ESP_READONLY)
                 System.err.println("[SlinkyWinkyPreview] R300_ESP_READONLY_FAIL "+problem);
+            if(R301_NATIVE_ESP_READONLY)
+                System.err.println("[SlinkyWinkyPreview] R301_NATIVE_ESP_READONLY_FAIL "+problem);
             if(R283_NATIVE_ROSTER_READONLY)
                 System.err.println("[SlinkyWinkyPreview] R283_NATIVE_ROSTER_READONLY_FAIL "+problem);
             if(R289_ROSTER_LOCAL_WORLD_TEST) {
@@ -1180,6 +1191,30 @@ public final class ForgePreview {
            receipt.worldToken==receipt.playerToken||receipt.players.isEmpty())
             throw new IllegalStateException("R300 invalid ownership receipt");
         r300World=mc.theWorld;r300Owner=mc.thePlayer;
+        if(R301_NATIVE_ESP_READONLY) {
+            if(r301EspNative==null)
+                throw new IllegalStateException("R301 native session absent");
+            final EspNativeReadOnlyPreview.Result nativeReceipt=
+                r301EspNative.observe(receipt,32.0f,32.0f,32.0f);
+            if(nativeReceipt.worldToken!=receipt.worldToken||
+               nativeReceipt.playerToken!=receipt.playerToken||
+               nativeReceipt.generation!=receipt.generation||
+               nativeReceipt.tick!=receipt.tick||
+               nativeReceipt.rawTiles!=receipt.tiles.size()||
+               nativeReceipt.rawDrops!=receipt.drops.size()||
+               nativeReceipt.rawPlayers!=receipt.players.size())
+                throw new IllegalStateException("R301 native provenance diverged");
+            ++r301EspSamples;
+            if(r301EspSamples==20)
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R301_REAL_NATIVE_ESP_WORLD_RECEIPT "+
+                    "samples="+r301EspSamples+
+                    " chestRows="+nativeReceipt.chestRows+
+                    " itemRows="+nativeReceipt.itemRows+
+                    " playerRows="+nativeReceipt.playerRows+
+                    " generation="+nativeReceipt.generation+
+                    " writes=0 rendering=0");
+        }
         ++r300EspSamples;
         if(r300EspSamples==20)
             System.out.println("[SlinkyWinkyPreview] "+

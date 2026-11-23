@@ -6,6 +6,7 @@ on:
     paths:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
+      - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeRelationshipRosterPort.java'
@@ -22,6 +23,7 @@ on:
     paths:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
+      - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeRelationshipRosterPort.java'
@@ -67,6 +69,7 @@ jobs:
             dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.class \
             dev/slinkywinky/RelationshipRosterSampler.class \
             dev/slinkywinky/EspWorldSnapshotSampler.class \
+            dev/slinkywinky/EspNativeReadOnlyPreview.class \
             dev/slinkywinky/RelationshipRosterNativePreview.class \
             dev/slinkywinky/RosterIsolationGate.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
