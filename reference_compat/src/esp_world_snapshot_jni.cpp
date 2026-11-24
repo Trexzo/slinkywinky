@@ -224,7 +224,7 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeChestPlan(
         env->GetDoubleArrayRegion(camera,0,3,xyz);
         if(env->ExceptionCheck())return nullptr;
         if(id[0]<=0||id[1]<=0||id[0]==id[1]||id[2]<=0||id[3]<0||
-           !finite(xyz[0])||!finite(xyz[1])||!finite(xyz[2])){
+           !std::isfinite(xyz[0])||!std::isfinite(xyz[1])||!std::isfinite(xyz[2])){
             fail(env,"R303 malformed camera/owner");return nullptr;
         }
         std::lock_guard<std::mutex> guard(lock);
@@ -252,7 +252,7 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeChestPlan(
             const auto& draw=plan.draws[i];
             const std::size_t base=5+5*i;
             for(int axis=0;axis<3;axis++){
-                if(!finite(draw.translation[static_cast<std::size_t>(axis)])){
+                if(!std::isfinite(draw.translation[static_cast<std::size_t>(axis)])){
                     fail(env,"R303 nonfinite draw translation");return nullptr;
                 }
                 payload[base+static_cast<std::size_t>(axis)]=
