@@ -22,10 +22,24 @@ param(
  [switch]$R303ChestRenderTest,
  [string]$R303ExpectedJarSha256,
  [switch]$R304EntityRenderTest,
- [string]$R304ExpectedJarSha256
+ [string]$R304ExpectedJarSha256,
+ [switch]$R305SourcePhaseTest,
+ [string]$R305ExpectedJarSha256
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if($R305SourcePhaseTest){
+  if($R305ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
+    {throw 'R305 exact preview JAR digest required'}
+  if($R304EntityRenderTest -or $R303ChestRenderTest -or
+     $R302EspWorldTest -or $R289RosterWorldTest -or
+     $R208LocalWorldTest -or $R209PlayerTickTest -or
+     $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
+     $R215VanillaInputTest -or $R216DisplacementTest -or
+     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest)
+    {throw 'R305 source-phase acceptance must be isolated'}
+}elseif($R305ExpectedJarSha256)
+  {throw 'R305 digest cannot override earlier test modes'}
 if($R304EntityRenderTest){
   if($R304ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
      $R304ExpectedJarSha256.ToLowerInvariant() -ne '03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38')
@@ -76,7 +90,9 @@ if($R289RosterWorldTest -and
     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest)) {
   throw 'R289 real roster test must be the ONLY selected mode'
 }
-$expectedJar=if($R304EntityRenderTest){
+$expectedJar=if($R305SourcePhaseTest){
+  $R305ExpectedJarSha256.ToLowerInvariant()
+}elseif($R304EntityRenderTest){
   '03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38'
 }elseif($R303ChestRenderTest){
   'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48'
@@ -103,7 +119,7 @@ $expectedJar=if($R304EntityRenderTest){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R304EntityRenderTest){'R304Offline'}elseif($R303ChestRenderTest){'R303Offline'}elseif($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R305SourcePhaseTest){'R305Offline'}elseif($R304EntityRenderTest){'R304Offline'}elseif($R303ChestRenderTest){'R303Offline'}elseif($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -115,10 +131,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
+if($R305SourcePhaseTest -or $R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R304EntityRenderTest){
+  $prefix=if($R305SourcePhaseTest){
+    '/slinkywinky-r305-independent-forge-[^/]+$'
+  }elseif($R304EntityRenderTest){
     '/slinkywinky-r304-independent-forge-[^/]+$'
   }elseif($R303ChestRenderTest){
     '/slinkywinky-r303-independent-forge-[^/]+$'
@@ -265,7 +283,15 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R304EntityRenderTest){
+if($R305SourcePhaseTest){
+  $argsList=@(
+    '-Dslinkywinky.r300EspReadOnlyProbe=true',
+    '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
+    '-Dslinkywinky.r303ChestRenderProbe=true',
+    '-Dslinkywinky.r304EntityRenderProbe=true',
+    '-Dslinkywinky.r305SourcePhaseTest=true',
+    '-Dslinkywinky.r305SourcePhaseLocalWorldTest=true')+$argsList
+}elseif($R304EntityRenderTest){
   $argsList=@(
     '-Dslinkywinky.r300EspReadOnlyProbe=true',
     '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
@@ -323,7 +349,9 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
 @(
  'R207_INDEPENDENT_FORGE_PREFLIGHT_PASS'
  "REOBF_SHA256=$expectedJar"
- "ISOLATED_WORLD_TEST=$([bool]($R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "ISOLATED_WORLD_TEST=$([bool]($R305SourcePhaseTest -or $R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "R305_NATIVE_SOURCE_PHASE_TEST=$([bool]$R305SourcePhaseTest)"
+ "R305_NATIVE_SOURCE_PHASES_R0_R18_R6_R7_R26=$([bool]$R305SourcePhaseTest)"
  "R304_ENTITY_RENDER_TEST=$([bool]$R304EntityRenderTest)"
  "R304_ENTITY_NATIVE_READONLY=$([bool]$R304EntityRenderTest)"
  "R303_CHEST_RENDER_TEST=$([bool]$R303ChestRenderTest)"

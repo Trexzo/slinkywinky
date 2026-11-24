@@ -150,6 +150,77 @@ public final class EspNativeReadOnlyPreviewSmoke {
         entityStranger.start();entityStranger.join();
         check(entityForeign[0],"R304 entity plan owner thread");
         nativePreview.close();javaSampler.close();
+
+        // R305: intentionally separate event 0, 18 and world/screen phase
+        // admissions against the actual native C++ R297-R299 controllers.
+        final Fixture sourceFixture=new Fixture();
+        final EspWorldSnapshotSampler phasedSampler=new EspWorldSnapshotSampler();
+        final EspNativeReadOnlyPreview phased=new EspNativeReadOnlyPreview(true);
+        final EspWorldSnapshotSampler.Receipt tick0=phasedSampler.observe(sourceFixture,10);
+        final EspNativeReadOnlyPreview.Result staged=phased.observe(tick0,10,10,10);
+        check(staged.chestRows==-1&&staged.itemRows==-1&&staged.playerRows==-1,
+              "R305 native staging does NOT run any controller");
+        refuse(new Runnable(){public void run(){
+            phased.sourceEvent(staged,18);
+        }},"R305 event18-before-event0 rejected");
+        refuse(new Runnable(){public void run(){
+            phased.chestPlan(staged,0,0,0);
+        }},"R305 plan denied before collection");
+        final EspNativeReadOnlyPreview.Result chest=phased.sourceEvent(staged,0);
+        check(chest.chestRows==2&&chest.itemRows==-1&&chest.playerRows==-1,
+              "R305 real Chest event0 only");
+        refuse(new Runnable(){public void run(){
+            phased.sourceEvent(chest,0);
+        }},"R305 duplicate event0 rejected");
+        final EspNativeReadOnlyPreview.Result collected=phased.sourceEvent(chest,18);
+        check(collected.chestRows==2&&collected.itemRows==1&&
+              collected.playerRows==1,"R305 Item/Player event18");
+        refuse(new Runnable(){public void run(){
+            phased.entityPlan(collected,0,0,0,.5);
+        }},"R305 render requires world event6");
+        refuse(new Runnable(){public void run(){
+            phased.sourceEvent(collected,7);
+        }},"R305 event7-before-event6 rejected");
+        final EspNativeReadOnlyPreview.Result world6=phased.sourceEvent(collected,6);
+        check(phased.chestPlan(world6,0,0,0).draws.size()==2 &&
+              phased.entityPlan(world6,0,0,0,.5).players.size()==1,
+              "R305 real C++ rows readable after event6");
+        final EspNativeReadOnlyPreview.Result screen7=phased.sourceEvent(world6,7);
+        final EspNativeReadOnlyPreview.Result another6=phased.sourceEvent(screen7,6);
+        check(another6.itemRows==1,"R305 repeat render per physics tick");
+        sourceFixture.drops.add(new EspWorldSnapshotSampler.Drop(
+            at(1.1,0,0),at(1.1,0,0),264,4,false,true,true));
+        final EspNativeReadOnlyPreview.Result nextStage=phased.observe(
+            phasedSampler.observe(sourceFixture,11),10,10,10);
+        refuse(new Runnable(){public void run(){
+            phased.sourceEvent(nextStage,6);
+        }},"R305 prior tick cannot authorize new render");
+        final EspNativeReadOnlyPreview.Result next0=phased.sourceEvent(nextStage,0);
+        final EspNativeReadOnlyPreview.Result next18=phased.sourceEvent(next0,18);
+        check(next18.itemRows==2,"R305 newly collected source rows");
+        final EspNativeReadOnlyPreview.Result cleared=phased.sourceEvent(next18,26);
+        check(cleared.chestRows==0&&cleared.itemRows==0&&cleared.playerRows==0,
+              "R305 original event26 clears collected rows and policy");
+        sourceFixture.world=new Object();
+        final EspNativeReadOnlyPreview.Result swapStage=phased.observe(
+            phasedSampler.observe(sourceFixture,0),10,10,10);
+        refuse(new Runnable(){public void run(){
+            phased.sourceEvent(next18,18);
+        }},"R305 old world receipt revoked");
+        final EspNativeReadOnlyPreview.Result swap0=phased.sourceEvent(swapStage,0);
+        final EspNativeReadOnlyPreview.Result swap18=phased.sourceEvent(swap0,18);
+        check(swap18.generation>next18.generation &&
+              swap18.chestRows==2&&swap18.itemRows==2,
+              "R305 new world generation collection");
+        final boolean[] phaseForeign={false};
+        Thread phaser=new Thread(new Runnable(){public void run(){
+            try {phased.sourceEvent(swap18,6);}
+            catch(IllegalStateException expected){phaseForeign[0]=true;}
+        }});
+        phaser.start();phaser.join();
+        check(phaseForeign[0],"R305 source phase remains owner-thread bound");
+        phased.close();phasedSampler.close();
+        System.out.println("R305_JAVA8_REAL_NATIVE_ESP_PHASE_0_18_6_7_26_PASS");
         System.out.println("R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS");
     }
 }

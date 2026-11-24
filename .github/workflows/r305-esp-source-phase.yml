@@ -1,0 +1,77 @@
+name: R305 source ESP phase dispatch (events 0,18,6,7,26)
+
+on:
+  push:
+    paths:
+      - 'reference_compat/src/esp_world_snapshot_jni.cpp'
+      - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
+      - 'tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - '.github/workflows/r305-esp-source-phase.yml'
+  pull_request:
+    paths:
+      - 'reference_compat/src/esp_world_snapshot_jni.cpp'
+      - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
+      - 'tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - '.github/workflows/r305-esp-source-phase.yml'
+
+jobs:
+  real-java8-native-event-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Configure actual first-party native JNI
+        run: cmake -S . -B build/r305 -DSLINKYWINKY_BUILD_JNI=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+      - name: Build real JNI controllers
+        run: cmake --build build/r305 --target slinkywinky_jni --parallel 2
+      - name: Real Java8-to-C++ Chest event0, Item/Player event18, render6/7 and unload26
+        run: ctest --test-dir build/r305 -R '^r301_java8_real_native_three_esp_controllers$' --output-on-failure
+
+  windows-launcher-source-gates:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Windows PowerShell 5.1 parse and R305 source event contracts
+        shell: powershell
+        run: |
+          $tokens=$null;$errors=$null
+          $file=Join-Path $env:GITHUB_WORKSPACE 'tools/run_r207_independent_forge_loader.ps1'
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            $file,[ref]$tokens,[ref]$errors)
+          if($errors.Count -gt 0) {
+            foreach($error in $errors){Write-Error $error.ToString()}
+            throw 'R305 PowerShell 5.1 parser failure'
+          }
+          $ps=Get-Content $file -Raw
+          $forge=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java' -Raw
+          $native=Get-Content 'reference_compat/src/esp_world_snapshot_jni.cpp' -Raw
+          foreach($needle in @(
+            'R305SourcePhaseTest','R305ExpectedJarSha256',
+            'R305_NATIVE_SOURCE_PHASE_TEST=',
+            'slinkywinky.r305SourcePhaseTest=true',
+            'slinkywinky.r305SourcePhaseLocalWorldTest=true'
+          )){if(-not $ps.Contains($needle)){throw ('R305 launcher missing '+$needle)}}
+          foreach($needle in @(
+            'R305_SOURCE_PHASE_ISOLATION_GATE_PASS',
+            'R305_REAL_NATIVE_SOURCE_0_18_PASS',
+            'R305_REAL_NATIVE_SOURCE_EVENT6_PASS',
+            'R305_REAL_NATIVE_SOURCE_EVENT7_PASS',
+            'R305_SOURCE_EVENT26_UNLOAD_PASS'
+          )){if(-not $forge.Contains($needle)){throw ('R305 Forge phase missing '+$needle)}}
+          foreach($needle in @(
+            'EspNativeReadOnlyPreview_nativeEnableSourcePhases',
+            'EspNativeReadOnlyPreview_nativeSourceEvent',
+            'R305 incomplete source events before next tick',
+            'R305 source event order/duplicate refused',
+            'R305 stale source event'
+          )){if(-not $native.Contains($needle)){throw ('R305 JNI gate missing '+$needle)}}
+          Write-Output 'R305_NATIVE_ESP_PHASE_DISPATCH_CONTRACT_PASS'

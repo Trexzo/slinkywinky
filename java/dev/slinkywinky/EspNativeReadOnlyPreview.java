@@ -9,6 +9,8 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
     private static final int VERSION=1;
     static {System.loadLibrary("slinkywinky_jni");}
     private static native long nativeCreate();
+    private static native void nativeEnableSourcePhases(long handle);
+    private static native long[] nativeSourceEvent(long handle,long[] identity,int type);
     private static native long[] nativeObserve(long handle,long[] identity,
         double[] self,double[] tiles,int[] tileIds,double[] drops,int[] dropFacts,
         double[] players,float[] health,int[] playerFacts,float[] ranges);
@@ -48,12 +50,29 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
             rawTiles=(int)n[5];rawDrops=(int)n[6];rawPlayers=(int)n[7];
             chestRows=(int)n[8];itemRows=(int)n[9];playerRows=(int)n[10];
         }
+        private Result(Result previous,long[] n){
+            worldToken=previous.worldToken;playerToken=previous.playerToken;
+            generation=previous.generation;tick=previous.tick;
+            rawTiles=previous.rawTiles;rawDrops=previous.rawDrops;
+            rawPlayers=previous.rawPlayers;
+            chestRows=(int)n[0];itemRows=(int)n[1];playerRows=(int)n[2];
+        }
     }
     private final Thread thread=Thread.currentThread();
+    private final boolean phased;
+    private Result lastSource;
     private long handle;
-    public EspNativeReadOnlyPreview(){
+    public EspNativeReadOnlyPreview(){this(false);}
+    public EspNativeReadOnlyPreview(boolean sourcePhases){
+        phased=sourcePhases;
         handle=nativeCreate();
         if(handle<=0)throw new IllegalStateException("R301 native unavailable");
+        if(sourcePhases){
+            try{nativeEnableSourcePhases(handle);}
+            catch(RuntimeException | LinkageError failure){
+                nativeClose(handle);handle=0;throw failure;
+            }
+        }
     }
     private void owner(){
         if(handle<=0||Thread.currentThread()!=thread)
@@ -113,9 +132,36 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
         if(n==null||n.length!=11||n[0]!=VERSION||n[1]!=id[0]||
            n[2]!=id[1]||n[3]!=id[2]||n[4]!=id[3]||
            n[5]!=ct||n[6]!=cd||n[7]!=cp||
-           n[8]<0||n[8]>100||n[9]<0||n[9]>100||n[10]<0||n[10]>100)
-            throw new IllegalStateException("R301 mismatched native receipt");
-        return new Result(receipt,n);
+           (phased ? (n[8]!=-1||n[9]!=-1||n[10]!=-1) :
+             (n[8]<0||n[8]>100||n[9]<0||n[9]>100||
+              n[10]<0||n[10]>100)))
+            throw new IllegalStateException("R301/R305 mismatched native receipt");
+        Result result=new Result(receipt,n);
+        if(phased)lastSource=result;
+        return result;
+    }
+    /**
+     * R305: independently dispatch source event-0 Chest collection,
+     * source event-18 Item+Player collection, event-6 world-render admission,
+     * event-7 screen-render admission, and event-26 unload cleanup.
+     * No JNI call is made by legacy (unphased) clients.
+     */
+    public Result sourceEvent(Result previous,int event){
+        owner();
+        if(!phased||previous==null||previous!=lastSource||
+           !(event==0||event==18||event==6||event==7||event==26))
+            throw new IllegalStateException("R305 wrong source event/owner receipt");
+        final long[] id={previous.worldToken,previous.playerToken,
+                         previous.generation,previous.tick};
+        long[] rows=nativeSourceEvent(handle,id,event);
+        if(rows==null||rows.length!=3||rows[0]<0||rows[0]>100||
+           ((event==0) ? (rows[1]!=-1||rows[2]!=-1) :
+             (rows[1]<0||rows[1]>100||rows[2]<0||rows[2]>100))||
+           (event==26&&(rows[0]!=0||rows[1]!=0||rows[2]!=0)))
+            throw new IllegalStateException("R305 malformed phase receipt");
+        Result next=new Result(previous,rows);
+        lastSource=event==26?null:next;
+        return next;
     }
     /**
      * R303: actual R297 C++ source controller's event-6 draw-plan.
@@ -241,6 +287,6 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
     }
 
     @Override public void close(){
-        owner();nativeClose(handle);handle=0;
+        owner();nativeClose(handle);handle=0;lastSource=null;
     }
 }

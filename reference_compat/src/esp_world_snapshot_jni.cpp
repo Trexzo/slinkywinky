@@ -21,6 +21,18 @@ struct Session {
     ChestEspController chest;
     ItemEspController item;
     PlayerEspController players;
+    // R305 opt-in only. Legacy R301-R304 JNI ABI and eager observe remain.
+    bool phased=false;
+    // 0 staged, 1 Chest event0 complete, 2 event18 complete,
+    // 6 world render, 7 overlay, 26 world unload; 3 initial.
+    int source_phase=3;
+    std::vector<ChestEspTile> staged_tiles;
+    std::vector<ItemEspEntity> staged_drops;
+    std::vector<PlayerEspEntity> staged_players;
+    ChestEspPosition staged_self{};
+    ChestEspSettings staged_chest{};
+    ItemEspSettings staged_item{};
+    PlayerEspSettings staged_player{};
 };
 std::mutex lock;
 std::map<jlong,std::unique_ptr<Session>> sessions;
@@ -68,6 +80,19 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeCreate(JNIEnv* env,jclass){
         sessions.emplace(id,std::unique_ptr<Session>(new Session()));
         return id;
     }catch(...){fail(env,"R301 session creation failed");return 0;}
+}
+// R305 optional semantic phase routing, never enabled by prior R301-R304 JARs.
+extern "C" JNIEXPORT void JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeEnableSourcePhases(
+    JNIEnv* env,jclass,jlong handle){
+    std::lock_guard<std::mutex> guard(lock);
+    const auto it=sessions.find(handle);
+    if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()||
+       it->second->observed||it->second->phased){
+        fail(env,"R305 phase upgrade denied");return;
+    }
+    it->second->phased=true;
+    it->second->source_phase=3;
 }
 extern "C" JNIEXPORT jlongArray JNICALL
 Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeObserve(
@@ -182,19 +207,102 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeObserve(
         const ChestEspPosition chestSelf{location[0],location[1],location[2]};
         const ItemEspPosition itemSelf{location[0],location[1],location[2]};
         const PlayerEspPosition playerSelf{location[0],location[1],location[2]};
-        s.chest.tick(true,chestSelf,cs.range,cs,tiles);
-        s.item.sample(true,itemSelf,is,{},drops);
-        s.players.update(true,playerSelf,ps,players);
+        jlong chestCount=-1,itemCount=-1,playerCount=-1;
+        if(s.phased){
+            if(s.source_phase==0||s.source_phase==1){
+                fail(env,"R305 incomplete source events before next tick");
+                return nullptr;
+            }
+            if(s.observed&&(meta[0]!=s.world||meta[1]!=s.player||
+                            meta[2]!=s.generation)){
+                // Event26-equivalent invalidation on world replacement.
+                s.chest.unload();s.item.clear_event26();s.players.world_unload();
+            }
+            s.staged_tiles=std::move(tiles);
+            s.staged_drops=std::move(drops);
+            s.staged_players=std::move(players);
+            s.staged_self=chestSelf;
+            s.staged_chest=cs;
+            s.staged_item=is;
+            s.staged_player=ps;
+            s.source_phase=0;
+        }else{
+            s.chest.tick(true,chestSelf,cs.range,cs,tiles);
+            s.item.sample(true,itemSelf,is,{},drops);
+            s.players.update(true,playerSelf,ps,players);
+            chestCount=static_cast<jlong>(s.chest.rows().size());
+            itemCount=static_cast<jlong>(s.item.rows().size());
+            playerCount=static_cast<jlong>(s.players.rows().size());
+        }
         jlong payload[11]{1,meta[0],meta[1],meta[2],meta[3],nt,nd,np,
-            static_cast<jlong>(s.chest.rows().size()),
-            static_cast<jlong>(s.item.rows().size()),
-            static_cast<jlong>(s.players.rows().size())};
+            chestCount,itemCount,playerCount};
         env->SetLongArrayRegion(out,0,11,payload);
         if(env->ExceptionCheck())return nullptr;
         s.observed=true;s.world=meta[0];s.player=meta[1];
         s.generation=meta[2];s.tick=meta[3];
         return out;
     }catch(...){fail(env,"R301 native ESP observation failed");return nullptr;}
+}
+// R305: actual first-party C++ controller event-0/event-18 dispatch,
+// plus render 6/7 admission and event26 invalidation. All optional.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeSourceEvent(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,jint type){
+    if(!identity||env->GetArrayLength(identity)!=4){
+        fail(env,"R305 invalid source event receipt");return nullptr;
+    }
+    jlong id[4]{};
+    env->GetLongArrayRegion(identity,0,4,id);
+    if(env->ExceptionCheck())return nullptr;
+    if(id[0]<=0||id[1]<=0||id[0]==id[1]||id[2]<=0||id[3]<0){
+        fail(env,"R305 invalid source event identity");return nullptr;
+    }
+    std::lock_guard<std::mutex> guard(lock);
+    const auto it=sessions.find(handle);
+    if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()||
+       !it->second->phased){
+        fail(env,"R305 source event wrong owner");return nullptr;
+    }
+    Session& s=*it->second;
+    if(!s.observed||id[0]!=s.world||id[1]!=s.player||
+       id[2]!=s.generation||id[3]!=s.tick){
+        fail(env,"R305 stale source event");return nullptr;
+    }
+    if(type==0 && s.source_phase==0){
+        s.chest.tick(true,s.staged_self,s.staged_chest.range,
+                     s.staged_chest,s.staged_tiles);
+        s.staged_tiles.clear();
+        s.source_phase=1;
+    }else if(type==18 && s.source_phase==1){
+        const ItemEspPosition self{s.staged_self.x,s.staged_self.y,
+                                   s.staged_self.z};
+        const PlayerEspPosition pself{s.staged_self.x,s.staged_self.y,
+                                     s.staged_self.z};
+        s.item.sample(true,self,s.staged_item,{},s.staged_drops);
+        s.players.update(true,pself,s.staged_player,s.staged_players);
+        s.staged_drops.clear();s.staged_players.clear();
+        s.source_phase=2;
+    }else if(type==6 && (s.source_phase==2||
+                          s.source_phase==6||s.source_phase==7)){
+        s.source_phase=6;
+    }else if(type==7 && (s.source_phase==6||s.source_phase==7)){
+        s.source_phase=7;
+    }else if(type==26){
+        s.chest.unload();s.item.clear_event26();s.players.world_unload();
+        s.staged_tiles.clear();s.staged_drops.clear();s.staged_players.clear();
+        s.source_phase=26;
+    }else{
+        fail(env,"R305 source event order/duplicate refused");return nullptr;
+    }
+    jlongArray out=env->NewLongArray(3);
+    if(!out)return nullptr;
+    jlong payload[3]{
+        static_cast<jlong>(s.chest.rows().size()),
+        s.source_phase==1 ? -1 : static_cast<jlong>(s.item.rows().size()),
+        s.source_phase==1 ? -1 : static_cast<jlong>(s.players.rows().size())
+    };
+    env->SetLongArrayRegion(out,0,3,payload);
+    return env->ExceptionCheck()?nullptr:out;
 }
 extern "C" JNIEXPORT void JNICALL
 Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeClose(
@@ -234,8 +342,9 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeChestPlan(
         }
         const Session& s=*it->second;
         if(!s.observed||id[0]!=s.world||id[1]!=s.player||
-           id[2]!=s.generation||id[3]!=s.tick){
-            fail(env,"R303 stale native render receipt");return nullptr;
+           id[2]!=s.generation||id[3]!=s.tick||
+           (s.phased&&s.source_phase!=6&&s.source_phase!=7)){
+            fail(env,"R303/R305 stale or out-of-phase render receipt");return nullptr;
         }
         ChestEspSettings settings;
         settings.line_width=1.0f;settings.filled=false;
@@ -308,8 +417,9 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeEntityPlan(
         }
         const Session& s=*it->second;
         if(!s.observed||id[0]!=s.world||id[1]!=s.player||
-           id[2]!=s.generation||id[3]!=s.tick){
-            fail(env,"R304 stale native entity rows");return nullptr;
+           id[2]!=s.generation||id[3]!=s.tick||
+           (s.phased&&s.source_phase!=6&&s.source_phase!=7)){
+            fail(env,"R304/R305 stale or out-of-phase entity rows");return nullptr;
         }
         const auto& items=s.item.rows();
         const auto& players=s.players.rows();
