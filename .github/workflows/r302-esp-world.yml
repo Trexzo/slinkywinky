@@ -47,7 +47,8 @@ jobs:
           foreach($needle in @(
             'R302EspWorldTest', 'R302ExpectedJarSha256',
             'slinkywinky.r302EspLocalWorldTest=true',
-            'R302_ESP_WORLD_TEST='
+            'R302_ESP_WORLD_TEST=',
+            'b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5'
           )){
             if(-not $launcher.Contains($needle)){throw ('Missing launcher contract: '+$needle)}
           }

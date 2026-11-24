@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 MC_SHA = "14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298"
+JAR_SHA = "b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5"
 PREFIX = "slinkywinky-r302-independent-forge-"
 MARKERS = (
     "R302_ESP_WORLD_ISOLATION_GATE_PASS",
@@ -82,8 +83,8 @@ def check_log(log):
 
 
 def check_preflight(preflight, jar_sha):
-    if not SHA.fullmatch(jar_sha):
-        raise ValueError("R302 exact 64-hex JAR hash required")
+    if not SHA.fullmatch(jar_sha) or jar_sha != JAR_SHA:
+        raise ValueError("R302 requires exact reviewed GitHub JAR SHA256")
     for marker in ("R207_INDEPENDENT_FORGE_PREFLIGHT_PASS",
                    "PROFILE=ISOLATED_TEMPORARY",
                    "LOGIN=OFFLINE_DUMMY",
@@ -164,7 +165,7 @@ def fixture():
 
 def preflight_fixture():
     lines = ["R207_INDEPENDENT_FORGE_PREFLIGHT_PASS",
-             "REOBF_SHA256=" + "a" * 64,
+             "REOBF_SHA256=" + JAR_SHA,
              "MC_SHA256=" + MC_SHA,
              "R302_ESP_WORLD_TEST=True",
              "R302_ESP_NATIVE_READONLY=True",
@@ -193,7 +194,7 @@ def selftest():
     good = fixture()
     check_log(good)
     p = preflight_fixture()
-    check_preflight(p, "a" * 64)
+    check_preflight(p, JAR_SHA)
     for marker in MARKERS:
         refuses(lambda marker=marker: check_log(good.replace(marker, "ABSENT", 1)))
     for old, new in (

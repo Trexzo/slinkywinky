@@ -11,7 +11,8 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-if($ExpectedReobfJarSha256 -notmatch '^[0-9a-fA-F]{64}$'){
+if($ExpectedReobfJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+   $ExpectedReobfJarSha256.ToLowerInvariant() -ne 'b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5'){
   throw 'R302 verifier requires an exact reviewed Forge JAR SHA256'
 }
 $instance=(Resolve-Path -LiteralPath $InstanceRoot -ErrorAction Stop).ProviderPath

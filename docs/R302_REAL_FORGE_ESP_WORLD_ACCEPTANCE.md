@@ -15,9 +15,17 @@ It then emits a one-time R302 acceptance marker, closes all native/Java
 observers, and disallows automatic restart. No packets, keys, rotations,
 world/entity changes, or GL drawing are performed by these observers.
 
-The R207 launcher adds `-R302EspWorldTest` and requires
-`-R302ExpectedJarSha256 <reviewed-64-hex-hash>`, which is compared
-against the actual reobfuscated mod JAR. Other test modes retain their
+The R207 launcher adds -R302EspWorldTest and requires the exact
+R302ExpectedJarSha256 value:
+
+    b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5
+
+This digest was extracted from the successful Forge 1.8.9 artifact built
+for commit bccdd860e24e7130a0e8ffef920731fb1e379787 and independently
+verified against the JAR in that CI archive and forge-preview.sha256.
+The launcher, Python verifier and Windows process wrapper all enforce
+this exact SHA-256; arbitrary user-provided digest overrides are refused.
+Other test modes retain their
 existing fixed hashes and are mutually excluded from this mode.
 R302 also checks the local game directory and dummy username.
 

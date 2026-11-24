@@ -23,8 +23,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 if($R302EspWorldTest){
-  if($R302ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
-    {throw 'R302 requires an exact expected reobfuscated JAR SHA256'}
+  if($R302ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+     $R302ExpectedJarSha256.ToLowerInvariant() -ne 'b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5')
+    {throw 'R302 requires the exact SHA-pinned GitHub Forge artifact'}
   if($R208LocalWorldTest -or $R209PlayerTickTest -or
      $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
      $R215VanillaInputTest -or $R216DisplacementTest -or
@@ -48,7 +49,7 @@ if($R289RosterWorldTest -and
   throw 'R289 real roster test must be the ONLY selected mode'
 }
 $expectedJar=if($R302EspWorldTest){
-  $R302ExpectedJarSha256.ToLowerInvariant()
+  'b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5'
 }elseif($R289RosterWorldTest){
   '37ed0d9ec4319ae7ffeefce19787394d6de1d75214c27f063b85c461ea62a807'
 }elseif($R224LocalStrafeReadOnlyTest){
