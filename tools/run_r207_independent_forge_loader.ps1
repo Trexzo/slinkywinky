@@ -16,10 +16,23 @@ param(
  [switch]$R216DisplacementTest,
  [switch]$R217ItemCategoriesTest,
  [switch]$R224LocalStrafeReadOnlyTest,
- [switch]$R289RosterWorldTest
+ [switch]$R289RosterWorldTest,
+ [switch]$R302EspWorldTest,
+ [string]$R302ExpectedJarSha256
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if($R302EspWorldTest){
+  if($R302ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
+    {throw 'R302 requires an exact expected reobfuscated JAR SHA256'}
+  if($R208LocalWorldTest -or $R209PlayerTickTest -or
+     $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
+     $R215VanillaInputTest -or $R216DisplacementTest -or
+     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest -or
+     $R289RosterWorldTest)
+    {throw 'R302 must be the only selected test mode'}
+}elseif($R302ExpectedJarSha256)
+  {throw 'R302 JAR SHA cannot override older SHA-pinned test modes'}
 if($R224LocalStrafeReadOnlyTest -and
    ($R208LocalWorldTest -or $R209PlayerTickTest -or
     $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
@@ -34,7 +47,9 @@ if($R289RosterWorldTest -and
     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest)) {
   throw 'R289 real roster test must be the ONLY selected mode'
 }
-$expectedJar=if($R289RosterWorldTest){
+$expectedJar=if($R302EspWorldTest){
+  $R302ExpectedJarSha256.ToLowerInvariant()
+}elseif($R289RosterWorldTest){
   '37ed0d9ec4319ae7ffeefce19787394d6de1d75214c27f063b85c461ea62a807'
 }elseif($R224LocalStrafeReadOnlyTest){
   'ba8759cec99148cf14b31ad4e4b2c7ec06abe387a9730e3a0bb8586d60b2d345'
@@ -55,7 +70,7 @@ $expectedJar=if($R289RosterWorldTest){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -67,10 +82,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
+if($R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R289RosterWorldTest){
+  $prefix=if($R302EspWorldTest){
+    '/slinkywinky-r302-independent-forge-[^/]+$'
+  }elseif($R289RosterWorldTest){
     '/slinkywinky-r278-independent-forge-[^/]+$'
   }elseif($R224LocalStrafeReadOnlyTest){
     '/slinkywinky-r224-independent-forge-[^/]+$'
@@ -211,7 +228,12 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R289RosterWorldTest){
+if($R302EspWorldTest){
+  $argsList=@(
+    '-Dslinkywinky.r300EspReadOnlyProbe=true',
+    '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
+    '-Dslinkywinky.r302EspLocalWorldTest=true')+$argsList
+}elseif($R289RosterWorldTest){
   $argsList=@(
     '-Dslinkywinky.r289RosterLocalWorldTest=true',
     '-Dslinkywinky.r278RosterReadOnlyProbe=true',
@@ -251,7 +273,9 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
 @(
  'R207_INDEPENDENT_FORGE_PREFLIGHT_PASS'
  "REOBF_SHA256=$expectedJar"
- "ISOLATED_WORLD_TEST=$([bool]($R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "ISOLATED_WORLD_TEST=$([bool]($R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "R302_ESP_WORLD_TEST=$([bool]$R302EspWorldTest)"
+ "R302_ESP_NATIVE_READONLY=$([bool]$R302EspWorldTest)"
  "R289_ROSTER_WORLD_TEST=$([bool]$R289RosterWorldTest)"
  "R289_ROSTER_NATIVE_READONLY=$([bool]$R289RosterWorldTest)"
  "NATIVE_JNI_SHA256=$((Get-FileHash (Join-Path $jni 'slinkywinky_jni.dll') -Algorithm SHA256).Hash.ToLowerInvariant())"

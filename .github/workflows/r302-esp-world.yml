@@ -1,0 +1,67 @@
+name: R302 exact in-world ESP receipt negative controls
+on:
+  push:
+    paths:
+      - 'tests/r302_esp_world_receipt.py'
+      - 'tools/verify_r302_esp_windows.ps1'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - '.github/workflows/r302-esp-world.yml'
+  pull_request:
+    paths:
+      - 'tests/r302_esp_world_receipt.py'
+      - 'tools/verify_r302_esp_windows.ps1'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - '.github/workflows/r302-esp-world.yml'
+jobs:
+  synthetic-negative-controls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Negative controls only (not Minecraft)
+        run: python3 tests/r302_esp_world_receipt.py --selftest
+  windows-powershell51-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse new acceptance scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          foreach ($path in @(
+            'tools/run_r207_independent_forge_loader.ps1',
+            'tools/verify_r302_esp_windows.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $env:GITHUB_WORKSPACE $path), [ref]$tokens, [ref]$errors)
+            if($errors.Count -gt 0) {
+              foreach($issue in $errors){Write-Error $issue.ToString()}
+              throw ('R302 PowerShell parser rejected ' + $path)
+            }
+          }
+          $launcher=Get-Content 'tools/run_r207_independent_forge_loader.ps1' -Raw
+          $verifier=Get-Content 'tools/verify_r302_esp_windows.ps1' -Raw
+          $source=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java' -Raw
+          foreach($needle in @(
+            'R302EspWorldTest', 'R302ExpectedJarSha256',
+            'slinkywinky.r302EspLocalWorldTest=true',
+            'R302_ESP_WORLD_TEST='
+          )){
+            if(-not $launcher.Contains($needle)){throw ('Missing launcher contract: '+$needle)}
+          }
+          foreach($needle in @(
+            'R302_REAL_FORGE_ESP_NATIVE_JNI_PASS',
+            'R302_ESP_NATIVE_CLEANUP_PASS', 'r302Generation',
+            'R302Offline'
+          )){
+            if(-not $source.Contains($needle)){throw ('Missing in-world contract: '+$needle)}
+          }
+          foreach($needle in @(
+            'Get-CimInstance Win32_Process','CreationDate',
+            'R302_EXACT_JVM_REAL_ESP_JNI_PASS'
+          )){
+            if(-not $verifier.Contains($needle)){throw ('Missing verifier contract: '+$needle)}
+          }
+          Write-Output 'R302_PS51_SOURCE_AND_LAUNCHER_PREFLIGHT_PASS'
