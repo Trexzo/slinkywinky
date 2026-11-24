@@ -71,9 +71,18 @@ new event phases nor GitHub tests prove visual parity, original 66
 descriptor runtime, vanilla injector ownership, pixel capture or
 real user-visible 1.8.9 gameplay. The owner desktop was offline.
 
-The new R305 JAR build SHA-256 must be independently reviewed and
-pinned before an owner-machine in-game acceptance. Keep PR #1 and
-PR #2 draft and unmerged.
+The new R305 Forge 1.8.9 build passed on commit `5ce4081`
+(GitHub Actions run 45473900295). Its `slinkywinky-forge189-preview-jar`
+artifact was downloaded: the packaged JAR SHA-256 independently matches
+the enclosed `forge-preview.sha256` manifest, and required renderer and
+Java JNI classes are inside the JAR. The exact R305 JAR SHA-256 is:
+
+`05e6f837f7ba2c953f1e2974bca364f63348e1bd32b8b084cb1c1664ac60aa0b`
+
+The new R305-only launcher path pins that exact reviewed hash in code
+and rejects a caller-supplied alternate digest. R302, R303 and R304
+hash pins remain unchanged. No owner-machine runtime acceptance has
+been performed. Keep PR #1 and PR #2 draft and unmerged.
 
 ## Target runtime evidence
 

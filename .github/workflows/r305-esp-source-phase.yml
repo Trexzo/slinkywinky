@@ -57,6 +57,7 @@ jobs:
           foreach($needle in @(
             'R305SourcePhaseTest','R305ExpectedJarSha256',
             'R305_NATIVE_SOURCE_PHASE_TEST=',
+            '05e6f837f7ba2c953f1e2974bca364f63348e1bd32b8b084cb1c1664ac60aa0b',
             'slinkywinky.r305SourcePhaseTest=true',
             'slinkywinky.r305SourcePhaseLocalWorldTest=true'
           )){if(-not $ps.Contains($needle)){throw ('R305 launcher missing '+$needle)}}
