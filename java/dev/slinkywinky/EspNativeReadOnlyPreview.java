@@ -14,6 +14,8 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
         double[] players,float[] health,int[] playerFacts,float[] ranges);
     private static native void nativeClose(long handle);
     private static native double[] nativeChestPlan(long handle,long[] identity,double[] camera);
+    private static native double[] nativeEntityPlan(long handle,long[] identity,
+                                                    double[] camera,double partialTicks);
 
     /** Source-derived native center translations. Diagnostic colors are host-specific. */
     public static final class ChestDraw {
@@ -151,6 +153,91 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
         }
         return new ChestPlan(receipt,(float)encoded[2],
                              (float)encoded[3],(float)encoded[4],rows);
+    }
+
+
+    /** R304: native ItemEspController collection order and merged quantity. */
+    public static final class ItemDraw {
+        public final double x,y,z;
+        public final int itemId,quantity;
+        private ItemDraw(double x,double y,double z,int id,int count){
+            this.x=x;this.y=y;this.z=z;itemId=id;quantity=count;
+        }
+    }
+    /** R304: native PlayerEspController farthest-first order and normalized health. */
+    public static final class PlayerDraw {
+        public final double x,y,z;
+        public final float health,absorption;
+        public final int hurtTime;
+        private PlayerDraw(double x,double y,double z,float health,float absorption,int hurt){
+            this.x=x;this.y=y;this.z=z;this.health=health;
+            this.absorption=absorption;hurtTime=hurt;
+        }
+    }
+    public static final class EntityPlan {
+        public final long worldToken,playerToken,generation,tick;
+        public final java.util.List<ItemDraw> items;
+        public final java.util.List<PlayerDraw> players;
+        private EntityPlan(Result receipt,java.util.List<ItemDraw> items,
+                           java.util.List<PlayerDraw> players){
+            worldToken=receipt.worldToken;playerToken=receipt.playerToken;
+            generation=receipt.generation;tick=receipt.tick;
+            this.items=java.util.Collections.unmodifiableList(
+                new java.util.ArrayList<ItemDraw>(items));
+            this.players=java.util.Collections.unmodifiableList(
+                new java.util.ArrayList<PlayerDraw>(players));
+        }
+    }
+
+    /**
+     * R304: source controller results, not original render semantics.
+     * All positions are interpolated from native previous/current rows, and
+     * translated against the Forge render camera. Item quantity zero
+     * represents a row folded into a nearby same-ID source count.
+     */
+    public EntityPlan entityPlan(Result receipt,double cameraX,double cameraY,
+                                 double cameraZ,double partialTicks){
+        owner();
+        if(receipt==null||receipt.worldToken<=0||receipt.playerToken<=0||
+           receipt.generation<=0||receipt.tick<0||
+           !Double.isFinite(cameraX)||!Double.isFinite(cameraY)||
+           !Double.isFinite(cameraZ)||!Double.isFinite(partialTicks)||
+           partialTicks<0||partialTicks>1)
+            throw new IllegalArgumentException("R304 malformed frame");
+        long[] id={receipt.worldToken,receipt.playerToken,receipt.generation,receipt.tick};
+        double[] out=nativeEntityPlan(handle,id,new double[]{cameraX,cameraY,cameraZ},
+                                      partialTicks);
+        if(out==null||out.length<3||out[0]!=1||out[1]<0||out[1]>100||
+           out[2]<0||out[2]>100||out[1]!=(int)out[1]||
+           out[2]!=(int)out[2]||out.length!=3+5*(int)out[1]+6*(int)out[2]||
+           out[1]!=receipt.itemRows||out[2]!=receipt.playerRows)
+            throw new IllegalStateException("R304 native row framing mismatch");
+        java.util.List<ItemDraw> items=new java.util.ArrayList<ItemDraw>();
+        for(int i=0;i<(int)out[1];i++){
+            int k=3+5*i;
+            if(!Double.isFinite(out[k])||!Double.isFinite(out[k+1])||
+               !Double.isFinite(out[k+2])||out[k+3]<0||
+               out[k+3]>(double)Integer.MAX_VALUE||
+               out[k+3]!=(int)out[k+3]||out[k+4]<0||out[k+4]>99||
+               out[k+4]!=(int)out[k+4])
+                throw new IllegalStateException("R304 invalid item row");
+            items.add(new ItemDraw(out[k],out[k+1],out[k+2],
+                                   (int)out[k+3],(int)out[k+4]));
+        }
+        java.util.List<PlayerDraw> players=new java.util.ArrayList<PlayerDraw>();
+        int offset=3+5*(int)out[1];
+        for(int i=0;i<(int)out[2];i++){
+            int k=offset+6*i;
+            if(!Double.isFinite(out[k])||!Double.isFinite(out[k+1])||
+               !Double.isFinite(out[k+2])||!Double.isFinite(out[k+3])||
+               !Double.isFinite(out[k+4])||out[k+3]<0||out[k+3]>1||
+               out[k+4]<0||out[k+4]>1||out[k+5]<0||
+               out[k+5]>Integer.MAX_VALUE||out[k+5]!=(int)out[k+5])
+                throw new IllegalStateException("R304 invalid player row");
+            players.add(new PlayerDraw(out[k],out[k+1],out[k+2],
+                       (float)out[k+3],(float)out[k+4],(int)out[k+5]));
+        }
+        return new EntityPlan(receipt,items,players);
     }
 
     @Override public void close(){

@@ -63,14 +63,60 @@ public final class EspNativeReadOnlyPreviewSmoke {
               Math.abs(draw.draws.get(0).centerY+0.5)<0.00001 &&
               Math.abs(draw.draws.get(0).centerZ+1.5)<0.00001,
               "R303 JNI camera relative centers");
+        EspNativeReadOnlyPreview.EntityPlan entities=
+            nativePreview.entityPlan(result,0.25,0.5,1.0,0.5);
+        check(entities.items.size()==1&&entities.players.size()==1&&
+              entities.worldToken==result.worldToken&&
+              entities.tick==result.tick,
+              "R304 source native Item and Player render rows");
+        check(entities.items.get(0).itemId==264&&
+              entities.items.get(0).quantity==3&&
+              Math.abs(entities.items.get(0).x-0.75)<0.00001 &&
+              Math.abs(entities.items.get(0).y+0.5)<0.00001 &&
+              Math.abs(entities.items.get(0).z+1.0)<0.00001,
+              "R304 native item coordinates and source count");
+        check(Math.abs(entities.players.get(0).x-1.75)<0.00001&&
+              Math.abs(entities.players.get(0).health-(12f/22f))<0.00001&&
+              Math.abs(entities.players.get(0).absorption-0.2f)<0.00001&&
+              entities.players.get(0).hurtTime==1,
+              "R304 native player health, absorption and hurt");
+        refuseArgument(new Runnable(){public void run(){
+            nativePreview.entityPlan(result,0,0,0,-0.1);
+        }},"R304 negative partialTicks");
+        refuseArgument(new Runnable(){public void run(){
+            nativePreview.entityPlan(result,0,0,0,Double.NaN);
+        }},"R304 NaN partialTicks");
         refuse(new Runnable(){public void run(){nativePreview.observe(one,10,10,10);}},
                "replay denied");
+        f.drops.add(new EspWorldSnapshotSampler.Drop(at(1.1,0,0),at(1.1,0,0),
+            264,4,false,true,true));
+        f.players.add(new EspWorldSnapshotSampler.Player(
+            UUID.fromString("00000000-0000-0000-0000-000000000003"),
+            at(4,0,0),at(4,0,0),false,false,20,20,0,0));
+        EspWorldSnapshotSampler.Receipt updated=javaSampler.observe(f,11);
+        EspNativeReadOnlyPreview.Result updatedNative=
+            nativePreview.observe(updated,10,10,10);
+        EspNativeReadOnlyPreview.EntityPlan merged=
+            nativePreview.entityPlan(updatedNative,0,0,0,1);
+        check(merged.items.size()==2&&merged.items.get(0).quantity==7&&
+              merged.items.get(1).quantity==0,
+              "R304 source list-order count merge, zeroed contributing row");
+        check(merged.players.size()==2&&
+              Math.abs(merged.players.get(0).x-4)<0.000001&&
+              Math.abs(merged.players.get(1).x-2)<0.000001,
+              "R304 farthest-first native PlayerESP source ordering");
+        refuse(new Runnable(){public void run(){
+            nativePreview.entityPlan(result,0,0,0,1);
+        }},"R304 stale tick entity plan");
         f.world=new Object();
         EspWorldSnapshotSampler.Receipt newWorld=javaSampler.observe(f,0);
         EspNativeReadOnlyPreview.Result next=nativePreview.observe(newWorld,10,10,10);
         refuse(new Runnable(){public void run(){
             nativePreview.chestPlan(result,0,0,0);
         }},"R303 old world draw refused");
+        refuse(new Runnable(){public void run(){
+            nativePreview.entityPlan(updatedNative,0,0,0,1);
+        }},"R304 old world entity plan refused");
         refuseArgument(new Runnable(){public void run(){
             nativePreview.chestPlan(next,Double.NaN,0,0);
         }},"R303 nonfinite camera");
@@ -94,6 +140,15 @@ public final class EspNativeReadOnlyPreviewSmoke {
         });
         drawStranger.start();drawStranger.join();
         check(drawForeign[0],"R303 draw owner thread");
+        final boolean[] entityForeign={false};
+        Thread entityStranger=new Thread(new Runnable(){
+            public void run(){
+                try{nativePreview.entityPlan(next,0,0,0,0.5);}
+                catch(IllegalStateException expected){entityForeign[0]=true;}
+            }
+        });
+        entityStranger.start();entityStranger.join();
+        check(entityForeign[0],"R304 entity plan owner thread");
         nativePreview.close();javaSampler.close();
         System.out.println("R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS");
     }

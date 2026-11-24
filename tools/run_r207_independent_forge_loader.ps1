@@ -20,10 +20,23 @@ param(
  [switch]$R302EspWorldTest,
  [string]$R302ExpectedJarSha256,
  [switch]$R303ChestRenderTest,
- [string]$R303ExpectedJarSha256
+ [string]$R303ExpectedJarSha256,
+ [switch]$R304EntityRenderTest,
+ [string]$R304ExpectedJarSha256
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if($R304EntityRenderTest){
+  if($R304ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
+    {throw 'R304 requires the exact reviewed reobfuscated preview JAR SHA256'}
+  if($R303ChestRenderTest -or $R302EspWorldTest -or
+     $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or
+     $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
+     $R215VanillaInputTest -or $R216DisplacementTest -or
+     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest)
+    {throw 'R304 must be the only isolated test mode'}
+}elseif($R304ExpectedJarSha256)
+  {throw 'R304 SHA256 cannot override earlier test modes'}
 if($R303ChestRenderTest){
   if($R303ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
      $R303ExpectedJarSha256.ToLowerInvariant() -ne 'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48')
@@ -62,7 +75,9 @@ if($R289RosterWorldTest -and
     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest)) {
   throw 'R289 real roster test must be the ONLY selected mode'
 }
-$expectedJar=if($R303ChestRenderTest){
+$expectedJar=if($R304EntityRenderTest){
+  $R304ExpectedJarSha256.ToLowerInvariant()
+}elseif($R303ChestRenderTest){
   'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48'
 }elseif($R302EspWorldTest){
   'b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5'
@@ -87,7 +102,7 @@ $expectedJar=if($R303ChestRenderTest){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R303ChestRenderTest){'R303Offline'}elseif($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R304EntityRenderTest){'R304Offline'}elseif($R303ChestRenderTest){'R303Offline'}elseif($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -99,10 +114,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
+if($R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R303ChestRenderTest){
+  $prefix=if($R304EntityRenderTest){
+    '/slinkywinky-r304-independent-forge-[^/]+$'
+  }elseif($R303ChestRenderTest){
     '/slinkywinky-r303-independent-forge-[^/]+$'
   }elseif($R302EspWorldTest){
     '/slinkywinky-r302-independent-forge-[^/]+$'
@@ -247,7 +264,14 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R303ChestRenderTest){
+if($R304EntityRenderTest){
+  $argsList=@(
+    '-Dslinkywinky.r300EspReadOnlyProbe=true',
+    '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
+    '-Dslinkywinky.r303ChestRenderProbe=true',
+    '-Dslinkywinky.r304EntityRenderProbe=true',
+    '-Dslinkywinky.r304EntityLocalWorldTest=true')+$argsList
+}elseif($R303ChestRenderTest){
   $argsList=@(
     '-Dslinkywinky.r300EspReadOnlyProbe=true',
     '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
@@ -298,7 +322,9 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
 @(
  'R207_INDEPENDENT_FORGE_PREFLIGHT_PASS'
  "REOBF_SHA256=$expectedJar"
- "ISOLATED_WORLD_TEST=$([bool]($R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "ISOLATED_WORLD_TEST=$([bool]($R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "R304_ENTITY_RENDER_TEST=$([bool]$R304EntityRenderTest)"
+ "R304_ENTITY_NATIVE_READONLY=$([bool]$R304EntityRenderTest)"
  "R303_CHEST_RENDER_TEST=$([bool]$R303ChestRenderTest)"
  "R303_CHEST_NATIVE_READONLY=$([bool]$R303ChestRenderTest)"
  "R302_ESP_WORLD_TEST=$([bool]$R302EspWorldTest)"

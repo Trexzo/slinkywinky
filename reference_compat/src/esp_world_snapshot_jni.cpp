@@ -273,3 +273,93 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeChestPlan(
         fail(env,"R303 native chest draw plan failed");return nullptr;
     }
 }
+
+
+// R304: source-order Entity ESP render *data* from the existing actual
+// ItemEspController and PlayerEspController, never synthetic replacements.
+// [version, itemRows, playerRows], 5 doubles per item
+// [cameraX,Y,Z,itemId,mergedQuantity], 6 per player
+// [cameraX,Y,Z,sourceHealth,sourceAbsorption,hurtTime].
+// Only the latest owner/session receipt is eligible and render interpolation
+// does not mutate any world or C++ source controller state.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeEntityPlan(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,
+    jdoubleArray camera,jdouble partialTicks){
+    if(!identity||!camera||env->GetArrayLength(identity)!=4||
+       env->GetArrayLength(camera)!=3){
+        fail(env,"R304 invalid entity draw metadata");return nullptr;
+    }
+    try{
+        jlong id[4]{};jdouble xyz[3]{};
+        env->GetLongArrayRegion(identity,0,4,id);
+        env->GetDoubleArrayRegion(camera,0,3,xyz);
+        if(env->ExceptionCheck())return nullptr;
+        if(id[0]<=0||id[1]<=0||id[0]==id[1]||id[2]<=0||id[3]<0||
+           !std::isfinite(partialTicks)||partialTicks<0||partialTicks>1||
+           !std::isfinite(xyz[0])||!std::isfinite(xyz[1])||
+           !std::isfinite(xyz[2])){
+            fail(env,"R304 invalid owner/camera/interpolation");return nullptr;
+        }
+        std::lock_guard<std::mutex> guard(lock);
+        const auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()){
+            fail(env,"R304 unowned render call");return nullptr;
+        }
+        const Session& s=*it->second;
+        if(!s.observed||id[0]!=s.world||id[1]!=s.player||
+           id[2]!=s.generation||id[3]!=s.tick){
+            fail(env,"R304 stale native entity rows");return nullptr;
+        }
+        const auto& items=s.item.rows();
+        const auto& players=s.players.rows();
+        if(items.size()>ItemEspController::kSourceRowCap||
+           players.size()>PlayerEspController::kSourceRowCap){
+            fail(env,"R304 source controller cap");return nullptr;
+        }
+        std::vector<jdouble> data(3+5*items.size()+6*players.size());
+        data[0]=1;data[1]=static_cast<double>(items.size());
+        data[2]=static_cast<double>(players.size());
+        const auto at=[&](double previous,double current,int axis)->double {
+            return previous+(current-previous)*partialTicks-xyz[axis];
+        };
+        for(std::size_t i=0;i<items.size();i++){
+            const auto& row=items[i];
+            const std::size_t k=3+5*i;
+            data[k]=at(row.previous.x,row.position.x,0);
+            data[k+1]=at(row.previous.y,row.position.y,1);
+            data[k+2]=at(row.previous.z,row.position.z,2);
+            data[k+3]=row.item_id;data[k+4]=row.quantity;
+            if(!std::isfinite(data[k])||!std::isfinite(data[k+1])||
+               !std::isfinite(data[k+2])||row.item_id<0||
+               row.quantity<0||row.quantity>99){
+                fail(env,"R304 invalid native item plan");return nullptr;
+            }
+        }
+        const std::size_t off=3+5*items.size();
+        for(std::size_t i=0;i<players.size();i++){
+            const auto& row=players[i];
+            const std::size_t k=off+6*i;
+            data[k]=at(row.previous.x,row.position.x,0);
+            data[k+1]=at(row.previous.y,row.position.y,1);
+            data[k+2]=at(row.previous.z,row.position.z,2);
+            data[k+3]=row.health;
+            data[k+4]=row.absorption;
+            data[k+5]=row.hurt;
+            if(!std::isfinite(data[k])||!std::isfinite(data[k+1])||
+               !std::isfinite(data[k+2])||
+               !std::isfinite(row.health)||row.health<0||row.health>1||
+               !std::isfinite(row.absorption)||row.absorption<0||
+               row.absorption>1||row.hurt<0){
+                fail(env,"R304 invalid native player plan");return nullptr;
+            }
+        }
+        jdoubleArray result=env->NewDoubleArray(static_cast<jsize>(data.size()));
+        if(!result)return nullptr;
+        env->SetDoubleArrayRegion(result,0,static_cast<jsize>(data.size()),
+                                  data.data());
+        return env->ExceptionCheck()?nullptr:result;
+    }catch(...){
+        fail(env,"R304 native source entity draw failure");return nullptr;
+    }
+}

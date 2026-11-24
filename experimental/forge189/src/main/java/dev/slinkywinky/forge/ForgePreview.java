@@ -109,6 +109,8 @@ public final class ForgePreview {
     private Object r303World,r303Player;
     private int r303RenderFrames;
     private boolean r303Started,r303SawDraw;
+    private boolean r304Started,r304StartupFailed,r304SawItem,r304SawPlayer;
+    private int r304RenderFrames;
     // R283: strictly read-only native source decisions; no Minecraft writes.
     private RelationshipRosterNativePreview r283Native;
     private RelationshipRosterNativePreview.Settings r283Settings;
@@ -163,6 +165,10 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r303ChestRenderProbe");
     private static final boolean R303_CHEST_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r303ChestLocalWorldTest");
+    private static final boolean R304_ENTITY_RENDER =
+        Boolean.getBoolean("slinkywinky.r304EntityRenderProbe");
+    private static final boolean R304_LOCAL_WORLD_TEST =
+        Boolean.getBoolean("slinkywinky.r304EntityLocalWorldTest");
     private static final int R283_UUID_MODE =
         Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
@@ -343,6 +349,13 @@ public final class ForgePreview {
             throw new IllegalStateException("R303 requires isolated R300/R301 only");
         if(R303_CHEST_LOCAL_WORLD_TEST && !R303_CHEST_RENDER)
             throw new IllegalStateException("R303 local world requires chest render");
+        if(R304_ENTITY_RENDER && (!R303_CHEST_RENDER||!R301_NATIVE_ESP_READONLY||
+           !R300_ESP_READONLY||R302_LOCAL_WORLD_TEST||
+           R303_CHEST_LOCAL_WORLD_TEST||R212_ACTION_TEST||
+           R289_ROSTER_LOCAL_WORLD_TEST||R208_LOCAL_WORLD_TEST))
+            throw new IllegalStateException("R304 requires exclusive R300/R301 native ESP");
+        if(R304_LOCAL_WORLD_TEST && !R304_ENTITY_RENDER)
+            throw new IllegalStateException("R304 world requires entity render");
         // R300: independent user-opted, read-only Forge world sampler.
         // Never expose raw world/player observations outside a TEMP profile.
         if(R301_NATIVE_ESP_READONLY && !R300_ESP_READONLY)
@@ -357,7 +370,12 @@ public final class ForgePreview {
                R237_CLUTCH_READONLY||R278_ROSTER_READONLY||
                R283_NATIVE_ROSTER_READONLY||R289_ROSTER_LOCAL_WORLD_TEST||
                !home.startsWith(temp)||
-               !(R303_CHEST_LOCAL_WORLD_TEST ?
+               !(R304_LOCAL_WORLD_TEST ?
+                   home.matches("(?i)^.*[/]slinkywinky-r304-independent-forge-[A-Za-z0-9._-]+$") &&
+                   "R304Offline".equals(mc.getSession().getUsername()) &&
+                   new java.io.File(home).getAbsoluteFile().getParentFile().equals(
+                       new java.io.File(temp).getAbsoluteFile()) :
+                 R303_CHEST_LOCAL_WORLD_TEST ?
                    home.matches("(?i)^.*[/]slinkywinky-r303-independent-forge-[A-Za-z0-9._-]+$") &&
                    "R303Offline".equals(mc.getSession().getUsername()) &&
                    new java.io.File(home).getAbsoluteFile().getParentFile().equals(
@@ -374,6 +392,8 @@ public final class ForgePreview {
                 System.out.println("[SlinkyWinkyPreview] R302_ESP_WORLD_ISOLATION_GATE_PASS");
             if(R303_CHEST_LOCAL_WORLD_TEST)
                 System.out.println("[SlinkyWinkyPreview] R303_CHEST_WORLD_ISOLATION_GATE_PASS");
+            if(R304_LOCAL_WORLD_TEST)
+                System.out.println("[SlinkyWinkyPreview] R304_ENTITY_WORLD_ISOLATION_GATE_PASS");
             System.out.println("[SlinkyWinkyPreview] R300_ESP_TEMP_GATE_PASS");
         }
         if(R237_CLUTCH_READONLY) {
@@ -428,6 +448,7 @@ public final class ForgePreview {
         r302Generation=0;
         r303LastReceipt=null;r303World=r303Player=null;
         r303RenderFrames=0;r303SawDraw=false;
+        r304RenderFrames=0;r304SawItem=r304SawPlayer=false;
         r300World=r300Owner=null;
         r237World=r237Player=null;
         r245Previous=null;r245PreviousAim=null;
@@ -511,6 +532,7 @@ public final class ForgePreview {
             r278RosterSamples=0;
             r300EspSamples=r301EspSamples=0;
             r303RenderFrames=0;r303SawDraw=false;
+            r304RenderFrames=0;r304SawItem=r304SawPlayer=false;
             r303LastReceipt=null;r303World=r303Player=null;
             r283NativeSamples=0;
             r251PriorCentered=false;
@@ -533,6 +555,10 @@ public final class ForgePreview {
             if(R302_LOCAL_WORLD_TEST) {
                 r302StartupFailed=true;
                 System.err.println("[SlinkyWinkyPreview] R302_ESP_PREVIEW_START_FAIL "+error);
+            }
+            if(R304_LOCAL_WORLD_TEST) {
+                r304StartupFailed=true;
+                System.err.println("[SlinkyWinkyPreview] R304_ENTITY_PREVIEW_START_FAIL "+error);
             }
         }
     }
@@ -569,13 +595,15 @@ public final class ForgePreview {
         }
         if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE &&
             !R214_LOCAL_NO_SLOW_TEST && !R289_ROSTER_LOCAL_WORLD_TEST &&
-            !R302_LOCAL_WORLD_TEST && !R303_CHEST_LOCAL_WORLD_TEST) return;
+            !R302_LOCAL_WORLD_TEST && !R303_CHEST_LOCAL_WORLD_TEST &&
+            !R304_LOCAL_WORLD_TEST) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_REQUESTED" :
+                (R304_LOCAL_WORLD_TEST ? "R304_LOCAL_WORLD_REQUESTED" :
+                 R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_REQUESTED" :
                  R302_LOCAL_WORLD_TEST ? "R302_LOCAL_WORLD_REQUESTED" :
                  R289_ROSTER_LOCAL_WORLD_TEST ? "R289_LOCAL_WORLD_REQUESTED" :
                  R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_REQUESTED" :
@@ -587,7 +615,8 @@ public final class ForgePreview {
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R303_CHEST_LOCAL_WORLD_TEST ?
+            final String worldName = R304_LOCAL_WORLD_TEST ?
+                "R304-local-only" : R303_CHEST_LOCAL_WORLD_TEST ?
                 "R303-local-only" : R302_LOCAL_WORLD_TEST ?
                 "R302-local-only" : R289_ROSTER_LOCAL_WORLD_TEST ?
                 "R289-local-only" : R224_LOCAL_STRAFE_TEST ?
@@ -607,7 +636,8 @@ public final class ForgePreview {
             if (!r208WorldReady) {
                 r208WorldReady=true;
                 System.out.println("[SlinkyWinkyPreview] " +
-                    (R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_PLAYER_READY_PASS" :
+                    (R304_LOCAL_WORLD_TEST ? "R304_LOCAL_WORLD_PLAYER_READY_PASS" :
+                     R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R302_LOCAL_WORLD_TEST ? "R302_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R289_ROSTER_LOCAL_WORLD_TEST ? "R289_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_PLAYER_READY_PASS" :
@@ -621,8 +651,10 @@ public final class ForgePreview {
                   (r289ReceiptEmitted || r289StartupFailed)) &&
                 !(R302_LOCAL_WORLD_TEST &&
                   (r302ReceiptEmitted || r302StartupFailed)) &&
-                !(R303_CHEST_LOCAL_WORLD_TEST && r303Started)) {
+                !(R303_CHEST_LOCAL_WORLD_TEST && r303Started) &&
+                !(R304_LOCAL_WORLD_TEST && (r304Started||r304StartupFailed))) {
                 if(R303_CHEST_LOCAL_WORLD_TEST)r303Started=true;
+                if(R304_LOCAL_WORLD_TEST)r304Started=true;
                 startPreview();
             } // completed TEMP-only tests never auto-restart
             if(R302_LOCAL_WORLD_TEST && r302ReceiptEmitted && !r302CleanupDone) {
@@ -1843,6 +1875,38 @@ public final class ForgePreview {
             if(mc.theWorld!=r303World||mc.thePlayer!=r303Player)
                 throw new IllegalStateException("R303 switched game world during render");
             ForgeChestEspDebugRenderer.draw(plan);
+            if(R304_ENTITY_RENDER) {
+                final EspNativeReadOnlyPreview.EntityPlan entities=
+                    r301EspNative.entityPlan(r303LastReceipt,
+                        rm.viewerPosX,rm.viewerPosY,rm.viewerPosZ,event.partialTicks);
+                if(mc.theWorld!=r303World||mc.thePlayer!=r303Player)
+                    throw new IllegalStateException("R304 owner changed in render");
+                ForgeEntityEspDebugRenderer.draw(entities);
+                ++r304RenderFrames;
+                if(!r304SawItem) {
+                    for(EspNativeReadOnlyPreview.ItemDraw item:entities.items)
+                        if(item.quantity>0) {
+                            r304SawItem=true;
+                            System.out.println("[SlinkyWinkyPreview] "+
+                                "R304_ITEM_NATIVE_RENDER_SUBMITTED rows="+
+                                entities.items.size()+" quantity="+item.quantity+
+                                " writes=0 diagnostic=1");
+                            break;
+                        }
+                }
+                if(!entities.players.isEmpty()&&!r304SawPlayer) {
+                    r304SawPlayer=true;
+                    System.out.println("[SlinkyWinkyPreview] "+
+                        "R304_PLAYER_NATIVE_RENDER_SUBMITTED rows="+
+                        entities.players.size()+" writes=0 diagnostic=1");
+                }
+                if(r304RenderFrames==40)
+                    System.out.println("[SlinkyWinkyPreview] "+
+                        "R304_ENTITY_RENDER_CALLBACK_PASS frames="+r304RenderFrames+
+                        " itemGeometry="+(r304SawItem?1:0)+
+                        " playerGeometry="+(r304SawPlayer?1:0)+
+                        " gameWrites=0");
+            }
             ++r303RenderFrames;
             if(!plan.draws.isEmpty()&&!r303SawDraw){
                 r303SawDraw=true;
@@ -1860,8 +1924,12 @@ public final class ForgePreview {
                     " gameWrites=0");
         }catch(RuntimeException | LinkageError problem) {
             try {stop();}catch(RuntimeException ignored) { }
-            status="R303 native Chest renderer refused stale or invalid frame";
-            System.err.println("[SlinkyWinkyPreview] R303_CHEST_RENDER_FAIL "+problem);
+            status="Native ESP renderer refused stale or invalid frame";
+            if(R304_ENTITY_RENDER) {
+                r304StartupFailed=true;
+                System.err.println("[SlinkyWinkyPreview] R304_ENTITY_RENDER_FAIL "+problem);
+            } else
+                System.err.println("[SlinkyWinkyPreview] R303_CHEST_RENDER_FAIL "+problem);
         }
     }
 
