@@ -13,6 +13,30 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
         double[] self,double[] tiles,int[] tileIds,double[] drops,int[] dropFacts,
         double[] players,float[] health,int[] playerFacts,float[] ranges);
     private static native void nativeClose(long handle);
+    private static native double[] nativeChestPlan(long handle,long[] identity,double[] camera);
+
+    /** Source-derived native center translations. Diagnostic colors are host-specific. */
+    public static final class ChestDraw {
+        public final double centerX,centerY,centerZ;
+        public final int blockId;
+        public final boolean filled;
+        private ChestDraw(double x,double y,double z,int id,boolean filled) {
+            centerX=x;centerY=y;centerZ=z;blockId=id;this.filled=filled;
+        }
+    }
+    public static final class ChestPlan {
+        public final long worldToken,playerToken,generation,tick;
+        public final float scale,filledAlpha,lineWidth;
+        public final java.util.List<ChestDraw> draws;
+        private ChestPlan(Result receipt,float scale,float alpha,float line,
+                          java.util.List<ChestDraw> draws) {
+            worldToken=receipt.worldToken;playerToken=receipt.playerToken;
+            generation=receipt.generation;tick=receipt.tick;
+            this.scale=scale;filledAlpha=alpha;lineWidth=line;
+            this.draws=java.util.Collections.unmodifiableList(
+                new java.util.ArrayList<ChestDraw>(draws));
+        }
+    }
     public static final class Result {
         public final long worldToken,playerToken,generation,tick;
         public final int rawTiles,rawDrops,rawPlayers,chestRows,itemRows,playerRows;
@@ -91,6 +115,44 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
             throw new IllegalStateException("R301 mismatched native receipt");
         return new Result(receipt,n);
     }
+    /**
+     * R303: actual R297 C++ source controller's event-6 draw-plan.
+     * Camera values are the Forge render-manager viewerPos fields, not
+     * invented GL projections. JNI requires the EXACT most recent native
+     * owner receipt; stale ticks/changed worlds cannot request draw rows.
+     */
+    public ChestPlan chestPlan(Result receipt,double cameraX,double cameraY,double cameraZ) {
+        owner();
+        if(receipt==null||receipt.worldToken<=0||receipt.playerToken<=0||
+           receipt.generation<=0||receipt.tick<0||
+           !Double.isFinite(cameraX)||!Double.isFinite(cameraY)||
+           !Double.isFinite(cameraZ))
+            throw new IllegalArgumentException("R303 malformed camera/receipt");
+        final long[] id={receipt.worldToken,receipt.playerToken,receipt.generation,receipt.tick};
+        final double[] encoded=nativeChestPlan(handle,id,new double[]{cameraX,cameraY,cameraZ});
+        if(encoded==null||encoded.length<5||encoded[0]!=1.0||
+           encoded[1]<0.0||encoded[1]>100.0||
+           encoded[1]!=(int)encoded[1]||
+           encoded.length!=5+5*(int)encoded[1]||
+           (int)encoded[1]!=receipt.chestRows||
+           encoded[2]!=0.5||Math.abs(encoded[3]-0.4)>0.000001||
+           !Double.isFinite(encoded[4])||encoded[4]<=0||encoded[4]>16)
+            throw new IllegalStateException("R303 invalid native source plan");
+        java.util.List<ChestDraw> rows=new java.util.ArrayList<ChestDraw>();
+        for(int i=0;i<(int)encoded[1];i++){
+            int base=5+5*i;
+            final double x=encoded[base],y=encoded[base+1],z=encoded[base+2];
+            final double kind=encoded[base+3],filled=encoded[base+4];
+            if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)||
+               !(kind==54||kind==130||kind==146||kind==138)||
+               !(filled==0.0||filled==1.0))
+                throw new IllegalStateException("R303 malformed native row");
+            rows.add(new ChestDraw(x,y,z,(int)kind,filled==1.0));
+        }
+        return new ChestPlan(receipt,(float)encoded[2],
+                             (float)encoded[3],(float)encoded[4],rows);
+    }
+
     @Override public void close(){
         owner();nativeClose(handle);handle=0;
     }

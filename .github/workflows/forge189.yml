@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeChestEspDebugRenderer.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
@@ -22,6 +23,7 @@ on:
   pull_request:
     paths:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeChestEspDebugRenderer.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
@@ -65,6 +67,7 @@ jobs:
           jar tf "$jarpath" > forge-preview-contents.txt
           for class in \
             dev/slinkywinky/forge/ForgePreview.class \
+            dev/slinkywinky/forge/ForgeChestEspDebugRenderer.class \
             dev/slinkywinky/forge/ForgeRelationshipRosterPort.class \
             dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.class \
             dev/slinkywinky/RelationshipRosterSampler.class \

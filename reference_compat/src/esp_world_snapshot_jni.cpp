@@ -206,3 +206,70 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeClose(
     }
     sessions.erase(it);
 }
+
+
+// R303: source-faithful ChestEspController.plan(...) row projection.
+// A 3D draw plan alone does not invoke GL or certify visual fidelity.
+// Reuses the same thread-bound R301 session and exact most recent owner IDs.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeChestPlan(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,jdoubleArray camera){
+    if(!identity||!camera||env->GetArrayLength(identity)!=4||
+       env->GetArrayLength(camera)!=3){
+        fail(env,"R303 invalid draw metadata");return nullptr;
+    }
+    try{
+        jlong id[4]{};jdouble xyz[3]{};
+        env->GetLongArrayRegion(identity,0,4,id);
+        env->GetDoubleArrayRegion(camera,0,3,xyz);
+        if(env->ExceptionCheck())return nullptr;
+        if(id[0]<=0||id[1]<=0||id[0]==id[1]||id[2]<=0||id[3]<0||
+           !finite(xyz[0])||!finite(xyz[1])||!finite(xyz[2])){
+            fail(env,"R303 malformed camera/owner");return nullptr;
+        }
+        std::lock_guard<std::mutex> guard(lock);
+        const auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()){
+            fail(env,"R303 unowned native draw plan");return nullptr;
+        }
+        const Session& s=*it->second;
+        if(!s.observed||id[0]!=s.world||id[1]!=s.player||
+           id[2]!=s.generation||id[3]!=s.tick){
+            fail(env,"R303 stale native render receipt");return nullptr;
+        }
+        ChestEspSettings settings;
+        settings.line_width=1.0f;settings.filled=false;
+        const auto plan=s.chest.plan({xyz[0],xyz[1],xyz[2]},settings);
+        const std::size_t rows=plan.draws.size();
+        if(rows>ChestEspController::kSourceRowCap){
+            fail(env,"R303 source draw row cap breached");return nullptr;
+        }
+        std::vector<jdouble> payload(5+5*rows);
+        payload[0]=1.0;payload[1]=static_cast<double>(rows);
+        payload[2]=plan.scale;payload[3]=plan.filled_alpha;
+        payload[4]=plan.line_width;
+        for(std::size_t i=0;i<rows;i++){
+            const auto& draw=plan.draws[i];
+            const std::size_t base=5+5*i;
+            for(int axis=0;axis<3;axis++){
+                if(!finite(draw.translation[static_cast<std::size_t>(axis)])){
+                    fail(env,"R303 nonfinite draw translation");return nullptr;
+                }
+                payload[base+static_cast<std::size_t>(axis)]=
+                    draw.translation[static_cast<std::size_t>(axis)];
+            }
+            if(!ChestEspController::kind(draw.block_id)){
+                fail(env,"R303 invalid source color kind");return nullptr;
+            }
+            payload[base+3]=draw.block_id;
+            payload[base+4]=draw.filled?1.0:0.0;
+        }
+        jdoubleArray output=env->NewDoubleArray(static_cast<jsize>(payload.size()));
+        if(!output)return nullptr;
+        env->SetDoubleArrayRegion(output,0,static_cast<jsize>(payload.size()),
+                                  payload.data());
+        return env->ExceptionCheck()?nullptr:output;
+    }catch(...){
+        fail(env,"R303 native chest draw plan failed");return nullptr;
+    }
+}

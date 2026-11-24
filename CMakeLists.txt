@@ -490,6 +490,8 @@ if(SLINKYWINKY_BUILD_JNI)
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r301_esp_native_jni.cmake)
     set_tests_properties(r301_java8_real_native_three_esp_controllers
       PROPERTIES TIMEOUT 40)
+    # R303: the R301 test now also verifies the real native Chest draw plan,
+    # its camera-relative centers, stale world/replay and foreign thread fences.
     # R282: Java8 roster receipt -> real JNI -> R281 C++ event0 proposals.
     add_test(NAME r282_java8_native_antibot_roster_roundtrip COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}

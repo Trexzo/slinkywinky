@@ -48,11 +48,27 @@ public final class EspNativeReadOnlyPreviewSmoke {
               "native input provenance");
         check(result.chestRows==2&&result.itemRows==1&&result.playerRows==1,
               "three real source controllers");
+        EspNativeReadOnlyPreview.ChestPlan draw=
+            nativePreview.chestPlan(result,0.25,1.0,2.0);
+        check(draw.draws.size()==2&&draw.worldToken==result.worldToken&&
+              draw.tick==result.tick&&draw.scale==0.5f,
+              "source plan receipt");
+        check(draw.draws.get(0).blockId==54&&draw.draws.get(1).blockId==130&&
+              Math.abs(draw.draws.get(0).centerX-1.25)<0.00001 &&
+              Math.abs(draw.draws.get(0).centerY+0.5)<0.00001 &&
+              Math.abs(draw.draws.get(0).centerZ+1.5)<0.00001,
+              "R303 JNI camera relative centers");
         refuse(new Runnable(){public void run(){nativePreview.observe(one,10,10,10);}},
                "replay denied");
         f.world=new Object();
         EspWorldSnapshotSampler.Receipt newWorld=javaSampler.observe(f,0);
         EspNativeReadOnlyPreview.Result next=nativePreview.observe(newWorld,10,10,10);
+        refuse(new Runnable(){public void run(){
+            nativePreview.chestPlan(result,0,0,0);
+        }},"R303 old world draw refused");
+        refuse(new Runnable(){public void run(){
+            nativePreview.chestPlan(next,Double.NaN,0,0);
+        }},"R303 nonfinite camera");
         check(next.generation>result.generation&&next.worldToken!=result.worldToken,
               "native world swap");
         final boolean[] offThread={false};
@@ -64,6 +80,15 @@ public final class EspNativeReadOnlyPreviewSmoke {
         });
         stranger.start();stranger.join();
         check(offThread[0],"native session thread");
+        final boolean[] drawForeign={false};
+        Thread drawStranger=new Thread(new Runnable(){
+            public void run(){
+                try{nativePreview.chestPlan(next,0,0,0);}
+                catch(IllegalStateException expected){drawForeign[0]=true;}
+            }
+        });
+        drawStranger.start();drawStranger.join();
+        check(drawForeign[0],"R303 draw owner thread");
         nativePreview.close();javaSampler.close();
         System.out.println("R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS");
     }

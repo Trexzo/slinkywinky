@@ -14,6 +14,7 @@ import dev.slinkywinky.ClutchCadenceObserver;
 import dev.slinkywinky.RelationshipRosterSampler;
 import dev.slinkywinky.EspWorldSnapshotSampler;
 import dev.slinkywinky.EspNativeReadOnlyPreview;
+import net.minecraftforge.client.event.RenderWorldLastEvent;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
 import net.minecraft.client.Minecraft;
@@ -104,6 +105,10 @@ public final class ForgePreview {
     private boolean r302ReceiptEmitted,r302CleanupDone,r302StartupFailed;
     private Object r302World,r302Player;
     private long r302Generation;
+    private EspNativeReadOnlyPreview.Result r303LastReceipt;
+    private Object r303World,r303Player;
+    private int r303RenderFrames;
+    private boolean r303Started,r303SawDraw;
     // R283: strictly read-only native source decisions; no Minecraft writes.
     private RelationshipRosterNativePreview r283Native;
     private RelationshipRosterNativePreview.Settings r283Settings;
@@ -154,6 +159,10 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r301NativeEspReadOnlyProbe");
     private static final boolean R302_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r302EspLocalWorldTest");
+    private static final boolean R303_CHEST_RENDER =
+        Boolean.getBoolean("slinkywinky.r303ChestRenderProbe");
+    private static final boolean R303_CHEST_LOCAL_WORLD_TEST =
+        Boolean.getBoolean("slinkywinky.r303ChestLocalWorldTest");
     private static final int R283_UUID_MODE =
         Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
@@ -324,6 +333,16 @@ public final class ForgePreview {
            R237_CLUTCH_READONLY || R278_ROSTER_READONLY ||
            R283_NATIVE_ROSTER_READONLY))
             throw new IllegalStateException("R302 requires isolated R300/R301 only");
+        // R303 is a debug-only 3D Chest draw path. It does not enable
+        // source event 6/0 equivalence or any combat/gameplay writes.
+        if(R303_CHEST_RENDER && (!R300_ESP_READONLY ||
+           !R301_NATIVE_ESP_READONLY || R302_LOCAL_WORLD_TEST ||
+           R212_ACTION_TEST || R208_LOCAL_WORLD_TEST ||
+           R237_CLUTCH_READONLY || R278_ROSTER_READONLY ||
+           R283_NATIVE_ROSTER_READONLY || R289_ROSTER_LOCAL_WORLD_TEST))
+            throw new IllegalStateException("R303 requires isolated R300/R301 only");
+        if(R303_CHEST_LOCAL_WORLD_TEST && !R303_CHEST_RENDER)
+            throw new IllegalStateException("R303 local world requires chest render");
         // R300: independent user-opted, read-only Forge world sampler.
         // Never expose raw world/player observations outside a TEMP profile.
         if(R301_NATIVE_ESP_READONLY && !R300_ESP_READONLY)
@@ -338,7 +357,12 @@ public final class ForgePreview {
                R237_CLUTCH_READONLY||R278_ROSTER_READONLY||
                R283_NATIVE_ROSTER_READONLY||R289_ROSTER_LOCAL_WORLD_TEST||
                !home.startsWith(temp)||
-               !(R302_LOCAL_WORLD_TEST ?
+               !(R303_CHEST_LOCAL_WORLD_TEST ?
+                   home.matches("(?i)^.*[/]slinkywinky-r303-independent-forge-[A-Za-z0-9._-]+$") &&
+                   "R303Offline".equals(mc.getSession().getUsername()) &&
+                   new java.io.File(home).getAbsoluteFile().getParentFile().equals(
+                       new java.io.File(temp).getAbsoluteFile()) :
+                 R302_LOCAL_WORLD_TEST ?
                    home.matches("(?i)^.*[/]slinkywinky-r302-independent-forge-[A-Za-z0-9._-]+$") &&
                    "R302Offline".equals(mc.getSession().getUsername()) &&
                    new java.io.File(home).getAbsoluteFile().getParentFile().equals(
@@ -348,6 +372,8 @@ public final class ForgePreview {
                 throw new IllegalStateException("R300 TEMP-only read-only admission denied");
             if(R302_LOCAL_WORLD_TEST)
                 System.out.println("[SlinkyWinkyPreview] R302_ESP_WORLD_ISOLATION_GATE_PASS");
+            if(R303_CHEST_LOCAL_WORLD_TEST)
+                System.out.println("[SlinkyWinkyPreview] R303_CHEST_WORLD_ISOLATION_GATE_PASS");
             System.out.println("[SlinkyWinkyPreview] R300_ESP_TEMP_GATE_PASS");
         }
         if(R237_CLUTCH_READONLY) {
@@ -400,6 +426,8 @@ public final class ForgePreview {
         if(r300EspSampler!=null) {r300EspSampler.close();r300EspSampler=null;}
         r302World=r302Player=null;
         r302Generation=0;
+        r303LastReceipt=null;r303World=r303Player=null;
+        r303RenderFrames=0;r303SawDraw=false;
         r300World=r300Owner=null;
         r237World=r237Player=null;
         r245Previous=null;r245PreviousAim=null;
@@ -482,6 +510,8 @@ public final class ForgePreview {
             r252Due=r252PressProposals=0;
             r278RosterSamples=0;
             r300EspSamples=r301EspSamples=0;
+            r303RenderFrames=0;r303SawDraw=false;
+            r303LastReceipt=null;r303World=r303Player=null;
             r283NativeSamples=0;
             r251PriorCentered=false;
             if(r251Sampler!=null){r251Sampler.close();r251Sampler=null;}
@@ -522,6 +552,7 @@ public final class ForgePreview {
                                  mc.thePlayer!=r300Owner)))) {
             r300EspSampler.retire();
             r300World=r300Owner=null;
+            r303LastReceipt=null;r303World=r303Player=null;
         }
         if (enabled && sprintProbe!=null && mc.thePlayer==null &&
             (sprintWorld!=null || sprintPlayer!=null)) {
@@ -538,13 +569,14 @@ public final class ForgePreview {
         }
         if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE &&
             !R214_LOCAL_NO_SLOW_TEST && !R289_ROSTER_LOCAL_WORLD_TEST &&
-            !R302_LOCAL_WORLD_TEST) return;
+            !R302_LOCAL_WORLD_TEST && !R303_CHEST_LOCAL_WORLD_TEST) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R302_LOCAL_WORLD_TEST ? "R302_LOCAL_WORLD_REQUESTED" :
+                (R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_REQUESTED" :
+                 R302_LOCAL_WORLD_TEST ? "R302_LOCAL_WORLD_REQUESTED" :
                  R289_ROSTER_LOCAL_WORLD_TEST ? "R289_LOCAL_WORLD_REQUESTED" :
                  R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_REQUESTED" :
                  R217_ITEM_CATEGORIES_TEST ? "R217_LOCAL_WORLD_REQUESTED" :
@@ -555,7 +587,8 @@ public final class ForgePreview {
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R302_LOCAL_WORLD_TEST ?
+            final String worldName = R303_CHEST_LOCAL_WORLD_TEST ?
+                "R303-local-only" : R302_LOCAL_WORLD_TEST ?
                 "R302-local-only" : R289_ROSTER_LOCAL_WORLD_TEST ?
                 "R289-local-only" : R224_LOCAL_STRAFE_TEST ?
                 "R224-local-only" : R217_ITEM_CATEGORIES_TEST ?
@@ -574,7 +607,8 @@ public final class ForgePreview {
             if (!r208WorldReady) {
                 r208WorldReady=true;
                 System.out.println("[SlinkyWinkyPreview] " +
-                    (R302_LOCAL_WORLD_TEST ? "R302_LOCAL_WORLD_PLAYER_READY_PASS" :
+                    (R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_PLAYER_READY_PASS" :
+                     R302_LOCAL_WORLD_TEST ? "R302_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R289_ROSTER_LOCAL_WORLD_TEST ? "R289_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R224_LOCAL_STRAFE_TEST ? "R224_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_PLAYER_READY_PASS" :
@@ -586,8 +620,11 @@ public final class ForgePreview {
                 !(R289_ROSTER_LOCAL_WORLD_TEST &&
                   (r289ReceiptEmitted || r289StartupFailed)) &&
                 !(R302_LOCAL_WORLD_TEST &&
-                  (r302ReceiptEmitted || r302StartupFailed)))
-                startPreview(); // completed TEMP-only tests never auto-restart
+                  (r302ReceiptEmitted || r302StartupFailed)) &&
+                !(R303_CHEST_LOCAL_WORLD_TEST && r303Started)) {
+                if(R303_CHEST_LOCAL_WORLD_TEST)r303Started=true;
+                startPreview();
+            } // completed TEMP-only tests never auto-restart
             if(R302_LOCAL_WORLD_TEST && r302ReceiptEmitted && !r302CleanupDone) {
                 r302CleanupDone=true;
                 if(enabled)stop();
@@ -1256,6 +1293,10 @@ public final class ForgePreview {
                nativeReceipt.rawDrops!=receipt.drops.size()||
                nativeReceipt.rawPlayers!=receipt.players.size())
                 throw new IllegalStateException("R301 native provenance diverged");
+            if(R303_CHEST_RENDER){
+                r303LastReceipt=nativeReceipt;
+                r303World=mc.theWorld;r303Player=mc.thePlayer;
+            }
             ++r301EspSamples;
             if(R302_LOCAL_WORLD_TEST && r301EspSamples==32) {
                 if(nativeReceipt.rawPlayers<1 ||
@@ -1777,6 +1818,50 @@ public final class ForgePreview {
                 "samples="+tick+" motion="+r224MotionSamples+
                 " proposals="+r224Proposals+
                 " distance="+horizontalDistance);
+        }
+    }
+
+    /**
+     * R303 prototype: real Forge 1.8.9 RenderWorldLast, not an authenticated
+     * original Slinky event-6 callback. Only consumes the R297 native C++
+     * center translations; Java only submits debug line geometry. No
+     * entity/world/input/packet writes and no vanilla injector dependency.
+     */
+    @SubscribeEvent public void onR303ChestWorldRender(RenderWorldLastEvent event) {
+        if(!R303_CHEST_RENDER||!enabled||r301EspNative==null||
+           r303LastReceipt==null)return;
+        final Minecraft mc=Minecraft.getMinecraft();
+        if(!mc.isCallingFromMinecraftThread()||mc.theWorld==null||
+           mc.thePlayer==null||mc.theWorld!=r303World||
+           mc.thePlayer!=r303Player||!mc.theWorld.isRemote||
+           !mc.isSingleplayer())return;
+        try {
+            final net.minecraft.client.renderer.entity.RenderManager rm=mc.getRenderManager();
+            if(rm==null)throw new IllegalStateException("R303 camera unavailable");
+            EspNativeReadOnlyPreview.ChestPlan plan=r301EspNative.chestPlan(
+                r303LastReceipt,rm.viewerPosX,rm.viewerPosY,rm.viewerPosZ);
+            if(mc.theWorld!=r303World||mc.thePlayer!=r303Player)
+                throw new IllegalStateException("R303 switched game world during render");
+            ForgeChestEspDebugRenderer.draw(plan);
+            ++r303RenderFrames;
+            if(!plan.draws.isEmpty()&&!r303SawDraw){
+                r303SawDraw=true;
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R303_CHEST_LIVE_DRAW_SUBMITTED rows="+plan.draws.size()+
+                    " generation="+plan.generation+
+                    " source=real_native_R297_render_world_last"+
+                    " writes=0 visual_parity_unverified=1");
+            }
+            if(r303RenderFrames==40)
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R303_CHEST_RENDER_CALLBACK_PASS frames="+r303RenderFrames+
+                    " latestRows="+plan.draws.size()+
+                    " hasGeometry="+(r303SawDraw?1:0)+
+                    " gameWrites=0");
+        }catch(RuntimeException | LinkageError problem) {
+            try {stop();}catch(RuntimeException ignored) { }
+            status="R303 native Chest renderer refused stale or invalid frame";
+            System.err.println("[SlinkyWinkyPreview] R303_CHEST_RENDER_FAIL "+problem);
         }
     }
 
