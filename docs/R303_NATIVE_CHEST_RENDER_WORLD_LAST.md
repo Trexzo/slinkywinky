@@ -46,8 +46,16 @@ flat world can correctly report zero matched rows. A log marker
 is not proof that pixels are visible; validate with original-game
 screenshots and frame-time measurements on the authorized Windows PC.
 
-A reproducible exact CI artifact hash will be pinned into the launcher
-once the new R303 Forge JAR builds. Prior R302 hash pins remain unchanged.
+The R303 Forge JAR built at commit `100e72a` (run 45458503513)
+was downloaded and independently SHA-256 verified against
+`forge-preview.sha256`. The exact preview JAR SHA-256 is:
+
+`b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48`
+
+Pass it as `-R303ExpectedJarSha256` when using the isolated R207
+launcher; other values are rejected. This is the CI **build JAR**,
+not proof of runtime reobfuscation or an actual successful launch.
+The earlier R302 hash pin remains unchanged.
 
 ### Remaining blockers to full Slinky fidelity
 - Original native event-0 vs event-6 timing, exact GL primitives,

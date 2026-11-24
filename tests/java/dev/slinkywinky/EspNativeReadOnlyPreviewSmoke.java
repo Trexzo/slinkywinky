@@ -38,6 +38,11 @@ public final class EspNativeReadOnlyPreviewSmoke {
         boolean ok=false;try{r.run();}catch(IllegalStateException expected){ok=true;}
         check(ok,what);
     }
+    static void refuseArgument(Runnable r,String what){
+        boolean ok=false;
+        try{r.run();}catch(IllegalArgumentException expected){ok=true;}
+        check(ok,what);
+    }
     public static void main(String[] args)throws Exception{
         Fixture f=new Fixture();
         EspWorldSnapshotSampler javaSampler=new EspWorldSnapshotSampler();
@@ -66,7 +71,7 @@ public final class EspNativeReadOnlyPreviewSmoke {
         refuse(new Runnable(){public void run(){
             nativePreview.chestPlan(result,0,0,0);
         }},"R303 old world draw refused");
-        refuse(new Runnable(){public void run(){
+        refuseArgument(new Runnable(){public void run(){
             nativePreview.chestPlan(next,Double.NaN,0,0);
         }},"R303 nonfinite camera");
         check(next.generation>result.generation&&next.worldToken!=result.worldToken,

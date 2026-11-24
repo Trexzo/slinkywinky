@@ -56,7 +56,8 @@ jobs:
           foreach($x in @(
             'R303ChestRenderTest','R303ExpectedJarSha256',
             'slinkywinky.r303ChestRenderProbe=true',
-            'R303_CHEST_RENDER_TEST='
+            'R303_CHEST_RENDER_TEST=',
+            'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48'
           )){if(-not $l.Contains($x)){throw ('Missing R303 launcher gate '+$x)}}
           foreach($x in @(
             'RenderWorldLastEvent','R303_CHEST_LIVE_DRAW_SUBMITTED',

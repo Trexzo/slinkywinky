@@ -25,8 +25,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 if($R303ChestRenderTest){
-  if($R303ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
-    {throw 'R303 requires an exact expected Forge preview SHA256'}
+  if($R303ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+     $R303ExpectedJarSha256.ToLowerInvariant() -ne 'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48')
+    {throw 'R303 requires the exact reviewed GitHub Forge preview SHA256'}
   if($R302EspWorldTest -or $R289RosterWorldTest -or
      $R208LocalWorldTest -or $R209PlayerTickTest -or
      $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
@@ -62,7 +63,7 @@ if($R289RosterWorldTest -and
   throw 'R289 real roster test must be the ONLY selected mode'
 }
 $expectedJar=if($R303ChestRenderTest){
-  $R303ExpectedJarSha256.ToLowerInvariant()
+  'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48'
 }elseif($R302EspWorldTest){
   'b4967fb970e2f369179b8268add1be5a80a8fcd7bba79d69659597213355ebe5'
 }elseif($R289RosterWorldTest){
