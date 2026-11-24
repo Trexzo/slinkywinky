@@ -90,3 +90,24 @@ video, player fixture, screenshot or frame-time benchmark exists yet.
 No production vanilla injection, original event priority, original
 GUI/HUD or full 66-module completeness is claimed.
 Both PRs stay draft/unmerged.
+
+## Verified experimental JAR artifact
+
+Implementation commit `ddaae05` passed the Java 8 ForgeGradle 2.1
+Minecraft 1.8.9 build (GitHub Actions run `45496166853`).
+The resulting `slinkywinky-forge189-preview-jar` artifact
+(ID `14969415200`) was downloaded. Its JAR SHA-256 was independently
+computed and compared byte-for-byte to the SHA256 manifest enclosed
+in that same artifact. The required native Java adapter,
+`PlayerEspScreenProjection$Frame`, `$Segment`,
+`ForgePlayerEspScreenRenderer`, and `ForgePreview` classes
+were confirmed in the JAR.
+
+The reviewed **JAR** digest (not the artifact ZIP digest) is:
+
+`f9a2e95fe689b2f59bd964935abaf1275cf1258773e16cd2cb472aa8625bf0c7`
+
+The R307-only launcher mode rejects all other hashes; older
+SHA-pinned R302–R306 launch modes remain untouched. This proves
+a reviewed build artifact, **not** successful owner-desktop
+Minecraft in-world rendering.

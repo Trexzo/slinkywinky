@@ -64,6 +64,7 @@ jobs:
           foreach($needle in @(
             'R307SourceScreenTest','R307ExpectedJarSha256',
             'R307_SOURCE_SCREEN_TEST=',
+            'f9a2e95fe689b2f59bd964935abaf1275cf1258773e16cd2cb472aa8625bf0c7',
             'slinkywinky.r307SourceScreenGeometryTest=true',
             'slinkywinky.r307SourceScreenLocalWorldTest=true',
             '/slinkywinky-r307-independent-forge-'
