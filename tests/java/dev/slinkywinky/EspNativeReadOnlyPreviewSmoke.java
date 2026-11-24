@@ -210,6 +210,50 @@ public final class EspNativeReadOnlyPreviewSmoke {
               Math.abs(rects.get(0).top-32)<.00001&&
               Math.abs(rects.get(0).bottom-50)<.00001,
               "R306 exact column-major projection to scaled GUI rectangle");
+        // R307: original eight corners recovered at RenderConstants
+        // 1378976..1379168 are +/-.4, vertical 0..2.0, not R306's
+        // diagnostic .3/1.8 dimensions. Original projected bounds remain
+        // *unclamped* and are admitted by the two-corner rule.
+        final java.util.List<PlayerEspScreenProjection.Rect> sourceRects=
+            scene.projectSource(screenRows);
+        check(sourceRects.size()==1&&
+              Math.abs(sourceRects.get(0).left-66)<.0001&&
+              Math.abs(sourceRects.get(0).right-74)<.0001&&
+              Math.abs(sourceRects.get(0).top-30)<.0001&&
+              Math.abs(sourceRects.get(0).bottom-50)<.0001,
+              "R307 recovered source eight-corner projected bounds");
+        check(PlayerEspScreenProjection.Frame.sourceVisibleBounds(
+                -2f,-1f,90f,80f,100f,100f) &&
+              !PlayerEspScreenProjection.Frame.sourceVisibleBounds(
+                -10f,-10f,110f,110f,100f,100f) &&
+              !PlayerEspScreenProjection.Frame.sourceVisibleBounds(
+                110f,10f,140f,80f,100f,100f),
+              "R307 original top-left OR bottom-right visibility differs from clipping");
+        final java.util.List<PlayerEspScreenProjection.Segment> healthSegments=
+            PlayerEspScreenProjection.sourceHealthSegments(sourceRects.get(0),1.25f);
+        check(healthSegments.size()==3&&
+              Math.abs(healthSegments.get(0).x-59.75)<.0001&&
+              Math.abs(healthSegments.get(0).y1-30)<.0001&&
+              Math.abs(healthSegments.get(0).y2-
+                 (50f+(12f/22f)*(30f-50f)))<.0001&&
+              healthSegments.get(0).red==0f&&
+              healthSegments.get(1).red==1f&&
+              Math.abs(healthSegments.get(1).green-.67f)<.00001&&
+              Math.abs(healthSegments.get(1).y2-
+                (healthSegments.get(0).y2+
+                 .2f*(50f-(float)healthSegments.get(0).y2)))<.0001&&
+              Math.abs(healthSegments.get(2).red-(1f-12f/22f))<.00001&&
+              Math.abs(healthSegments.get(2).green-(12f/22f))<.00001,
+              "R307 source black/absorption/health 3-stage bar");
+        check(Math.abs(PlayerEspScreenProjection.sourceHurtMix(5,.5f)-.45f)<.00001&&
+              PlayerEspScreenProjection.sourceHurtMix(20,0f)==1f&&
+              PlayerEspScreenProjection.sourceHurtMix(0,.5f)==0f,
+              "R307 source min(10,hurt-partial)*0.1 hurt transition");
+        refuseArgument(new Runnable(){public void run(){
+            PlayerEspScreenProjection.sourceHealthSegments(sourceRects.get(0),
+                                                             Float.NaN);
+        }},"R307 source geometry rejects nonfinite line width");
+
         final PlayerEspScreenProjection.Frame outside=
             new PlayerEspScreenProjection.Frame(
                 screen7.worldToken,screen7.playerToken,
@@ -225,6 +269,9 @@ public final class EspNativeReadOnlyPreviewSmoke {
         refuse(new Runnable(){public void run(){
             wrongWorld.project(screenRows);
         }},"R306 stale/foreign world projection denied");
+        refuse(new Runnable(){public void run(){
+            wrongWorld.projectSource(screenRows);
+        }},"R307 source projection also denies foreign world");
         refuseArgument(new Runnable(){public void run(){
             phased.playerScreenPlan(screen7,0,0,0,Double.NaN);
         }},"R306 invalid partial frame denied");
@@ -273,6 +320,7 @@ public final class EspNativeReadOnlyPreviewSmoke {
         phaser.start();phaser.join();
         check(phaseForeign[0],"R305 source phase remains owner-thread bound");
         phased.close();phasedSampler.close();
+        System.out.println("R307_RECOVERED_PLAYER_ESP_SOURCE_GEOMETRY_HEALTH_PASS");
         System.out.println("R306_JAVA8_REAL_NATIVE_EVENT7_SCREEN_PROJECTION_PASS");
         System.out.println("R305_JAVA8_REAL_NATIVE_ESP_PHASE_0_18_6_7_26_PASS");
         System.out.println("R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS");

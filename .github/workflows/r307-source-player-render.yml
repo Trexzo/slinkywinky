@@ -1,0 +1,87 @@
+name: R307 recovered Player ESP source geometry and health
+
+on:
+  push:
+    paths:
+      - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java'
+      - 'tests/run_r301_esp_native_jni.cmake'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - '.github/workflows/r307-source-player-render.yml'
+  pull_request:
+    paths:
+      - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java'
+      - 'tests/run_r301_esp_native_jni.cmake'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - '.github/workflows/r307-source-player-render.yml'
+
+jobs:
+  real-java8-jni-recovered-render-constants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Build actual first-party JNI player controller
+        run: |
+          cmake -S . -B build/r307 -DSLINKYWINKY_BUILD_JNI=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/r307 --target slinkywinky_jni --parallel 2
+      - name: Real source phase7 JNI and original 8-corner/health/hurt parity
+        run: ctest --test-dir build/r307 -R '^r301_java8_real_native_three_esp_controllers$' --output-on-failure
+
+  windows-powershell51-launcher-regression:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PowerShell 5.1 parse and R306 self-conflict negative regression
+        shell: powershell
+        run: |
+          $tokens=$null;$errors=$null
+          $path='tools/run_r207_independent_forge_loader.ps1'
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $env:GITHUB_WORKSPACE $path),[ref]$tokens,[ref]$errors)
+          if($errors.Count -gt 0){
+            foreach($e in $errors){Write-Error $e.ToString()}
+            throw 'R307 PowerShell 5.1 syntax failure'
+          }
+          $ps=Get-Content $path -Raw
+          $start=$ps.IndexOf('if($R306PlayerScreenTest){')
+          $end=$ps.IndexOf('elseif($R306ExpectedJarSha256)')
+          if($start -lt 0 -or $end -lt $start){throw 'R306 launcher gate absent'}
+          $block=$ps.Substring($start,$end-$start)
+          if($block.Contains('if($R306PlayerScreenTest -or')){
+            throw 'R306 exclusive mode self-conflict regression'
+          }
+          foreach($needle in @(
+            'R307SourceScreenTest','R307ExpectedJarSha256',
+            'R307_SOURCE_SCREEN_TEST=',
+            'slinkywinky.r307SourceScreenGeometryTest=true',
+            'slinkywinky.r307SourceScreenLocalWorldTest=true',
+            '/slinkywinky-r307-independent-forge-'
+          )){if(-not $ps.Contains($needle)){throw ('R307 launcher missing '+$needle)}}
+          $forge=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java' -Raw
+          foreach($needle in @(
+            'R307_SOURCE_SCREEN_ISOLATION_GATE_PASS',
+            'R307_SOURCE_PLAYER_BOX_SUBMITTED',
+            'R307_SOURCE_SCREEN_CALLBACK_PASS',
+            'r306Camera.camera.projectSource(source)',
+            'ForgePlayerEspScreenRenderer.drawSource('
+          )){if(-not $forge.Contains($needle)){throw ('R307 Forge source path absent '+$needle)}}
+          $render=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java' -Raw
+          $model=Get-Content 'java/dev/slinkywinky/PlayerEspScreenProjection.java' -Raw
+          if(-not $render.Contains('sourceHealthSegments(') -or
+             -not $render.Contains('glPushAttrib(GL11.GL_ALL_ATTRIB_BITS)') -or
+             -not $model.Contains('sourceVisibleBounds(') -or
+             -not $model.Contains('{-.4,2,-.4}') -or
+             -not $model.Contains('sourceHurtMix('))
+            {throw 'R307 source geometry/health contract missing'}
+          Write-Output 'R307_ORIGINAL_SOURCE_GEOMETRY_AND_LAUNCHER_CONTRACT_PASS'

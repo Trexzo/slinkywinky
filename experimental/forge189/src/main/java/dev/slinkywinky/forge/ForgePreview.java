@@ -183,6 +183,10 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r306PlayerScreenRenderProbe");
     private static final boolean R306_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r306PlayerScreenLocalWorldTest");
+    private static final boolean R307_SOURCE_SCREEN =
+        Boolean.getBoolean("slinkywinky.r307SourceScreenGeometryTest");
+    private static final boolean R307_LOCAL_WORLD_TEST =
+        Boolean.getBoolean("slinkywinky.r307SourceScreenLocalWorldTest");
     private static final int R283_UUID_MODE =
         Integer.getInteger("slinkywinky.r283AntiBotUuidMode",0).intValue();
     // R212 is a deliberately separate, TEMP-only local singleplayer test.
@@ -386,6 +390,12 @@ public final class ForgePreview {
             throw new IllegalStateException("R306 2D requires isolated source event7");
         if(R306_LOCAL_WORLD_TEST&&!R306_PLAYER_2D)
             throw new IllegalStateException("R306 local world requires 2D");
+        if(R307_SOURCE_SCREEN&&(!R307_LOCAL_WORLD_TEST||
+           !R306_PLAYER_2D||!R306_LOCAL_WORLD_TEST||
+           !R305_SOURCE_PHASES||!R305_LOCAL_WORLD_TEST))
+            throw new IllegalStateException("R307 source geometry requires isolated event7");
+        if(R307_LOCAL_WORLD_TEST&&!R307_SOURCE_SCREEN)
+            throw new IllegalStateException("R307 local world requires source geometry");
         // R300: independent user-opted, read-only Forge world sampler.
         // Never expose raw world/player observations outside a TEMP profile.
         if(R301_NATIVE_ESP_READONLY && !R300_ESP_READONLY)
@@ -400,7 +410,12 @@ public final class ForgePreview {
                R237_CLUTCH_READONLY||R278_ROSTER_READONLY||
                R283_NATIVE_ROSTER_READONLY||R289_ROSTER_LOCAL_WORLD_TEST||
                !home.startsWith(temp)||
-               !(R306_LOCAL_WORLD_TEST ?
+               !(R307_LOCAL_WORLD_TEST ?
+                   home.matches("(?i)^.*[/]slinkywinky-r307-independent-forge-[A-Za-z0-9._-]+$") &&
+                   "R307Offline".equals(mc.getSession().getUsername()) &&
+                   new java.io.File(home).getAbsoluteFile().getParentFile().equals(
+                       new java.io.File(temp).getAbsoluteFile()) :
+                 R306_LOCAL_WORLD_TEST ?
                    home.matches("(?i)^.*[/]slinkywinky-r306-independent-forge-[A-Za-z0-9._-]+$") &&
                    "R306Offline".equals(mc.getSession().getUsername()) &&
                    new java.io.File(home).getAbsoluteFile().getParentFile().equals(
@@ -438,6 +453,8 @@ public final class ForgePreview {
                 System.out.println("[SlinkyWinkyPreview] R305_SOURCE_PHASE_ISOLATION_GATE_PASS");
             if(R306_LOCAL_WORLD_TEST)
                 System.out.println("[SlinkyWinkyPreview] R306_PLAYER_SCREEN_ISOLATION_GATE_PASS");
+            if(R307_LOCAL_WORLD_TEST)
+                System.out.println("[SlinkyWinkyPreview] R307_SOURCE_SCREEN_ISOLATION_GATE_PASS");
             System.out.println("[SlinkyWinkyPreview] R300_ESP_TEMP_GATE_PASS");
         }
         if(R237_CLUTCH_READONLY) {
@@ -664,13 +681,15 @@ public final class ForgePreview {
         if (!R208_LOCAL_WORLD_TEST && !R213_LOCAL_ACTION_ACCEPTANCE &&
             !R214_LOCAL_NO_SLOW_TEST && !R289_ROSTER_LOCAL_WORLD_TEST &&
             !R302_LOCAL_WORLD_TEST && !R303_CHEST_LOCAL_WORLD_TEST &&
-            !R304_LOCAL_WORLD_TEST && !R305_LOCAL_WORLD_TEST) return;
+            !R304_LOCAL_WORLD_TEST && !R305_LOCAL_WORLD_TEST &&
+            !R307_LOCAL_WORLD_TEST) return;
         if (!r208WorldRequested &&
             mc.theWorld==null && mc.currentScreen instanceof GuiMainMenu &&
             ++r208MenuTicks >= 30) {
             r208WorldRequested=true;
             System.out.println("[SlinkyWinkyPreview] " +
-                (R306_LOCAL_WORLD_TEST ? "R306_LOCAL_WORLD_REQUESTED" :
+                (R307_LOCAL_WORLD_TEST ? "R307_LOCAL_WORLD_REQUESTED" :
+                 R306_LOCAL_WORLD_TEST ? "R306_LOCAL_WORLD_REQUESTED" :
                  R305_LOCAL_WORLD_TEST ? "R305_LOCAL_WORLD_REQUESTED" :
                  R304_LOCAL_WORLD_TEST ? "R304_LOCAL_WORLD_REQUESTED" :
                  R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_REQUESTED" :
@@ -685,7 +704,8 @@ public final class ForgePreview {
                     R209_PLAYER_TICK_TEST ? "R209_LOCAL_WORLD_REQUESTED" :
                                             "R208_LOCAL_WORLD_REQUESTED"));
             // Opt-in writes a new save ONLY inside the isolated TEMP gameDir.
-            final String worldName = R306_LOCAL_WORLD_TEST ?
+            final String worldName = R307_LOCAL_WORLD_TEST ?
+                "R307-local-only" : R306_LOCAL_WORLD_TEST ?
                 "R306-local-only" : R305_LOCAL_WORLD_TEST ?
                 "R305-local-only" : R304_LOCAL_WORLD_TEST ?
                 "R304-local-only" : R303_CHEST_LOCAL_WORLD_TEST ?
@@ -708,7 +728,8 @@ public final class ForgePreview {
             if (!r208WorldReady) {
                 r208WorldReady=true;
                 System.out.println("[SlinkyWinkyPreview] " +
-                    (R306_LOCAL_WORLD_TEST ? "R306_LOCAL_WORLD_PLAYER_READY_PASS" :
+                    (R307_LOCAL_WORLD_TEST ? "R307_LOCAL_WORLD_PLAYER_READY_PASS" :
+                     R306_LOCAL_WORLD_TEST ? "R306_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R305_LOCAL_WORLD_TEST ? "R305_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R304_LOCAL_WORLD_TEST ? "R304_LOCAL_WORLD_PLAYER_READY_PASS" :
                      R303_CHEST_LOCAL_WORLD_TEST ? "R303_LOCAL_WORLD_PLAYER_READY_PASS" :
@@ -2064,20 +2085,30 @@ public final class ForgePreview {
                             r306Camera.viewerX,r306Camera.viewerY,
                             r306Camera.viewerZ,r306Camera.partialTicks);
                     final java.util.List<dev.slinkywinky.PlayerEspScreenProjection.Rect> rects=
-                        r306Camera.camera.project(source);
-                    ForgePlayerEspScreenRenderer.draw(rects);
+                        R307_SOURCE_SCREEN ?
+                            r306Camera.camera.projectSource(source) :
+                            r306Camera.camera.project(source);
+                    if(R307_SOURCE_SCREEN)
+                        ForgePlayerEspScreenRenderer.drawSource(
+                            rects,(float)r306Camera.partialTicks);
+                    else
+                        ForgePlayerEspScreenRenderer.draw(rects);
                     ++r306ScreenFrames;
                     if(!rects.isEmpty()&&!r306SawVisible) {
                         r306SawVisible=true;
                         System.out.println("[SlinkyWinkyPreview] "+
-                            "R306_REAL_NATIVE_2D_PLAYER_SUBMITTED rectangles="+
+                            (R307_SOURCE_SCREEN ?
+                             "R307_SOURCE_PLAYER_BOX_SUBMITTED rectangles=" :
+                             "R306_REAL_NATIVE_2D_PLAYER_SUBMITTED rectangles=")+
                             rects.size()+" sourceRows="+source.players.size()+
                             " projection=forge_world_matrix gameWrites=0"+
                             " originalPixelsVerified=0");
                     }
                     if(r306ScreenFrames==40)
                         System.out.println("[SlinkyWinkyPreview] "+
-                            "R306_PLAYER_SCREEN_CALLBACK_PASS frames="+r306ScreenFrames+
+                            (R307_SOURCE_SCREEN ?
+                             "R307_SOURCE_SCREEN_CALLBACK_PASS frames=" :
+                             "R306_PLAYER_SCREEN_CALLBACK_PASS frames=")+r306ScreenFrames+
                             " projectedOnce="+(r306SawVisible?1:0)+
                             " gameWrites=0");
                 }

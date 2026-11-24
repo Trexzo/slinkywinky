@@ -107,4 +107,60 @@ public final class ForgePlayerEspScreenRenderer {
             GL11.glPopAttrib();
         }
     }
+    /**
+     * R307 separate opt-in source-geometry visualization: 8 original
+     * recovered corners are projected by Frame.projectSource(). Source
+     * HealthBar's three-stage black/yellow/health line positions and hurt
+     * animation factor are preserved. RGB base colors and the line width
+     * are DIAGNOSTIC because the user's original settings/name colors have
+     * not been recovered into the JNI snapshot. Never claim pixel parity.
+     */
+    public static void drawSource(List<PlayerEspScreenProjection.Rect> rectangles,
+                                  float partialTicks){
+        if(rectangles==null||rectangles.size()>100||
+           !Float.isFinite(partialTicks)||partialTicks<0||partialTicks>1)
+            throw new IllegalStateException("R307 invalid source draw request");
+        final float lineWidth=1.25f; // known diagnostic default, NOT recovered GUI setting.
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glPushMatrix();
+        try{
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(false);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glLineWidth(lineWidth);
+            GL11.glBegin(GL11.GL_LINES);
+            try{
+                for(PlayerEspScreenProjection.Rect r:rectangles){
+                    if(r==null||!Double.isFinite(r.left)||!Double.isFinite(r.top)||
+                       !Double.isFinite(r.right)||!Double.isFinite(r.bottom)||
+                       r.right<=r.left||r.bottom<=r.top)
+                        throw new IllegalStateException("R307 malformed projected box");
+                    // The source hurt formula uses min(10,hurt-partial)*0.1.
+                    // Opt-in diagnostic base cyan; original name/target colors
+                    // and show_2d_box / hurt_effect settings remain unresolved.
+                    float h=PlayerEspScreenProjection.sourceHurtMix(
+                        r.hurtTime,partialTicks);
+                    GL11.glColor4f(.4f+.6f*h,.8f*(1f-h),1f-h,1f);
+                    line(r.left,r.top,r.right,r.top);
+                    line(r.right,r.top,r.right,r.bottom);
+                    line(r.right,r.bottom,r.left,r.bottom);
+                    line(r.left,r.bottom,r.left,r.top);
+                    for(PlayerEspScreenProjection.Segment seg:
+                            PlayerEspScreenProjection.sourceHealthSegments(
+                                r,lineWidth)){
+                        GL11.glColor4f(seg.red,seg.green,seg.blue,1f);
+                        line(seg.x,seg.y1,seg.x,seg.y2);
+                    }
+                }
+            }finally{GL11.glEnd();}
+        }finally{
+            GL11.glPopMatrix();
+            GL11.glPopAttrib();
+        }
+    }
+
 }
