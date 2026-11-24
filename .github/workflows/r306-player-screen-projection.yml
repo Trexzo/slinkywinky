@@ -67,6 +67,7 @@ jobs:
           foreach($needle in @(
             'R306PlayerScreenTest','R306ExpectedJarSha256',
             'R306_PLAYER_SCREEN_TEST=',
+            '0e61015ff788f21280d87213b6cf743489de2f4b9ee35f422922c1913b676c34',
             'slinkywinky.r306PlayerScreenRenderProbe=true',
             'slinkywinky.r306PlayerScreenLocalWorldTest=true'
           )){if(-not $ps.Contains($needle)){throw ('R306 missing launcher '+$needle)}}

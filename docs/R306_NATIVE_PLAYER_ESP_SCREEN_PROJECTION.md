@@ -61,7 +61,16 @@ R306 requires its own explicit R207 mode
 new direct-TEMP-only `slinkywinky-r306-independent-forge-<unique>`
 game folder, dummy username `R306Offline` and a disposable
 `R306-local-only` singleplayer world. Earlier R302–R305 hashes/modes
-remain unchanged. This is not enabled in ordinary Forge/production
+remain unchanged. The initial R306 ForgeGradle Java 8 JAR build
+passed on implementation commit `86ca8c4` in GitHub Actions
+run `45488098903`. I downloaded the artifact, independently hashed
+the JAR, verified that it matched the included `forge-preview.sha256`
+manifest, and inspected the archive for all required R306 Java/Forge
+class files. The new, exclusive launcher mode enforces exact SHA-256:
+
+`0e61015ff788f21280d87213b6cf743489de2f4b9ee35f422922c1913b676c34`
+
+This is not enabled in ordinary Forge/production
 Minecraft or PR #1's injector.
 
 Runtime logs distinguish **frame callbacks** from an actually
