@@ -473,3 +473,75 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeEntityPlan(
         fail(env,"R304 native source entity draw failure");return nullptr;
     }
 }
+
+
+// R306: strictly event-7 source PlayerESP rows for projection by the Forge
+// screen overlay. This method does not project, draw, or call the game.
+// [version=1, rowCount, each: cameraRelativeX/Y/Z, sourceHealth,
+// sourceAbsorption, hurtTime]. Uses only R299 C++ controller row ordering.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativePlayerScreenRows(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,
+    jdoubleArray camera,jdouble partialTicks){
+    if(!identity||!camera||env->GetArrayLength(identity)!=4||
+       env->GetArrayLength(camera)!=3){
+        fail(env,"R306 malformed screen metadata");return nullptr;
+    }
+    try{
+        jlong id[4]{};jdouble xyz[3]{};
+        env->GetLongArrayRegion(identity,0,4,id);
+        env->GetDoubleArrayRegion(camera,0,3,xyz);
+        if(env->ExceptionCheck())return nullptr;
+        if(id[0]<=0||id[1]<=0||id[0]==id[1]||id[2]<=0||id[3]<0||
+           !std::isfinite(partialTicks)||partialTicks<0||partialTicks>1||
+           !std::isfinite(xyz[0])||!std::isfinite(xyz[1])||
+           !std::isfinite(xyz[2])){
+            fail(env,"R306 malformed screen camera/owner");return nullptr;
+        }
+        std::lock_guard<std::mutex> guard(lock);
+        const auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()){
+            fail(env,"R306 foreign owner");return nullptr;
+        }
+        const Session& s=*it->second;
+        if(!s.phased||!s.observed||s.source_phase!=7||
+           id[0]!=s.world||id[1]!=s.player||
+           id[2]!=s.generation||id[3]!=s.tick||
+           !s.players.screen_mode(s.staged_player,true)){
+            fail(env,"R306 event7, owner or source mode not admitted");return nullptr;
+        }
+        const auto& rows=s.players.rows();
+        if(rows.size()>PlayerEspController::kSourceRowCap){
+            fail(env,"R306 player cap exceeded");return nullptr;
+        }
+        std::vector<jdouble> output(2+6*rows.size());
+        output[0]=1;output[1]=static_cast<jdouble>(rows.size());
+        for(std::size_t i=0;i<rows.size();i++){
+            const auto& row=rows[i];
+            const std::size_t k=2+6*i;
+            const auto interp=[&](double a,double b,double o)->double {
+                return a+(b-a)*partialTicks-o;
+            };
+            output[k]=interp(row.previous.x,row.position.x,xyz[0]);
+            output[k+1]=interp(row.previous.y,row.position.y,xyz[1]);
+            output[k+2]=interp(row.previous.z,row.position.z,xyz[2]);
+            output[k+3]=row.health;
+            output[k+4]=row.absorption;
+            output[k+5]=row.hurt;
+            if(!std::isfinite(output[k])||!std::isfinite(output[k+1])||
+               !std::isfinite(output[k+2])||
+               !std::isfinite(row.health)||row.health<0||row.health>1||
+               !std::isfinite(row.absorption)||row.absorption<0||
+               row.absorption>1||row.hurt<0){
+                fail(env,"R306 native nonfinite/out-of-range screen row");return nullptr;
+            }
+        }
+        jdoubleArray result=env->NewDoubleArray(static_cast<jsize>(output.size()));
+        if(!result)return nullptr;
+        env->SetDoubleArrayRegion(result,0,static_cast<jsize>(output.size()),
+                                  output.data());
+        return env->ExceptionCheck()?nullptr:result;
+    }catch(...){
+        fail(env,"R306 player source screen rows failed");return nullptr;
+    }
+}

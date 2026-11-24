@@ -7,6 +7,8 @@ on:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeChestEspDebugRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEntityEspDebugRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java'
+      - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
@@ -26,6 +28,8 @@ on:
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeChestEspDebugRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEntityEspDebugRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java'
+      - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
@@ -71,6 +75,8 @@ jobs:
             dev/slinkywinky/forge/ForgePreview.class \
             dev/slinkywinky/forge/ForgeChestEspDebugRenderer.class \
             dev/slinkywinky/forge/ForgeEntityEspDebugRenderer.class \
+            dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.class \
+            dev/slinkywinky/PlayerEspScreenProjection.class \
             dev/slinkywinky/forge/ForgeRelationshipRosterPort.class \
             dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.class \
             dev/slinkywinky/RelationshipRosterSampler.class \

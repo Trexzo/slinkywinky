@@ -54,6 +54,9 @@ public final class ForgeEntityEspDebugRenderer {
         finally {GL11.glEnd();}
     }
     public static void draw(EspNativeReadOnlyPreview.EntityPlan plan) {
+        draw(plan,true); // R304 legacy behavior unchanged.
+    }
+    public static void draw(EspNativeReadOnlyPreview.EntityPlan plan,boolean drawPlayers) {
         if(plan==null||plan.items==null||plan.players==null||
            plan.items.size()>100||plan.players.size()>100)
             throw new IllegalStateException("R304 invalid native plans");
@@ -81,7 +84,7 @@ public final class ForgeEntityEspDebugRenderer {
                     itemMarker(i.quantity);
                 } finally {GL11.glPopMatrix();}
             }
-            for(EspNativeReadOnlyPreview.PlayerDraw p:plan.players) {
+            if(drawPlayers)for(EspNativeReadOnlyPreview.PlayerDraw p:plan.players) {
                 if(p==null||!Double.isFinite(p.x)||!Double.isFinite(p.y)||
                    !Double.isFinite(p.z)||!Float.isFinite(p.health)||
                    p.health<0||p.health>1||!Float.isFinite(p.absorption)||

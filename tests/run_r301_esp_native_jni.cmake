@@ -10,6 +10,7 @@ execute_process(COMMAND "${JAVA_COMPILER}" -source 8 -target 8 -encoding UTF-8
   -d "${STAGE}"
   "${PROJECT_ROOT}/java/dev/slinkywinky/EspWorldSnapshotSampler.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/EspNativeReadOnlyPreview.java"
+  "${PROJECT_ROOT}/java/dev/slinkywinky/PlayerEspScreenProjection.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java"
   RESULT_VARIABLE RC OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)
 if(NOT RC EQUAL 0)
@@ -19,7 +20,9 @@ execute_process(COMMAND "${JAVA_EXECUTABLE}"
   "-Djava.library.path=${LIBRARY_DIR}" -cp "${STAGE}"
   dev.slinkywinky.EspNativeReadOnlyPreviewSmoke
   RESULT_VARIABLE RC OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)
-if(NOT RC EQUAL 0 OR NOT OUT MATCHES "R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS")
+if(NOT RC EQUAL 0 OR
+   NOT OUT MATCHES "R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS" OR
+   NOT OUT MATCHES "R306_JAVA8_REAL_NATIVE_EVENT7_SCREEN_PROJECTION_PASS")
   message(FATAL_ERROR "R301 JNI three ESP test: ${OUT} ${ERR}")
 endif()
 message(STATUS "${OUT}")

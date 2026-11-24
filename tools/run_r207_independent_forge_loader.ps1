@@ -24,10 +24,25 @@ param(
  [switch]$R304EntityRenderTest,
  [string]$R304ExpectedJarSha256,
  [switch]$R305SourcePhaseTest,
- [string]$R305ExpectedJarSha256
+ [string]$R305ExpectedJarSha256,
+ [switch]$R306PlayerScreenTest,
+ [string]$R306ExpectedJarSha256
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
+if($R306PlayerScreenTest){
+  if($R306ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
+    {throw 'R306 requires an exact reviewed Forge JAR digest'}
+  if($R306PlayerScreenTest -or $R305SourcePhaseTest -or $R304EntityRenderTest -or
+     $R303ChestRenderTest -or $R302EspWorldTest -or
+     $R289RosterWorldTest -or $R208LocalWorldTest -or
+     $R209PlayerTickTest -or $R213LocalActionAcceptance -or
+     $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or
+     $R216DisplacementTest -or $R217ItemCategoriesTest -or
+     $R224LocalStrafeReadOnlyTest)
+    {throw 'R306 must be the only selected TEMP acceptance mode'}
+}elseif($R306ExpectedJarSha256)
+  {throw 'R306 digest cannot override another mode'}
 if($R305SourcePhaseTest){
   if($R305ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
      $R305ExpectedJarSha256.ToLowerInvariant() -ne '05e6f837f7ba2c953f1e2974bca364f63348e1bd32b8b084cb1c1664ac60aa0b')
@@ -91,7 +106,9 @@ if($R289RosterWorldTest -and
     $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest)) {
   throw 'R289 real roster test must be the ONLY selected mode'
 }
-$expectedJar=if($R305SourcePhaseTest){
+$expectedJar=if($R306PlayerScreenTest){
+  $R306ExpectedJarSha256.ToLowerInvariant()
+}elseif($R305SourcePhaseTest){
   '05e6f837f7ba2c953f1e2974bca364f63348e1bd32b8b084cb1c1664ac60aa0b'
 }elseif($R304EntityRenderTest){
   '03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38'
@@ -120,7 +137,7 @@ $expectedJar=if($R305SourcePhaseTest){
 }else{
   'f331bb3367236b15846288b3afb3c4d054d0e1b5bab941290e78dff121769e87'
 }
-$offlineUsername=if($R305SourcePhaseTest){'R305Offline'}elseif($R304EntityRenderTest){'R304Offline'}elseif($R303ChestRenderTest){'R303Offline'}elseif($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
+$offlineUsername=if($R306PlayerScreenTest){'R306Offline'}elseif($R305SourcePhaseTest){'R305Offline'}elseif($R304EntityRenderTest){'R304Offline'}elseif($R303ChestRenderTest){'R303Offline'}elseif($R302EspWorldTest){'R302Offline'}elseif($R289RosterWorldTest){'R278Offline'}elseif($R224LocalStrafeReadOnlyTest){'R224Offline'}elseif($R217ItemCategoriesTest){'R217Offline'}elseif($R216DisplacementTest){'R216Offline'}elseif($R215VanillaInputTest){'R215Offline'}elseif($R214LocalNoSlowAcceptance){'R214Offline'}elseif($R213LocalActionAcceptance){'R213Offline'}elseif($R209PlayerTickTest){'R209Offline'}elseif($R208LocalWorldTest){'R208Offline'}else{'R207Offline'}
 $expectedVanilla='14f0d96d1a56fb4f5c3b2233d00699525893fe5ce3dcf181e7de59120595d298'
 $forgeId='1.8.9-forge1.8.9-11.15.1.2318-1.8.9'
 $root=(Resolve-Path -LiteralPath $MinecraftRoot).Path
@@ -132,10 +149,12 @@ if ([IO.Path]::GetFullPath($InstanceRoot).TrimEnd('\') -eq $root.TrimEnd('\') -o
       [StringComparison]::OrdinalIgnoreCase)) {
     throw 'R207 refuses to write to original Minecraft root'
 }
-if($R305SourcePhaseTest -or $R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
+if($R306PlayerScreenTest -or $R305SourcePhaseTest -or $R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or $R215VanillaInputTest -or $R216DisplacementTest -or $R217ItemCategoriesTest -or $R224LocalStrafeReadOnlyTest){
   $target=[IO.Path]::GetFullPath($InstanceRoot).Replace('\','/')
   $tmp=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).Replace('\','/')
-  $prefix=if($R305SourcePhaseTest){
+  $prefix=if($R306PlayerScreenTest){
+    '/slinkywinky-r306-independent-forge-[^/]+$'
+  }elseif($R305SourcePhaseTest){
     '/slinkywinky-r305-independent-forge-[^/]+$'
   }elseif($R304EntityRenderTest){
     '/slinkywinky-r304-independent-forge-[^/]+$'
@@ -284,7 +303,17 @@ $argsList=@(
  '--tweakClass','net.minecraftforge.fml.common.launcher.FMLTweaker',
  '--width','960','--height','540'
 )
-if($R305SourcePhaseTest){
+if($R306PlayerScreenTest){
+  $argsList=@(
+    '-Dslinkywinky.r300EspReadOnlyProbe=true',
+    '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
+    '-Dslinkywinky.r303ChestRenderProbe=true',
+    '-Dslinkywinky.r304EntityRenderProbe=true',
+    '-Dslinkywinky.r305SourcePhaseTest=true',
+    '-Dslinkywinky.r305SourcePhaseLocalWorldTest=true',
+    '-Dslinkywinky.r306PlayerScreenRenderProbe=true',
+    '-Dslinkywinky.r306PlayerScreenLocalWorldTest=true')+$argsList
+}elseif($R305SourcePhaseTest){
   $argsList=@(
     '-Dslinkywinky.r300EspReadOnlyProbe=true',
     '-Dslinkywinky.r301NativeEspReadOnlyProbe=true',
@@ -351,6 +380,8 @@ $evidence=Join-Path $isolation 'R207_INDEPENDENT_FORGE_PREFLIGHT.txt'
  'R207_INDEPENDENT_FORGE_PREFLIGHT_PASS'
  "REOBF_SHA256=$expectedJar"
  "ISOLATED_WORLD_TEST=$([bool]($R305SourcePhaseTest -or $R304EntityRenderTest -or $R303ChestRenderTest -or $R302EspWorldTest -or $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or $R224LocalStrafeReadOnlyTest))"
+ "R306_PLAYER_SCREEN_TEST=$([bool]$R306PlayerScreenTest)"
+ "R306_NATIVE_EVENT7_SCREEN=$([bool]$R306PlayerScreenTest)"
  "R305_NATIVE_SOURCE_PHASE_TEST=$([bool]$R305SourcePhaseTest)"
  "R305_NATIVE_SOURCE_PHASES_R0_R18_R6_R7_R26=$([bool]$R305SourcePhaseTest)"
  "R304_ENTITY_RENDER_TEST=$([bool]$R304EntityRenderTest)"

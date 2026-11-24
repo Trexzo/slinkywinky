@@ -18,6 +18,8 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
     private static native double[] nativeChestPlan(long handle,long[] identity,double[] camera);
     private static native double[] nativeEntityPlan(long handle,long[] identity,
                                                     double[] camera,double partialTicks);
+    private static native double[] nativePlayerScreenRows(long handle,long[] identity,
+                                                         double[] camera,double partialTicks);
 
     /** Source-derived native center translations. Diagnostic colors are host-specific. */
     public static final class ChestDraw {
@@ -284,6 +286,65 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
                        (float)out[k+3],(float)out[k+4],(int)out[k+5]));
         }
         return new EntityPlan(receipt,items,players);
+    }
+
+    /** R306: event-7 native PlayerESP screen rows in source farthest-first order. */
+    public static final class ScreenPlayer {
+        public final double x,y,z;
+        public final float health,absorption;
+        public final int hurtTime;
+        private ScreenPlayer(double x,double y,double z,
+                             float health,float absorption,int hurtTime){
+            this.x=x;this.y=y;this.z=z;this.health=health;
+            this.absorption=absorption;this.hurtTime=hurtTime;
+        }
+    }
+    public static final class ScreenPlan {
+        public final long worldToken,playerToken,generation,tick;
+        public final java.util.List<ScreenPlayer> players;
+        private ScreenPlan(Result source,java.util.List<ScreenPlayer> data){
+            worldToken=source.worldToken;playerToken=source.playerToken;
+            generation=source.generation;tick=source.tick;
+            players=java.util.Collections.unmodifiableList(
+                new java.util.ArrayList<ScreenPlayer>(data));
+        }
+    }
+    /**
+     * R306: only the original source event-7 phase can return native screen
+     * rows. The native bridge still owns source sorting, normalized health,
+     * relationship filtering and provenance. No coordinates are projected
+     * inside JNI; actual Forge OpenGL matrices are supplied to a separate,
+     * independently tested projection adapter.
+     */
+    public ScreenPlan playerScreenPlan(Result source,double cameraX,
+                                       double cameraY,double cameraZ,double partialTicks){
+        owner();
+        if(!phased||source==null||source!=lastSource||
+           source.playerRows<0||source.playerRows>100||
+           !Double.isFinite(cameraX)||!Double.isFinite(cameraY)||
+           !Double.isFinite(cameraZ)||!Double.isFinite(partialTicks)||
+           partialTicks<0||partialTicks>1)
+            throw new IllegalArgumentException("R306 invalid source screen request");
+        long[] id={source.worldToken,source.playerToken,source.generation,source.tick};
+        double[] out=nativePlayerScreenRows(handle,id,
+            new double[]{cameraX,cameraY,cameraZ},partialTicks);
+        if(out==null||out.length<2||out[0]!=1||out[1]<0||
+           out[1]>100||out[1]!=(int)out[1]||
+           out.length!=2+6*(int)out[1]||out[1]!=source.playerRows)
+            throw new IllegalStateException("R306 source screen packet mismatch");
+        java.util.List<ScreenPlayer> players=new java.util.ArrayList<ScreenPlayer>();
+        for(int i=0;i<(int)out[1];i++){
+            final int k=2+6*i;
+            if(!Double.isFinite(out[k])||!Double.isFinite(out[k+1])||
+               !Double.isFinite(out[k+2])||!Double.isFinite(out[k+3])||
+               !Double.isFinite(out[k+4])||out[k+3]<0||out[k+3]>1||
+               out[k+4]<0||out[k+4]>1||out[k+5]<0||
+               out[k+5]>Integer.MAX_VALUE||out[k+5]!=(int)out[k+5])
+                throw new IllegalStateException("R306 invalid native source screen row");
+            players.add(new ScreenPlayer(out[k],out[k+1],out[k+2],
+                                         (float)out[k+3],(float)out[k+4],(int)out[k+5]));
+        }
+        return new ScreenPlan(source,players);
     }
 
     @Override public void close(){

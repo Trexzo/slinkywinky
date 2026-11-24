@@ -185,7 +185,57 @@ public final class EspNativeReadOnlyPreviewSmoke {
         check(phased.chestPlan(world6,0,0,0).draws.size()==2 &&
               phased.entityPlan(world6,0,0,0,.5).players.size()==1,
               "R305 real C++ rows readable after event6");
+        refuse(new Runnable(){public void run(){
+            phased.playerScreenPlan(world6,0,0,0,1);
+        }},"R306 native screen query rejected before event7");
         final EspNativeReadOnlyPreview.Result screen7=phased.sourceEvent(world6,7);
+        final EspNativeReadOnlyPreview.ScreenPlan screenRows=
+            phased.playerScreenPlan(screen7,0,0,0,1);
+        check(screenRows.players.size()==1&&
+              Math.abs(screenRows.players.get(0).x-2)<0.000001 &&
+              Math.abs(screenRows.players.get(0).health-(12f/22f))<0.00001,
+              "R306 source-ordered native event7 screen rows/health");
+        final double[] identity={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};
+        final double[] scale={.2,0,0,0,0,.2,0,0,0,0,.2,0,0,0,0,1};
+        final PlayerEspScreenProjection.Frame scene=
+            new PlayerEspScreenProjection.Frame(
+                screen7.worldToken,screen7.playerToken,
+                screen7.generation,screen7.tick,
+                identity,scale,new int[]{0,0,200,200},100,100);
+        final java.util.List<PlayerEspScreenProjection.Rect> rects=
+            scene.project(screenRows);
+        check(rects.size()==1&&
+              Math.abs(rects.get(0).left-67)<.00001&&
+              Math.abs(rects.get(0).right-73)<.00001&&
+              Math.abs(rects.get(0).top-32)<.00001&&
+              Math.abs(rects.get(0).bottom-50)<.00001,
+              "R306 exact column-major projection to scaled GUI rectangle");
+        final PlayerEspScreenProjection.Frame outside=
+            new PlayerEspScreenProjection.Frame(
+                screen7.worldToken,screen7.playerToken,
+                screen7.generation,screen7.tick,
+                identity,identity,new int[]{0,0,200,200},100,100);
+        check(outside.project(screenRows).isEmpty(),
+              "R306 outside viewport geometry conservatively skipped");
+        final PlayerEspScreenProjection.Frame wrongWorld=
+            new PlayerEspScreenProjection.Frame(
+                screen7.worldToken+100,screen7.playerToken,
+                screen7.generation,screen7.tick,
+                identity,scale,new int[]{0,0,200,200},100,100);
+        refuse(new Runnable(){public void run(){
+            wrongWorld.project(screenRows);
+        }},"R306 stale/foreign world projection denied");
+        refuseArgument(new Runnable(){public void run(){
+            phased.playerScreenPlan(screen7,0,0,0,Double.NaN);
+        }},"R306 invalid partial frame denied");
+        final double[] nanMatrix=identity.clone();
+        nanMatrix[0]=Double.NaN;
+        refuseArgument(new Runnable(){public void run(){
+            new PlayerEspScreenProjection.Frame(
+                screen7.worldToken,screen7.playerToken,
+                screen7.generation,screen7.tick,
+                nanMatrix,scale,new int[]{0,0,200,200},100,100);
+        }},"R306 nonfinite matrix denied");
         final EspNativeReadOnlyPreview.Result another6=phased.sourceEvent(screen7,6);
         check(another6.itemRows==1,"R305 repeat render per physics tick");
         sourceFixture.drops.add(new EspWorldSnapshotSampler.Drop(
@@ -195,6 +245,9 @@ public final class EspNativeReadOnlyPreviewSmoke {
         refuse(new Runnable(){public void run(){
             phased.sourceEvent(nextStage,6);
         }},"R305 prior tick cannot authorize new render");
+        refuseArgument(new Runnable(){public void run(){
+            phased.playerScreenPlan(screen7,0,0,0,1);
+        }},"R306 old tick screen rows denied");
         final EspNativeReadOnlyPreview.Result next0=phased.sourceEvent(nextStage,0);
         final EspNativeReadOnlyPreview.Result next18=phased.sourceEvent(next0,18);
         check(next18.itemRows==2,"R305 newly collected source rows");
@@ -220,6 +273,7 @@ public final class EspNativeReadOnlyPreviewSmoke {
         phaser.start();phaser.join();
         check(phaseForeign[0],"R305 source phase remains owner-thread bound");
         phased.close();phasedSampler.close();
+        System.out.println("R306_JAVA8_REAL_NATIVE_EVENT7_SCREEN_PROJECTION_PASS");
         System.out.println("R305_JAVA8_REAL_NATIVE_ESP_PHASE_0_18_6_7_26_PASS");
         System.out.println("R301_JAVA8_REAL_NATIVE_THREE_ESP_CONTROLLERS_PASS");
     }

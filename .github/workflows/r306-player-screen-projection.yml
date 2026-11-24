@@ -1,0 +1,86 @@
+name: R306 source Player ESP event7 screen projection
+
+on:
+  push:
+    paths:
+      - 'reference_compat/src/esp_world_snapshot_jni.cpp'
+      - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
+      - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
+      - 'tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java'
+      - 'tests/run_r301_esp_native_jni.cmake'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEntityEspDebugRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - '.github/workflows/r306-player-screen-projection.yml'
+  pull_request:
+    paths:
+      - 'reference_compat/src/esp_world_snapshot_jni.cpp'
+      - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
+      - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
+      - 'tests/java/dev/slinkywinky/EspNativeReadOnlyPreviewSmoke.java'
+      - 'tests/run_r301_esp_native_jni.cmake'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEntityEspDebugRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java'
+      - 'tools/run_r207_independent_forge_loader.ps1'
+      - '.github/workflows/r306-player-screen-projection.yml'
+
+jobs:
+  real-java8-jni-source-player-projection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+      - name: Build actual source-native JNI player model
+        run: |
+          cmake -S . -B build/r306 -DSLINKYWINKY_BUILD_JNI=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/r306 --target slinkywinky_jni --parallel 2
+      - name: Event7-only native row + independently calculated clip-space screen projection
+        run: ctest --test-dir build/r306 -R '^r301_java8_real_native_three_esp_controllers$' --output-on-failure
+
+  windows-powershell51-source-contract:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse launcher and audit native/Forge 2D ownership
+        shell: powershell
+        run: |
+          $tokens=$null;$errors=$null
+          $launcher='tools/run_r207_independent_forge_loader.ps1'
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path $env:GITHUB_WORKSPACE $launcher),[ref]$tokens,[ref]$errors)
+          if($errors.Count -gt 0){
+            foreach($e in $errors){Write-Error $e.ToString()}
+            throw 'R306 launcher PowerShell 5.1 syntax invalid'
+          }
+          $ps=Get-Content $launcher -Raw
+          $forge=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java' -Raw
+          $native=Get-Content 'reference_compat/src/esp_world_snapshot_jni.cpp' -Raw
+          $screen=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePlayerEspScreenRenderer.java' -Raw
+          $project=Get-Content 'java/dev/slinkywinky/PlayerEspScreenProjection.java' -Raw
+          foreach($needle in @(
+            'R306PlayerScreenTest','R306ExpectedJarSha256',
+            'R306_PLAYER_SCREEN_TEST=',
+            'slinkywinky.r306PlayerScreenRenderProbe=true',
+            'slinkywinky.r306PlayerScreenLocalWorldTest=true'
+          )){if(-not $ps.Contains($needle)){throw ('R306 missing launcher '+$needle)}}
+          foreach($needle in @(
+            'R306_PLAYER_SCREEN_ISOLATION_GATE_PASS',
+            'R306_REAL_NATIVE_2D_PLAYER_SUBMITTED',
+            'R306_PLAYER_SCREEN_CALLBACK_PASS',
+            'ForgeEntityEspDebugRenderer.draw(entities,!R306_PLAYER_2D)'
+          )){if(-not $forge.Contains($needle)){throw ('R306 Forge 2D source missing '+$needle)}}
+          if(-not $native.Contains('EspNativeReadOnlyPreview_nativePlayerScreenRows') -or
+             -not $native.Contains('s.source_phase!=7') -or
+             -not $screen.Contains('GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX') -or
+             -not $screen.Contains('glPushAttrib(GL11.GL_ALL_ATTRIB_BITS)') -or
+             -not $project.Contains('projection[4*k+row]*model[4*col+k]')){
+            throw 'R306 native event7, real camera capture or GL restore missing'
+          }
+          Write-Output 'R306_REAL_NATIVE_PLAYER_2D_SOURCE_CONTRACT_PASS'
