@@ -55,7 +55,8 @@ jobs:
           $view=Get-Content 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEntityEspDebugRenderer.java' -Raw
           foreach($needle in @(
             'R304EntityRenderTest','R304ExpectedJarSha256',
-            'R304_ENTITY_RENDER_TEST=','slinkywinky.r304EntityRenderProbe=true',
+            'R304_ENTITY_RENDER_TEST=','03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38',
+            'slinkywinky.r304EntityRenderProbe=true',
             'slinkywinky.r304EntityLocalWorldTest=true'
           )){
             if(-not $ps.Contains($needle)){throw ('R304 launcher missing '+$needle)}

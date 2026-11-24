@@ -27,8 +27,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 if($R304EntityRenderTest){
-  if($R304ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$')
-    {throw 'R304 requires the exact reviewed reobfuscated preview JAR SHA256'}
+  if($R304ExpectedJarSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+     $R304ExpectedJarSha256.ToLowerInvariant() -ne '03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38')
+    {throw 'R304 requires the exact SHA-pinned Forge preview JAR'}
   if($R303ChestRenderTest -or $R302EspWorldTest -or
      $R289RosterWorldTest -or $R208LocalWorldTest -or $R209PlayerTickTest -or
      $R213LocalActionAcceptance -or $R214LocalNoSlowAcceptance -or
@@ -76,7 +77,7 @@ if($R289RosterWorldTest -and
   throw 'R289 real roster test must be the ONLY selected mode'
 }
 $expectedJar=if($R304EntityRenderTest){
-  $R304ExpectedJarSha256.ToLowerInvariant()
+  '03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38'
 }elseif($R303ChestRenderTest){
   'b289870834ec50fc290955427304d4aea6114b925949da6a9e0670d97ec9ff48'
 }elseif($R302EspWorldTest){

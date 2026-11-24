@@ -42,8 +42,17 @@ R303/R302/legacy tests. Only a fresh direct TEMP gameDir named
 identity `R304Offline`, verified Forge libraries/Java 8, and a
 matching first-party native DLL are eligible. The resulting disposable
 singleplayer world is named `R304-local-only`, and the observer
-auto-starts once. The R304 specific Forge JAR hash is pinned after a
-successful exact-source Forge build; old SHA-pinned modes are unchanged.
+auto-starts once. The SHA256 of the reviewed R304 Forge 1.8.9 JAR is pinned in the
+launcher, which rejects any other digest:
+
+`03cd60d6afaf031c7b7a83d81bac0b820b95b37eb2f32861460696a700f5ae38`
+
+I downloaded the `slinkywinky-forge189-preview-jar` artifact from
+the successful Forge build on commit `61d39e5` (run 45463710609).
+The JAR digest independently matches `forge-preview.sha256`; the
+packaged JAR contains the new renderer and native Java adapter.
+This authenticates the **build artifact**, not an actual Minecraft
+runtime launch. Other previously SHA-pinned modes are unchanged.
 
 `R304_ENTITY_RENDER_CALLBACK_PASS` documents 40 real render callbacks.
 `R304_ITEM_NATIVE_RENDER_SUBMITTED` and
