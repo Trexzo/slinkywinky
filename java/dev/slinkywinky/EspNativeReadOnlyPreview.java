@@ -20,6 +20,9 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
                                                     double[] camera,double partialTicks);
     private static native double[] nativePlayerScreenRows(long handle,long[] identity,
                                                          double[] camera,double partialTicks);
+    private static native void nativeStageScreenStyle(long handle,long[] identity,
+        int[] flagsAndTarget,float[] nameRgb,float[] palette,int[] options);
+    private static native double[] nativeScreenStyleRows(long handle,long[] identity);
 
     /** Source-derived native center translations. Diagnostic colors are host-specific. */
     public static final class ChestDraw {
@@ -63,6 +66,7 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
     private final Thread thread=Thread.currentThread();
     private final boolean phased;
     private Result lastSource;
+    private SourceStyleSettings lastStyleSettings;
     private long handle;
     public EspNativeReadOnlyPreview(){this(false);}
     public EspNativeReadOnlyPreview(boolean sourcePhases){
@@ -139,7 +143,7 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
               n[10]<0||n[10]>100)))
             throw new IllegalStateException("R301/R305 mismatched native receipt");
         Result result=new Result(receipt,n);
-        if(phased)lastSource=result;
+        if(phased){lastSource=result;lastStyleSettings=null;}
         return result;
     }
     /**
@@ -163,6 +167,7 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
             throw new IllegalStateException("R305 malformed phase receipt");
         Result next=new Result(previous,rows);
         lastSource=event==26?null:next;
+        if(event==26)lastStyleSettings=null;
         return next;
     }
     /**
@@ -347,7 +352,171 @@ public final class EspNativeReadOnlyPreview implements AutoCloseable {
         return new ScreenPlan(source,players);
     }
 
+
+    /** R308 explicit user/fixture settings; not factory defaults. */
+    public static final class SourceStyleSettings {
+        public final boolean hideFriendlies,overrideTarget,showBox,showHealth,
+                             filled,hurtEffect;
+        public final int colorMode; // 0 original automatic name; 1 manual
+        public final float lineWidth;
+        private final float[] palette;
+        public SourceStyleSettings(int colorMode,boolean hideFriendlies,
+                boolean overrideTarget,boolean showBox,boolean showHealth,
+                boolean filled,boolean hurtEffect,float lineWidth,
+                float[] target,float[] friendly,float[] enemy){
+            if((colorMode!=0&&colorMode!=1)||!Float.isFinite(lineWidth)||
+               lineWidth<1||lineWidth>4||target==null||friendly==null||
+               enemy==null||target.length!=3||friendly.length!=3||
+               enemy.length!=3)
+                throw new IllegalArgumentException("R308 malformed explicit settings");
+            palette=new float[10];
+            for(int i=0;i<3;i++){
+                palette[i]=target[i];palette[i+3]=friendly[i];
+                palette[i+6]=enemy[i];
+            }
+            palette[9]=lineWidth;
+            for(int i=0;i<9;i++)
+                if(!Float.isFinite(palette[i])||
+                   palette[i]<0||palette[i]>1)
+                    throw new IllegalArgumentException("R308 RGB out of range");
+            this.colorMode=colorMode;this.hideFriendlies=hideFriendlies;
+            this.overrideTarget=overrideTarget;this.showBox=showBox;
+            this.showHealth=showHealth;this.filled=filled;
+            this.hurtEffect=hurtEffect;this.lineWidth=lineWidth;
+        }
+        private int[] options(){
+            return new int[]{0,colorMode,hideFriendlies?1:0,
+                overrideTarget?1:0,showBox?1:0,showHealth?1:0,
+                filled?1:0,hurtEffect?1:0};
+        }
+    }
+    /** R308 caller MUST supply authoritative relationship and target data. */
+    public static final class SourcePlayerStyle {
+        public final java.util.UUID uuid;
+        public final int relationshipFlags;
+        public final boolean target;
+        private final float[] nameRgb;
+        public SourcePlayerStyle(java.util.UUID uuid,int flags,boolean target,
+                                 float red,float green,float blue){
+            if(uuid==null||flags<0||flags>7||
+               !Float.isFinite(red)||!Float.isFinite(green)||
+               !Float.isFinite(blue)||red<0||red>1||
+               green<0||green>1||blue<0||blue>1)
+                throw new IllegalArgumentException("R308 source identity/color");
+            this.uuid=uuid;relationshipFlags=flags;this.target=target;
+            nameRgb=new float[]{red,green,blue};
+        }
+    }
+    /** Source receipt stage may be called exactly once before source event0. */
+    public void stageScreenStyle(Result observed,
+                 EspWorldSnapshotSampler.Receipt source,
+                 SourceStyleSettings settings,
+                 java.util.List<SourcePlayerStyle> players){
+        owner();
+        if(!phased||observed==null||observed!=lastSource||
+           observed.chestRows!=-1||observed.itemRows!=-1||
+           observed.playerRows!=-1||lastStyleSettings!=null||
+           settings==null||players==null||source==null||
+           source.worldToken!=observed.worldToken||
+           source.playerToken!=observed.playerToken||
+           source.generation!=observed.generation||
+           source.tick!=observed.tick||
+           players.size()!=source.players.size()||
+           players.size()>EspWorldSnapshotSampler.MAX_PLAYERS)
+            throw new IllegalStateException("R308 stale/missing source style receipt");
+        int[] facts=new int[players.size()*2];
+        float[] names=new float[players.size()*3];
+        int targetCount=0;
+        for(int i=0;i<players.size();i++){
+            final SourcePlayerStyle p=players.get(i);
+            final EspWorldSnapshotSampler.Player original=source.players.get(i);
+            if(p==null||original==null||!p.uuid.equals(original.uuid))
+                throw new IllegalArgumentException("R308 reordered roster provenance");
+            // R308 fails closed rather than accept multiple source targets.
+            if(p.target)targetCount++;
+            facts[2*i]=p.relationshipFlags;
+            facts[2*i+1]=p.target?1:0;
+            System.arraycopy(p.nameRgb,0,names,3*i,3);
+        }
+        if(targetCount>1)
+            throw new IllegalArgumentException("R308 multiple source targets");
+        nativeStageScreenStyle(handle,
+            new long[]{observed.worldToken,observed.playerToken,
+                       observed.generation,observed.tick},
+            facts,names,settings.palette.clone(),settings.options());
+        lastStyleSettings=settings;
+    }
+    public static final class SourceDrawStyle {
+        public final float red,green,blue;
+        public final boolean target;
+        private SourceDrawStyle(float red,float green,float blue,boolean target){
+            this.red=red;this.green=green;this.blue=blue;this.target=target;
+        }
+    }
+    public static final class SourceStylePlan {
+        public final long worldToken,playerToken,generation,tick;
+        public final float lineWidth;
+        public final boolean showBox,showHealth,filled,hurtEffect;
+        public final java.util.List<SourceDrawStyle> rows;
+        private SourceStylePlan(Result owner,float lineWidth,
+                                boolean showBox,boolean showHealth,
+                                boolean filled,boolean hurt,
+                                java.util.List<SourceDrawStyle> rows){
+            worldToken=owner.worldToken;playerToken=owner.playerToken;
+            generation=owner.generation;tick=owner.tick;
+            this.lineWidth=lineWidth;this.showBox=showBox;
+            this.showHealth=showHealth;this.filled=filled;
+            hurtEffect=hurt;
+            this.rows=java.util.Collections.unmodifiableList(
+                new java.util.ArrayList<SourceDrawStyle>(rows));
+        }
+    }
+    /** C++ PlayerEspController output already source-filtered and sorted. */
+    public SourceStylePlan screenStylePlan(Result screen,
+                                           ScreenPlan geometry){
+        owner();
+        if(!phased||screen==null||screen!=lastSource||
+           lastStyleSettings==null||geometry==null||
+           geometry.worldToken!=screen.worldToken||
+           geometry.playerToken!=screen.playerToken||
+           geometry.generation!=screen.generation||
+           geometry.tick!=screen.tick||
+           geometry.players.size()!=screen.playerRows)
+            throw new IllegalStateException("R308 stale/mismatched style geometry");
+        final double[] out=nativeScreenStyleRows(handle,
+            new long[]{screen.worldToken,screen.playerToken,
+                       screen.generation,screen.tick});
+        if(out==null||out.length<7||out[0]!=1||
+           out[1]!=(int)out[1]||out[1]<0||out[1]>100||
+           out[1]!=screen.playerRows||out.length!=7+4*(int)out[1]||
+           out[2]!=lastStyleSettings.lineWidth)
+            throw new IllegalStateException("R308 native style framing");
+        for(int i=3;i<=6;i++)
+            if(out[i]!=0&&out[i]!=1)
+                throw new IllegalStateException("R308 invalid native settings");
+        if((out[3]!=0)!=lastStyleSettings.showBox||
+           (out[4]!=0)!=lastStyleSettings.showHealth||
+           (out[5]!=0)!=lastStyleSettings.filled||
+           (out[6]!=0)!=lastStyleSettings.hurtEffect)
+            throw new IllegalStateException("R308 settings changed mid-frame");
+        java.util.List<SourceDrawStyle> rows=
+            new java.util.ArrayList<SourceDrawStyle>();
+        for(int i=0;i<(int)out[1];i++){
+            int k=7+4*i;
+            if(!Double.isFinite(out[k])||!Double.isFinite(out[k+1])||
+               !Double.isFinite(out[k+2])||
+               out[k]<0||out[k]>1||out[k+1]<0||out[k+1]>1||
+               out[k+2]<0||out[k+2]>1||
+               (out[k+3]!=0&&out[k+3]!=1))
+                throw new IllegalStateException("R308 source RGB invalid");
+            rows.add(new SourceDrawStyle((float)out[k],(float)out[k+1],
+                                         (float)out[k+2],out[k+3]!=0));
+        }
+        return new SourceStylePlan(screen,(float)out[2],out[3]!=0,
+            out[4]!=0,out[5]!=0,out[6]!=0,rows);
+    }
+
     @Override public void close(){
-        owner();nativeClose(handle);handle=0;lastSource=null;
+        owner();nativeClose(handle);handle=0;lastSource=null;lastStyleSettings=null;
     }
 }

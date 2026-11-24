@@ -320,6 +320,154 @@ public final class EspNativeReadOnlyPreviewSmoke {
         phaser.start();phaser.join();
         check(phaseForeign[0],"R305 source phase remains owner-thread bound");
         phased.close();phasedSampler.close();
+
+        // R308: explicit source-provenance style staging before event0, no
+        // default relationship/target inference. Actual C++ R299 filtering,
+        // source farthest-first sorting and color override must survive JNI.
+        final Fixture colorFixture=new Fixture();
+        final UUID friendly1=UUID.fromString("00000000-0000-0000-0000-000000000003");
+        final UUID friendly4=UUID.fromString("00000000-0000-0000-0000-000000000004");
+        final UUID hidden2=UUID.fromString("00000000-0000-0000-0000-000000000005");
+        colorFixture.players.add(new EspWorldSnapshotSampler.Player(
+            friendly1,at(4,0,0),at(4,0,0),false,false,15,20,0,0));
+        colorFixture.players.add(new EspWorldSnapshotSampler.Player(
+            friendly4,at(6,0,0),at(6,0,0),false,false,18,20,0,0));
+        colorFixture.players.add(new EspWorldSnapshotSampler.Player(
+            hidden2,at(8,0,0),at(8,0,0),false,false,18,20,0,0));
+        final EspWorldSnapshotSampler colorSampler=new EspWorldSnapshotSampler();
+        final EspNativeReadOnlyPreview colorNative=new EspNativeReadOnlyPreview(true);
+        final EspWorldSnapshotSampler.Receipt colorTick0=
+            colorSampler.observe(colorFixture,50);
+        final EspNativeReadOnlyPreview.Result colorStage=
+            colorNative.observe(colorTick0,15,15,20);
+        final java.util.List<EspNativeReadOnlyPreview.SourcePlayerStyle> facts=
+            java.util.Arrays.asList(
+                new EspNativeReadOnlyPreview.SourcePlayerStyle(
+                    OWNER,0,false,1f,1f,1f),
+                new EspNativeReadOnlyPreview.SourcePlayerStyle(
+                    OTHER,0,true,.2f,.4f,.6f),
+                new EspNativeReadOnlyPreview.SourcePlayerStyle(
+                    friendly1,1,false,.7f,.1f,.1f),
+                new EspNativeReadOnlyPreview.SourcePlayerStyle(
+                    friendly4,4,false,.8f,.2f,.1f),
+                new EspNativeReadOnlyPreview.SourcePlayerStyle(
+                    hidden2,2,false,.9f,.3f,.2f));
+        final float[] yellow={1f,1f,0f};
+        final float[] green={0f,1f,0f};
+        final float[] red={1f,0f,0f};
+        final EspNativeReadOnlyPreview.SourceStyleSettings manual=
+            new EspNativeReadOnlyPreview.SourceStyleSettings(
+                1,false,true,false,true,false,true,2f,
+                yellow,green,red);
+        refuseArgument(new Runnable(){public void run(){
+            new EspNativeReadOnlyPreview.SourceStyleSettings(
+                0,false,false,true,true,true,false,5f,
+                yellow,green,red);
+        }},"R308 recovered 1..4 line-width bound");
+        refuseArgument(new Runnable(){public void run(){
+            colorNative.stageScreenStyle(colorStage,colorTick0,manual,
+                java.util.Arrays.asList(facts.get(1),facts.get(0),
+                    facts.get(2),facts.get(3),facts.get(4)));
+        }},"R308 source UUID encounter ordering enforced");
+        colorNative.stageScreenStyle(colorStage,colorTick0,manual,facts);
+        refuse(new Runnable(){public void run(){
+            colorNative.stageScreenStyle(colorStage,colorTick0,manual,facts);
+        }},"R308 duplicate stage refused");
+        final EspNativeReadOnlyPreview.Result color0=
+            colorNative.sourceEvent(colorStage,0);
+        final EspNativeReadOnlyPreview.Result color18=
+            colorNative.sourceEvent(color0,18);
+        check(color18.playerRows==3,
+              "R308 original source relationship flag 2 excluded, 1/4 included");
+        refuse(new Runnable(){public void run(){
+            colorNative.screenStylePlan(color18,null);
+        }},"R308 source style rows require event7 geometry receipt");
+        final EspNativeReadOnlyPreview.Result color6=
+            colorNative.sourceEvent(color18,6);
+        refuse(new Runnable(){public void run(){
+            colorNative.screenStylePlan(color6,
+                colorNative.playerScreenPlan(color6,0,0,0,1));
+        }},"R308 style cannot read before event7");
+        final EspNativeReadOnlyPreview.Result color7=
+            colorNative.sourceEvent(color6,7);
+        final EspNativeReadOnlyPreview.ScreenPlan colorGeo=
+            colorNative.playerScreenPlan(color7,0,0,0,1);
+        final EspNativeReadOnlyPreview.SourceStylePlan colorStyle=
+            colorNative.screenStylePlan(color7,colorGeo);
+        check(colorGeo.players.size()==3&&colorStyle.rows.size()==3&&
+              Math.abs(colorGeo.players.get(0).x-6)<.0001&&
+              Math.abs(colorGeo.players.get(1).x-4)<.0001&&
+              Math.abs(colorGeo.players.get(2).x-2)<.0001,
+              "R308 actual native farthest-first source sort with style rows");
+        check(colorStyle.lineWidth==2f&&!colorStyle.showBox&&
+              colorStyle.showHealth&&!colorStyle.filled&&
+              colorStyle.hurtEffect&&
+              !colorStyle.rows.get(0).target&&
+              colorStyle.rows.get(0).green==1f&&
+              colorStyle.rows.get(1).green==1f&&
+              colorStyle.rows.get(2).target&&
+              colorStyle.rows.get(2).red==1f&&
+              colorStyle.rows.get(2).green==1f&&
+              colorStyle.rows.get(2).blue==0f,
+              "R308 native first-party target override/manual friendly RGB");
+        check(!PlayerEspScreenProjection.sourceDrawBox(
+                colorStyle.showBox,colorStyle.rows.get(0).target)&&
+              PlayerEspScreenProjection.sourceDrawBox(
+                colorStyle.showBox,colorStyle.rows.get(2).target),
+              "R308 original showBox OR row.target semantics");
+        final float[] hurtMix=PlayerEspScreenProjection.sourceDrawColor(
+            .2f,.4f,.6f,5,.5f,true);
+        check(Math.abs(hurtMix[0]-.56f)<.00001&&
+              Math.abs(hurtMix[1]-.22f)<.00001&&
+              Math.abs(hurtMix[2]-.33f)<.00001,
+              "R308 source blend(base,red,min(10,hurt-partial)*.1)");
+
+        colorFixture.drops.add(new EspWorldSnapshotSampler.Drop(
+            at(2,0,0),at(2,0,0),264,1,false,true,true));
+        final EspWorldSnapshotSampler.Receipt colorTick1=
+            colorSampler.observe(colorFixture,51);
+        final EspNativeReadOnlyPreview.Result colorStage1=
+            colorNative.observe(colorTick1,15,15,20);
+        refuse(new Runnable(){public void run(){
+            colorNative.screenStylePlan(color7,colorGeo);
+        }},"R308 old tick style read rejected");
+        final EspNativeReadOnlyPreview.SourceStyleSettings automatic=
+            new EspNativeReadOnlyPreview.SourceStyleSettings(
+                0,true,false,false,false,true,false,1f,
+                yellow,green,red);
+        colorNative.stageScreenStyle(colorStage1,colorTick1,automatic,facts);
+        final EspNativeReadOnlyPreview.Result a0=
+            colorNative.sourceEvent(colorStage1,0);
+        final EspNativeReadOnlyPreview.Result a18=
+            colorNative.sourceEvent(a0,18);
+        check(a18.playerRows==1,"R308 original hide-friendlies mask 7");
+        final EspNativeReadOnlyPreview.Result a6=colorNative.sourceEvent(a18,6);
+        final EspNativeReadOnlyPreview.Result a7=colorNative.sourceEvent(a6,7);
+        final EspNativeReadOnlyPreview.ScreenPlan automaticGeo=
+            colorNative.playerScreenPlan(a7,0,0,0,1);
+        final EspNativeReadOnlyPreview.SourceStylePlan automaticStyle=
+            colorNative.screenStylePlan(a7,automaticGeo);
+        check(automaticStyle.rows.size()==1&&
+              !automaticStyle.rows.get(0).target&&
+              Math.abs(automaticStyle.rows.get(0).red-.2f)<.000001&&
+              Math.abs(automaticStyle.rows.get(0).green-.4f)<.000001&&
+              Math.abs(automaticStyle.rows.get(0).blue-.6f)<.000001&&
+              !automaticStyle.showBox&&!automaticStyle.showHealth,
+              "R308 original automatic name RGB and draw gates");
+        final boolean[] wrongThreadStyle={false};
+        Thread wrongStyle=new Thread(new Runnable(){public void run(){
+            try{colorNative.screenStylePlan(a7,automaticGeo);}
+            catch(IllegalStateException expected){wrongThreadStyle[0]=true;}
+        }});
+        wrongStyle.start();wrongStyle.join();
+        check(wrongThreadStyle[0],"R308 owner thread style read denied");
+        final EspNativeReadOnlyPreview.Result a26=colorNative.sourceEvent(a7,26);
+        check(a26.playerRows==0,"R308 source event26 owner cleanup");
+        refuse(new Runnable(){public void run(){
+            colorNative.screenStylePlan(a7,automaticGeo);
+        }},"R308 unload style receipt revoked");
+        colorNative.close();colorSampler.close();
+        System.out.println("R308_REAL_NATIVE_PLAYER_SOURCE_STYLE_FILTER_SORT_COLOR_PASS");
         System.out.println("R307_RECOVERED_PLAYER_ESP_SOURCE_GEOMETRY_HEALTH_PASS");
         System.out.println("R306_JAVA8_REAL_NATIVE_EVENT7_SCREEN_PROJECTION_PASS");
         System.out.println("R305_JAVA8_REAL_NATIVE_ESP_PHASE_0_18_6_7_26_PASS");

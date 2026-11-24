@@ -25,6 +25,23 @@ public final class PlayerEspScreenProjection {
             this.health=health;this.absorption=absorption;this.hurtTime=hurtTime;
         }
     }
+    /** Recovered screenPlan condition: show_2d_box OR target override. */
+    public static boolean sourceDrawBox(boolean showBox,boolean target){
+        return showBox||target;
+    }
+    /** RenderMath.blend(sourceRGB, (1,0,0), hurt) exact float order. */
+    public static strictfp float[] sourceDrawColor(float red,float green,float blue,
+            int hurt,float partialTicks,boolean enabled){
+        if(!Float.isFinite(red)||!Float.isFinite(green)||
+           !Float.isFinite(blue)||red<0||red>1||green<0||green>1||
+           blue<0||blue>1)
+            throw new IllegalArgumentException("R308 invalid source RGB");
+        final float t=enabled?sourceHurtMix(hurt,partialTicks):0f;
+        return new float[]{
+            red+t*(1f-red),green+t*(0f-green),blue+t*(0f-blue)
+        };
+    }
+
     /** R307 original Java PlayerEspModule.healthBar() line coordinates. */
     public static final class Segment {
         public final double x,y1,y2;

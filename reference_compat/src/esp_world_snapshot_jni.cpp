@@ -5,6 +5,7 @@
 #include "slinkywinky/player_esp_controller.hpp"
 #include <jni.h>
 #include <cmath>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -33,6 +34,12 @@ struct Session {
     ChestEspSettings staged_chest{};
     ItemEspSettings staged_item{};
     PlayerEspSettings staged_player{};
+    // R308: explicit style input arrives only after observe and before
+    // event0. Native C++ retains controller RGBs through distance sort.
+    bool staged_style=false;
+    float staged_line_width=1.0f;
+    bool staged_show_box=false,staged_show_health=false;
+    bool staged_filled=false,staged_hurt_effect=false;
 };
 std::mutex lock;
 std::map<jlong,std::unique_ptr<Session>> sessions;
@@ -225,6 +232,7 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeObserve(
             s.staged_chest=cs;
             s.staged_item=is;
             s.staged_player=ps;
+            s.staged_style=false;
             s.source_phase=0;
         }else{
             s.chest.tick(true,chestSelf,cs.range,cs,tiles);
@@ -290,6 +298,7 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeSourceEvent(
     }else if(type==26){
         s.chest.unload();s.item.clear_event26();s.players.world_unload();
         s.staged_tiles.clear();s.staged_drops.clear();s.staged_players.clear();
+        s.staged_style=false;
         s.source_phase=26;
     }else{
         fail(env,"R305 source event order/duplicate refused");return nullptr;
@@ -544,4 +553,158 @@ Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativePlayerScreenRows(
     }catch(...){
         fail(env,"R306 player source screen rows failed");return nullptr;
     }
+}
+
+
+// R308 explicit source provenance, submitted after the immutable R300
+// receipt, before source event0. No additional game state is read or
+// inferred. Opt-in only; the earlier R301-R307 JNI ABI remains intact.
+extern "C" JNIEXPORT void JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeStageScreenStyle(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,
+    jintArray facts,jfloatArray nameColors,jfloatArray palette,
+    jintArray options){
+    if(!identity||!facts||!nameColors||!palette||!options||
+       env->GetArrayLength(identity)!=4||
+       env->GetArrayLength(palette)!=10||
+       env->GetArrayLength(options)!=8||
+       env->GetArrayLength(facts)%2!=0||
+       env->GetArrayLength(nameColors)!=
+           env->GetArrayLength(facts)/2*3||
+       env->GetArrayLength(facts)>1024){
+        fail(env,"R308 invalid style packet lengths");return;
+    }
+    try{
+        jlong id[4]{};jfloat colors[10]{};jint opts[8]{};
+        env->GetLongArrayRegion(identity,0,4,id);
+        env->GetFloatArrayRegion(palette,0,10,colors);
+        env->GetIntArrayRegion(options,0,8,opts);
+        const jsize n=env->GetArrayLength(facts)/2;
+        std::vector<jint> flags(static_cast<std::size_t>(2*n));
+        std::vector<jfloat> names(static_cast<std::size_t>(3*n));
+        if(n){env->GetIntArrayRegion(facts,0,2*n,flags.data());
+              env->GetFloatArrayRegion(nameColors,0,3*n,names.data());}
+        if(env->ExceptionCheck())return;
+        // opts = mode, colorMode, hideFriendlies, overrideTarget,
+        // showBox, showHealthBar, filled, hurtEffect.
+        if(id[0]<=0||id[1]<=0||id[0]==id[1]||id[2]<=0||id[3]<0||
+           opts[0]!=0||(opts[1]!=0&&opts[1]!=1)){
+            fail(env,"R308 invalid source mode or owner");return;
+        }
+        for(int i=2;i<8;i++)if(!boolean(opts[i])){
+            fail(env,"R308 nonboolean source setting");return;
+        }
+        for(int i=0;i<9;i++){
+            if(!std::isfinite(colors[i])||colors[i]<0||colors[i]>1){
+                fail(env,"R308 out-of-gamut source palette");return;
+            }
+        }
+        if(!std::isfinite(colors[9])||colors[9]<1||colors[9]>4){
+            fail(env,"R308 source line width outside recovered metadata bounds");
+            return;
+        }
+        for(jsize i=0;i<n;i++){
+            const std::size_t k=static_cast<std::size_t>(i);
+            if(flags[2*k]<0||flags[2*k]>7||!boolean(flags[2*k+1])){
+                fail(env,"R308 invalid relationship/target provenance");return;
+            }
+            for(int j=0;j<3;j++)
+                if(!std::isfinite(names[3*k+static_cast<std::size_t>(j)])||
+                   names[3*k+static_cast<std::size_t>(j)]<0||
+                   names[3*k+static_cast<std::size_t>(j)]>1){
+                    fail(env,"R308 invalid player name color");return;
+                }
+        }
+        std::lock_guard<std::mutex> guard(lock);
+        const auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()){
+            fail(env,"R308 foreign style session");return;
+        }
+        Session& s=*it->second;
+        if(!s.phased||!s.observed||s.source_phase!=0||
+           s.staged_style||s.world!=id[0]||s.player!=id[1]||
+           s.generation!=id[2]||s.tick!=id[3]||
+           s.staged_players.size()!=static_cast<std::size_t>(n)){
+            fail(env,"R308 stale or duplicate style staging");return;
+        }
+        PlayerEspSettings settings=s.staged_player;
+        settings.mode=opts[0];settings.color_mode=opts[1];
+        settings.hide_friendlies=opts[2]!=0;
+        settings.override_target_color=opts[3]!=0;
+        settings.source_style=true;
+        settings.target_rgb={{colors[0],colors[1],colors[2]}};
+        settings.friendly_rgb={{colors[3],colors[4],colors[5]}};
+        settings.enemy_rgb={{colors[6],colors[7],colors[8]}};
+        for(jsize i=0;i<n;i++){
+            auto& row=s.staged_players[static_cast<std::size_t>(i)];
+            const std::size_t k=static_cast<std::size_t>(i);
+            row.relationship_flags=static_cast<std::uint32_t>(flags[2*k]);
+            row.is_target=flags[2*k+1]!=0;
+            row.name_rgb={{names[3*k],names[3*k+1],names[3*k+2]}};
+            row.name_rgb_known=true;
+        }
+        s.staged_player=settings;
+        s.staged_line_width=colors[9];
+        s.staged_show_box=opts[4]!=0;
+        s.staged_show_health=opts[5]!=0;
+        s.staged_filled=opts[6]!=0;
+        s.staged_hurt_effect=opts[7]!=0;
+        s.staged_style=true;
+    }catch(...){fail(env,"R308 native style stage failure");}
+}
+
+// First-party C++ sorted source row RGB + user-provided draw settings.
+// Payload = [version,rowCount,lineWidth,box,health,filled,hurt,
+//            rows: rgb.r,g,b,target] (all double for JNI framing).
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_EspNativeReadOnlyPreview_nativeScreenStyleRows(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity){
+    if(!identity||env->GetArrayLength(identity)!=4){
+        fail(env,"R308 invalid screen style identity");return nullptr;
+    }
+    try{
+        jlong id[4]{};
+        env->GetLongArrayRegion(identity,0,4,id);
+        if(env->ExceptionCheck())return nullptr;
+        std::lock_guard<std::mutex> guard(lock);
+        const auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->thread!=std::this_thread::get_id()){
+            fail(env,"R308 foreign style reader");return nullptr;
+        }
+        const Session& s=*it->second;
+        if(!s.phased||!s.observed||!s.staged_style||s.source_phase!=7||
+           !s.players.screen_mode(s.staged_player,true)||
+           id[0]!=s.world||id[1]!=s.player||
+           id[2]!=s.generation||id[3]!=s.tick){
+            fail(env,"R308 stale/non-screen style source");return nullptr;
+        }
+        const auto& rows=s.players.rows();
+        if(rows.size()>PlayerEspController::kSourceRowCap){
+            fail(env,"R308 source row cap");return nullptr;
+        }
+        std::vector<jdouble> out(7+4*rows.size());
+        out[0]=1;out[1]=static_cast<jdouble>(rows.size());
+        out[2]=s.staged_line_width;out[3]=s.staged_show_box?1:0;
+        out[4]=s.staged_show_health?1:0;out[5]=s.staged_filled?1:0;
+        out[6]=s.staged_hurt_effect?1:0;
+        for(std::size_t i=0;i<rows.size();i++){
+            const auto& row=rows[i];
+            if(!row.source_rgb_known){
+                fail(env,"R308 source row color lacks provenance");return nullptr;
+            }
+            const std::size_t at=7+4*i;
+            for(int c=0;c<3;c++){
+                const float channel=row.source_rgb[static_cast<std::size_t>(c)];
+                if(!std::isfinite(channel)||channel<0||channel>1){
+                    fail(env,"R308 native selected color invalid");return nullptr;
+                }
+                out[at+static_cast<std::size_t>(c)]=channel;
+            }
+            out[at+3]=row.target?1:0;
+        }
+        jdoubleArray result=env->NewDoubleArray(static_cast<jsize>(out.size()));
+        if(!result)return nullptr;
+        env->SetDoubleArrayRegion(result,0,static_cast<jsize>(out.size()),out.data());
+        return env->ExceptionCheck()?nullptr:result;
+    }catch(...){fail(env,"R308 native selected style failed");return nullptr;}
 }

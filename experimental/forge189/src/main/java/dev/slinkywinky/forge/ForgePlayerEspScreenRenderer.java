@@ -163,4 +163,81 @@ public final class ForgePlayerEspScreenRenderer {
         }
     }
 
+    /**
+     * R308 reconstructed source gating/color selection, consuming only the
+     * row-aligned and exact-owner C++ native source StylePlan. The normal
+     * R306/R307 Forge preview deliberately DOES NOT call this method until
+     * original relationship/target provenance is available in the game.
+     * Canvas graphics are approximated with GL11: no pixel-parity claim.
+     */
+    public static void drawStyled(
+            java.util.List<PlayerEspScreenProjection.Rect> rectangles,
+            EspNativeReadOnlyPreview.SourceStylePlan style,float partialTicks){
+        if(rectangles==null||style==null||style.rows==null||
+           rectangles.size()!=style.rows.size()||
+           rectangles.size()>100||!Float.isFinite(partialTicks)||
+           partialTicks<0||partialTicks>1||!Float.isFinite(style.lineWidth)||
+           style.lineWidth<1||style.lineWidth>4)
+            throw new IllegalStateException("R308 style source/row framing");
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glPushMatrix();
+        try{
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_CULL_FACE);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(false);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glLineWidth(style.lineWidth);
+            for(int i=0;i<rectangles.size();i++){
+                final PlayerEspScreenProjection.Rect r=rectangles.get(i);
+                final EspNativeReadOnlyPreview.SourceDrawStyle color=style.rows.get(i);
+                if(r==null||color==null||!Double.isFinite(r.left)||
+                   !Double.isFinite(r.right)||!Double.isFinite(r.top)||
+                   !Double.isFinite(r.bottom)||r.right<=r.left||
+                   r.bottom<=r.top)
+                    throw new IllegalStateException("R308 style projection malformed");
+                final boolean box=PlayerEspScreenProjection.sourceDrawBox(
+                    style.showBox,color.target);
+                final float[] channels=PlayerEspScreenProjection.sourceDrawColor(
+                    color.red,color.green,color.blue,r.hurtTime,
+                    partialTicks,style.hurtEffect);
+                if(box && style.filled){
+                    GL11.glColor4f(channels[0],channels[1],channels[2],.25f);
+                    GL11.glBegin(GL11.GL_QUADS);
+                    try{
+                        GL11.glVertex2d(r.left,r.top);
+                        GL11.glVertex2d(r.right,r.top);
+                        GL11.glVertex2d(r.right,r.bottom);
+                        GL11.glVertex2d(r.left,r.bottom);
+                    }finally{GL11.glEnd();}
+                }
+                if(box||style.showHealth){
+                    GL11.glBegin(GL11.GL_LINES);
+                    try{
+                        if(box){
+                            GL11.glColor4f(channels[0],channels[1],channels[2],1f);
+                            line(r.left,r.top,r.right,r.top);
+                            line(r.right,r.top,r.right,r.bottom);
+                            line(r.right,r.bottom,r.left,r.bottom);
+                            line(r.left,r.bottom,r.left,r.top);
+                        }
+                        if(style.showHealth){
+                            for(PlayerEspScreenProjection.Segment bar:
+                                    PlayerEspScreenProjection.sourceHealthSegments(
+                                        r,style.lineWidth)){
+                                GL11.glColor4f(bar.red,bar.green,bar.blue,1f);
+                                line(bar.x,bar.y1,bar.x,bar.y2);
+                            }
+                        }
+                    }finally{GL11.glEnd();}
+                }
+            }
+        }finally{
+            GL11.glPopMatrix();
+            GL11.glPopAttrib();
+        }
+    }
+
 }

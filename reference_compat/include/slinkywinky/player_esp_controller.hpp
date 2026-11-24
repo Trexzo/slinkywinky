@@ -2,6 +2,7 @@
 // R299: source-ordered Java PlayerEspModule event-18 row collection.
 // No GL, Minecraft ownership, projection or world graphics hooks.
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -15,12 +16,19 @@ struct PlayerEspSettings {
     bool hide_friendlies=false,override_target_color=false;
     int color_mode=0,mode=0;
     std::string color_target="target",color_friendlies="friendly",color_enemies="enemy";
+    // R308: explicit opt-in recovered RGB selection; no guessed settings.
+    bool source_style=false;
+    std::array<float,3> target_rgb{{1.0f,1.0f,0.0f}};
+    std::array<float,3> friendly_rgb{{0.0f,1.0f,0.0f}};
+    std::array<float,3> enemy_rgb{{1.0f,0.0f,0.0f}};
 };
 struct PlayerEspEntity {
     bool is_self=false,dead=false,is_target=false;
     std::uint32_t relationship_flags=0;
     PlayerEspPosition previous{},position{};
     std::string name_color="name";
+    std::array<float,3> name_rgb{{1.0f,1.0f,1.0f}};
+    bool name_rgb_known=false;
     float absorption=0.0f, max_health=20.0f, health=20.0f;
     int hurt_time=0;
 };
@@ -30,6 +38,9 @@ struct PlayerEspRow {
     float distance=0.0f,health=0.0f,absorption=0.0f;
     int hurt=0;
     bool target=false;
+    // Preserves exact source float channels, not 8-bit palette approximations.
+    std::array<float,3> source_rgb{{0.0f,0.0f,0.0f}};
+    bool source_rgb_known=false;
 };
 class PlayerEspController final {
 public:
@@ -87,8 +98,24 @@ public:
                 source_clamp(0.0f,kSourceHealthMax,(p.health+extra)/total);
             const float absorb=p.health==0.0f?0.0f:
                 source_clamp(0.0f,kSourceHealthMax,extra/p.health);
-            rows_.push_back({p.previous,p.position,color,
-                static_cast<float>(distance),health,absorb,p.hurt_time,target});
+            PlayerEspRow row{p.previous,p.position,color,
+                static_cast<float>(distance),health,absorb,p.hurt_time,target};
+            if(settings.source_style){
+                // Original priority: target > name (automatic) >
+                // friend/enemy (manual). Flags 2/7 are already filtered.
+                if(target){
+                    row.source_rgb=settings.target_rgb;
+                    row.source_rgb_known=true;
+                }else if(settings.color_mode==0){
+                    row.source_rgb=p.name_rgb;
+                    row.source_rgb_known=p.name_rgb_known;
+                }else{
+                    row.source_rgb=(p.relationship_flags&5u)!=0u ?
+                        settings.friendly_rgb:settings.enemy_rgb;
+                    row.source_rgb_known=true;
+                }
+            }
+            rows_.push_back(row);
             if(rows_.size()==kSourceRowCap)break;
         }
         std::stable_sort(rows_.begin(),rows_.end(),[](const auto& a,const auto& b){
