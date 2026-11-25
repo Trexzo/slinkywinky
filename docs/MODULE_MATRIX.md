@@ -67,11 +67,11 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | visual | `mod_overlay` | Not implemented | Identify state, host events and reference traces |
 | visual | `name_tags` | Not implemented | Identify state, host events and reference traces |
 | visual | `no_hurt_cam` | Offline C++ field-lifecycle model (no live writes) | Find original pre-render hook; test old-player restore in isolated world |
-| visual | `notifications` | Not implemented | Identify state, host events and reference traces |
+| visual | `notifications` | Offline C++ controller (bounded message queue and toggle batching) | Verify authenticated callback dispatch, settings and original drawing |
 | visual | `player_esp` | Offline source event-18 row/health/sort model (no projection or rendering) | Authenticate Forge player snapshots, 2D/3D renderer and live source colors |
 | visual | `pointers` | Not implemented | Identify state, host events and reference traces |
 | visual | `trajectories` | Not implemented | Identify state, host events and reference traces |
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R299 verifies 35 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R310 records 36 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
