@@ -20,6 +20,7 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
     // Direct geometry callers need the same finite-dimension gate.
     if(!std::isfinite(panel_width) || !std::isfinite(panel_height) ||
        panel_width<=0.0f || panel_height<=0.0f)return false;
+    if(static_cast<unsigned>(frame.tab)>static_cast<unsigned>(MenuTab::Profiles))return false;
     if(frame.tab!=MenuTab::Profiles)
         return frame.profile_cards.empty() &&
                frame.profile_name_draft.empty() &&
@@ -30,7 +31,14 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
                !frame.profile_bind_capture_index;
     if(!frame.is_placeholder || !frame.visible.empty() ||
        !frame.parameters.empty() || frame.profile_cards.empty() ||
-       frame.profile_cards.size()>6)return false;
+       frame.profile_cards.size()>6 || frame.dropdown_preview ||
+       frame.focused_text_widget || frame.numeric_hover ||
+       frame.numeric_drag_preview || frame.bind_capture_index ||
+       frame.bind_hover_row)return false;
+    if(frame.unload_confirmation_preview && frame.profile_name_focused)
+        return false;
+    if(frame.profile_name_taken && !frame.profile_name_draft.empty())
+        return false;
     if(frame.profile_name_draft.size()>28u)return false;
     for(const unsigned char c:frame.profile_name_draft)
         if(c<32u || c>126u || c=='/' || c=='\\')return false;
@@ -61,6 +69,7 @@ inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
     for(std::size_t i=0;i<frame.profile_cards.size();++i) {
         const auto& profile=frame.profile_cards[i];
         if(!menu_profile_text_valid(profile.name,28) ||
+           profile.name.front()==' ' || profile.name.back()==' ' ||
            ((i==0u || !profile.description.empty()) &&
             !menu_profile_text_valid(profile.description,62)) ||
            (!profile.bind.empty() &&

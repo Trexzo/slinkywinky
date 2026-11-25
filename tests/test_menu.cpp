@@ -61,6 +61,10 @@ int main() {
     CHECK(state.select(MenuTab::Profiles) && state.page().empty());
     CHECK(!state.select(MenuTab::Unload) && state.tab()==MenuTab::Profiles);
     CHECK(!state.select(MenuTab::Count) && state.tab()==MenuTab::Profiles);
+    for(unsigned raw=8;raw<=255;++raw) {
+        CHECK(!state.select(static_cast<MenuTab>(raw)));
+        CHECK(state.tab()==MenuTab::Profiles && state.page().empty());
+    }
     CHECK(state.select(MenuTab::Combat) && state.expanded(0));
     CHECK(!state.appearance().compact && !state.appearance().wide);
     CHECK(!state.appearance().allow_input_while_open);

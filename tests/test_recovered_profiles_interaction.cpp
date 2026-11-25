@@ -48,6 +48,49 @@ int main() {
         CHECK(frame && menu_profile_preview_valid(
             *frame,panel->logical_width(),panel->logical_height()));
         CHECK(frame->is_placeholder && frame->profile_cards.size()==1u);
+        // Check malformed frame copies independently of MenuState. The
+        // genuine profile snapshot must retain its normal geometry.
+        const auto reject=[&](const MenuRenderFrame& malformed) {
+            CHECK(!menu_profile_preview_valid(malformed,
+                panel->logical_width(),panel->logical_height()));
+            CHECK(!menu_profile_input_rect(malformed,
+                panel->logical_width(),panel->logical_height()));
+            CHECK(!hit_test_menu(malformed,mode,25,25));
+        };
+        {
+            auto malformed=*frame;
+            malformed.tab=static_cast<MenuTab>(255);
+            reject(malformed);
+            malformed=*frame;
+            malformed.dropdown_preview=MenuDropdownPreview{};
+            reject(malformed);
+            malformed=*frame;
+            malformed.focused_text_widget=0u;
+            reject(malformed);
+            malformed=*frame;
+            malformed.numeric_hover=MenuNumericHover{0u,0u};
+            reject(malformed);
+            malformed=*frame;
+            malformed.bind_capture_index=0u;
+            reject(malformed);
+            malformed=*frame;
+            malformed.bind_hover_row=0u;
+            reject(malformed);
+            malformed=*frame;
+            malformed.unload_confirmation_preview=true;
+            malformed.profile_name_focused=true;
+            reject(malformed);
+            malformed=*frame;
+            malformed.profile_name_taken=true;
+            malformed.profile_name_draft="contradiction";
+            reject(malformed);
+            malformed=*frame;
+            malformed.profile_cards.push_back({" padded ","","",false});
+            reject(malformed);
+            malformed=*frame;
+            malformed.profile_cards.push_back({"   ","","",false});
+            reject(malformed);
+        }
         const auto defaultCard=frame->profile_cards[0];
         CHECK(defaultCard.is_default && defaultCard.name=="Default");
         CHECK(defaultCard.description==

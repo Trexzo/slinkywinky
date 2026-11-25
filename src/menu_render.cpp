@@ -141,7 +141,7 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
         frame.profile_icon_hover=menu.profile_icon_hover();
         frame.profile_bind_capture_index=menu.profile_bind_capture_index();
     }
-    if(frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload)
+    if(static_cast<unsigned>(frame.tab)>static_cast<unsigned>(MenuTab::Profiles))
         return std::nullopt;
     sequence_++;
     return frame;

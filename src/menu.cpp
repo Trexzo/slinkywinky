@@ -62,7 +62,7 @@ std::size_t MenuState::tab_count(MenuTab tab) const noexcept {
         [tab](const MenuModule& item){return item.tab==tab;}));
 }
 bool MenuState::select(MenuTab tab) noexcept {
-    if(tab==MenuTab::Count || tab==MenuTab::Unload)return false;
+    if(static_cast<unsigned>(tab)>static_cast<unsigned>(MenuTab::Profiles))return false;
     dropdown_preview_.reset();
     focused_text_widget_.reset();
     numeric_hover_.reset();
