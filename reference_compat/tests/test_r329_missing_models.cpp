@@ -144,12 +144,11 @@ try{
             "32 packet cap fail closed");
     InvWalkInput ii{};ii.in_game=true;ii.screen=InvWalkScreen::inventory;
     ii.physically_held={false,false,false,true,false};
-    auto it=inv.tick(ii);
-    require(it.update_keys&&!it.pressed[3]&&it.cancel_sprint,
-            "moving keys suspended during queued clicks");
     require(!inv.inventory_tick(true,true).drain_stale_keyboard_events,
             "replay guard delays flush");
-    it=inv.tick(ii); // clears replay flag
+    auto it=inv.tick(ii); // tick restores key ownership and clears replay phase
+    require(it.update_keys&&!it.pressed[3]&&it.cancel_sprint,
+            "moving keys suspended during queued clicks");
     require(inv.inventory_tick(true,true).drain_stale_keyboard_events&&
             inv.queued()==0,"flush after replay settled");
     it=inv.tick(ii);
