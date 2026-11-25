@@ -9,6 +9,7 @@
 #include <GL/gl.h>
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/menu_profile.hpp"
+#include "slinkywinky/menu_preview_document.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_mouse_gesture.hpp"
@@ -130,6 +131,7 @@ void refresh_caption(HWND hwnd) {
             label+=paging.str();
         }
     }
+    label+=L" | Ctrl+Shift+S/O: preview document";
     SetWindowTextW(hwnd,label.c_str());
 }
 void request_paint(HWND hwnd){InvalidateRect(hwnd,nullptr,FALSE);}
@@ -246,6 +248,60 @@ void adjust_client(HWND hwnd) {
     AdjustWindowRectEx(&rectangle,style,FALSE,extended);
     SetWindowPos(hwnd,nullptr,0,0,rectangle.right-rectangle.left,
                  rectangle.bottom-rectangle.top,SWP_NOMOVE|SWP_NOZORDER);
+}
+// Explicit file selection in the offline desktop preview only. No
+// automatic import, client discovery, or native profile mutation.
+void preview_document_dialog(HWND hwnd,bool saving) {
+    try {
+        wchar_t file[32768]{};
+        OPENFILENAMEW dialog{};
+        dialog.lStructSize=sizeof(dialog);
+        dialog.hwndOwner=hwnd;
+        dialog.lpstrFilter=L"SlinkyWinky offline preview (*.swp)\0*.swp\0All files\0*.*\0\0";
+        dialog.lpstrFile=file;
+        dialog.nMaxFile=static_cast<DWORD>(sizeof(file)/sizeof(file[0]));
+        dialog.lpstrDefExt=L"swp";
+        dialog.Flags=OFN_EXPLORER|OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|
+            (saving?OFN_OVERWRITEPROMPT:OFN_FILEMUSTEXIST);
+        dialog.lpstrTitle=saving?L"Export offline GUI preview":L"Import offline GUI preview";
+        const BOOL selected=saving?GetSaveFileNameW(&dialog):GetOpenFileNameW(&dialog);
+        if(!selected) {
+            if(CommDlgExtendedError()!=0)
+                MessageBoxW(hwnd,L"Could not open the file dialog.",title,MB_OK|MB_ICONERROR);
+            return;
+        }
+        if(!IsWindow(hwnd))return;
+        if(saving) {
+            if(!slinkywinky::save_menu_preview_document(
+                std::filesystem::path(file),slinkywinky::capture_local_preview(menu))) {
+                MessageBoxW(hwnd,L"Preview export failed. No document was committed.",
+                            title,MB_OK|MB_ICONERROR);
+                return;
+            }
+        } else {
+            const auto document=slinkywinky::load_menu_preview_document(
+                std::filesystem::path(file));
+            if(!document || !menu.restore_local_preview(*document)) {
+                MessageBoxW(hwnd,L"Invalid or incompatible preview document. Current settings were retained.",
+                            title,MB_OK|MB_ICONERROR);
+                return;
+            }
+            // No mouse gesture or animation survives a document transition.
+            cancel_mouse(hwnd);
+            pendingTextHigh=0;
+            visualMotion.reset();
+            controlMotion.reset();
+            const auto rows=menu.page();
+            if(!rows.empty() && !navigation.visible_focus())
+                navigation.focus_visible_row(rows.front().catalog_index);
+            adjust_client(hwnd);
+        }
+        refresh_caption(hwnd);
+        request_paint(hwnd);
+    } catch(...) {
+        if(IsWindow(hwnd))
+            MessageBoxW(hwnd,L"Preview document operation failed.",title,MB_OK|MB_ICONERROR);
+    }
 }
 LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
     switch(message) {
@@ -1093,6 +1149,14 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                         menu.scroll_preview_popup(1);
                 }
                 request_paint(hwnd);
+                return 0;
+            }
+            // The explicit document shortcut is admitted only after every
+            // text, bind, dropdown and confirmation owner has declined it.
+            if((wp==L'S' || wp==L'O') && (GetKeyState(VK_CONTROL)&0x8000) &&
+               (GetKeyState(VK_SHIFT)&0x8000)) {
+                if((static_cast<std::uint32_t>(lp)&(1u<<30))==0u)
+                    preview_document_dialog(hwnd,wp==L'S');
                 return 0;
             }
             // Separate Windows preview ONLY; never hooks Minecraft.

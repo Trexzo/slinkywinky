@@ -20,11 +20,18 @@ target_include_directories(slinkywinky_bridge PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 set_target_properties(slinkywinky_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
+add_executable(slinkywinky_preview_document examples/preview_document_cli.cpp)
+target_link_libraries(slinkywinky_preview_document PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
   add_executable(slinkywinky_r324_preview_document_tests tests/test_r324_preview_document.cpp)
   target_link_libraries(slinkywinky_r324_preview_document_tests PRIVATE slinkywinky_core)
   add_test(NAME r324_offline_preview_document COMMAND slinkywinky_r324_preview_document_tests)
+  add_test(NAME r324_preview_document_cli
+    COMMAND ${CMAKE_COMMAND}
+      -DTOOL=$<TARGET_FILE:slinkywinky_preview_document>
+      -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r324_preview_document_cli.cmake)
   # R317: GUI-only preferences, bounded reads and atomic replacement.
   add_executable(slinkywinky_r317_preferences_tests tests/test_r317_preferences_persistence.cpp)
   target_link_libraries(slinkywinky_r317_preferences_tests PRIVATE slinkywinky_core)
