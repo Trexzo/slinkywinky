@@ -17,6 +17,7 @@ import dev.slinkywinky.EspNativeReadOnlyPreview;
 import dev.slinkywinky.SourceWorldReadOnlyHost;
 import dev.slinkywinky.SourceRuntimePreview;
 import dev.slinkywinky.SourcePacketReadOnlyQueue;
+import dev.slinkywinky.SourceRemotePositionHistory;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
@@ -111,6 +112,8 @@ public final class ForgePreview {
     private long r339PacketObservations;
     private int r341BoxFrames;
     private boolean r341SubmittedBox;
+    private int r342HistoricalFrames;
+    private boolean r342HistorySubmitted;
     private long r338LastRenderNanos;
     private int r338SourceRenderSamples;
     private Object r300World,r300Owner;
@@ -184,6 +187,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r339PacketReadOnly");
     private static final boolean R341_SOURCE_BOX_DIAGNOSTIC =
         Boolean.getBoolean("slinkywinky.r341SourceBoxDiagnostic");
+    private static final boolean R342_HISTORY_DIAGNOSTIC =
+        Boolean.getBoolean("slinkywinky.r342ServerHistoryDiagnostic");
     private static final boolean R302_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r302EspLocalWorldTest");
     private static final boolean R303_CHEST_RENDER =
@@ -603,6 +608,10 @@ public final class ForgePreview {
             if(R341_SOURCE_BOX_DIAGNOSTIC&&!R337_SOURCE_READONLY)
                 throw new IllegalStateException(
                     "R341 diagnostic boxes require the read-only source owner");
+            if(R342_HISTORY_DIAGNOSTIC&&
+               (!R341_SOURCE_BOX_DIAGNOSTIC||!R339_PACKET_READONLY))
+                throw new IllegalStateException(
+                    "R342 historical positions require R337/R339/R341 passive source gates");
             if(R339_PACKET_READONLY){
                 if(!R337_SOURCE_READONLY || R212_ACTION_TEST)
                     throw new IllegalStateException(
@@ -640,6 +649,8 @@ public final class ForgePreview {
             r339PacketObservations=0;
             r341BoxFrames=0;
             r341SubmittedBox=false;
+            r342HistoricalFrames=0;
+            r342HistorySubmitted=false;
             r338LastRenderNanos=0;
             r338SourceRenderSamples=0;
             r303RenderFrames=0;r303SawDraw=false;
@@ -2113,14 +2124,33 @@ public final class ForgePreview {
            mc.thePlayer==null||!mc.theWorld.isRemote||!mc.isSingleplayer())
             return;
         try {
+            final ForgeSourceWorldPort port=new ForgeSourceWorldPort(mc,true);
             final SourceRuntimePreview.SourceBoxes geometry=
-                r337SourceHost.observeBoxes(
-                    new ForgeSourceWorldPort(mc,true),event.partialTicks);
+                R342_HISTORY_DIAGNOSTIC?
+                    r337SourceHost.observeHistoricalBoxes(port,event.partialTicks):
+                    r337SourceHost.observeBoxes(port,event.partialTicks);
             if(geometry==null)return;
             ++r341BoxFrames;
             if(mc.theWorld==null||mc.thePlayer==null||!mc.isSingleplayer())
                 throw new IllegalStateException("R341 source world replaced before GL");
             ForgeSourceBoxDiagnosticRenderer.draw(geometry);
+            if(R342_HISTORY_DIAGNOSTIC){
+                final SourceRemotePositionHistory.Historical remote=
+                    r337SourceHost.lastHistoryBox();
+                if(remote==null)
+                    throw new IllegalStateException("R342 native e6 missing owner history");
+                ForgeSourceBoxDiagnosticRenderer.drawHistory(
+                    remote,mc.getRenderManager());
+                ++r342HistoricalFrames;
+                if(!r342HistorySubmitted){
+                    r342HistorySubmitted=true;
+                    System.out.println("[SlinkyWinkyPreview] "+
+                        "R342_AUTHENTIC_APPLIED_SERVERPOS_HISTORY_SUBMITTED "+
+                        "ageMs="+remote.ageNanos/1000000L+
+                        " source="+remote.current.source+
+                        " nativeE6=1 packetHold=0");
+                }
+            }
             if(!r341SubmittedBox &&
                (geometry.backtrack.draw||geometry.lagRange.draw)) {
                 r341SubmittedBox=true;

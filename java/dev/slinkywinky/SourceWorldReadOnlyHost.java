@@ -19,6 +19,20 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public interface BoxPort extends RenderPort {
         BoxFrame captureBoxes(float partialTicks);
     }
+    /** R342 only client-applied serverPos fixed-point coordinates. */
+    public interface HistoryPort extends BoxPort {
+        RemoteTarget captureRemoteTarget();
+        BoxFrame captureHistoricalBoxes(float partialTicks,
+                     SourceRemotePositionHistory.Historical history);
+    }
+    public static final class RemoteTarget {
+        public final int entityId,serverX,serverY,serverZ;
+        public final long uuidHigh,uuidLow;
+        public RemoteTarget(int id,long hi,long lo,int x,int y,int z){
+            entityId=id;uuidHigh=hi;uuidLow=lo;
+            serverX=x;serverY=y;serverZ=z;
+        }
+    }
     public static final class BoxFrame {
         private final double[] coordinates;
         public BoxFrame(double[] coordinates){
@@ -87,6 +101,9 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     private TickReceipt last;
     private SourceRuntimePreview.Receipt lastRender;
     private SourceRuntimePreview.SourceBoxes lastBoxes;
+    private SourceRemotePositionHistory.Historical lastHistoryBox;
+    private final SourceRemotePositionHistory positionHistory=
+        new SourceRemotePositionHistory();
     private SourcePacketReadOnlyQueue packetIngress;
     private int lastPacketSequence;
     private long packetObservationCount;
@@ -115,8 +132,14 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public TickReceipt last(){owner();return last;}
     public SourceRuntimePreview.Receipt lastRender(){owner();return lastRender;}
     public SourceRuntimePreview.SourceBoxes lastBoxes(){owner();return lastBoxes;}
+    public SourceRemotePositionHistory history(){owner();return positionHistory;}
+    public SourceRemotePositionHistory.Historical lastHistoryBox(){
+        owner();return lastHistoryBox;
+    }
     private void invalidate(){
-        last=null;lastRender=null;lastBoxes=null;packetIngress=null;
+        last=null;lastRender=null;lastBoxes=null;lastHistoryBox=null;
+        packetIngress=null;
+        positionHistory.resetWorld();
         lastPacketSequence=0;packetObservationCount=0;
         world=player=null;tick=0;
         worldNumber=playerNumber=0;
@@ -128,7 +151,7 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     }
     private void failClosed(){
         try{nativePreview.close();}
-        finally{closed=true;invalidate();}
+        finally{closed=true;invalidate();positionHistory.retire();}
     }
     /**
      * Source tick order is fixed. Forge's ClientTick.END does NOT establish
@@ -173,6 +196,17 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                 result[i]=nativePreview.observe(worldNumber,playerNumber,
                     generation,tick,names[i],frame.bits[i],frame.fields[i]);
             }
+            if(port instanceof HistoryPort){
+                RemoteTarget sample=((HistoryPort)port).captureRemoteTarget();
+                if(sample!=null){
+                    if(!port.admittedClientThread()||
+                       port.worldIdentity()!=world||port.playerIdentity()!=player)
+                        throw new IllegalStateException("History target world changed");
+                    positionHistory.applied(sample.entityId,
+                        sample.uuidHigh,sample.uuidLow,sample.serverX,
+                        sample.serverY,sample.serverZ,System.nanoTime());
+                }
+            }
             last=new TickReceipt(generation,tick,result);
             return last;
         }catch(RuntimeException | Error failure){
@@ -215,6 +249,9 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                 if(o.sequence<=lastPacketSequence)
                     throw new IllegalStateException("Packet observation order regression");
                 lastPacketSequence=o.sequence;
+                // Observe only primitive facts, validate them against future
+                // client-applied serverPos samples; no Packet/Entity refs.
+                positionHistory.packet(o);
                 if(o.direction==SourcePacketReadOnlyQueue.IN){
                     // S19 status exposes an entity only via a World lookup.
                     // Unknown ID must never simulate known target feedback.
@@ -272,6 +309,46 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                                      incoming,outgoing,inventory,callbacks);
         }catch(RuntimeException | Error failed){
             failClosed();throw failed;
+        }finally{inCall=false;}
+    }
+
+    /**
+     * R342: native source event6 receives only an authenticated *past*
+     * vanilla serverPos history: >=80ms old and <=600ms old. Distinct
+     * from the live-target R341 geometry, and NOT original packet delay.
+     */
+    public SourceRuntimePreview.SourceBoxes observeHistoricalBoxes(
+                                                HistoryPort port,float partial){
+        owner();
+        if(inCall)throw new IllegalStateException("Reentrant history render");
+        if(port==null)throw new IllegalArgumentException("Missing history render port");
+        inCall=true;
+        try{
+            if(!port.admittedClientThread())
+                throw new IllegalStateException("Foreign history render owner");
+            if(world==null||player==null||last==null)return null;
+            if(port.worldIdentity()!=world||port.playerIdentity()!=player){
+                invalidate();return null;
+            }
+            RemoteTarget target=port.captureRemoteTarget();
+            if(target==null)return null;
+            final SourceRemotePositionHistory.Historical historic=
+                positionHistory.historical(target.entityId,
+                    target.uuidHigh,target.uuidLow,System.nanoTime(),
+                    SourceRemotePositionHistory.MIN_AGE_NANOS,
+                    SourceRemotePositionHistory.MAX_AGE_NANOS);
+            if(historic==null)return null;
+            BoxFrame boxes=port.captureHistoricalBoxes(partial,historic);
+            if(boxes==null)return null;
+            if(!port.admittedClientThread()||
+               port.worldIdentity()!=world||port.playerIdentity()!=player)
+                throw new IllegalStateException("History render world switched");
+            lastBoxes=nativePreview.observeBoxes(worldNumber,playerNumber,
+                generation,tick,boxes.coordinates);
+            lastHistoryBox=historic;
+            return lastBoxes;
+        }catch(RuntimeException | Error failure){
+            failClosed();throw failure;
         }finally{inCall=false;}
     }
 

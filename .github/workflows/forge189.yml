@@ -14,6 +14,7 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
+      - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -46,6 +47,7 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
+      - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -92,7 +94,7 @@ jobs:
           set -euo pipefail
           xml=experimental/forge189/build/test-results/TEST-dev.slinkywinky.forge.ForgeSourcePacketTapEmbeddedTest.xml
           test -f "$xml"
-          test "$(grep -c '<testcase' "$xml")" -eq 4
+          test "$(grep -c '<testcase' "$xml")" -eq 6
           if grep -Eq '<failure|<error' "$xml"; then
             echo "R340 Netty identity and overflow tests failed" >&2; exit 1
           fi
@@ -131,7 +133,12 @@ jobs:
             dev/slinkywinky/SourceRuntimePreview\$SourceBox.class \
             dev/slinkywinky/SourceRuntimePreview\$SourceBoxes.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$BoxPort.class \
-            dev/slinkywinky/SourceWorldReadOnlyHost\$BoxFrame.class; do
+            dev/slinkywinky/SourceWorldReadOnlyHost\$BoxFrame.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$HistoryPort.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$RemoteTarget.class \
+            dev/slinkywinky/SourceRemotePositionHistory.class \
+            dev/slinkywinky/SourceRemotePositionHistory\$Position.class \
+            dev/slinkywinky/SourceRemotePositionHistory\$Historical.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
               echo "Required read-only Forge class missing: $class" >&2
               exit 1
@@ -181,6 +188,12 @@ jobs:
           grep -Fq 'glPushAttrib(GL11.GL_ALL_ATTRIB_BITS)' "$gl"
           grep -Fq 'glPopAttrib()' "$gl"
           grep -Fq 'SourceRuntimePreview.SourceBoxes' "$host"
+          grep -Fq 'r342ServerHistoryDiagnostic' "$forge"
+          grep -Fq 'R342_AUTHENTIC_APPLIED_SERVERPOS_HISTORY_SUBMITTED' "$forge"
+          grep -Fq 'captureHistoricalBoxes(' experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java
+          grep -Fq 'SourceRemotePositionHistory.MIN_AGE_NANOS' "$gl"
+          grep -Fq 'SourceRemotePositionHistory.Historical' "$host"
+          echo R342_EXACT_SERVERPOS_HISTORY_PACKAGING_PASS
           echo R341_FORGE_SOURCE_BOX_OPTIN_RENDER_PACKAGING_PASS
           echo R339_FORGE_PACKET_PASSIVE_TAP_PACKAGING_PASS
           echo R338_FORGE_SOURCE_READONLY_PACKAGING_PASS

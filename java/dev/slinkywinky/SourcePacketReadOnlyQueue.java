@@ -21,6 +21,10 @@ public final class SourcePacketReadOnlyQueue implements AutoCloseable {
     public static final int ENTITY_STATUS=1,UPDATE_HEALTH=2,SOUND=3;
     public static final int VELOCITY=4,TELEPORT=5,MOVEMENT=6,ATTACK=7;
     public static final int STOP_SPRINT=8,INV_OPEN=9,INV_CLICK=10,INV_CLOSE=11;
+    // MCP 1.8.9 absolute S18/S0C/S0F and conservative S14/S13 barriers.
+    public static final int ENTITY_ABSOLUTE_TELEPORT=12;
+    public static final int RELATIVE_UNRESOLVED=13,PLAYER_SPAWN_ABSOLUTE=14;
+    public static final int MOB_SPAWN_ABSOLUTE=15,DESTROY_UNRESOLVED=16;
     public static final class Observation {
         public final int direction,kind,entityId,sequence;
         public final long nanoTime;
@@ -53,7 +57,7 @@ public final class SourcePacketReadOnlyQueue implements AutoCloseable {
                            boolean entityKnown,boolean hasPosition,
                            double x,double y,double z,long atNanos) {
         if(closed||failed)return false;
-        if(direction!=IN&&direction!=OUT || kind<UNKNOWN||kind>INV_CLOSE||
+        if(direction!=IN&&direction!=OUT || kind<UNKNOWN||kind>DESTROY_UNRESOLVED||
            !Double.isFinite(x)||!Double.isFinite(y)||
            !Double.isFinite(z) || nextSeq==Integer.MAX_VALUE ||
            queue.size()==CAPACITY){

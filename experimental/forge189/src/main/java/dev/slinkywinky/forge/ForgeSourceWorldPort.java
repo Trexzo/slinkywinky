@@ -1,6 +1,8 @@
 package dev.slinkywinky.forge;
 
 import dev.slinkywinky.SourceWorldReadOnlyHost;
+import dev.slinkywinky.SourceRemotePositionHistory;
+import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.inventory.GuiInventory;
@@ -21,7 +23,7 @@ import org.lwjgl.input.Mouse;
  * Uses real game/player/target/key *observations*, no game writes or packets.
  * Forge ClientTick.END is NOT the original Slinky native event18 timing.
  */
-public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.BoxPort {
+public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.HistoryPort {
     private final Minecraft mc;
     private final Thread owner=Thread.currentThread();
     private final boolean debugBoxSettings;
@@ -50,6 +52,58 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.BoxPo
         int code=key.getKeyCode();
         return code>0&&code<256&&Keyboard.isKeyDown(code)?1:0;
     }
+    @Override public SourceWorldReadOnlyHost.RemoteTarget captureRemoteTarget(){
+        if(!admittedClientThread()||worldIdentity()==null)
+            throw new IllegalStateException("R342 history owner is not local");
+        final WorldClient world=mc.theWorld;
+        final EntityPlayerSP self=mc.thePlayer;
+        final MovingObjectPosition hit=mc.objectMouseOver;
+        final Entity entity=hit==null?null:hit.entityHit;
+        if(!(entity instanceof EntityLivingBase)||entity==self||
+           entity.isDead||entity.worldObj!=world)return null;
+        final UUID id=entity.getUniqueID();
+        if(id==null)return null;
+        final SourceWorldReadOnlyHost.RemoteTarget sample=
+            new SourceWorldReadOnlyHost.RemoteTarget(entity.getEntityId(),
+                id.getMostSignificantBits(),id.getLeastSignificantBits(),
+                entity.serverPosX,entity.serverPosY,entity.serverPosZ);
+        if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
+            throw new IllegalStateException("R342 history world switched");
+        return sample;
+    }
+
+    @Override public SourceWorldReadOnlyHost.BoxFrame captureHistoricalBoxes(
+            float partial,SourceRemotePositionHistory.Historical historical){
+        if(historical==null)return null;
+        if(!admittedClientThread()||worldIdentity()==null)
+            throw new IllegalStateException("R342 historic camera owner unavailable");
+        final WorldClient world=mc.theWorld;
+        final EntityPlayerSP self=mc.thePlayer;
+        final MovingObjectPosition aim=mc.objectMouseOver;
+        final Entity target=aim==null?null:aim.entityHit;
+        if(!(target instanceof EntityLivingBase)||target==self||
+           target.isDead||target.worldObj!=world)return null;
+        final UUID uuid=target.getUniqueID();
+        if(uuid==null||target.getEntityId()!=historical.current.entityId||
+           uuid.getMostSignificantBits()!=historical.current.uniqueHigh||
+           uuid.getLeastSignificantBits()!=historical.current.uniqueLow)
+            throw new IllegalStateException("R342 entity ID or UUID recycled");
+        final net.minecraft.client.renderer.entity.RenderManager camera=
+            mc.getRenderManager();
+        if(camera==null)throw new IllegalStateException("Missing source history camera");
+        // Historical *vanilla-applied serverPos* fixed-point values,
+        // NOT a held/delayed original network packet or native Slinky ghost.
+        final double[] values={
+            historical.previous.x(),historical.previous.y(),historical.previous.z(),
+            historical.current.x(),historical.current.y(),historical.current.z(),
+            camera.viewerPosX,camera.viewerPosY,camera.viewerPosZ,
+            partial,target.prevRotationYaw,target.rotationYaw
+        };
+        if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
+            throw new IllegalStateException("R342 historical world changed midread");
+        return new SourceWorldReadOnlyHost.BoxFrame(values);
+    }
+
     @Override public SourceWorldReadOnlyHost.BoxFrame captureBoxes(float partial){
         if(!admittedClientThread()||worldIdentity()==null)
             throw new IllegalStateException("R341 source box needs owned local world");

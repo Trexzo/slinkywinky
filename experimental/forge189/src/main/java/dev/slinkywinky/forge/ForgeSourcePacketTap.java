@@ -20,6 +20,11 @@ import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.network.play.server.S06PacketUpdateHealth;
 import net.minecraft.network.play.server.S08PacketPlayerPosLook;
 import net.minecraft.network.play.server.S12PacketEntityVelocity;
+import net.minecraft.network.play.server.S13PacketDestroyEntities;
+import net.minecraft.network.play.server.S14PacketEntity;
+import net.minecraft.network.play.server.S18PacketEntityTeleport;
+import net.minecraft.network.play.server.S0CPacketSpawnPlayer;
+import net.minecraft.network.play.server.S0FPacketSpawnMob;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
 import net.minecraft.network.play.server.S29PacketSoundEffect;
 
@@ -75,6 +80,30 @@ public final class ForgeSourcePacketTap implements AutoCloseable {
                     entityKnown=true;
                 }else if(msg instanceof S08PacketPlayerPosLook){
                     kind=SourcePacketReadOnlyQueue.TELEPORT;
+                }else if(msg instanceof S18PacketEntityTeleport){
+                    S18PacketEntityTeleport tele=(S18PacketEntityTeleport)msg;
+                    kind=SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT;
+                    entity=tele.getEntityId();entityKnown=true;moving=true;
+                    x=tele.getX()/32.0d;y=tele.getY()/32.0d;z=tele.getZ()/32.0d;
+                }else if(msg instanceof S0CPacketSpawnPlayer){
+                    S0CPacketSpawnPlayer spawn=(S0CPacketSpawnPlayer)msg;
+                    kind=SourcePacketReadOnlyQueue.PLAYER_SPAWN_ABSOLUTE;
+                    entity=spawn.getEntityID();entityKnown=true;moving=true;
+                    x=spawn.getX()/32.0d;y=spawn.getY()/32.0d;z=spawn.getZ()/32.0d;
+                }else if(msg instanceof S0FPacketSpawnMob){
+                    S0FPacketSpawnMob spawn=(S0FPacketSpawnMob)msg;
+                    kind=SourcePacketReadOnlyQueue.MOB_SPAWN_ABSOLUTE;
+                    entity=spawn.getEntityID();entityKnown=true;moving=true;
+                    x=spawn.getX()/32.0d;y=spawn.getY()/32.0d;z=spawn.getZ()/32.0d;
+                }else if(msg instanceof S14PacketEntity.S15PacketEntityRelMove||
+                         msg instanceof S14PacketEntity.S17PacketEntityLookMove){
+                    // No public entityId accessor on MCP 1.8.9 S14;
+                    // record a conservative global packet provenance barrier.
+                    kind=SourcePacketReadOnlyQueue.RELATIVE_UNRESOLVED;
+                }else if(msg instanceof S13PacketDestroyEntities){
+                    // Multiple IDs, no Packet objects retained on Netty.
+                    // Invalidate packet-only claims conservatively.
+                    kind=SourcePacketReadOnlyQueue.DESTROY_UNRESOLVED;
                 }
             }else{
                 if(msg instanceof C03PacketPlayer){

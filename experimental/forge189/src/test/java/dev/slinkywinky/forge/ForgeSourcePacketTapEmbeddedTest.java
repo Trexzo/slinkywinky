@@ -7,6 +7,8 @@ import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.network.play.client.C16PacketClientStatus;
 import net.minecraft.network.play.server.S06PacketUpdateHealth;
 import net.minecraft.network.play.server.S19PacketEntityStatus;
+import net.minecraft.network.play.server.S18PacketEntityTeleport;
+import net.minecraft.network.play.server.S14PacketEntity;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -83,6 +85,56 @@ public final class ForgeSourcePacketTapEmbeddedTest {
             Assert.assertSame("Packet flow survives observer poisoning",
                               after,channel.readInbound());
             Assert.assertTrue("Channel itself stays open",channel.isOpen());
+        }finally{
+            channel.finish();
+            q.close();
+        }
+    }
+
+    @Test public void exactTeleportFixedPointAndPacketIdentity(){
+        SourcePacketReadOnlyQueue q=new SourcePacketReadOnlyQueue();
+        EmbeddedChannel channel=new EmbeddedChannel(
+            ForgeSourcePacketTap.diagnosticObserver(q));
+        try{
+            S18PacketEntityTeleport teleport=new S18PacketEntityTeleport(
+                71,320,640,-64,(byte)64,(byte)0,true);
+            Assert.assertTrue(channel.writeInbound(teleport));
+            Assert.assertSame("Exact same packet object forwarded",
+                              teleport,channel.readInbound());
+            SourcePacketReadOnlyQueue.Batch b=q.drain(16);
+            Assert.assertEquals(1,b.rows.size());
+            SourcePacketReadOnlyQueue.Observation o=b.rows.get(0);
+            Assert.assertEquals(SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT,o.kind);
+            Assert.assertTrue(o.entityIdKnown);
+            Assert.assertEquals(71,o.entityId);
+            Assert.assertTrue(o.moving);
+            Assert.assertEquals(10.0,o.x,0.0);
+            Assert.assertEquals(20.0,o.y,0.0);
+            Assert.assertEquals(-2.0,o.z,0.0);
+        }finally{
+            channel.finish();
+            q.close();
+        }
+    }
+
+    @Test public void relativeMovementHasConservativeUnknownEntityBarrier(){
+        SourcePacketReadOnlyQueue q=new SourcePacketReadOnlyQueue();
+        EmbeddedChannel channel=new EmbeddedChannel(
+            ForgeSourcePacketTap.diagnosticObserver(q));
+        try{
+            S14PacketEntity.S15PacketEntityRelMove relative=
+                new S14PacketEntity.S15PacketEntityRelMove(
+                    71,(byte)32,(byte)0,(byte)-16,false);
+            Assert.assertTrue(channel.writeInbound(relative));
+            Assert.assertSame("Relative packet untouched",
+                              relative,channel.readInbound());
+            SourcePacketReadOnlyQueue.Batch b=q.drain(16);
+            Assert.assertEquals(1,b.rows.size());
+            SourcePacketReadOnlyQueue.Observation o=b.rows.get(0);
+            Assert.assertEquals(SourcePacketReadOnlyQueue.RELATIVE_UNRESOLVED,o.kind);
+            Assert.assertFalse("S14 has no public getEntityId in 1.8.9",
+                               o.entityIdKnown);
+            Assert.assertFalse(o.moving);
         }finally{
             channel.finish();
             q.close();

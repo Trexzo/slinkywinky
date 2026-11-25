@@ -1,0 +1,23 @@
+# R342 — Bounded historical vanilla serverPos and absolute-packet confirmation
+
+## Verified 1.8.9 sources
+
+The exact MCP 1.8.9 protocol exposes `S18PacketEntityTeleport.getEntityId/getX/getY/getZ`, and `S0CPacketSpawnPlayer.getEntityID/getX/getY/getZ`, with coordinates as integer fixed-point /32. `S0FPacketSpawnMob` exposes the corresponding entity ID and coordinates. The `S14PacketEntity` base has public relative offset bytes but NO public entity ID getter; a packet decoder must not perform a `World` lookup on Netty's event loop.
+
+References: https://mc-packet-reference.netlify.app/source/net/minecraft/network/play/server/s18packetentityteleport/ ; https://mc-packet-reference.netlify.app/source/net/minecraft/network/play/server/s14packetentity/ ; https://mc-packet-reference.netlify.app/source/net/minecraft/network/play/server/s0cpacketspawnplayer/ .
+
+## Implemented
+
+- `SourcePacketReadOnlyQueue` adds five **primitive-only** packet classifications: absolute S18 teleport, S0C player spawn, S0F mob spawn, unknown-ID relative S15/S17 movement and unresolved S13 destroyed entities. The Netty handler copies exact ID and fixed-point positions for only packet classes with public getters and continues forwarding the identical `Packet` and `ChannelPromise` unchanged. It does not perform field reflection, retain packets or call JNI.
+- `SourceRemotePositionHistory` records actual Minecraft `Entity.serverPosX/serverPosY/serverPosZ` integer snapshots from `ClientTick.END`. It keeps at most **32 entities × 24 distinct-position samples**, keyed by entity ID and two UUID 64-bit halves. It only claims `PACKET_CONFIRMED` provenance when a previously decoded absolute packet position matches the subsequently applied vanilla fixed-point position within 300ms. Mismatches remain `APPLIED_SERVER_POSITION`, never called confirmed; S14's unknown ID clears pending packet confirmation; S13 destroy clears entity history. Re-spawns reset old entity-ID ownership. No actual entity references are retained.
+- `SourceWorldReadOnlyHost` now samples the client target's real serverPos after the existing native tick, processes primitive packet confirmations on the client owner thread and clears history on world/player/connection retirement. `observeHistoricalBoxes` selects only authentic serverPos points **80–600ms old**, never interpolates a future point, rejects UUID reuse, and passes the older positions through the same original Backtrack/Lag Range C++ event6 JNI geometry callback. No gameplay writes.
+- `ForgeSourceWorldPort` captures the target UUID and exact server fixed-point fields on the proper Minecraft thread, then forms a shared-camera history snapshot with old-to-new *historical* interpolation. `ForgePreview` adds strictly explicit `-Dslinkywinky.r342ServerHistoryDiagnostic=true`, requiring R337 + R339 + R341 and manual F9, for a golden outline of the historic server-applied center. This marker is drawn independently of any **disabled** Backtrack module verdict and is explicitly labeled diagnostic, not original Slinky parity. OpenGL matrices and attributes are restored.
+
+## Tests
+
+- New real Java 8/JNI CTest `r342_java8_serverpos_historical_e6_jni`: checks fixed/32 packet confirmation vs mismatch; old-vs-current cutoff; exact timestamp window; expired history; UUID entity-ID reuse; S14 barrier; spawn reset; LRU capacity; signed `System.nanoTime`; world reset; closed history; real JNI e6 receipt over past fixed-point positions; wrong-thread and mixed-world fail-closed behavior.
+- Previous R337, R338, R339, R341 Java8 smoke runners now compile the new transitive history dependency. Forge 1.8.9 EmbeddedChannel JUnit adds exact S18 teleport values and S14 relative unknown-ID barrier, for six passive handler tests. Forge JAR packaging check confirms all history and owner classes.
+
+## Still not proven
+
+Historical vanilla *client-applied* server positions are NOT the original Slinky packet-hold queue or historical server-side positions *before* the client applies them. The original S14 entity-ID mapping, actual ordered packet delay/replay, exact source Backtrack reach admission, remote-player yaw history, selection algorithms, native GL parity and full original Slinky functionality remain unverified. This is a read-only diagnostics/reconstruction step, never a claim of 100% original behavior. No proprietary recovered files committed, PR #1 untouched, PR #2 draft.

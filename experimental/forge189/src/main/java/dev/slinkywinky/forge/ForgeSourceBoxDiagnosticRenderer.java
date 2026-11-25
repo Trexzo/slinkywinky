@@ -1,6 +1,8 @@
 package dev.slinkywinky.forge;
 
 import dev.slinkywinky.SourceRuntimePreview;
+import dev.slinkywinky.SourceRemotePositionHistory;
+import net.minecraft.client.renderer.entity.RenderManager;
 import org.lwjgl.opengl.GL11;
 
 /**
@@ -43,6 +45,40 @@ public final class ForgeSourceBoxDiagnosticRenderer {
             GL11.glLineWidth((float)b.lineWidth);
             unitCubeLines();
         }finally{GL11.glPopMatrix();}
+    }
+    /**
+     * Separate golden diagnostic for historical vanilla-applied serverPos.
+     * This bypasses a DISABLED native module's draw verdict only in the
+     * explicitly opt-in R342 debug world, and is NOT original ghost parity.
+     */
+    public static void drawHistory(SourceRemotePositionHistory.Historical h,
+                                   RenderManager camera){
+        if(h==null||camera==null||h.current==null||
+           h.ageNanos<SourceRemotePositionHistory.MIN_AGE_NANOS||
+           h.ageNanos>SourceRemotePositionHistory.MAX_AGE_NANOS)
+            throw new IllegalArgumentException("Missing or stale true server history");
+        final double x=h.current.x()-camera.viewerPosX;
+        final double y=h.current.y()-camera.viewerPosY+1.0;
+        final double z=h.current.z()-camera.viewerPosZ;
+        if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)||
+           Math.abs(x)>10000000||Math.abs(y)>10000000||Math.abs(z)>10000000)
+            throw new IllegalArgumentException("Invalid historical camera space");
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        GL11.glPushMatrix();
+        try{
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glDisable(GL11.GL_LIGHTING);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glDepthMask(false);
+            GL11.glLineWidth(1.5f);
+            GL11.glColor4f(1.0f,0.72f,0.18f,1.0f);
+            GL11.glTranslated(x,y,z);
+            GL11.glScaled(0.3,1.0,0.3);
+            unitCubeLines();
+        }finally{
+            GL11.glPopMatrix();
+            GL11.glPopAttrib();
+        }
     }
     public static void draw(SourceRuntimePreview.SourceBoxes boxes){
         if(boxes==null)return;
