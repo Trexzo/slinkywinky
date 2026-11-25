@@ -43,7 +43,7 @@ try{
           "callback order from replay priority");
     auto bad=f;bad.event=17;
     check(!bridge.dispatch(bad),"typed payload event mismatch rejected");
-    bad=f;bad.timer_range_source_tick={};
+    bad=f;bad.timer_range_source_tick=TimerRangeSourceTickPayload{};
     check(!bridge.dispatch(bad),"mixed event18 and event0 denied");
     check(bridge.request(bk,false),"disable backtrack");
     check(bridge.apply(true,true),"apply disable backtrack");
