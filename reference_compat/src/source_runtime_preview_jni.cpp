@@ -54,6 +54,7 @@ struct Session {
            !bridge.bind_lag_range_source_tick(module[1])||
            !bridge.bind_lag_range_source_packet(module[1])||
            !bridge.bind_timer_range_source_tick(module[2])||
+           !bridge.bind_timer_range_source_packet(module[2])||
            !bridge.bind_timer_range_source_frame(module[2])||
            !bridge.bind_inv_walk_source_tick(module[3])||
            !bridge.bind_inv_walk_source_packet(module[3])||
