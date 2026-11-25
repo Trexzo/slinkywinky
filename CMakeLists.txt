@@ -24,6 +24,13 @@ add_executable(slinkywinky_preview_document examples/preview_document_cli.cpp)
 target_link_libraries(slinkywinky_preview_document PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R330: existing ModuleExecutionBridge now owns four candidate tick policies.
+  add_executable(slinkywinky_r330_source_event_tests reference_compat/tests/test_r330_source_tick_bridge.cpp)
+  target_link_libraries(slinkywinky_r330_source_event_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_r330_source_event_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_r330_source_event_tests PRIVATE cxx_std_17)
+  add_test(NAME r330_four_source_tick_event_bindings COMMAND slinkywinky_r330_source_event_tests)
   # R329: candidate-source Backtrack, Lag Range, Timer Range and Inv Walk.
   add_executable(slinkywinky_r329_missing_models_tests reference_compat/tests/test_r329_missing_models.cpp)
   target_include_directories(slinkywinky_r329_missing_models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)

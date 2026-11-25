@@ -35,10 +35,15 @@
 #include "slinkywinky/keep_sprint_controller.hpp"
 #include "slinkywinky/sprint_controller.hpp"
 #include "slinkywinky/strafe_controller.hpp"
+#include "slinkywinky/backtrack_controller.hpp"
+#include "slinkywinky/lag_range_controller.hpp"
+#include "slinkywinky/timer_range_controller.hpp"
+#include "slinkywinky/inv_walk_controller.hpp"
 
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <initializer_list>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -329,6 +334,32 @@ struct StrafeSteeringPayload {
     unsigned executions = 0;
 };
 
+
+struct BacktrackSourceTickPayload {
+    BacktrackSettings settings{};
+    BacktrackSample input{};
+    bool active=false,show_box=false;
+    unsigned executions=0;
+};
+struct LagRangeSourceTickPayload {
+    LagRangeSettings settings{};
+    LagRangeTickSample input{};
+    bool active=false,show_box=false;
+    unsigned executions=0;
+};
+struct TimerRangeSourceTickPayload {
+    TimerRangeSettings settings{};
+    TimerRangeTick input{};
+    TimerRangeProposal decision{};
+    unsigned executions=0;
+};
+struct InvWalkSourceTickPayload {
+    InvWalkSettings settings{};
+    InvWalkInput input{};
+    InvWalkProposal decision{};
+    unsigned executions=0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -384,6 +415,10 @@ struct ExecutionFrame {
     std::optional<SprintMovementPayload> sprint_movement{};
     std::optional<StrafeSnapshotPayload> strafe_snapshot{};
     std::optional<StrafeSteeringPayload> strafe_steering{};
+    std::optional<BacktrackSourceTickPayload> backtrack_source_tick{};
+    std::optional<LagRangeSourceTickPayload> lag_range_source_tick{};
+    std::optional<TimerRangeSourceTickPayload> timer_range_source_tick{};
+    std::optional<InvWalkSourceTickPayload> inv_walk_source_tick{};
     std::vector<std::size_t> executed_modules{};
 };
 
@@ -440,6 +475,56 @@ public:
         callbacks_[id][event] = std::move(callback);
         ++bound_count_;
         return true;
+    }
+
+
+    // R330: original candidate callback slot membership only, not priorities.
+    // Source +0x168 => event 18; +0x48 => event 0; +0x1d8 => event 25.
+    // These are offline value-only tick adapters; non-tick subscriptions
+    // remain unbound until their packet/frame ownership is independently proven.
+    bool bind_backtrack_source_tick(std::size_t id) {
+        if(!matches_source_row(id,"Backtrack",0,{2,6,18}))return false;
+        return bind(id,18,[this](const Delivery&,ExecutionFrame& frame) {
+            if(!frame.backtrack_source_tick)return;
+            auto& p=*frame.backtrack_source_tick;
+            ++p.executions;
+            backtrack_source_.configure(p.settings);
+            backtrack_source_.tick(p.input);
+            p.active=backtrack_source_.active();
+            p.show_box=backtrack_source_.render_box();
+        });
+    }
+    bool bind_lag_range_source_tick(std::size_t id) {
+        if(!matches_source_row(id,"Lag Range",0,{3,6,15,18}))return false;
+        return bind(id,18,[this](const Delivery&,ExecutionFrame& frame) {
+            if(!frame.lag_range_source_tick)return;
+            auto& p=*frame.lag_range_source_tick;
+            ++p.executions;
+            lag_range_source_.configure(p.settings);
+            lag_range_source_.tick(p.input);
+            p.active=lag_range_source_.active();
+            p.show_box=lag_range_source_.render_box();
+        });
+    }
+    bool bind_timer_range_source_tick(std::size_t id) {
+        if(!matches_source_row(id,"Timer Range",0,{0,1,3,5}))return false;
+        return bind(id,0,[this](const Delivery&,ExecutionFrame& frame) {
+            if(!frame.timer_range_source_tick)return;
+            auto& p=*frame.timer_range_source_tick;
+            ++p.executions;
+            timer_range_source_.configure(p.settings);
+            p.decision=timer_range_source_.tick(p.input);
+        });
+    }
+    bool bind_inv_walk_source_tick(std::size_t id) {
+        if(!matches_source_row(id,"Inv Walk",1,{5,17,23,25}))return false;
+        return bind(id,25,[this](const Delivery&,ExecutionFrame& frame) {
+            if(!frame.inv_walk_source_tick)return;
+            auto& p=*frame.inv_walk_source_tick;
+            ++p.executions;
+            inv_walk_source_.configure(p.settings);
+            p.decision=inv_walk_source_.tick(p.input);
+        });
     }
 
     // Unlike a synthetic reimplementation, this invokes the existing R-series
@@ -1743,6 +1828,10 @@ public:
             return false;
         if (frame.strafe_steering && frame.event != kStrafeSteeringEvent)
             return false;
+        if (frame.backtrack_source_tick && frame.event != 18)return false;
+        if (frame.lag_range_source_tick && frame.event != 18)return false;
+        if (frame.timer_range_source_tick && frame.event != 0)return false;
+        if (frame.inv_walk_source_tick && frame.event != 25)return false;
         // Event 16 may carry BOTH movement policies, unlike disjoint
         // event-8 Reach and event-17 jump payloads. Prevent conflicting
         // or fabricated game-state inputs on the same movement tick.
@@ -1793,7 +1882,14 @@ public:
             static_cast<unsigned>(frame.sprint_update.has_value()) +
             static_cast<unsigned>(frame.sprint_movement.has_value()) +
             static_cast<unsigned>(frame.strafe_snapshot.has_value()) +
-            static_cast<unsigned>(frame.strafe_steering.has_value());
+            static_cast<unsigned>(frame.strafe_steering.has_value()) +
+            static_cast<unsigned>(frame.backtrack_source_tick.has_value()) +
+            static_cast<unsigned>(frame.lag_range_source_tick.has_value()) +
+            static_cast<unsigned>(frame.timer_range_source_tick.has_value()) +
+            static_cast<unsigned>(frame.inv_walk_source_tick.has_value());
+        const bool combined_candidate_source_tick=
+            typed_count==2 && frame.event==18 &&
+            frame.backtrack_source_tick && frame.lag_range_source_tick;
         const unsigned movement_count=
             static_cast<unsigned>(frame.null_move.has_value()) +
             static_cast<unsigned>(frame.instant_stop.has_value()) +
@@ -1908,7 +2004,8 @@ public:
             !combined_edge_place && !combined_outgoing_packet &&
             !combined_late_tick && !combined_toggle &&
             !combined_rotation && !combined_source_query &&
-            !combined_inventory && !combined_cleanup)
+            !combined_inventory && !combined_cleanup &&
+            !combined_candidate_source_tick)
             return false;
         // Both recovered Java modules iterate the SAME playerEntities
         // collection. Equal names do not prove equal players: duplicate
@@ -2008,6 +2105,24 @@ public:
                 return false;
         }
         frame.executed_modules.clear();
+        if(frame.backtrack_source_tick){
+            frame.backtrack_source_tick->active=false;
+            frame.backtrack_source_tick->show_box=false;
+            frame.backtrack_source_tick->executions=0;
+        }
+        if(frame.lag_range_source_tick){
+            frame.lag_range_source_tick->active=false;
+            frame.lag_range_source_tick->show_box=false;
+            frame.lag_range_source_tick->executions=0;
+        }
+        if(frame.timer_range_source_tick){
+            frame.timer_range_source_tick->decision={};
+            frame.timer_range_source_tick->executions=0;
+        }
+        if(frame.inv_walk_source_tick){
+            frame.inv_walk_source_tick->decision={};
+            frame.inv_walk_source_tick->executions=0;
+        }
         if (frame.reach) {
             frame.reach->proposed_distance.reset();
             frame.reach->executions = 0;
@@ -2207,6 +2322,16 @@ public:
         const AutoWeaponController auto_weapon_before=auto_weapon_;
         const WeaponsTickCache weapons_cache_before=weapons_tick_cache_;
         const AntiBotController anti_bot_before=anti_bot_;
+        const BacktrackController backtrack_source_before=backtrack_source_;
+        const LagRangeController lag_range_source_before=lag_range_source_;
+        const TimerRangeController timer_range_source_before=timer_range_source_;
+        const InvWalkController inv_walk_source_before=inv_walk_source_;
+        const auto restore_candidate_source=[&]() noexcept {
+            backtrack_source_=backtrack_source_before;
+            lag_range_source_=lag_range_source_before;
+            timer_range_source_=timer_range_source_before;
+            inv_walk_source_=inv_walk_source_before;
+        };
         if(!shared_source_rng_enabled_) {
             try {
                 const bool delivered=replay_.dispatch(
@@ -2216,12 +2341,14 @@ public:
                     auto_weapon_=auto_weapon_before;
                     weapons_tick_cache_=weapons_cache_before;
                     anti_bot_=anti_bot_before;
+                    restore_candidate_source();
                 }
                 return delivered;
             } catch(...) {
                 auto_weapon_=auto_weapon_before;
                 weapons_tick_cache_=weapons_cache_before;
                 anti_bot_=anti_bot_before;
+                restore_candidate_source();
                 throw;
             }
         }
@@ -2244,6 +2371,7 @@ public:
             auto_weapon_=auto_weapon_before;
             weapons_tick_cache_=weapons_cache_before;
             anti_bot_=anti_bot_before;
+            restore_candidate_source();
         };
         try {
             const bool delivered=replay_.dispatch(frame.event,
@@ -2268,9 +2396,18 @@ public:
             weapons_tick_cache_.reset();
         }
         if(!anti_bot_bound_enabled())anti_bot_.reset();
+        // Candidate-source state must not survive a module toggle.
+        if(!candidate_tick_enabled("Backtrack",18))backtrack_source_.reset_world();
+        if(!candidate_tick_enabled("Lag Range",18))lag_range_source_.reset_world();
+        if(!candidate_tick_enabled("Timer Range",0))timer_range_source_.reset_world();
+        if(!candidate_tick_enabled("Inv Walk",25))inv_walk_source_.reset_world();
         return true;
     }
 
+    void reset_backtrack_source_world_state() noexcept {backtrack_source_.reset_world();}
+    void reset_lag_range_source_world_state() noexcept {lag_range_source_.reset_world();}
+    void reset_timer_range_source_world_state() noexcept {timer_range_source_.reset_world();}
+    void reset_inv_walk_source_world_state() noexcept {inv_walk_source_.reset_world();}
     void reset_reach_world_state() noexcept { controller_.reset(); }
     void reset_null_move_world_state() noexcept { null_move_.reset(); }
     void reset_instant_stop_world_state() noexcept { instant_stop_.reset(); }
@@ -2350,6 +2487,10 @@ public:
         stopped_ = true;
         replay_.stop();
         controller_.reset();
+        backtrack_source_.reset_world();
+        lag_range_source_.reset_world();
+        timer_range_source_.reset_world();
+        inv_walk_source_.reset_world();
         null_move_.reset();
         instant_stop_.reset();
         no_use_delay_.reset();
@@ -2381,6 +2522,27 @@ public:
     int reach_cooldown_ticks() const noexcept { return controller_.cooldown_ticks(); }
 
 private:
+    bool matches_source_row(std::size_t id,const char* name,unsigned category,
+                            std::initializer_list<unsigned> slots) const {
+        if(stopped_||active_frame_||id>=definitions_.size()||
+           definitions_[id].name!=name||
+           definitions_[id].category!=category||
+           definitions_[id].subscriptions.size()!=slots.size())return false;
+        for(unsigned e:slots){
+            if(e>=kEventSlots)return false;
+            bool found=false;
+            for(const auto& s:definitions_[id].subscriptions)
+                if(s.event==e){found=true;break;}
+            if(!found)return false;
+        }
+        return true;
+    }
+    bool candidate_tick_enabled(const char* name,unsigned event) const {
+        for(std::size_t i=0;i<definitions_.size();++i)
+            if(definitions_[i].name==name&&callbacks_[i][event]&&replay_.enabled(i))
+                return true;
+        return false;
+    }
     bool piercing_bound_enabled() const noexcept {
         for(std::size_t i=0;i<definitions_.size();++i)
             if(definitions_[i].name=="Piercing" &&
@@ -2415,6 +2577,10 @@ private:
     }
     EventReplay replay_;
     slinkywinky::ReachController controller_;
+    BacktrackController backtrack_source_{};
+    LagRangeController lag_range_source_{};
+    TimerRangeController timer_range_source_{};
+    InvWalkController inv_walk_source_{};
     NoJumpDelayController no_jump_delay_;
     NullMoveController null_move_;
     InstantStopController instant_stop_;
