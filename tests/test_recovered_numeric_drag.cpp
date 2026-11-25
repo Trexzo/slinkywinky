@@ -56,6 +56,12 @@ int main() {
         const auto track=menu_numeric_track_geometry(
             *frame,panel->logical_width(),panel->logical_height(),2u,cps);
         CHECK(track && track->width>30.0f);
+        for(float bad:{std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity(),0.f,-1.f,20000.f}) {
+            CHECK(!menu_numeric_track_geometry(*frame,bad,panel->logical_height(),2u,cps));
+            CHECK(!menu_numeric_track_geometry(*frame,panel->logical_width(),bad,2u,cps));
+        }
         const auto start=xy(track->x+track->width*0.35f,
                             track->y+track->height*0.5f);
         const auto end=xy(track->x+track->width*0.8f,

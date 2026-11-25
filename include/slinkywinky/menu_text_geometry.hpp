@@ -56,7 +56,9 @@ inline std::optional<MenuTextFieldRect> menu_text_field_geometry(
         std::size_t widget_index) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(frame.unload_confirmation_preview || frame.dropdown_preview ||
+    if(!menu_widget_panel_valid(logical_width,logical_height) ||
+       frame.profile_action_preview ||
+       frame.unload_confirmation_preview || frame.dropdown_preview ||
        frame.is_placeholder || !menu_settings_offsets_valid(frame) ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=frame.tab ||
@@ -89,7 +91,8 @@ inline std::optional<MenuTextFieldRect> menu_text_field_geometry(
     const float controlX=menu_setting_column(rect.x,rect.width).x;
     const float controlW=menu_setting_column(rect.x,rect.width).width;
     MenuTextFieldRect field{controlX,controlY,controlW,20.0f};
-    if(field.x<rect.x || field.x+field.width>rect.x+rect.width ||
+    if(!menu_widget_rect_valid(field.x,field.y,field.width,field.height) ||
+       field.x<rect.x || field.x+field.width>rect.x+rect.width ||
        field.y<rect.y || field.y+field.height>rect.y+rect.height ||
        field.y+field.height>logical_height-menu_panel_padding)
         return std::nullopt;

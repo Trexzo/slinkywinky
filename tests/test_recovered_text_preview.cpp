@@ -8,6 +8,7 @@
 #include "slinkywinky/recovered_settings.hpp"
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -67,6 +68,12 @@ int main() {
             *frame,panel->logical_width(),panel->logical_height(),
             42u,searchItem);
         CHECK(field && field->height==20.0f && field->width>30.0f);
+        for(float bad:{std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity(),0.f,-1.f,20000.f}) {
+            CHECK(!menu_text_field_geometry(*frame,bad,panel->logical_height(),42u,searchItem));
+            CHECK(!menu_text_field_geometry(*frame,panel->logical_width(),bad,42u,searchItem));
+        }
         const auto inside=xy(field->x+field->width*0.5f,field->y+11.0f);
         const auto label=xy(field->x-60.0f,field->y+11.0f);
         const auto hit=hit_test_menu(

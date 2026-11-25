@@ -56,7 +56,9 @@ inline std::optional<MenuColorSwatchRect> menu_color_swatch_geometry(
         std::size_t widget_index) noexcept {
     const auto& catalog=official_module_catalog();
     const auto& all=recovered_widget_catalog();
-    if(frame.unload_confirmation_preview || frame.dropdown_preview ||
+    if(!menu_widget_panel_valid(logical_width,logical_height) ||
+       frame.profile_action_preview ||
+       frame.unload_confirmation_preview || frame.dropdown_preview ||
        frame.is_placeholder || !menu_settings_offsets_valid(frame) ||
        catalog_index>=catalog.size() || widget_index>=all.size() ||
        catalog[catalog_index].tab!=frame.tab ||
@@ -92,7 +94,8 @@ inline std::optional<MenuColorSwatchRect> menu_color_swatch_geometry(
     MenuColorSwatchRect swatch{
         controlX+controlW-40.0f,controlY,40.0f,20.0f
     };
-    if(swatch.x<rect.x || swatch.x+swatch.width>rect.x+rect.width ||
+    if(!menu_widget_rect_valid(swatch.x,swatch.y,swatch.width,swatch.height) ||
+       swatch.x<rect.x || swatch.x+swatch.width>rect.x+rect.width ||
        swatch.y<rect.y || swatch.y+swatch.height>rect.y+rect.height ||
        swatch.y+swatch.height>logical_height-menu_panel_padding)
         return std::nullopt;

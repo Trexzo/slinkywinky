@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -75,6 +76,12 @@ int main() {
             *frame,panel->logical_width(),panel->logical_height(),
             32u,accent);
         CHECK(box && box->width==40.0f && box->height==20.0f);
+        for(float bad:{std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity(),0.f,-1.f,20000.f}) {
+            CHECK(!menu_color_swatch_geometry(*frame,bad,panel->logical_height(),32u,accent));
+            CHECK(!menu_color_swatch_geometry(*frame,panel->logical_width(),bad,32u,accent));
+        }
         const auto inside=logicalPoint(box->x+21.0f,box->y+11.0f);
         const auto before=hit_test_menu(*frame,mode,
                                         inside.first,inside.second);

@@ -3,6 +3,7 @@
 #include "slinkywinky/recovered_settings.hpp"
 #include "slinkywinky/menu_settings_vertical.hpp"
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <string_view>
 
@@ -27,6 +28,23 @@ constexpr float menu_switch_height=20.0f;
 constexpr float menu_expand_size=20.0f;
 constexpr float menu_column_target=430.0f;
 
+// All interactive widget geometry receives logical dimensions from a
+// validated viewport; direct callers must obey the same finite bounds.
+// The upper limit accommodates the largest supported scaled viewport.
+inline bool menu_widget_width_valid(float width) noexcept {
+    return std::isfinite(width) && width>=64.0f && width<=16384.0f;
+}
+inline bool menu_widget_panel_valid(float width,float height) noexcept {
+    return menu_widget_width_valid(width) && std::isfinite(height) &&
+        height>=menu_first_row_y+menu_widget_height+menu_panel_padding &&
+        height<=16384.0f;
+}
+inline bool menu_widget_rect_valid(float x,float y,float width,float height) noexcept {
+    return std::isfinite(x) && std::isfinite(y) &&
+        std::isfinite(width) && std::isfinite(height) &&
+        width>0.0f && height>0.0f &&
+        std::isfinite(x+width) && std::isfinite(y+height);
+}
 inline float menu_tab_width(float width) noexcept {
     return (width-2.0f*menu_nav_x)/menu_tab_count;
 }

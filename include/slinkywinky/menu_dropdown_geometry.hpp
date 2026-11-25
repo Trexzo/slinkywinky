@@ -125,7 +125,10 @@ inline std::string_view menu_dropdown_option_label(
 inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
         const MenuRenderFrame& frame,float logical_width,
         float logical_height) noexcept {
-    if(!frame.dropdown_preview || frame.is_placeholder ||
+    if(!menu_widget_panel_valid(logical_width,logical_height) ||
+       !menu_settings_offsets_valid(frame) || frame.unload_confirmation_preview ||
+       frame.profile_action_preview ||
+       !frame.dropdown_preview || frame.is_placeholder ||
        logical_width<320.0f ||
        logical_height<240.0f)return std::nullopt;
     const auto popup=*frame.dropdown_preview;
@@ -224,7 +227,8 @@ inline std::optional<MenuDropdownPopupRect> menu_dropdown_popup_geometry(
     // If no full, safe placement exists, the popup does not receive input.
     if(result.y+height>logical_height-menu_panel_padding)
         result.y=controlY-height+20.0f;
-    if(result.y<menu_first_row_y ||
+    if(!menu_widget_rect_valid(result.x,result.y,result.width,height) ||
+       result.y<menu_first_row_y ||
        result.y+height>logical_height-menu_panel_padding ||
        result.x<menu_panel_padding ||
        result.x+result.width>logical_width-menu_panel_padding)

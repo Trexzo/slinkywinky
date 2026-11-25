@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -52,6 +53,15 @@ int main() {
         auto popup=menu_dropdown_popup_geometry(
             *snap,panel->logical_width(),panel->logical_height());
         CHECK(popup && popup->option_count==4u && popup->selected==0u);
+        for(float bad:{std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity(),0.f,-1.f,20000.f}) {
+            CHECK(!menu_dropdown_popup_geometry(*snap,bad,panel->logical_height()));
+            CHECK(!menu_dropdown_popup_geometry(*snap,panel->logical_width(),bad));
+        }
+        auto conflicting=*snap;
+        conflicting.unload_confirmation_preview=true;
+        CHECK(!menu_dropdown_popup_geometry(conflicting,panel->logical_width(),panel->logical_height()));
         // All other modules and even the navigation bar are inert
         // while a dropdown owns pointer input.
         CHECK(!hit_test_menu(*snap,mode,

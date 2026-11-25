@@ -26,12 +26,15 @@ inline float menu_expander_text_width(std::string_view s,float font) noexcept {
 }
 inline std::optional<MenuExpanderRect> menu_expander_geometry(
         const MenuRenderFrame& frame,float width,std::size_t row) noexcept {
-    if(row>=frame.visible.size() || frame.tab>=MenuTab::Profiles)
+    if(!menu_widget_width_valid(width) || row>=frame.visible.size() ||
+       frame.tab>=MenuTab::Profiles)
         return std::nullopt;
     const auto& item=frame.visible[row];
     if(item.catalog_index>=67u || recovered_widget_count(item.title)==0u)
         return std::nullopt;
     const auto card=menu_module_card_rect(frame,width,row);
+    if(!menu_widget_rect_valid(card.x,card.y,card.width,card.height) ||
+       card.width<44.0f)return std::nullopt;
     const bool compact=frame.appearance.compact;
     const auto label=compact?std::string_view(item.title):
         std::string_view(menu_preview_description(item.catalog_index));
@@ -44,6 +47,8 @@ inline std::optional<MenuExpanderRect> menu_expander_geometry(
 }
 inline bool menu_expander_contains(const MenuExpanderRect& a,
                                    float x,float y) noexcept {
-    return x>=a.x && x<a.x+a.width && y>=a.y && y<a.y+a.height;
+    return menu_widget_rect_valid(a.x,a.y,a.width,a.height) &&
+           std::isfinite(x) && std::isfinite(y) &&
+           x>=a.x && x<a.x+a.width && y>=a.y && y<a.y+a.height;
 }
 }

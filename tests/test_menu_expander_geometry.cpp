@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_render.hpp"
+#include <limits>
 #include <stdexcept>
 #include <string>
 #define CHECK(x) do {if(!(x))throw std::runtime_error(\
@@ -17,6 +18,14 @@ int main() {
     const auto card=menu_module_card_rect(*frame,900.0f,0);
     const auto exp=menu_expander_geometry(*frame,900.0f,0);
     CHECK(exp && !exp->compact);
+    for(float bad:{std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity(),0.f,-1.f,20000.f})
+        CHECK(!menu_expander_geometry(*frame,bad,0));
+    auto invalid=*exp;
+    invalid.width=std::numeric_limits<float>::infinity();
+    CHECK(!menu_expander_contains(invalid,exp->x+1,exp->y+1));
+    CHECK(!menu_expander_contains(*exp,std::numeric_limits<float>::quiet_NaN(),exp->y+1));
     CHECK(exp->x==card.x+8.0f && exp->y==card.y+40.0f);
     CHECK(exp->height==20.0f);
     CHECK(exp->plus_x==exp->x+exp->text_width+8.0f);

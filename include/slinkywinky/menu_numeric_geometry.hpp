@@ -25,7 +25,9 @@ inline std::optional<MenuNumericTrack> menu_numeric_track_geometry(
         const MenuRenderFrame& frame,float logical_width,
         float logical_height,std::size_t catalog_index,
         std::size_t widget_index) noexcept {
-    if(frame.unload_confirmation_preview || frame.dropdown_preview ||
+    if(!menu_widget_panel_valid(logical_width,logical_height) ||
+       frame.profile_action_preview ||
+       frame.unload_confirmation_preview || frame.dropdown_preview ||
        frame.is_placeholder || !menu_settings_offsets_valid(frame) ||
        widget_index>=recovered_widget_catalog().size() ||
        catalog_index>=official_module_catalog().size() ||
@@ -65,7 +67,8 @@ inline std::optional<MenuNumericTrack> menu_numeric_track_geometry(
         menu_setting_column(rect.x,rect.width).x,controlY,
         menu_setting_column(rect.x,rect.width).width-2.0f,20.0f
     };
-    if(track.x<rect.x || track.x+track.width>rect.x+rect.width ||
+    if(!menu_widget_rect_valid(track.x,track.y,track.width,track.height) ||
+       track.x<rect.x || track.x+track.width>rect.x+rect.width ||
        track.y<rect.y || track.y+track.height>rect.y+rect.height ||
        track.y+track.height>logical_height-menu_panel_padding)
         return std::nullopt;
