@@ -24,6 +24,11 @@ add_executable(slinkywinky_preview_document examples/preview_document_cli.cpp)
 target_link_libraries(slinkywinky_preview_document PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R328 source-informed Criticals and Knockback Displace, offline only.
+  add_executable(slinkywinky_r328_combat_tests reference_compat/tests/test_r328_candidate_combat.cpp)
+  target_include_directories(slinkywinky_r328_combat_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_r328_combat_tests PRIVATE cxx_std_17)
+  add_test(NAME r328_two_candidate_combat_models COMMAND slinkywinky_r328_combat_tests)
   # R327: candidate-source packet/sprint policies, value-only (no network/game IO).
   add_executable(slinkywinky_r327_policy_tests reference_compat/tests/test_r327_source_policies.cpp)
   target_include_directories(slinkywinky_r327_policy_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
