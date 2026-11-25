@@ -415,6 +415,20 @@ public final class EspNativeReadOnlyPreviewSmoke {
               PlayerEspScreenProjection.sourceDrawBox(
                 colorStyle.showBox,colorStyle.rows.get(2).target),
               "R308 original showBox OR row.target semantics");
+        // R309: x=6 is outside the synthetic camera, while x=4 and x=2
+        // survive in the original order. Styles must not shift to row zero.
+        final double[] r309Identity={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};
+        final double[] r309Scale={.25,0,0,0,0,.25,0,0,0,0,1,0,0,0,0,1};
+        final PlayerEspScreenProjection.Frame r309Frame=
+            new PlayerEspScreenProjection.Frame(colorGeo.worldToken,
+                colorGeo.playerToken,colorGeo.generation,colorGeo.tick,
+                r309Identity,r309Scale,new int[]{0,0,800,600},800,600);
+        final java.util.List<PlayerEspScreenProjection.StyledRect> paired=
+            r309Frame.projectStyledSource(colorGeo,colorStyle);
+        check(paired.size()==2&&paired.get(0).style==colorStyle.rows.get(1)&&
+              paired.get(1).style==colorStyle.rows.get(2)&&
+              paired.get(1).style.target&&!paired.get(0).style.target,
+              "R309 clipped source row must not shift style provenance");
         final float[] hurtMix=PlayerEspScreenProjection.sourceDrawColor(
             .2f,.4f,.6f,5,.5f,true);
         check(Math.abs(hurtMix[0]-.56f)<.00001&&
@@ -454,6 +468,9 @@ public final class EspNativeReadOnlyPreviewSmoke {
               Math.abs(automaticStyle.rows.get(0).blue-.6f)<.000001&&
               !automaticStyle.showBox&&!automaticStyle.showHealth,
               "R308 original automatic name RGB and draw gates");
+        refuse(new Runnable(){public void run(){
+            r309Frame.projectStyledSource(colorGeo,automaticStyle);
+        }},"R309 stale style plan must not pair with previous frame");
         final boolean[] wrongThreadStyle={false};
         Thread wrongStyle=new Thread(new Runnable(){public void run(){
             try{colorNative.screenStylePlan(a7,automaticGeo);}
@@ -467,6 +484,7 @@ public final class EspNativeReadOnlyPreviewSmoke {
             colorNative.screenStylePlan(a7,automaticGeo);
         }},"R308 unload style receipt revoked");
         colorNative.close();colorSampler.close();
+        System.out.println("R309_OFFLINE_CLIPPED_STYLE_PROVENANCE_PASS");
         System.out.println("R308_REAL_NATIVE_PLAYER_SOURCE_STYLE_FILTER_SORT_COLOR_PASS");
         System.out.println("R307_RECOVERED_PLAYER_ESP_SOURCE_GEOMETRY_HEALTH_PASS");
         System.out.println("R306_JAVA8_REAL_NATIVE_EVENT7_SCREEN_PROJECTION_PASS");

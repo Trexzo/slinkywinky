@@ -19,10 +19,24 @@ public final class PlayerEspScreenProjection {
         public final double left,top,right,bottom;
         public final float health,absorption;
         public final int hurtTime;
+        private final int sourceIndex;
         private Rect(double left,double top,double right,double bottom,
                      float health,float absorption,int hurtTime){
+            this(left,top,right,bottom,health,absorption,hurtTime,-1);
+        }
+        private Rect(double left,double top,double right,double bottom,
+                     float health,float absorption,int hurtTime,int sourceIndex){
+            this.sourceIndex=sourceIndex;
             this.left=left;this.top=top;this.right=right;this.bottom=bottom;
             this.health=health;this.absorption=absorption;this.hurtTime=hurtTime;
+        }
+    }
+    /** Immutable pair from one owner-matched source row, after clipping. */
+    public static final class StyledRect {
+        public final Rect rect;
+        public final EspNativeReadOnlyPreview.SourceDrawStyle style;
+        private StyledRect(Rect rect,EspNativeReadOnlyPreview.SourceDrawStyle style){
+            this.rect=rect;this.style=style;
         }
     }
     /** Recovered screenPlan condition: show_2d_box OR target override. */
@@ -200,7 +214,8 @@ public final class PlayerEspScreenProjection {
                rows.tick!=tick||rows.players==null||rows.players.size()>100)
                 throw new IllegalStateException("R307 source screen owner mismatch");
             final List<Rect> out=new ArrayList<Rect>();
-            for(EspNativeReadOnlyPreview.ScreenPlayer p:rows.players){
+            for(int sourceIndex=0;sourceIndex<rows.players.size();sourceIndex++){
+                EspNativeReadOnlyPreview.ScreenPlayer p=rows.players.get(sourceIndex);
                 if(p==null||!Double.isFinite(p.x)||!Double.isFinite(p.y)||
                    !Double.isFinite(p.z)||!Float.isFinite(p.health)||
                    p.health<0||p.health>1||!Float.isFinite(p.absorption)||
@@ -226,7 +241,30 @@ public final class PlayerEspScreenProjection {
                                                scaledWidth,scaledHeight)&&
                    maxX>minX&&maxY>minY)
                     out.add(new Rect(minX,minY,maxX,maxY,
-                                     p.health,p.absorption,p.hurtTime));
+                                     p.health,p.absorption,p.hurtTime,sourceIndex));
+            }
+            return Collections.unmodifiableList(out);
+        }
+
+        /** R309 diagnostic-only: preserve source row identity across clipping.
+         * A compacted geometry list is not interchangeable with a full style list.
+         */
+        public List<StyledRect> projectStyledSource(
+                EspNativeReadOnlyPreview.ScreenPlan geometry,
+                EspNativeReadOnlyPreview.SourceStylePlan styles){
+            if(geometry==null||styles==null||geometry.players==null||
+               styles.rows==null||styles.worldToken!=worldToken||
+               styles.playerToken!=playerToken||styles.generation!=generation||
+               styles.tick!=tick||styles.rows.size()!=geometry.players.size())
+                throw new IllegalStateException("R309 stale or mismatched style rows");
+            List<Rect> visible=projectSource(geometry);
+            List<StyledRect> out=new ArrayList<StyledRect>(visible.size());
+            for(Rect rect:visible){
+                EspNativeReadOnlyPreview.SourceDrawStyle style=
+                    styles.rows.get(rect.sourceIndex);
+                if(style==null)
+                    throw new IllegalStateException("R309 missing source style");
+                out.add(new StyledRect(rect,style));
             }
             return Collections.unmodifiableList(out);
         }

@@ -171,14 +171,16 @@ public final class ForgePlayerEspScreenRenderer {
      * Canvas graphics are approximated with GL11: no pixel-parity claim.
      */
     public static void drawStyled(
-            java.util.List<PlayerEspScreenProjection.Rect> rectangles,
+            PlayerEspScreenProjection.Frame frame,
+            EspNativeReadOnlyPreview.ScreenPlan geometry,
             EspNativeReadOnlyPreview.SourceStylePlan style,float partialTicks){
-        if(rectangles==null||style==null||style.rows==null||
-           rectangles.size()!=style.rows.size()||
-           rectangles.size()>100||!Float.isFinite(partialTicks)||
+        if(frame==null||geometry==null||style==null||style.rows==null||
+           !Float.isFinite(partialTicks)||
            partialTicks<0||partialTicks>1||!Float.isFinite(style.lineWidth)||
            style.lineWidth<1||style.lineWidth>4)
             throw new IllegalStateException("R308 style source/row framing");
+        final List<PlayerEspScreenProjection.StyledRect> rectangles=
+            frame.projectStyledSource(geometry,style);
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         GL11.glPushMatrix();
         try{
@@ -191,8 +193,9 @@ public final class ForgePlayerEspScreenRenderer {
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glLineWidth(style.lineWidth);
             for(int i=0;i<rectangles.size();i++){
-                final PlayerEspScreenProjection.Rect r=rectangles.get(i);
-                final EspNativeReadOnlyPreview.SourceDrawStyle color=style.rows.get(i);
+                final PlayerEspScreenProjection.StyledRect pair=rectangles.get(i);
+                final PlayerEspScreenProjection.Rect r=pair.rect;
+                final EspNativeReadOnlyPreview.SourceDrawStyle color=pair.style;
                 if(r==null||color==null||!Double.isFinite(r.left)||
                    !Double.isFinite(r.right)||!Double.isFinite(r.top)||
                    !Double.isFinite(r.bottom)||r.right<=r.left||
