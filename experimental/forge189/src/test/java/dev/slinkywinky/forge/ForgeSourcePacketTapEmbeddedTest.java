@@ -40,7 +40,7 @@ public final class ForgeSourcePacketTapEmbeddedTest {
             Assert.assertEquals(2,batch.rows.get(1).sequence);
             Assert.assertFalse("Ground-only packet is not position-bearing",batch.rows.get(1).moving);
         }finally{
-            channel.finishAndReleaseAll();
+            channel.finish();
             ingress.close();
         }
     }
@@ -60,7 +60,7 @@ public final class ForgeSourcePacketTapEmbeddedTest {
             Assert.assertFalse("Original entity ID unavailable on Netty",
                                batch.rows.get(0).entityIdKnown);
         }finally{
-            channel.finishAndReleaseAll();
+            channel.finish();
             q.close();
         }
     }
@@ -84,7 +84,7 @@ public final class ForgeSourcePacketTapEmbeddedTest {
                               after,channel.readInbound());
             Assert.assertTrue("Channel itself stays open",channel.isOpen());
         }finally{
-            channel.finishAndReleaseAll();
+            channel.finish();
             q.close();
         }
     }
@@ -102,7 +102,7 @@ public final class ForgeSourcePacketTapEmbeddedTest {
             Assert.assertEquals(1,batch.rows.size());
             Assert.assertEquals(SourcePacketReadOnlyQueue.INV_OPEN,batch.rows.get(0).kind);
         }finally{
-            channel.finishAndReleaseAll();
+            channel.finish();
             q.close();
         }
     }
