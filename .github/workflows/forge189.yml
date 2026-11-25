@@ -11,6 +11,9 @@ on:
       - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
+      - 'java/dev/slinkywinky/SourceRuntimePreview.java'
+      - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeRelationshipRosterPort.java'
@@ -32,6 +35,9 @@ on:
       - 'java/dev/slinkywinky/PlayerEspScreenProjection.java'
       - 'java/dev/slinkywinky/EspWorldSnapshotSampler.java'
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
+      - 'java/dev/slinkywinky/SourceRuntimePreview.java'
+      - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeRelationshipRosterPort.java'
@@ -83,7 +89,12 @@ jobs:
             dev/slinkywinky/EspWorldSnapshotSampler.class \
             dev/slinkywinky/EspNativeReadOnlyPreview.class \
             dev/slinkywinky/RelationshipRosterNativePreview.class \
-            dev/slinkywinky/RosterIsolationGate.class; do
+            dev/slinkywinky/RosterIsolationGate.class \
+            dev/slinkywinky/SourceRuntimePreview.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$RenderPort.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$RenderFrame.class \
+            dev/slinkywinky/forge/ForgeSourceWorldPort.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
               echo "Required read-only Forge class missing: $class" >&2
               exit 1
@@ -93,6 +104,25 @@ jobs:
             echo 'Smoke-test mains should not be in the Forge mod JAR' >&2; exit 1
           fi
           sha256sum "$jarpath" > forge-preview.sha256
+      - name: Verify R337/R338 source observer remains read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          forge=experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgePreview.java
+          source=experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java
+          host=java/dev/slinkywinky/SourceWorldReadOnlyHost.java
+          grep -Fq 'r337NativeSourceTickReadOnly' "$forge"
+          grep -Fq 'R337_REAL_FORGE_SOURCE_TICK_OBSERVED' "$forge"
+          grep -Fq 'R338_REAL_FORGE_TIMER_SOURCE_FRAME_OBSERVED' "$forge"
+          grep -Fq 'Math.min(0.25d,delta)' "$forge"
+          grep -Fq 'sourceReachEligible' docs/R337_REAL_FORGE_WORLD_SOURCE_OBSERVATION.md
+          grep -Fq 'public final class ForgeSourceWorldPort' "$source"
+          grep -Fq '0.1d,0d' "$source"
+          grep -Fq 'nativePreview.observe(' "$host"
+          if grep -Eq 'write(Key|Timer)|sendPacket|addToSendQueue|glBegin' "$source"; then
+            echo 'Unexpected gameplay write in read-only source sampler' >&2; exit 1
+          fi
+          echo R338_FORGE_SOURCE_READONLY_PACKAGING_PASS
       - name: Upload experimental Forge JAR
         uses: actions/upload-artifact@v4
         with:
