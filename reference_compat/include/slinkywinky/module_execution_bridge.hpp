@@ -39,6 +39,7 @@
 #include "slinkywinky/lag_range_controller.hpp"
 #include "slinkywinky/timer_range_controller.hpp"
 #include "slinkywinky/inv_walk_controller.hpp"
+#include "slinkywinky/source_box_preview.hpp"
 
 #include <array>
 #include <cstddef>
@@ -379,6 +380,7 @@ struct TimerRangeSourceFramePayload{
     double delta_seconds=0;
     float partial_ticks=0;
     std::vector<TimerRangeRayStep> ray_steps{};
+    std::optional<TimerRangeSourceObservation> source_snapshot{};
     bool sword_held=false;
     TimerRangeProposal decision{};
     unsigned executions=0;
@@ -392,6 +394,24 @@ struct InvWalkSourceFlushPayload{
     bool flush_confirmed=false;
     bool in_game=false;
     InvWalkProposal decision{};
+    unsigned executions=0;
+};
+
+
+struct BacktrackSourceRenderPayload{
+    SourceBoxObservation observation{};
+    SourceBoxStyle style{};
+    SourceBoxProposal decision{};
+    unsigned executions=0;
+};
+struct LagRangeSourceRenderPayload{
+    SourceBoxObservation observation{};
+    SourceBoxStyle style{};
+    SourceBoxProposal decision{};
+    unsigned executions=0;
+};
+struct LagRangeSourceAttackPayload{
+    bool phase_one=false,hit_at_current_tick=false;
     unsigned executions=0;
 };
 
@@ -450,6 +470,9 @@ struct ExecutionFrame {
     std::optional<SprintMovementPayload> sprint_movement{};
     std::optional<StrafeSnapshotPayload> strafe_snapshot{};
     std::optional<StrafeSteeringPayload> strafe_steering{};
+    std::optional<BacktrackSourceRenderPayload> backtrack_source_render{};
+    std::optional<LagRangeSourceRenderPayload> lag_range_source_render{};
+    std::optional<LagRangeSourceAttackPayload> lag_range_source_attack{};
     std::optional<BacktrackSourcePacketPayload> backtrack_source_packet{};
     std::optional<LagRangeSourcePacketPayload> lag_range_source_packet{};
     std::optional<TimerRangeSourcePacketPayload> timer_range_source_packet{};
@@ -609,8 +632,13 @@ public:
             if(!f.timer_range_source_frame)return;
             auto& p=*f.timer_range_source_frame;
             ++p.executions;
+            if(p.source_snapshot&& !p.ray_steps.empty())
+                throw std::invalid_argument("two Timer Range ray evidence sources");
+            const auto rays=p.source_snapshot?
+                source_timer_range_predict(*p.source_snapshot,
+                    timer_range_source_.settings()):p.ray_steps;
             p.decision=timer_range_source_.frame(p.delta_seconds,p.partial_ticks,
-                                                  p.ray_steps,p.sword_held);
+                                                  rays,p.sword_held);
         });
     }
     bool bind_inv_walk_source_packet(std::size_t id){
@@ -631,6 +659,42 @@ public:
             auto& p=*f.inv_walk_source_flush;
             ++p.executions;
             p.decision=inv_walk_source_.inventory_tick(p.flush_confirmed,p.in_game);
+        });
+    }
+
+
+    // R333: source GL hooks expressed only as geometry proposals; one
+    // shared render event may carry both modules' immutable camera snapshot.
+    bool bind_backtrack_source_render(std::size_t id){
+        if(!matches_source_row(id,"Backtrack",0,{{2,0},{6,0},{18,0}}) ||
+           !callbacks_[id][18])return false;
+        return bind(id,6,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.backtrack_source_render)return;
+            auto& p=*f.backtrack_source_render;
+            ++p.executions;
+            p.decision=source_box_preview(backtrack_source_.render_box(),
+                p.observation,p.style,true);
+        });
+    }
+    bool bind_lag_range_source_render(std::size_t id){
+        if(!matches_source_row(id,"Lag Range",0,{{3,-100},{6,0},{15,0},{18,0}}) ||
+           !callbacks_[id][18])return false;
+        return bind(id,6,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.lag_range_source_render)return;
+            auto& p=*f.lag_range_source_render;
+            ++p.executions;
+            p.decision=source_box_preview(lag_range_source_.render_box(),
+                p.observation,p.style,false);
+        });
+    }
+    bool bind_lag_range_source_attack(std::size_t id){
+        if(!matches_source_row(id,"Lag Range",0,{{3,-100},{6,0},{15,0},{18,0}}) ||
+           !callbacks_[id][18])return false;
+        return bind(id,15,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.lag_range_source_attack)return;
+            auto& p=*f.lag_range_source_attack;
+            ++p.executions;
+            lag_range_source_.attack_phase(p.phase_one,p.hit_at_current_tick);
         });
     }
 
@@ -1935,6 +1999,9 @@ public:
             return false;
         if (frame.strafe_steering && frame.event != kStrafeSteeringEvent)
             return false;
+        if (frame.backtrack_source_render && frame.event != 6)return false;
+        if (frame.lag_range_source_render && frame.event != 6)return false;
+        if (frame.lag_range_source_attack && frame.event != 15)return false;
         if (frame.backtrack_source_packet && frame.event != 2)return false;
         if (frame.lag_range_source_packet && frame.event != 3)return false;
         if (frame.timer_range_source_packet && frame.event != 1)return false;
@@ -1996,6 +2063,9 @@ public:
             static_cast<unsigned>(frame.sprint_movement.has_value()) +
             static_cast<unsigned>(frame.strafe_snapshot.has_value()) +
             static_cast<unsigned>(frame.strafe_steering.has_value()) +
+            static_cast<unsigned>(frame.backtrack_source_render.has_value()) +
+            static_cast<unsigned>(frame.lag_range_source_render.has_value()) +
+            static_cast<unsigned>(frame.lag_range_source_attack.has_value()) +
             static_cast<unsigned>(frame.backtrack_source_packet.has_value()) +
             static_cast<unsigned>(frame.lag_range_source_packet.has_value()) +
             static_cast<unsigned>(frame.timer_range_source_packet.has_value()) +
@@ -2009,6 +2079,9 @@ public:
         // R332 refuses combined candidate packet frames without identical
         // underlying packet identity and provenance. Two optional fields alone
         // are not proof that they refer to the same network packet.
+        const bool combined_source_render=
+            typed_count==2&&frame.event==6&&
+            frame.backtrack_source_render&&frame.lag_range_source_render;
         const bool combined_candidate_source_tick=
             typed_count==2 && frame.event==18 &&
             frame.backtrack_source_tick && frame.lag_range_source_tick;
@@ -2127,7 +2200,7 @@ public:
             !combined_late_tick && !combined_toggle &&
             !combined_rotation && !combined_source_query &&
             !combined_inventory && !combined_cleanup &&
-            !combined_candidate_source_tick)
+            !combined_candidate_source_tick&&!combined_source_render)
             return false;
         // Both recovered Java modules iterate the SAME playerEntities
         // collection. Equal names do not prove equal players: duplicate
@@ -2226,7 +2299,25 @@ public:
                 a.physically_held != b.physically_held)
                 return false;
         }
+        if(combined_source_render){
+            // Independent render modules must share the same camera frame.
+            const auto& a=frame.backtrack_source_render->observation;
+            const auto& b=frame.lag_range_source_render->observation;
+            if(a.partial_ticks!=b.partial_ticks||
+               a.camera.x!=b.camera.x||a.camera.y!=b.camera.y||
+               a.camera.z!=b.camera.z)return false;
+        }
         frame.executed_modules.clear();
+        if(frame.backtrack_source_render){
+            frame.backtrack_source_render->decision={};
+            frame.backtrack_source_render->executions=0;
+        }
+        if(frame.lag_range_source_render){
+            frame.lag_range_source_render->decision={};
+            frame.lag_range_source_render->executions=0;
+        }
+        if(frame.lag_range_source_attack)
+            frame.lag_range_source_attack->executions=0;
         if(frame.backtrack_source_packet){
             frame.backtrack_source_packet->decision={};
             frame.backtrack_source_packet->executions=0;

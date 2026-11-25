@@ -114,6 +114,7 @@ public:
         }
         return out;
     }
+    TimerRangeSettings settings()const noexcept{return settings_;}
     bool packet_hold()const noexcept{return hold_packets_;}
     bool frozen()const noexcept{return timer_modified_;}
     int burst_ticks()const noexcept{return burst_ticks_;}
