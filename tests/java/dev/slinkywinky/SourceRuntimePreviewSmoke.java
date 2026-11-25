@@ -24,6 +24,13 @@ public final class SourceRuntimePreviewSmoke {
     };}
     static int[] inv(){return new int[]{1,1,0,0,0,1,0,0,0,1,0,1};}
 
+    static void deniedControl(final SourceRuntimePreview s,
+                              final long w,final long p,final long g,final long tick){
+        deny(()->s.setEnabled(w,p,g,tick,99,true),
+             "Unknown source module index denied");
+        deny(()->s.setEnabled(w+1,p,g,tick,SourceRuntimePreview.INV_WALK,false),
+             "Control cannot cross world without epoch");
+    }
     public static void main(String[] ignored)throws Exception{
         final SourceRuntimePreview s=new SourceRuntimePreview();
         final long w=100,p=200,g=1;
@@ -57,6 +64,28 @@ public final class SourceRuntimePreviewSmoke {
         s.observe(w,p,g,5,6,inv(),new double[]{3});
         r=s.observe(w,p,g,5,8,new int[]{1,1},new double[]{});
         eq(r.at(3),1,"Confirmed inventory flush");
+        // R336: source event5 callbacks are now accessible through the
+        // same JNI session but return only cleanup receipts, never actions.
+        r=s.observe(w,p,g,5,7,new int[]{1},new double[]{});
+        eq(r.at(3),1,"Reopened silent inventory");
+        r=s.observe(w,p,g,5,7,new int[]{2},new double[]{});
+        eq(r.at(3),3,"One outstanding click for native disable");
+        SourceRuntimePreview.ControlReceipt disabledInv=s.setEnabled(
+            w,p,g,5,SourceRuntimePreview.INV_WALK,false);
+        ok(!disabledInv.activeEnabled && disabledInv.queuedInventoryClicks==1,
+           "Native event5 inventory cleanup receipt");
+        deny(()->s.observe(w,p,g,5,7,new int[]{2},new double[]{}),
+             "Disabled module cannot produce executable packet receipt");
+        s.setEnabled(w,p,g,5,SourceRuntimePreview.INV_WALK,true);
+        r=s.observe(w,p,g,5,7,new int[]{2},new double[]{});
+        eq(r.at(3),0,"Re-enabled inventory has no stale queued click");
+        SourceRuntimePreview.ControlReceipt disabledTimer=s.setEnabled(
+            w,p,g,5,SourceRuntimePreview.TIMER_RANGE,false);
+        ok(!disabledTimer.activeEnabled && disabledTimer.restoreTimerSpeed,
+           "Native event5 Timer Range restoration receipt");
+        s.setEnabled(w,p,g,5,SourceRuntimePreview.TIMER_RANGE,true);
+        deniedControl(s,w,p,g,5);
+
         deny(()->s.observe(w,p,g,4,1,new int[]{0,4,0,1},new double[]{10}),
              "Stale native event rejected");
         deny(()->s.observe(101,p,g,5,1,new int[]{0,4,0,1},new double[]{10}),

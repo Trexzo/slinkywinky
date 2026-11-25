@@ -1,0 +1,9 @@
+# R336 — Native source lifecycle toggles and cleanup receipts exposed over JNI
+
+R335 created a genuine Java 8 → JNI → ModuleExecutionBridge bridge. R336 extends that **same native owner session** with an explicit `setEnabled` entry point, which invokes the existing source `request()/apply()` module lifecycle. This calls the R334 original event-5 source callbacks for Timer Range and Inv Walk, not a fabricated standalone event.
+
+Control calls verify owner thread, matching world/player identity, generation and tick, plus the exact module index. They reserve their JNI output array before applying state changes and return a seven-field immutable Java receipt. Timer Range reports a required timer-speed restoration and use-key release; Inv Walk reports the exact number of queued click proposals requiring **external reconciliation**. No actual JNI reference, click packet, timer write or key is retained or changed.
+
+After disable, any attempt to dispatch a callback for that inactive source module produces no executable native callback and the Java read-only facade rejects the receipt. After reenable, the source state begins cleared. The extended Java 8 smoke exercises both module event5 callbacks, outstanding inventory cleanup, timer restoration, no stale queued clicks, disabled callback refusal, wrong module IDs and stale world identity.
+
+The bridge is still observation-only and not a commercial 1:1 gameplay implementation. Production packet/timer/input owners and exact client-thread hooks have not been attached; offline candidate status must not be conflated with live behavior. PR #1 unchanged; PR #2 draft/unmerged.

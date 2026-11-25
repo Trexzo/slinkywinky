@@ -346,3 +346,56 @@ Java_dev_slinkywinky_SourceRuntimePreview_nativeClose(JNIEnv* env,jclass,jlong h
         java_error(env,"java/lang/IllegalStateException",e.what());
     }
 }
+
+
+// R336: explicit source-module enable/disable replay over the SAME owner.
+// This produces cleanup receipts only; it is not authorized game I/O.
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_dev_slinkywinky_SourceRuntimePreview_nativeControl(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,jint moduleId,
+    jboolean enabled){
+    if(!identity||env->GetArrayLength(identity)!=4){
+        java_error(env,"java/lang/IllegalArgumentException","Invalid source control identity");
+        return nullptr;
+    }
+    jlong id[4]{};
+    env->GetLongArrayRegion(identity,0,4,id);
+    if(env->ExceptionCheck())return nullptr;
+    try {
+        require(moduleId>=0&&moduleId<4,"Unknown source module control");
+        require(id[0]>0&&id[1]>0&&id[0]!=id[1]&&id[2]>0&&id[3]>=0,
+                "Invalid source control world identity");
+        // Reserve result before changing module state; an allocation failure
+        // cannot leave an unreported successful disable behind.
+        jlongArray output=env->NewLongArray(7);
+        if(!output)return nullptr;
+        std::lock_guard<std::mutex> lk(mutex);
+        auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->owner!=std::this_thread::get_id())
+            throw std::logic_error("Closed or foreign source control session");
+        Session& s=*it->second;
+        s.observe_identity(id);
+        const bool requested=enabled==JNI_TRUE;
+        const auto module=s.module[static_cast<std::size_t>(moduleId)];
+        if(!s.bridge.request(module,requested)||!s.bridge.apply(true,true))
+            throw std::logic_error("Original source module lifecycle rejected change");
+        const auto timer=s.bridge.take_timer_range_source_cleanup();
+        const auto inv=s.bridge.take_inv_walk_source_cleanup();
+        const jlong receipt[7]={
+            static_cast<jlong>(moduleId),requested?1:0,
+            s.bridge.enabled(module)?1:0,
+            timer && timer->write_speed && timer->speed==1 ? 1:0,
+            timer && timer->write_use_key && !timer->use_key ? 1:0,
+            inv ? static_cast<jlong>(inv->queued_clicks_before_reset):0,
+            id[2]
+        };
+        env->SetLongArrayRegion(output,0,7,receipt);
+        return output;
+    }catch(const std::invalid_argument& e){
+        java_error(env,"java/lang/IllegalArgumentException",e.what());
+        return nullptr;
+    }catch(const std::exception& e){
+        java_error(env,"java/lang/IllegalStateException",e.what());
+        return nullptr;
+    }
+}

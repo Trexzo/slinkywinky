@@ -8,6 +8,37 @@ public final class SourceRuntimePreview implements AutoCloseable {
     private static native double[] nativeObserve(long handle,long[] identity,
                                                   int opcode,int[] bits,double[] fields);
     private static native void nativeClose(long handle);
+    private static native long[] nativeControl(long handle,long[] identity,
+                                               int moduleId,boolean enabled);
+    public static final int BACKTRACK=0,LAG_RANGE=1,TIMER_RANGE=2,INV_WALK=3;
+    /** One-shot, read-only native disable cleanup. No world mutation. */
+    public static final class ControlReceipt {
+        public final int moduleId;
+        public final boolean requestedEnabled,activeEnabled;
+        public final boolean restoreTimerSpeed,releaseUseKey;
+        public final long queuedInventoryClicks,worldGeneration;
+        private ControlReceipt(int module,boolean enabled,long generation,long[] r){
+            if(r==null||r.length!=7||r[0]!=module||
+               r[1]!=(enabled?1:0)||r[2]!=(enabled?1:0)||
+               r[3]<0||r[3]>1||r[4]<0||r[4]>1||
+               r[5]<0||r[5]>32||r[6]!=generation)
+                throw new IllegalStateException("Malformed source toggle receipt");
+            moduleId=module;requestedEnabled=enabled;activeEnabled=r[2]!=0;
+            restoreTimerSpeed=r[3]!=0;releaseUseKey=r[4]!=0;
+            queuedInventoryClicks=r[5];worldGeneration=r[6];
+        }
+    }
+    public synchronized ControlReceipt setEnabled(long world,long player,
+                                                   long generation,long tick,
+                                                   int module,boolean enabled){
+        assertOwner();
+        if(world<=0||player<=0||world==player||generation<=0||tick<0||
+           module<0||module>3)
+            throw new IllegalArgumentException("Invalid source toggle identity");
+        long[] identity={world,player,generation,tick};
+        return new ControlReceipt(module,enabled,generation,
+            nativeControl(handle,identity,module,enabled));
+    }
     public static final int BACKTRACK_TICK=0,BACKTRACK_PACKET=1,
         LAG_RANGE_TICK=2,LAG_RANGE_PACKET=3,TIMER_RANGE_TICK=4,
         TIMER_RANGE_FRAME=5,INV_WALK_TICK=6,INV_WALK_PACKET=7,
