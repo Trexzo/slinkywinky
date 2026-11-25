@@ -70,6 +70,19 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     private boolean closed,inCall;
     private TickReceipt last;
     private SourceRuntimePreview.Receipt lastRender;
+    private SourcePacketReadOnlyQueue packetIngress;
+    private int lastPacketSequence;
+    private long packetObservationCount;
+    public static final class PacketReceipt {
+        public final long generation,tick,observed;
+        public final int incoming,outgoing,inventory,callbacks;
+        private PacketReceipt(long g,long t,long observed,int inbound,
+                              int outbound,int inventory,int callbacks){
+            generation=g;tick=t;this.observed=observed;
+            incoming=inbound;outgoing=outbound;this.inventory=inventory;
+            this.callbacks=callbacks;
+        }
+    }
     public SourceWorldReadOnlyHost(){
         this(new SourceRuntimePreview());
     }
@@ -85,7 +98,8 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public TickReceipt last(){owner();return last;}
     public SourceRuntimePreview.Receipt lastRender(){owner();return lastRender;}
     private void invalidate(){
-        last=null;lastRender=null;
+        last=null;lastRender=null;packetIngress=null;
+        lastPacketSequence=0;packetObservationCount=0;
         world=player=null;tick=0;
         worldNumber=playerNumber=0;
     }
@@ -150,6 +164,89 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
             inCall=false;
         }
     }
+    /**
+     * R339: replay bounded primitive Netty observations ONLY on the admitted
+     * game thread, after a verified world/client tick. Packet I/O has
+     * already passed through Minecraft; these are hypothetical policies.
+     * No native packet is withheld, replayed, cancelled or transmitted.
+     */
+    public PacketReceipt observePackets(Port port,SourcePacketReadOnlyQueue ingress){
+        owner();
+        if(inCall)throw new IllegalStateException("Reentrant packet source observer");
+        if(port==null||ingress==null)
+            throw new IllegalArgumentException("Missing packet Port/ingress");
+        inCall=true;
+        try{
+            if(!port.admittedClientThread())
+                throw new IllegalStateException("Network replay on foreign thread");
+            if(world==null||player==null||last==null)return null;
+            if(port.worldIdentity()!=world||port.playerIdentity()!=player){
+                invalidate();return null;
+            }
+            if(packetIngress!=null&&packetIngress!=ingress)
+                throw new IllegalStateException("Network channel changed within owner generation");
+            if(!ingress.healthy())
+                throw new IllegalStateException("Incomplete / overflowed Netty event stream");
+            if(packetIngress==null)packetIngress=ingress;
+            final SourcePacketReadOnlyQueue.Batch batch=ingress.drain(128);
+            int incoming=0,outgoing=0,inventory=0,callbacks=0;
+            for(SourcePacketReadOnlyQueue.Observation o:batch.rows){
+                if(!port.admittedClientThread()||
+                   port.worldIdentity()!=world||port.playerIdentity()!=player)
+                    throw new IllegalStateException("World switched mid packet drain");
+                if(o.sequence<=lastPacketSequence)
+                    throw new IllegalStateException("Packet observation order regression");
+                lastPacketSequence=o.sequence;
+                if(o.direction==SourcePacketReadOnlyQueue.IN){
+                    // S19 status exposes an entity only via a World lookup.
+                    // Unknown ID must never simulate known target feedback.
+                    int kind=0;
+                    if(o.kind==SourcePacketReadOnlyQueue.ENTITY_STATUS&&o.entityIdKnown)
+                        kind=1;
+                    else if(o.kind==SourcePacketReadOnlyQueue.UPDATE_HEALTH)
+                        kind=2;
+                    else if(o.kind==SourcePacketReadOnlyQueue.SOUND)kind=3;
+                    else if(o.kind==SourcePacketReadOnlyQueue.VELOCITY)kind=4;
+                    else if(o.kind==SourcePacketReadOnlyQueue.TELEPORT)kind=5;
+                    SourceRuntimePreview.Receipt r=nativePreview.observe(
+                        worldNumber,playerNumber,generation,tick,
+                        SourceRuntimePreview.BACKTRACK_PACKET,
+                        new int[]{kind,o.sequence,o.entityId,1},
+                        new double[]{0});
+                    if(r.sourceEvent!=2)throw new IllegalStateException("Wrong source ingress phase");
+                    ++incoming;++callbacks;
+                }else if(o.direction==SourcePacketReadOnlyQueue.OUT){
+                    int kind=o.kind==SourcePacketReadOnlyQueue.MOVEMENT?1:
+                        o.kind==SourcePacketReadOnlyQueue.ATTACK?2:
+                        o.kind==SourcePacketReadOnlyQueue.STOP_SPRINT?3:0;
+                    SourceRuntimePreview.Receipt r=nativePreview.observe(
+                        worldNumber,playerNumber,generation,tick,
+                        SourceRuntimePreview.LAG_RANGE_PACKET,
+                        new int[]{kind,o.sequence,o.moving?1:0,1},
+                        new double[]{0,o.x,o.y,o.z});
+                    if(r.sourceEvent!=3)throw new IllegalStateException("Wrong source egress phase");
+                    ++outgoing;++callbacks;
+                    final int inv=o.kind==SourcePacketReadOnlyQueue.INV_OPEN?1:
+                        o.kind==SourcePacketReadOnlyQueue.INV_CLICK?2:
+                        o.kind==SourcePacketReadOnlyQueue.INV_CLOSE?3:-1;
+                    if(inv>=0){
+                        SourceRuntimePreview.Receipt gi=nativePreview.observe(
+                            worldNumber,playerNumber,generation,tick,
+                            SourceRuntimePreview.INV_WALK_PACKET,
+                            new int[]{inv},new double[0]);
+                        if(gi.sourceEvent!=23)throw new IllegalStateException("Wrong inventory phase");
+                        ++inventory;++callbacks;
+                    }
+                }else throw new IllegalStateException("Malformed packet direction");
+                ++packetObservationCount;
+            }
+            return new PacketReceipt(generation,tick,packetObservationCount,
+                                     incoming,outgoing,inventory,callbacks);
+        }catch(RuntimeException | Error failed){
+            failClosed();throw failed;
+        }finally{inCall=false;}
+    }
+
     /** Source frame delivery is read-only, bound to the prior admitted tick. */
     public SourceRuntimePreview.Receipt observeRender(RenderPort port,
                                                        double dt,float partial){

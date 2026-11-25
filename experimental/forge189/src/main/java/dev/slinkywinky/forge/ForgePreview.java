@@ -16,6 +16,7 @@ import dev.slinkywinky.EspWorldSnapshotSampler;
 import dev.slinkywinky.EspNativeReadOnlyPreview;
 import dev.slinkywinky.SourceWorldReadOnlyHost;
 import dev.slinkywinky.SourceRuntimePreview;
+import dev.slinkywinky.SourcePacketReadOnlyQueue;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
@@ -105,6 +106,9 @@ public final class ForgePreview {
     // R337: opt-in real Forge tick -> Java8/JNI -> native source controllers.
     private SourceWorldReadOnlyHost r337SourceHost;
     private int r337SourceSamples;
+    private ForgeSourcePacketTap r339Tap;
+    private int r339PacketBatches;
+    private long r339PacketObservations;
     private long r338LastRenderNanos;
     private int r338SourceRenderSamples;
     private Object r300World,r300Owner;
@@ -174,6 +178,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r301NativeEspReadOnlyProbe");
     private static final boolean R337_SOURCE_READONLY =
         Boolean.getBoolean("slinkywinky.r337NativeSourceTickReadOnly");
+    private static final boolean R339_PACKET_READONLY =
+        Boolean.getBoolean("slinkywinky.r339PacketReadOnly");
     private static final boolean R302_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r302EspLocalWorldTest");
     private static final boolean R303_CHEST_RENDER =
@@ -513,6 +519,9 @@ public final class ForgePreview {
             r278RosterSampler.close();r278RosterSampler=null;
         }
         if(r301EspNative!=null) {r301EspNative.close();r301EspNative=null;}
+        if(r339Tap!=null){
+            try {r339Tap.close();}finally {r339Tap=null;}
+        }
         if(r337SourceHost!=null){
             try {r337SourceHost.close();}
             catch(IllegalStateException alreadyRetired) {
@@ -587,6 +596,12 @@ public final class ForgePreview {
                 r301EspNative=new EspNativeReadOnlyPreview(R305_SOURCE_PHASES);
             if(R337_SOURCE_READONLY)
                 r337SourceHost=new SourceWorldReadOnlyHost();
+            if(R339_PACKET_READONLY){
+                if(!R337_SOURCE_READONLY || R212_ACTION_TEST)
+                    throw new IllegalStateException(
+                        "R339 packet observation requires read-only R337 without action mode");
+                r339Tap=new ForgeSourcePacketTap();
+            }
             if(R283_NATIVE_ROSTER_READONLY) {
                 r283Native=new RelationshipRosterNativePreview();
                 r283Settings=new RelationshipRosterNativePreview.Settings(
@@ -614,6 +629,8 @@ public final class ForgePreview {
             r278RosterSamples=0;
             r300EspSamples=r301EspSamples=0;
             r337SourceSamples=0;
+            r339PacketBatches=0;
+            r339PacketObservations=0;
             r338LastRenderNanos=0;
             r338SourceRenderSamples=0;
             r303RenderFrames=0;r303SawDraw=false;
@@ -671,18 +688,39 @@ public final class ForgePreview {
         // It never creates a world or modifies the input, timer or packets.
         if(enabled && R337_SOURCE_READONLY && r337SourceHost!=null){
             try {
+                // R339: Netty-only capture; no native JNI on a network loop.
+                // Channel/world swap must retire the old C++ controller epoch.
+                if(r339Tap!=null&&r339Tap.reconcile(mc))
+                    r337SourceHost.retire();
                 if(mc.theWorld!=null&&mc.thePlayer!=null&&!mc.isSingleplayer()){
                     // Multiplayer observation is NOT an admitted source scope.
                     r337SourceHost.retire();
                 }else{
+                    final ForgeSourceWorldPort port=new ForgeSourceWorldPort(mc);
                     final SourceWorldReadOnlyHost.TickReceipt received=
-                        r337SourceHost.observe(new ForgeSourceWorldPort(mc));
+                        r337SourceHost.observe(port);
                     if(received!=null && ++r337SourceSamples==1)
                         System.out.println("[SlinkyWinkyPreview] "+
                             "R337_REAL_FORGE_SOURCE_TICK_OBSERVED "+
                             "generation="+received.generation+
                             " tick="+received.tick+
                             " reachUnverified=1 gameWrites=0");
+                    if(received!=null&&r339Tap!=null){
+                        final SourcePacketReadOnlyQueue incoming=r339Tap.ingress();
+                        if(incoming!=null){
+                            final SourceWorldReadOnlyHost.PacketReceipt batch=
+                                r337SourceHost.observePackets(port,incoming);
+                            if(batch!=null){
+                                r339PacketObservations+=batch.incoming+batch.outgoing;
+                                if(batch.callbacks>0&&++r339PacketBatches==1)
+                                    System.out.println("[SlinkyWinkyPreview] "+
+                                        "R339_REAL_NETTY_READONLY_JNI_PACKET_OBSERVED "+
+                                        "callbacks="+batch.callbacks+
+                                        " generation="+batch.generation+
+                                        " gameWrites=0 packetsForwarded=1");
+                            }
+                        }
+                    }
                 }
             }catch(RuntimeException | LinkageError sourceError){
                 System.err.println("[SlinkyWinkyPreview] "+

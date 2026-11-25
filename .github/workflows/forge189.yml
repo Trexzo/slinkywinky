@@ -13,6 +13,8 @@ on:
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
+      - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
@@ -37,6 +39,8 @@ on:
       - 'java/dev/slinkywinky/EspNativeReadOnlyPreview.java'
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
+      - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
@@ -94,7 +98,12 @@ jobs:
             dev/slinkywinky/SourceWorldReadOnlyHost.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderPort.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderFrame.class \
-            dev/slinkywinky/forge/ForgeSourceWorldPort.class; do
+            dev/slinkywinky/forge/ForgeSourceWorldPort.class \
+            dev/slinkywinky/SourcePacketReadOnlyQueue.class \
+            dev/slinkywinky/SourcePacketReadOnlyQueue\$Observation.class \
+            dev/slinkywinky/SourcePacketReadOnlyQueue\$Batch.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$PacketReceipt.class \
+            dev/slinkywinky/forge/ForgeSourcePacketTap.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
               echo "Required read-only Forge class missing: $class" >&2
               exit 1
@@ -122,6 +131,19 @@ jobs:
           if grep -Eq 'write(Key|Timer)|sendPacket|addToSendQueue|glBegin' "$source"; then
             echo 'Unexpected gameplay write in read-only source sampler' >&2; exit 1
           fi
+          packet=experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java
+          queue=java/dev/slinkywinky/SourcePacketReadOnlyQueue.java
+          grep -Fq 'r339PacketReadOnly' "$forge"
+          grep -Fq 'R339_REAL_NETTY_READONLY_JNI_PACKET_OBSERVED' "$forge"
+          grep -Fq 'ctx.fireChannelRead(msg);' "$packet"
+          grep -Fq 'ctx.write(msg,promise);' "$packet"
+          grep -Fq 'pipeline.addBefore("packet_handler",handlerName,observer)' "$packet"
+          grep -Fq 'queue.size()==CAPACITY' "$queue"
+          grep -Fq 'SourcePacketReadOnlyQueue.Observation' "$host"
+          if grep -Eq 'sendPacket\(|release\(|ReferenceCountUtil\.release|ctx\.close\(|promise\.setFailure' "$packet"; then
+            echo 'R339 Netty source tap may mutate real traffic' >&2; exit 1
+          fi
+          echo R339_FORGE_PACKET_PASSIVE_TAP_PACKAGING_PASS
           echo R338_FORGE_SOURCE_READONLY_PACKAGING_PASS
       - name: Upload experimental Forge JAR
         uses: actions/upload-artifact@v4
