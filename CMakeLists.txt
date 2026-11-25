@@ -22,6 +22,11 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R315: synthetic resource ownership and cleanup.
+  add_executable(slinkywinky_r315_resource_tests reference_compat/tests/test_r315_resource_lifecycle.cpp)
+  target_include_directories(slinkywinky_r315_resource_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_r315_resource_tests PRIVATE cxx_std_17)
+  add_test(NAME r315_resource_lifecycle COMMAND slinkywinky_r315_resource_tests)
   # R314: value-only inventory reference fixtures.
   add_executable(slinkywinky_r314_inventory_tests reference_compat/tests/test_r314_inventory_models.cpp)
   target_include_directories(slinkywinky_r314_inventory_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)

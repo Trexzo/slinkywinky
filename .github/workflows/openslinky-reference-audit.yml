@@ -66,6 +66,10 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_r197_native_record_serializer.py' -v
       - name: Native reference compiler availability (informational; no DLL build)
         run: python3 tools/probe_openslinky_native_toolchain.py --json-out native_toolchain_preflight.json
+      - name: Remaining module evidence and original-table accounting
+        run: |
+          python3 -m unittest discover -s tests -p 'test_r315_remaining_inventory.py' -v
+          python3 tools/audit_r315_remaining_inventory.py
       - name: Static inventory (never run untrusted native code)
         run: python3 tools/audit_openslinky_reference.py --json-out reference_audit.json
       - uses: actions/upload-artifact@v4

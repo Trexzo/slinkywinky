@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "base": "d603c1e9c70a0b21c4bb49ba368301eff470d3b7",
+  "reference_archive_sha256": "c06b4c6033e2d19de86bad8f19127b0a3a68cfc496130233ebc9ff29f4540915",
+  "modules": [
+    {
+      "name": "backtrack",
+      "category": "combat",
+      "settings_reported": 12,
+      "registered_subscriptions": 3,
+      "functions_reported": 3,
+      "sha256": "f37905f8bb5bc7c1aacb0b06610ebe924cdf2d283ba125494029ddf922bda5b6"
+    },
+    {
+      "name": "criticals",
+      "category": "combat",
+      "settings_reported": 7,
+      "registered_subscriptions": 4,
+      "functions_reported": 4,
+      "sha256": "4c675eef1368bc2385e05a36d6ae367f007fe23394b5ad1770e5e2109076bb2e"
+    },
+    {
+      "name": "knockback_delay",
+      "category": "combat",
+      "settings_reported": 7,
+      "registered_subscriptions": 2,
+      "functions_reported": 2,
+      "sha256": "2929e3203f70d2966d202500e89c7c34a0d3b194a9955c15d4e440da8fb48047"
+    },
+    {
+      "name": "knockback_displace",
+      "category": "combat",
+      "settings_reported": 9,
+      "registered_subscriptions": 5,
+      "functions_reported": 6,
+      "sha256": "e1abae994f0d67372ac8174cac403bf304a1d0be319c60801b30cbf8b624ad75"
+    },
+    {
+      "name": "lag_range",
+      "category": "combat",
+      "settings_reported": 8,
+      "registered_subscriptions": 4,
+      "functions_reported": 4,
+      "sha256": "45418aa7124db5afc18e43e98559bb8b9c584416b4a1a8077cb01d78d756ac9e"
+    },
+    {
+      "name": "sprint_reset",
+      "category": "combat",
+      "settings_reported": 6,
+      "registered_subscriptions": 1,
+      "functions_reported": 2,
+      "sha256": "5d4af70c727e1e9d46db74e72f3f54637dfc1ae5ba3432c68b9b7acd0c4646ed"
+    },
+    {
+      "name": "timer_range",
+      "category": "combat",
+      "settings_reported": 9,
+      "registered_subscriptions": 4,
+      "functions_reported": 5,
+      "sha256": "c2977a652312257841e737f2f6cda2ef93a1c0dd5f407ee611f9313f2631bcce"
+    },
+    {
+      "name": "inv_walk",
+      "category": "move",
+      "settings_reported": 4,
+      "registered_subscriptions": 4,
+      "functions_reported": 4,
+      "sha256": "902d94e06a0fd24e249692483c78da65e262651f8f5d9d0d3cdc2a8a653b96fd"
+    },
+    {
+      "name": "blink",
+      "category": "utility",
+      "settings_reported": 5,
+      "registered_subscriptions": 5,
+      "functions_reported": 5,
+      "sha256": "b23dff5f786dd7b06c7c227b025d2327494c37a0e421173a2964eda46c53fdc3"
+    },
+    {
+      "name": "fake_lag",
+      "category": "utility",
+      "settings_reported": 7,
+      "registered_subscriptions": 3,
+      "functions_reported": 2,
+      "sha256": "fab2b75c11b6a8c6801f4cad392a9b39b16c0332a3c741f7f24a153b87433d1e"
+    },
+    {
+      "name": "block_esp",
+      "category": "visual",
+      "settings_reported": 5,
+      "registered_subscriptions": 5,
+      "functions_reported": 5,
+      "sha256": "e11586c2e91105ac3ec1925d696e5b73c93b44ecb7552085984ba4ed24563618"
+    }
+  ],
+  "runtime_parity_verified": false
+}
