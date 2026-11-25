@@ -1,0 +1,15 @@
+# R337 — Actual Forge 1.8.9 client tick observations into the native source bridge
+
+## Scope
+R337 implements an opt-in **real Minecraft 1.8.9 client-side observation path** to the JNI controllers committed in R335/R336. `ForgePreview` starts `SourceWorldReadOnlyHost` only under `-Dslinkywinky.r337NativeSourceTickReadOnly=true` **and manual F9 preview admission**. The adapter samples on Forge `TickEvent.ClientTickEvent.END` in an explicitly **singleplayer**, client-world environment; it does not create worlds, write fields, run packet hooks, draw GL primitives or press keys. It cleans up in the existing `stop()` path.
+
+`ForgeSourceWorldPort` reads actual world/player identity, crosshair `EntityLivingBase` target, current/held item, first-person target distance, server position scaled from 1.8.9 fixed-point, ground/jump/use state, local cursor inventory and LWJGL physical keyboard/mouse keys. It checks `Minecraft.isCallingFromMinecraftThread()`, revalidates original world/player identity *after* capture, and fails closed on foreign-thread or mid-snapshot changes.
+
+`SourceWorldReadOnlyHost` is a plain Java 8 owner model. It captures all four source tick arrays **before** sending any callback to JNI, deep-copies the arrays, binds world/player Java object identity to distinct monotonically increasing opaque native tokens and increments world generation on every world or player replacement. Disconnect and multiplayer ineligibility retire ownership. The source JNI tick stays monotonic per generation; failure retires the complete source preview.
+
+The four JNI callbacks are executed in fixed order: Backtrack e18, Lag Range e18, Timer Range e0, Inv Walk e25. **Important source gap:** Forge ClientTick.END does not prove the original Slinky event18/e0/e25 timing. Backtrack source reach eligibility, true native attack callback timing and original moving target projection are not available through this Forge event; the adapter passes `sourceReachEligible=false` rather than forging it. LagRange hit-this-tick is also `false` unless verified by a separate source event. Inv Walk mode remains `vanilla`; there is no synthetic server GUI queue. All settings are fixed diagnostic values, not proof of original GUI slider defaults.
+
+## Executable evidence
+New CTest `r337_java8_world_source_owner_jni` compiles the genuine Java 8 owner and runs it through the actual JNI native library. Mock-port tests cover the four source callbacks, read-only Backtrack reach gate, native Lag Range activity, same-world tick count, player replacement, disconnection, world relogin, foreign thread, mid-snapshot owner replacement, fail-closed session retirement and defensive copy against caller array mutation.
+
+The Forge adapter and ForgePreview wiring are **source-integrated but have not been validated inside an actual Minecraft process by CI**. Live ForgeGradle game acceptance, original event timing, packet ownership and full module functionality remain future work. Only PR #2 was changed. No proprietary original code or blobs committed.

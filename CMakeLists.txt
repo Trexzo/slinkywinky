@@ -590,6 +590,15 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R337: Java 8 world/player owner -> actual JNI source tick replay.
+    add_test(NAME r337_java8_world_source_owner_jni COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r337_source_world_jni.cmake)
+    set_tests_properties(r337_java8_world_source_owner_jni PROPERTIES TIMEOUT 40)
     # R335: Java8 -> real JNI -> four source-informed native controllers.
     add_test(NAME r335_java8_native_four_source_callbacks COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}

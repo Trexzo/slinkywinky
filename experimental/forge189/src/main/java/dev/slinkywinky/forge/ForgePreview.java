@@ -14,6 +14,7 @@ import dev.slinkywinky.ClutchCadenceObserver;
 import dev.slinkywinky.RelationshipRosterSampler;
 import dev.slinkywinky.EspWorldSnapshotSampler;
 import dev.slinkywinky.EspNativeReadOnlyPreview;
+import dev.slinkywinky.SourceWorldReadOnlyHost;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
@@ -100,6 +101,9 @@ public final class ForgePreview {
     private int r278RosterSamples;
     private EspWorldSnapshotSampler r300EspSampler;
     private EspNativeReadOnlyPreview r301EspNative;
+    // R337: opt-in real Forge tick -> Java8/JNI -> native source controllers.
+    private SourceWorldReadOnlyHost r337SourceHost;
+    private int r337SourceSamples;
     private Object r300World,r300Owner;
     private int r300EspSamples,r301EspSamples;
     private boolean r302ReceiptEmitted,r302CleanupDone,r302StartupFailed;
@@ -165,6 +169,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r300EspReadOnlyProbe");
     private static final boolean R301_NATIVE_ESP_READONLY =
         Boolean.getBoolean("slinkywinky.r301NativeEspReadOnlyProbe");
+    private static final boolean R337_SOURCE_READONLY =
+        Boolean.getBoolean("slinkywinky.r337NativeSourceTickReadOnly");
     private static final boolean R302_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r302EspLocalWorldTest");
     private static final boolean R303_CHEST_RENDER =
@@ -504,6 +510,13 @@ public final class ForgePreview {
             r278RosterSampler.close();r278RosterSampler=null;
         }
         if(r301EspNative!=null) {r301EspNative.close();r301EspNative=null;}
+        if(r337SourceHost!=null){
+            try {r337SourceHost.close();}
+            catch(IllegalStateException alreadyRetired) {
+                // A failed world admission already forced this preview closed.
+            }
+            finally {r337SourceHost=null;}
+        }
         if(r300EspSampler!=null) {r300EspSampler.close();r300EspSampler=null;}
         r302World=r302Player=null;
         r302Generation=0;
@@ -569,6 +582,8 @@ public final class ForgePreview {
                 r300EspSampler=new EspWorldSnapshotSampler();
             if(R301_NATIVE_ESP_READONLY)
                 r301EspNative=new EspNativeReadOnlyPreview(R305_SOURCE_PHASES);
+            if(R337_SOURCE_READONLY)
+                r337SourceHost=new SourceWorldReadOnlyHost();
             if(R283_NATIVE_ROSTER_READONLY) {
                 r283Native=new RelationshipRosterNativePreview();
                 r283Settings=new RelationshipRosterNativePreview.Settings(
@@ -595,6 +610,7 @@ public final class ForgePreview {
             r252Due=r252PressProposals=0;
             r278RosterSamples=0;
             r300EspSamples=r301EspSamples=0;
+            r337SourceSamples=0;
             r303RenderFrames=0;r303SawDraw=false;
             r304RenderFrames=0;r304SawItem=r304SawPlayer=false;
             r305WorldFrames=r305ScreenFrames=r305Collections=0;
@@ -646,6 +662,33 @@ public final class ForgePreview {
         }
 
         final Minecraft mc=Minecraft.getMinecraft();
+        // R337 is independent of the local-world test autostart logic.
+        // It never creates a world or modifies the input, timer or packets.
+        if(enabled && R337_SOURCE_READONLY && r337SourceHost!=null){
+            try {
+                if(mc.theWorld!=null&&mc.thePlayer!=null&&!mc.isSingleplayer()){
+                    // Multiplayer observation is NOT an admitted source scope.
+                    r337SourceHost.retire();
+                }else{
+                    final SourceWorldReadOnlyHost.TickReceipt received=
+                        r337SourceHost.observe(new ForgeSourceWorldPort(mc));
+                    if(received!=null && ++r337SourceSamples==1)
+                        System.out.println("[SlinkyWinkyPreview] "+
+                            "R337_REAL_FORGE_SOURCE_TICK_OBSERVED "+
+                            "generation="+received.generation+
+                            " tick="+received.tick+
+                            " reachUnverified=1 gameWrites=0");
+                }
+            }catch(RuntimeException | LinkageError sourceError){
+                System.err.println("[SlinkyWinkyPreview] "+
+                    "R337_SOURCE_CLIENT_ADMISSION_FAIL "+sourceError);
+                try {stop();}catch(RuntimeException closeFailure){
+                    System.err.println("[SlinkyWinkyPreview] "+
+                        "R337_SOURCE_CLOSE_FAIL "+closeFailure);
+                }
+                status="R337 read-only source observer stopped after failure";
+            }
+        }
         // A disconnected or replaced owner invalidates all R300 receipts.
         if(r300EspSampler!=null &&
            (mc.theWorld==null||mc.thePlayer==null||
