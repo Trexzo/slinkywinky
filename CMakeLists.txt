@@ -24,6 +24,11 @@ add_executable(slinkywinky_preview_document examples/preview_document_cli.cpp)
 target_link_libraries(slinkywinky_preview_document PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R329: candidate-source Backtrack, Lag Range, Timer Range and Inv Walk.
+  add_executable(slinkywinky_r329_missing_models_tests reference_compat/tests/test_r329_missing_models.cpp)
+  target_include_directories(slinkywinky_r329_missing_models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_r329_missing_models_tests PRIVATE cxx_std_17)
+  add_test(NAME r329_four_remaining_partial_models COMMAND slinkywinky_r329_missing_models_tests)
   # R328 source-informed Criticals and Knockback Displace, offline only.
   add_executable(slinkywinky_r328_combat_tests reference_compat/tests/test_r328_candidate_combat.cpp)
   target_include_directories(slinkywinky_r328_combat_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)

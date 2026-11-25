@@ -15,22 +15,22 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_weapon` | Offline event-25 bridge + source Weapons tick cache (no hotbar writes) | Verify host callback priority and real Minecraft player-tick observations |
-| combat | `backtrack` | Not implemented | Identify state, host events and reference traces |
+| combat | `backtrack` | Offline C++ controller (candidate packet/target tracking only) | Identify state, host events and reference traces |
 | combat | `criticals` | Offline C++ controller (candidate chance/packet/timer policy; no game writes) | Identify state, host events and reference traces |
 | combat | `hit_select` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `hitboxes` | Offline C++ controller + event-8 bridge (no entity writes) | Authenticate native event ordering and Minecraft collision query |
 | combat | `knockback_delay` | Offline C++ controller (candidate transaction/velocity delay decisions; no transport) | Identify state, host events and reference traces |
 | combat | `knockback_displace` | Offline C++ controller (candidate rotation/click proposal; no game actions) | Identify state, host events and reference traces |
-| combat | `lag_range` | Not implemented | Identify state, host events and reference traces |
+| combat | `lag_range` | Offline C++ controller (candidate outgoing hold and cooldown policy only) | Identify state, host events and reference traces |
 | combat | `piercing` | Offline C++ event-8 bridge + separate rank/blocks proposals | Verify original native event priority, real entity ray and cached weapon host state |
 | combat | `reach` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `sprint_reset` | Offline C++ controller (candidate staged key state; no live key writes) | Identify state, host events and reference traces |
-| combat | `timer_range` | Not implemented | Identify state, host events and reference traces |
+| combat | `timer_range` | Offline C++ controller (candidate timer/freezing policy; ray simulation deferred) | Identify state, host events and reference traces |
 | combat | `velocity` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `weapons` | Offline C++ item/slot policy + event-26 clearing proposal | Verify source per-tick cache, host settings and real hotbar read-only snapshots |
 | move | `fast_accel` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | move | `instant_stop` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
-| move | `inv_walk` | Not implemented | Identify state, host events and reference traces |
+| move | `inv_walk` | Offline C++ controller (candidate inventory/key/packet state; no game IO) | Identify state, host events and reference traces |
 | move | `keep_sprint` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | move | `no_jump_delay` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | move | `no_slow` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R328 records 56 matching offline C++ controller headers in PR #2, including four new candidate-source-only packet/sprint policies, and the existing six experimental offline combat decision models. Five candidate rows remain without controllers, including descriptor-only Chest Stealer. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R329 records 60 matching offline C++ controller headers in PR #2, including four new candidate-source-only packet/sprint policies, and the existing six experimental offline combat decision models. Only descriptor-only Chest Stealer remains without a controller; it is outside the 66-entry target. All other modules are still partial or experimental and require live bindings and parity verification. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.

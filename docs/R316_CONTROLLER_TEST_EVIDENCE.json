@@ -27,6 +27,9 @@
       "reference_compat/tests/test_auto_weapon_controller.cpp",
       "reference_compat/tests/test_auto_weapon_weapons_bridge.cpp"
     ],
+    "backtrack": [
+      "reference_compat/tests/test_r329_missing_models.cpp"
+    ],
     "blink": [
       "reference_compat/tests/test_r327_source_policies.cpp"
     ],
@@ -97,6 +100,9 @@
     "inv_manager": [
       "reference_compat/tests/test_r314_inventory_models.cpp"
     ],
+    "inv_walk": [
+      "reference_compat/tests/test_r329_missing_models.cpp"
+    ],
     "item_esp": [
       "reference_compat/tests/test_item_esp_controller.cpp"
     ],
@@ -111,6 +117,9 @@
     ],
     "knockback_displace": [
       "reference_compat/tests/test_r328_candidate_combat.cpp"
+    ],
+    "lag_range": [
+      "reference_compat/tests/test_r329_missing_models.cpp"
     ],
     "mod_overlay": [
       "reference_compat/tests/test_r312_presentation_state.cpp"
@@ -177,6 +186,9 @@
     ],
     "timer": [
       "reference_compat/tests/test_timer_bridge.cpp"
+    ],
+    "timer_range": [
+      "reference_compat/tests/test_r329_missing_models.cpp"
     ],
     "trajectories": [
       "reference_compat/tests/test_r313_visual_models.cpp"
