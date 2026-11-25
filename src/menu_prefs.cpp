@@ -1,4 +1,5 @@
 #include "slinkywinky/menu.hpp"
+#include "prefs_file_io.hpp"
 #include <cmath>
 #include <cctype>
 #include <fstream>
@@ -7,15 +8,10 @@
 #include <set>
 #include <sstream>
 #include <string>
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
 
 namespace slinkywinky {
 namespace {
+constexpr std::size_t appearance_limit = 4096;
 std::string trim(const std::string& s) {
     auto left=s.find_first_not_of(" \t\n\r");
     if(left==std::string::npos)return {};
@@ -49,6 +45,7 @@ std::string serialize_menu_appearance(const MenuAppearance& a) {
 }
 bool parse_menu_appearance(const std::string& text,
                            MenuAppearance& appearance) noexcept {
+    if(text.size()>appearance_limit || text.find('\0')!=std::string::npos)return false;
     try {
         MenuAppearance parsed;
         std::set<std::string> seen;
@@ -95,38 +92,16 @@ bool parse_menu_appearance(const std::string& text,
 bool load_menu_appearance(const std::filesystem::path& path,
                           MenuAppearance& output) noexcept {
     try {
-        std::ifstream in(path,std::ios::binary);
-        if(!in)return false;
-        std::ostringstream contents;contents<<in.rdbuf();
-        if(in.bad())return false;
-        return parse_menu_appearance(contents.str(),output);
+        std::string contents;
+        return prefs_file_io::read(path,appearance_limit,contents)
+            && parse_menu_appearance(contents,output);
     }catch(...){return false;}
 }
 bool save_menu_appearance(const std::filesystem::path& path,
                           const MenuAppearance& prefs) noexcept {
-    if(!plausible(prefs))return false;
-    const auto contents=serialize_menu_appearance(prefs);
-    if(contents.empty())return false;
     try {
-        if(!path.parent_path().empty())
-            std::filesystem::create_directories(path.parent_path());
-        const auto tmp=std::filesystem::path(path.string()+".tmp");
-        {
-            std::ofstream out(tmp,std::ios::binary|std::ios::trunc);
-            if(!out)return false;
-            out<<contents;out.flush();
-            if(!out)return false;
-        }
-#ifdef _WIN32
-        if(!MoveFileExW(tmp.c_str(),path.c_str(),
-                        MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
-            std::error_code ignored;std::filesystem::remove(tmp,ignored);
-            return false;
-        }
-#else
-        std::filesystem::rename(tmp,path);
-#endif
-        return true;
+        if(!plausible(prefs))return false;
+        return prefs_file_io::replace(path,serialize_menu_appearance(prefs));
     }catch(...){return false;}
 }
 } // namespace slinkywinky

@@ -22,6 +22,10 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R317: GUI-only preferences, bounded reads and atomic replacement.
+  add_executable(slinkywinky_r317_preferences_tests tests/test_r317_preferences_persistence.cpp)
+  target_link_libraries(slinkywinky_r317_preferences_tests PRIVATE slinkywinky_core)
+  add_test(NAME r317_gui_preferences_persistence COMMAND slinkywinky_r317_preferences_tests)
   # R316: independent translation unit per controller; no runtime linkage.
   file(GLOB R316_CONTROLLER_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include/slinkywinky/*_controller.hpp")
