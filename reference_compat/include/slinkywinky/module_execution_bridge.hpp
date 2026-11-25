@@ -415,6 +415,13 @@ struct LagRangeSourceAttackPayload{
     unsigned executions=0;
 };
 
+// Value-only receipt: a real packet owner must explicitly decide whether to
+// deliver the old queued clicks, since this model holds no JNI global refs.
+struct InvWalkSourceCleanupReceipt{
+    std::size_t queued_clicks_before_reset=0;
+    bool requires_external_packet_reconciliation=false;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -510,13 +517,36 @@ public:
     ModuleExecutionBridge()
         : replay_([this](const Delivery& delivery, bool& veto) {
               (void)veto;
-              if (active_frame_ == nullptr || delivery.event != active_frame_->event)
+              // R334: only the two explicitly registered source lifecycle
+              // owners receive actual apply() toggle notifications here.
+              // Ordinary bridge callbacks preserve their existing behavior.
+              if(active_frame_==nullptr){
+                  if(delivery.event!=kToggleNotification ||
+                     delivery.target!=delivery.recipient ||
+                     delivery.recipient>=source_toggle_owned_.size()||
+                     !source_toggle_owned_[delivery.recipient])return;
+                  auto& callback=callbacks_[delivery.recipient][kToggleNotification];
+                  if(!callback)return;
+                  ExecutionFrame notification{};
+                  notification.event=kToggleNotification;
+                  notification.world_present=notification.player_present=true;
+                  notification.notification_target=delivery.target;
+                  notification.notification_new_state=delivery.new_state;
+                  source_toggle_notification_active_=true;
+                  try{
+                      callback(delivery,notification);
+                      source_toggle_notification_active_=false;
+                  }catch(...){
+                      source_toggle_notification_active_=false;
+                      throw;
+                  }
                   return;
-              // All registrations were individually validated by bind().
-              auto& callback = callbacks_[delivery.recipient][delivery.event];
-              if (callback) {
+              }
+              if(delivery.event!=active_frame_->event)return;
+              auto& callback=callbacks_[delivery.recipient][delivery.event];
+              if(callback){
                   active_frame_->executed_modules.push_back(delivery.recipient);
-                  callback(delivery, *active_frame_);
+                  callback(delivery,*active_frame_);
               }
           }) {}
 
@@ -525,6 +555,7 @@ public:
         const std::size_t id = replay_.add(module);
         definitions_.push_back(std::move(module));
         callbacks_.emplace_back();
+        source_toggle_owned_.push_back(false);
         return id;
     }
 
@@ -696,6 +727,52 @@ public:
             ++p.executions;
             lag_range_source_.attack_phase(p.phase_one,p.hit_at_current_tick);
         });
+    }
+
+
+    // R334: native e5 source lifecycle callbacks are invoked exclusively
+    // by EventReplay.apply()'s real toggle delivery, not fabricated e5 frames.
+    bool bind_timer_range_source_toggle(std::size_t id){
+        if(!matches_source_row(id,"Timer Range",0,{{0,-100},{1,0},{3,0},{5,0}}) ||
+           !callbacks_[id][0])return false;
+        const bool registered=bind(id,kToggleNotification,
+            [this,id](const Delivery& d,ExecutionFrame&){
+                if(!source_toggle_notification_active_||d.target!=id||d.new_state)return;
+                const auto cleanup=timer_range_source_.disable();
+                if(cleanup.write_speed||cleanup.write_use_key)
+                    timer_range_cleanup_receipt_=cleanup;
+            });
+        if(registered)source_toggle_owned_[id]=true;
+        return registered;
+    }
+    bool bind_inv_walk_source_toggle(std::size_t id){
+        if(!matches_source_row(id,"Inv Walk",1,{{5,0},{17,0},{23,0},{25,0}}) ||
+           !callbacks_[id][25])return false;
+        const bool registered=bind(id,kToggleNotification,
+            [this,id](const Delivery& d,ExecutionFrame&){
+                if(!source_toggle_notification_active_||d.target!=id||d.new_state)return;
+                const auto queued=inv_walk_source_.queued();
+                inv_walk_source_.reset_world();
+                if(queued>0)
+                    inv_walk_cleanup_receipt_={queued,true};
+            });
+        if(registered)source_toggle_owned_[id]=true;
+        return registered;
+    }
+
+    // Caller can take these offline proposals once. They are NOT direct
+    // game-thread action receipts and cannot authorize JNI/Netty work.
+    std::optional<TimerRangeProposal>
+    take_timer_range_source_cleanup() noexcept {
+        const auto value=timer_range_cleanup_receipt_;
+        timer_range_cleanup_receipt_.reset();
+        return value;
+    }
+    std::optional<InvWalkSourceCleanupReceipt>
+    take_inv_walk_source_cleanup() noexcept {
+        const auto value=inv_walk_cleanup_receipt_;
+        inv_walk_cleanup_receipt_.reset();
+        return value;
     }
 
     // Unlike a synthetic reimplementation, this invokes the existing R-series
@@ -2726,7 +2803,13 @@ public:
         controller_.reset();
         backtrack_source_.reset_world();
         lag_range_source_.reset_world();
-        timer_range_source_.reset_world();
+        const auto timer_cleanup=timer_range_source_.disable();
+        if((timer_cleanup.write_speed||timer_cleanup.write_use_key) &&
+           !timer_range_cleanup_receipt_)
+            timer_range_cleanup_receipt_=timer_cleanup;
+        const auto queued=inv_walk_source_.queued();
+        if(queued>0&&!inv_walk_cleanup_receipt_)
+            inv_walk_cleanup_receipt_={queued,true};
         inv_walk_source_.reset_world();
         null_move_.reset();
         instant_stop_.reset();
@@ -2749,6 +2832,7 @@ public:
         shared_source_rng_enabled_=false;
         shared_source_rng_=SourceWalkRng{};
         callbacks_.clear();
+        source_toggle_owned_.clear();
         definitions_.clear();
         bound_count_ = 0;
     }
@@ -2850,6 +2934,10 @@ private:
     StrafeController strafe_;
     std::vector<ModuleSpec> definitions_;
     std::vector<std::array<OfflineCallback, kEventSlots>> callbacks_;
+    std::vector<bool> source_toggle_owned_{};
+    bool source_toggle_notification_active_=false;
+    std::optional<TimerRangeProposal> timer_range_cleanup_receipt_{};
+    std::optional<InvWalkSourceCleanupReceipt> inv_walk_cleanup_receipt_{};
     ExecutionFrame* active_frame_ = nullptr;
     std::size_t bound_count_ = 0;
     bool stopped_ = false;
