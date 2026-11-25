@@ -71,13 +71,17 @@ public:
                 Glyph& glyph=glyphs_[static_cast<std::size_t>(c-32)];
                 glyph.left=metrics.gmptGlyphOrigin.x;
                 glyph.origin_y=metrics.gmptGlyphOrigin.y;
+                // Validate unsigned GDI dimensions before narrowing or
+                // calculating padded row pitches.
+                if(metrics.gmBlackBoxX>80u || metrics.gmBlackBoxY>80u ||
+                   count>16384u)return;
                 glyph.width=static_cast<int>(metrics.gmBlackBoxX);
                 glyph.height=static_cast<int>(metrics.gmBlackBoxY);
                 glyph.pitch=(glyph.width+3)&~3;
                 glyph.advance=metrics.gmCellIncX;
-                if(glyph.advance<=0 || glyph.advance>80 ||
-                   glyph.width>80 || glyph.height>80 || count>16384)
-                    return;
+                if(glyph.advance<=0 || glyph.advance>80)return;
+                if(glyph.width>0 && glyph.height>0 &&
+                   static_cast<DWORD>(glyph.pitch*glyph.height)>count)return;
                 glyph.coverage.resize(count);
                 if(count && GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
                     &metrics,count,glyph.coverage.data(),&transform)==GDI_ERROR)
@@ -130,7 +134,10 @@ bool draw_menu_system_text(std::string_view label,float x,float top,
                            float font_px,float max_width) noexcept {
     const auto& cache=font_cache();
     if(!cache.ready() || !std::isfinite(font_px) || font_px<8 || font_px>48 ||
-       !std::isfinite(max_width) || max_width<0) return false;
+       !std::isfinite(x) || !std::isfinite(top) ||
+       !std::isfinite(max_width) || max_width<0 ||
+       !std::isfinite(x+max_width) ||
+       !std::isfinite(top+font_px))return false;
     GLfloat base[4]{};
     glGetFloatv(GL_CURRENT_COLOR,base);
     const float scale=font_px/kRasterHeight;

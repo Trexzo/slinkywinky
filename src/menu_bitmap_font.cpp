@@ -56,6 +56,29 @@ std::array<std::uint8_t,7> menu_ascii_glyph(char c) noexcept {
         case '(':return {{2,4,8,8,8,4,2}};
         case ')':return {{8,4,2,2,2,4,8}};
         case '%':return {{17,2,4,8,17,0,0}};
+        case '"':return {{10,10,10,0,0,0,0}};
+        case '#':return {{10,10,31,10,31,10,10}};
+        case '
+    }
+}
+} // namespace slinkywinky
+:return {{4,15,20,14,5,30,4}};
+        case '&':return {{12,18,20,8,21,18,13}};
+        case '\'':return {{4,4,8,0,0,0,0}};
+        case '*':return {{0,21,14,31,14,21,0}};
+        case ';':return {{0,12,12,0,12,12,8}};
+        case '<':return {{2,4,8,16,8,4,2}};
+        case '>':return {{8,4,2,1,2,4,8}};
+        case '@':return {{14,17,23,21,23,16,14}};
+        case '[':return {{14,8,8,8,8,8,14}};
+        case '\\':return {{16,16,8,4,2,1,1}};
+        case ']':return {{14,2,2,2,2,2,14}};
+        case '^':return {{4,10,17,0,0,0,0}};
+        case '`':return {{8,4,2,0,0,0,0}};
+        case '{':return {{2,4,4,8,4,4,2}};
+        case '|':return {{4,4,4,4,4,4,4}};
+        case '}':return {{8,4,4,2,4,4,8}};
+        case '~':return {{0,0,9,22,0,0,0}};
         default:return {{14,17,1,2,4,0,4}};
     }
 }

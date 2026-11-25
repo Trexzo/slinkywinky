@@ -39,7 +39,25 @@ int main() {
           slinkywinky::menu_ascii_glyph('Z'));
     const std::array<std::uint8_t,7> empty{};
     CHECK(slinkywinky::menu_ascii_glyph(' ')==empty);
-    CHECK(slinkywinky::menu_ascii_glyph('~')==
-          slinkywinky::menu_ascii_glyph('?'));
+    const auto fallback=slinkywinky::menu_ascii_glyph('?');
+    // Printable ASCII coverage must be real, not the fallback glyph.
+    for(unsigned byte=32;byte<=126;++byte) {
+        const char c=static_cast<char>(byte);
+        const auto glyph=slinkywinky::menu_ascii_glyph(c);
+        check_string(std::string(1,c));
+        if(c!='?')CHECK(glyph!=fallback);
+        if(c!=' ')CHECK(glyph!=empty);
+    }
+    for(unsigned byte=0;byte<=255;++byte) {
+        if(byte>=32 && byte<=126)continue;
+        CHECK(slinkywinky::menu_ascii_glyph(static_cast<char>(byte))==fallback);
+    }
+    for(char c='a';c<='z';++c)
+        CHECK(slinkywinky::menu_ascii_glyph(c)==
+              slinkywinky::menu_ascii_glyph(static_cast<char>(c-'a'+'A')));
+    CHECK(slinkywinky::menu_ascii_glyph('[')!=slinkywinky::menu_ascii_glyph(']'));
+    CHECK(slinkywinky::menu_ascii_glyph('{')!=slinkywinky::menu_ascii_glyph('}'));
+    CHECK(slinkywinky::menu_ascii_glyph('<')!=slinkywinky::menu_ascii_glyph('>'));
+    CHECK(slinkywinky::menu_ascii_glyph('/')!=slinkywinky::menu_ascii_glyph('\\'));
     return 0;
 }
