@@ -66,10 +66,19 @@ public final class SourceWorldBatchHistorySmoke {
         h.observe(port);
         yes(h.history().tracked()==32,
             "Changing target cannot unexpectedly remove other remote histories");
+        final SourcePacketReadOnlyQueue boundPackets=
+            new SourcePacketReadOnlyQueue();
+        yes(boundPackets.offer(SourcePacketReadOnlyQueue.IN,
+                SourcePacketReadOnlyQueue.UNKNOWN,0,false,false,
+                0,0,0,System.nanoTime()),"Admit old-world primitive packet");
+        yes(h.observePackets(port,boundPackets).incoming==1,
+            "Old-world network ingress bound to one native generation");
         port.world=new Object();
         port.batch=Collections.emptyList();
         yes(h.observe(port).generation==2&&h.history().tracked()==0,
             "World swap atomically retires all old remote UUID positions");
+        yes(!boundPackets.healthy()&&boundPackets.pending()==0,
+            "Direct world switch closes old primitive Netty queue");
         h.close();
 
         Port duplicate=new Port();

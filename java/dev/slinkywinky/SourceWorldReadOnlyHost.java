@@ -148,6 +148,10 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
         owner();return lastHistoryBox;
     }
     private void invalidate(){
+        // On disconnect or direct world replacement, also close the
+        // previously admitted primitive packet ingress. Late Netty offers
+        // then fail closed while real packet delivery remains untouched.
+        if(packetIngress!=null)packetIngress.close();
         last=null;lastRender=null;lastBoxes=null;lastHistoryBox=null;
         packetIngress=null;
         positionHistory.resetWorld();
