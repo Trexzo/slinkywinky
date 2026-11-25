@@ -1,0 +1,171 @@
+{
+  "schema": 1,
+  "baseline": "9a0e71c7bee085dbcd647b25c22406a1a522d80b",
+  "evidence_kind": "registered test source association, not proof of behavior",
+  "controllers": {
+    "anti_bot": [
+      "reference_compat/tests/test_anti_bot_controller.cpp",
+      "reference_compat/tests/test_anti_bot_event_bridge.cpp"
+    ],
+    "anti_debuff": [
+      "reference_compat/tests/test_anti_debuff_bridge.cpp"
+    ],
+    "auto_pot": [
+      "reference_compat/tests/test_r314_inventory_models.cpp"
+    ],
+    "auto_rod": [
+      "reference_compat/tests/test_r314_inventory_models.cpp"
+    ],
+    "auto_soup": [
+      "reference_compat/tests/test_r314_inventory_models.cpp"
+    ],
+    "auto_tool": [
+      "reference_compat/tests/test_auto_tool_bridge.cpp"
+    ],
+    "auto_weapon": [
+      "reference_compat/tests/test_auto_weapon_cached_bridge.cpp",
+      "reference_compat/tests/test_auto_weapon_controller.cpp",
+      "reference_compat/tests/test_auto_weapon_weapons_bridge.cpp"
+    ],
+    "block_esp": [
+      "reference_compat/tests/test_r315_resource_lifecycle.cpp"
+    ],
+    "block_in": [
+      "reference_compat/tests/test_block_in_bridge.cpp",
+      "reference_compat/tests/test_block_in_source_targets.cpp"
+    ],
+    "bridge_assist": [
+      "reference_compat/tests/test_bridge_assist_bridge.cpp"
+    ],
+    "chams": [
+      "reference_compat/tests/test_chams_controller.cpp"
+    ],
+    "chest_esp": [
+      "reference_compat/tests/test_chest_esp_controller.cpp"
+    ],
+    "clutch": [
+      "reference_compat/tests/test_clutch_bridge.cpp",
+      "reference_compat/tests/test_clutch_click_gate.cpp",
+      "reference_compat/tests/test_clutch_original_candidate_planner.cpp",
+      "reference_compat/tests/test_clutch_world_observation_bridge.cpp"
+    ],
+    "debug": [
+      "reference_compat/tests/test_r312_presentation_state.cpp"
+    ],
+    "fast_accel": [
+      "reference_compat/tests/test_fast_accel_bridge.cpp"
+    ],
+    "fast_mine": [
+      "reference_compat/tests/test_fast_mine_bridge.cpp"
+    ],
+    "fast_place": [
+      "reference_compat/tests/test_fast_place_bridge.cpp"
+    ],
+    "free_look": [
+      "reference_compat/tests/test_free_look_controller.cpp",
+      "reference_compat/tests/test_free_look_event_bridge.cpp"
+    ],
+    "friends": [
+      "reference_compat/tests/test_r312_presentation_state.cpp"
+    ],
+    "ghost_hand": [
+      "reference_compat/tests/test_ghost_hand_controller.cpp",
+      "reference_compat/tests/test_ghost_hand_event_bridge.cpp"
+    ],
+    "gui": [
+      "reference_compat/tests/test_r313_visual_models.cpp"
+    ],
+    "hitboxes": [
+      "reference_compat/tests/test_hitboxes_controller.cpp",
+      "reference_compat/tests/test_hitboxes_event_bridge.cpp"
+    ],
+    "indicators": [
+      "reference_compat/tests/test_r312_presentation_state.cpp"
+    ],
+    "instant_stop": [
+      "reference_compat/tests/test_instant_stop_bridge.cpp"
+    ],
+    "inv_manager": [
+      "reference_compat/tests/test_r314_inventory_models.cpp"
+    ],
+    "item_esp": [
+      "reference_compat/tests/test_item_esp_controller.cpp"
+    ],
+    "item_use_fix": [
+      "reference_compat/tests/test_item_use_fix_bridge.cpp"
+    ],
+    "keep_sprint": [
+      "reference_compat/tests/test_keep_sprint_bridge.cpp"
+    ],
+    "mod_overlay": [
+      "reference_compat/tests/test_r312_presentation_state.cpp"
+    ],
+    "name_tags": [
+      "reference_compat/tests/test_r313_visual_models.cpp"
+    ],
+    "no_hit_delay": [
+      "reference_compat/tests/test_no_hit_delay_bridge.cpp"
+    ],
+    "no_hurt_cam": [
+      "reference_compat/tests/test_no_hurt_cam_controller.cpp"
+    ],
+    "no_item_release": [
+      "reference_compat/tests/test_no_item_release_bridge.cpp"
+    ],
+    "no_jump_delay": [
+      "reference_compat/tests/test_no_jump_delay_bridge.cpp"
+    ],
+    "no_slow": [
+      "reference_compat/tests/test_no_slow_bridge.cpp"
+    ],
+    "no_use_delay": [
+      "reference_compat/tests/test_no_use_delay_bridge.cpp"
+    ],
+    "notifications": [
+      "reference_compat/tests/test_notifications_controller.cpp"
+    ],
+    "null_move": [
+      "reference_compat/tests/test_null_move_bridge.cpp"
+    ],
+    "piercing": [
+      "reference_compat/tests/test_piercing_controller.cpp",
+      "reference_compat/tests/test_piercing_event_bridge.cpp"
+    ],
+    "ping_fix": [
+      "reference_compat/tests/test_ping_fix_bridge.cpp"
+    ],
+    "player_esp": [
+      "reference_compat/tests/test_player_esp_controller.cpp"
+    ],
+    "pointers": [
+      "reference_compat/tests/test_r313_visual_models.cpp"
+    ],
+    "refill": [
+      "reference_compat/tests/test_r314_inventory_models.cpp"
+    ],
+    "safe_walk": [
+      "reference_compat/tests/test_safe_walk_bridge.cpp"
+    ],
+    "sprint": [
+      "reference_compat/tests/test_sprint_bridge.cpp",
+      "reference_compat/tests/test_sprint_observation_preview.cpp"
+    ],
+    "strafe": [
+      "reference_compat/tests/test_strafe_bridge.cpp"
+    ],
+    "teams": [
+      "reference_compat/tests/test_teams_controller.cpp",
+      "reference_compat/tests/test_teams_event_bridge.cpp"
+    ],
+    "timer": [
+      "reference_compat/tests/test_timer_bridge.cpp"
+    ],
+    "trajectories": [
+      "reference_compat/tests/test_r313_visual_models.cpp"
+    ],
+    "weapons": [
+      "reference_compat/tests/test_weapons_controller.cpp",
+      "reference_compat/tests/test_weapons_tick_cache.cpp"
+    ]
+  }
+}

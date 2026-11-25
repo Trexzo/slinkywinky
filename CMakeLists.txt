@@ -22,6 +22,22 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R316: independent translation unit per controller; no runtime linkage.
+  file(GLOB R316_CONTROLLER_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include/slinkywinky/*_controller.hpp")
+  set(R316_CONTROLLER_UNITS "")
+  foreach(R316_HEADER IN LISTS R316_CONTROLLER_HEADERS)
+    get_filename_component(R316_NAME "${R316_HEADER}" NAME)
+    get_filename_component(R316_STEM "${R316_HEADER}" NAME_WE)
+    set(R316_UNIT "${CMAKE_CURRENT_BINARY_DIR}/r316_headers/${R316_STEM}.cpp")
+    file(GENERATE OUTPUT "${R316_UNIT}" CONTENT "#include \"slinkywinky/${R316_NAME}\"\n")
+    list(APPEND R316_CONTROLLER_UNITS "${R316_UNIT}")
+  endforeach()
+  add_library(slinkywinky_r316_header_compile OBJECT ${R316_CONTROLLER_UNITS})
+  target_include_directories(slinkywinky_r316_header_compile PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  target_compile_features(slinkywinky_r316_header_compile PRIVATE cxx_std_17)
   # R315: synthetic resource ownership and cleanup.
   add_executable(slinkywinky_r315_resource_tests reference_compat/tests/test_r315_resource_lifecycle.cpp)
   target_include_directories(slinkywinky_r315_resource_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
