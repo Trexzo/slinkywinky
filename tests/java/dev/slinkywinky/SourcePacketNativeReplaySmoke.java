@@ -42,8 +42,8 @@ public final class SourcePacketNativeReplaySmoke {
         netty.start();netty.join();
         SourceWorldReadOnlyHost.PacketReceipt batch=host.observePackets(port,packets);
         yes(batch.incoming==2&&batch.outgoing==5&&batch.inventory==3&&
-            batch.callbacks==10&&batch.observed==7,
-            "Both packet directions hit actual source JNI events 2,3,23");
+            batch.callbacks==15&&batch.observed==7,
+            "Both directions hit JNI events 2/3/23 plus outgoing Timer Range event1");
         yes(batch.generation==1&&batch.tick==1,"Same owner epoch and tick");
         SourceWorldReadOnlyHost.PacketReceipt empty=host.observePackets(port,packets);
         yes(empty.callbacks==0&&empty.observed==7,"Packets consumed exactly once");
@@ -66,8 +66,8 @@ public final class SourcePacketNativeReplaySmoke {
         final SourcePacketReadOnlyQueue other=new SourcePacketReadOnlyQueue();
         different.observe(freshPort);
         add(first,SourcePacketReadOnlyQueue.OUT,SourcePacketReadOnlyQueue.ATTACK,0);
-        yes(different.observePackets(freshPort,first).callbacks==1,
-            "One authenticated channel");
+        yes(different.observePackets(freshPort,first).callbacks==2,
+            "One channel: Lag Range e3 and Timer Range e1 callbacks");
         add(other,SourcePacketReadOnlyQueue.OUT,SourcePacketReadOnlyQueue.ATTACK,0);
         denied(()->different.observePackets(freshPort,other),
                "Changed channel in same generation is forbidden");

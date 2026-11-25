@@ -121,6 +121,11 @@ public final class ForgeSourcePacketTap implements AutoCloseable {
             ctx.write(msg,promise);
         }
     }
+    /** ForgeGradle test-only passive observer construction; no Minecraft state. */
+    static ChannelDuplexHandler diagnosticObserver(SourcePacketReadOnlyQueue q){
+        if(q==null)throw new IllegalArgumentException("Missing passive packet queue");
+        return new Observer(q);
+    }
     /**
      * Call only from Minecraft client tick. Attaches asynchronously on
      * Netty event loop, never blocks a frame while mutating the pipeline.

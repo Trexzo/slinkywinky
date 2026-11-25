@@ -8,6 +8,13 @@ buildscript {
     }
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
+repositories {
+    mavenCentral()
+}
+dependencies {
+    // R340: execute the real Netty EmbeddedChannel traffic identity tests.
+    testCompile 'junit:junit:4.13.2'
+}
 
 // This is an intentionally separate, read-only integration experiment.
 sourceCompatibility = targetCompatibility = '1.8'

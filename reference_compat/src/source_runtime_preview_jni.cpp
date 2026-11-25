@@ -88,9 +88,9 @@ struct Session {
 std::mutex mutex;
 std::map<jlong,std::unique_ptr<Session>> sessions;
 jlong next_id=1;
-static constexpr int bits_by_op[9]={12,4,12,4,15,1,12,1,2};
-static constexpr int vals_by_op[9]={7,1,6,4,7,20,1,0,0};
-static constexpr unsigned event_by_op[9]={18,2,18,3,0,3,25,23,17};
+static constexpr int bits_by_op[10]={12,4,12,4,15,1,12,1,2,0};
+static constexpr int vals_by_op[10]={7,1,6,4,7,20,1,0,0,0};
+static constexpr unsigned event_by_op[10]={18,2,18,3,0,3,25,23,17,1};
 std::array<double,8> dispatch(Session& s,int op,
                                const std::vector<jint>& bits,
                                const std::vector<jdouble>& vals){
@@ -272,6 +272,18 @@ std::array<double,8> dispatch(Session& s,int op,
         result[3]=d.decision.drain_stale_keyboard_events;
         break;
     }
+    case 9:{
+        // Original Timer Range source event1 is outgoing packet gating.
+        // This JNI opcode merely observes the C++ source hold flag;
+        // no actual on-wire packet is delayed, retained or cancelled.
+        TimerRangeSourcePacketPayload p{};
+        f.timer_range_source_packet=p;
+        require(s.bridge.dispatch(f),"Timer Range event1 denied");
+        const auto& d=*f.timer_range_source_packet;
+        result[2]=d.executions;
+        result[3]=d.hold_packets;
+        break;
+    }
     }
     for(double x:result)require(std::isfinite(x),"Nonfinite source JNI output");
     return result;
@@ -311,7 +323,7 @@ Java_dev_slinkywinky_SourceRuntimePreview_nativeObserve(
     if(nv)env->GetDoubleArrayRegion(values,0,static_cast<jsize>(nv),v.data());
     if(env->ExceptionCheck())return nullptr;
     try {
-        require(op>=0&&op<9,"Unknown source event opcode");
+        require(op>=0&&op<10,"Unknown source event opcode");
         require(nb==static_cast<std::size_t>(bits_by_op[op])&&
                 nv==static_cast<std::size_t>(vals_by_op[op]),
                 "Source event ABI shape mismatch");

@@ -226,6 +226,16 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                         new double[]{0,o.x,o.y,o.z});
                     if(r.sourceEvent!=3)throw new IllegalStateException("Wrong source egress phase");
                     ++outgoing;++callbacks;
+                    // Timer Range's original event1 is invoked for every
+                    // outgoing packet. The result is NOT an on-wire verdict:
+                    // this packet was already forwarded unchanged by Netty.
+                    SourceRuntimePreview.Receipt timerPacket=nativePreview.observe(
+                        worldNumber,playerNumber,generation,tick,
+                        SourceRuntimePreview.TIMER_RANGE_PACKET,
+                        new int[0],new double[0]);
+                    if(timerPacket.sourceEvent!=1)
+                        throw new IllegalStateException("Wrong source Timer Range packet phase");
+                    ++callbacks;
                     final int inv=o.kind==SourcePacketReadOnlyQueue.INV_OPEN?1:
                         o.kind==SourcePacketReadOnlyQueue.INV_CLICK?2:
                         o.kind==SourcePacketReadOnlyQueue.INV_CLOSE?3:-1;

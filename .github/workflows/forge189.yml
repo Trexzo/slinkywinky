@@ -15,6 +15,8 @@ on:
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
+      - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
+      - 'experimental/forge189/build.gradle'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
@@ -41,6 +43,8 @@ on:
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
+      - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
+      - 'experimental/forge189/build.gradle'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeClutchWorldPort.java'
@@ -74,6 +78,17 @@ jobs:
           cache-disabled: true
       - name: Build experimental Forge 1.8.9 JAR
         run: gradle --no-daemon -p experimental/forge189 build --stacktrace
+      - name: Verify four real Netty EmbeddedChannel pass-through tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xml=experimental/forge189/build/test-results/TEST-dev.slinkywinky.forge.ForgeSourcePacketTapEmbeddedTest.xml
+          test -f "$xml"
+          test "$(grep -c '<testcase' "$xml")" -eq 4
+          if grep -Eq '<failure|<error' "$xml"; then
+            echo "R340 Netty identity and overflow tests failed" >&2; exit 1
+          fi
+          echo R340_EMBEDDED_CHANNEL_ORIGINAL_PACKET_IDENTITY_PASS
       - name: Check packaged classes
         shell: bash
         run: |
@@ -109,6 +124,9 @@ jobs:
               exit 1
             fi
           done
+          if grep -Fq 'ForgeSourcePacketTapEmbeddedTest.class' forge-preview-contents.txt; then
+            echo 'R340 test class leaked into production Forge jar' >&2; exit 1
+          fi
           if grep -Eq 'dev/slinkywinky/(NativeSmoke|HostSmoke)\.class' forge-preview-contents.txt; then
             echo 'Smoke-test mains should not be in the Forge mod JAR' >&2; exit 1
           fi

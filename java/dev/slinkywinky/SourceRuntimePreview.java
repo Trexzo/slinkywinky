@@ -42,10 +42,10 @@ public final class SourceRuntimePreview implements AutoCloseable {
     public static final int BACKTRACK_TICK=0,BACKTRACK_PACKET=1,
         LAG_RANGE_TICK=2,LAG_RANGE_PACKET=3,TIMER_RANGE_TICK=4,
         TIMER_RANGE_FRAME=5,INV_WALK_TICK=6,INV_WALK_PACKET=7,
-        INV_WALK_FLUSH=8;
-    private static final int[] BIT_LENGTHS={12,4,12,4,15,1,12,1,2};
-    private static final int[] FIELD_LENGTHS={7,1,6,4,7,20,1,0,0};
-    private static final int[] SOURCE_EVENTS={18,2,18,3,0,3,25,23,17};
+        INV_WALK_FLUSH=8,TIMER_RANGE_PACKET=9;
+    private static final int[] BIT_LENGTHS={12,4,12,4,15,1,12,1,2,0};
+    private static final int[] FIELD_LENGTHS={7,1,6,4,7,20,1,0,0,0};
+    private static final int[] SOURCE_EVENTS={18,2,18,3,0,3,25,23,17,1};
     private final Thread owner=Thread.currentThread();
     private long handle;
     public SourceRuntimePreview(){

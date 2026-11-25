@@ -53,6 +53,10 @@ public final class SourceRuntimePreviewSmoke {
         r=s.observe(w,p,g,3,5,new int[]{1},timerFrame());
         eq(r.at(3),1,"Timer Range native raycast burst proposed");
         eq(r.at(4),1,"Timer Range freeze-before timer proposal");
+        r=s.observe(w,p,g,3,SourceRuntimePreview.TIMER_RANGE_PACKET,
+            new int[0],new double[0]);
+        eq(r.at(3),1,"Original Timer Range source event1 reports packet-hold proposal");
+        // A hypothetical packet decision is not a real network mutation.
         r=s.observe(w,p,g,4,6,inv(),new double[]{3});
         eq(r.at(2),1,"Inv Walk native tick callback");
         r=s.observe(w,p,g,4,7,new int[]{1},new double[]{});
