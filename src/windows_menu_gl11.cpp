@@ -8,6 +8,7 @@
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_hit_test.hpp"
 #include "slinkywinky/menu_bitmap_font.hpp"
+#include "slinkywinky/menu_utf8.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/menu_expander_geometry.hpp"
 #include "slinkywinky/menu_bind_preview.hpp"
@@ -105,12 +106,14 @@ void text(std::string_view label,float x,float y,
     if(pixelScale<=0.0f || maxWidth<5.0f*pixelScale)return;
     const float advance=6.0f*pixelScale;
     const float glyphWidth=5.0f*pixelScale;
-    const auto limit=std::min<std::size_t>(label.size(),48);
+    MenuDisplayScalars scalars(label);
+    std::uint32_t point=0;
+    std::size_t i=0;
     glBegin(GL_QUADS);
-    for(std::size_t i=0;i<limit;++i) {
-        const float offset=static_cast<float>(i)*advance;
+    while(scalars.next(point)) {
+        const float offset=static_cast<float>(i++)*advance;
         if(offset+glyphWidth>maxWidth)break;
-        const auto rows=menu_ascii_glyph(label[i]);
+        const auto rows=menu_ascii_glyph(menu_ascii_display_scalar(point));
         for(unsigned row=0;row<7;++row) {
             for(unsigned col=0;col<5;++col) {
                 if((rows[row]&(1u<<(4-col)))==0u)continue;
@@ -124,6 +127,18 @@ void text(std::string_view label,float x,float y,
         }
     }
     glEnd();
+}
+
+// Fallback measurement uses the same scalar cap and advance as drawing.
+float measure_preview_text(std::string_view label,float size) noexcept {
+    const float measured=measure_menu_system_text(label,size);
+    if(measured>0.0f || label.empty())return measured;
+    if(!std::isfinite(size) || size<=0.0f || size>48.0f)return 0.0f;
+    MenuDisplayScalars scalars(label);
+    std::uint32_t point=0;
+    std::size_t count=0;
+    while(scalars.next(point))++count;
+    return static_cast<float>(count)*6.0f*size/9.0f;
 }
 
 // Four independent, hand-drawn glyphs for the read-only profile preview.
@@ -265,7 +280,7 @@ void draw_recovered_widget(const RecoveredWidget& widget,
                  15.0f,controlW-12.0f);
             if(widget.kind==RecoveredWidgetKind::Text && textFocused) {
                 const float measured=textOverride.empty()?0.0f:
-                    measure_menu_system_text(textOverride,15.0f);
+                    measure_preview_text(textOverride,15.0f);
                 const float xCaret=controlX+6.0f+
                     std::clamp(measured,0.0f,
                                std::max(0.0f,controlW-16.0f));
@@ -290,7 +305,7 @@ void draw_recovered_widget(const RecoveredWidget& widget,
             round_rect(bx,controlY,bw,20.0f,8.0f);
             rgb(0xdddddd);
             const std::string_view label(widget.label);
-            const float measured=measure_menu_system_text(label,15.0f);
+            const float measured=measure_preview_text(label,15.0f);
             const float estimated=measured>0.0f?measured:
                 static_cast<float>(label.size())*7.5f;
             const float tx=bx+std::max(8.0f,(bw-estimated)*0.5f);
@@ -512,7 +527,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
         const auto tab=static_cast<MenuTab>(i);
         std::string_view label=menu_tab_name(tab);
         const float fontPx=16.0f;
-        const float textWidth=measure_menu_system_text(label,fontPx);
+        const float textWidth=measure_preview_text(label,fontPx);
         const float fallbackWidth=label.size()*fontPx*0.62f;
         const float measured=textWidth>0?textWidth:fallbackWidth;
         const float left=menu_nav_x+static_cast<float>(i)*cell+
@@ -594,7 +609,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                  15.0f,nameInput->width-16.0f);
             if(frame.profile_name_focused) {
                 const float measured=frame.profile_name_draft.empty()?0.0f:
-                    measure_menu_system_text(frame.profile_name_draft,15.0f);
+                    measure_preview_text(frame.profile_name_draft,15.0f);
                 rgb(frame.appearance.accent_rgb);
                 quad(nameInput->x+8.0f+
                      std::clamp(measured,0.0f,nameInput->width-22.0f),
@@ -602,7 +617,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             }
             rgb(0xdddddd);
             constexpr std::string_view label="CREATE NEW PROFILE";
-            const float textW=measure_menu_system_text(label,15.0f);
+            const float textW=measure_preview_text(label,15.0f);
             text(label,create->x+
                  std::max(8.0f,(create->width-textW)*0.5f),
                  create->y+2.0f,15.0f,create->width-12.0f);
@@ -923,7 +938,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
             const auto label=menu_dropdown_option_label(
                 frame.dropdown_preview->kind,absolute,
                 frame.dropdown_preview->widget_index);
-            const float measured=measure_menu_system_text(label,15.0f);
+            const float measured=measure_preview_text(label,15.0f);
             const float fallback=static_cast<float>(label.size())*8.0f;
             const float left=popup->x+std::max(
                 4.0f,(popup->width-(measured>0?measured:fallback))*0.5f);
@@ -1009,7 +1024,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                    modal->continue_width,20.0f,8.0f);
         rgb(0xdddddd);
         const std::string_view label="Continue";
-        const float textWidth=measure_menu_system_text(label,15.0f);
+        const float textWidth=measure_preview_text(label,15.0f);
         text(label,modal->continue_x+
              std::max(8.0f,(modal->continue_width-textWidth)*0.5f),
              modal->continue_y+3.0f,15.0f,
@@ -1041,7 +1056,7 @@ bool draw_menu_gl11(const MenuRenderFrame& frame,
                    modal->continue_width,20.0f,8.0f);
         rgb(0xdddddd);
         const std::string_view action="Continue (preview only)";
-        const float measured=measure_menu_system_text(action,15.0f);
+        const float measured=measure_preview_text(action,15.0f);
         text(action,modal->continue_x+
             std::max(8.0f,(modal->continue_width-measured)*0.5f),
             modal->continue_y+3.0f,15.0f,

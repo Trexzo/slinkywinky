@@ -4,6 +4,8 @@
 #endif
 #include "slinkywinky/windows_menu_system_font.hpp"
 #include "slinkywinky/menu_glyph_metrics.hpp"
+#include "slinkywinky/menu_utf8.hpp"
+#include <utility>
 #include <windows.h>
 #include <GL/gl.h>
 #include <array>
@@ -63,34 +65,18 @@ public:
             TEXTMETRICW tm{};
             if(!GetTextMetricsW(dc_,&tm))return;
             ascent_=tm.tmAscent;
-            const MAT2 transform={ {0,1},{0,0},{0,0},{0,1} };
-            for(wchar_t c=32;c<=126;++c) {
-                GLYPHMETRICS metrics{};
-                const DWORD count=GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
-                    &metrics,0,nullptr,&transform);
-                if(count==GDI_ERROR)return;
-                Glyph& glyph=glyphs_[static_cast<std::size_t>(c-32)];
-                glyph.left=metrics.gmptGlyphOrigin.x;
-                glyph.origin_y=metrics.gmptGlyphOrigin.y;
-                const auto layout=menu_glyph_raster_layout(
-                    metrics.gmBlackBoxX,metrics.gmBlackBoxY,metrics.gmCellIncX,count);
-                if(!layout)return;
-                glyph.width=static_cast<int>(layout->width);
-                glyph.height=static_cast<int>(layout->height);
-                glyph.pitch=static_cast<int>(layout->pitch);
-                glyph.advance=static_cast<int>(layout->advance);
-                // Whitespace can have no raster bytes even when GDI
-                // reports a nonzero black box. It still advances the pen.
-                if(!count)continue;
-                glyph.coverage.resize(count);
-                const DWORD copied=GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
-                    &metrics,count,glyph.coverage.data(),&transform);
-                if(copied==GDI_ERROR || copied>count ||
-                   metrics.gmBlackBoxX!=layout->width ||
-                   metrics.gmBlackBoxY!=layout->height ||
-                   metrics.gmCellIncX!=glyph.advance ||
-                   copied<static_cast<DWORD>(glyph.pitch*glyph.height))return;
-                glyph.coverage.resize(copied);
+            for(wchar_t c=32;c<=126;++c)
+                if(!load_glyph(c,glyphs_[static_cast<std::size_t>(c-32)]))return;
+            // Optional Latin-1 glyphs must not invalidate the mandatory
+            // ASCII cache. The local font may omit individual characters.
+            for(wchar_t c=160;c<=255;++c) {
+                WORD index=0xffffu;
+                if(GetGlyphIndicesW(dc_,&c,1,&index,GGI_MARK_NONEXISTING_GLYPHS)==GDI_ERROR ||
+                   index==0xffffu)continue;
+                try {
+                    if(load_glyph(c,glyphs_[static_cast<std::size_t>(c-32)]))
+                        latin1_[static_cast<std::size_t>(c-160)]=true;
+                }catch(...) {}
             }
             ready_=true;
         } catch(...) {ready_=false;}
@@ -102,16 +88,50 @@ public:
     }
     bool ready() const noexcept {return ready_;}
     int ascent() const noexcept {return ascent_;}
-    const Glyph& glyph(unsigned char c) const noexcept {
-        return glyphs_[(c>=32 && c<=126)?c-32:static_cast<unsigned char>('?')-32];
+    const Glyph& glyph(std::uint32_t c) const noexcept {
+        if((c>=32 && c<=126)||(c>=160 && c<=255 && latin1_[c-160]))
+            return glyphs_[c-32];
+        return glyphs_[static_cast<unsigned>('?')-32];
     }
 private:
+    bool load_glyph(wchar_t c,Glyph& out) {
+        const MAT2 transform={ {0,1},{0,0},{0,0},{0,1} };
+        GLYPHMETRICS metrics{};
+        const DWORD count=GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
+            &metrics,0,nullptr,&transform);
+        if(count==GDI_ERROR)return false;
+        Glyph glyph;
+        glyph.left=metrics.gmptGlyphOrigin.x;
+        glyph.origin_y=metrics.gmptGlyphOrigin.y;
+        const auto layout=menu_glyph_raster_layout(
+            metrics.gmBlackBoxX,metrics.gmBlackBoxY,metrics.gmCellIncX,count);
+        if(!layout)return false;
+        glyph.width=static_cast<int>(layout->width);
+        glyph.height=static_cast<int>(layout->height);
+        glyph.pitch=static_cast<int>(layout->pitch);
+        glyph.advance=static_cast<int>(layout->advance);
+        // Whitespace can have no raster bytes even when GDI
+        // reports a nonzero black box. It still advances the pen.
+        if(!count){out=std::move(glyph);return true;}
+        glyph.coverage.resize(count);
+        const DWORD copied=GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
+            &metrics,count,glyph.coverage.data(),&transform);
+        if(copied==GDI_ERROR || copied>count ||
+           metrics.gmBlackBoxX!=layout->width ||
+           metrics.gmBlackBoxY!=layout->height ||
+           metrics.gmCellIncX!=glyph.advance ||
+           copied<static_cast<DWORD>(glyph.pitch*glyph.height))return false;
+        glyph.coverage.resize(copied);
+        out=std::move(glyph);
+        return true;
+    }
     HDC dc_=nullptr;
     HFONT font_=nullptr;
     HGDIOBJ old_=nullptr;
     int ascent_=20;
     bool ready_=false;
-    std::array<Glyph,95> glyphs_{};
+    std::array<Glyph,224> glyphs_{};
+    std::array<bool,96> latin1_{};
 };
 const SystemGlyphCache& font_cache() noexcept {
     // Constructed on the WGL render thread. GDI objects stay on that thread
@@ -127,9 +147,10 @@ float measure_menu_system_text(std::string_view label,float font_px) noexcept {
         return 0.0f;
     const float scale=font_px/kRasterHeight;
     float advance=0;
-    for(std::size_t i=0;i<label.size() && i<80;++i)
-        advance+=static_cast<float>(cache.glyph(
-            static_cast<unsigned char>(label[i])).advance)*scale;
+    MenuDisplayScalars scalars(label);
+    std::uint32_t point=0;
+    while(scalars.next(point))
+        advance+=static_cast<float>(cache.glyph(point).advance)*scale;
     return advance;
 }
 
@@ -147,8 +168,10 @@ bool draw_menu_system_text(std::string_view label,float x,float top,
     const float baseline=top+static_cast<float>(cache.ascent())*scale;
     float pen=0;
     glBegin(GL_QUADS);
-    for(std::size_t i=0;i<label.size() && i<80;++i) {
-        const Glyph& g=cache.glyph(static_cast<unsigned char>(label[i]));
+    MenuDisplayScalars scalars(label);
+    std::uint32_t point=0;
+    while(scalars.next(point)) {
+        const Glyph& g=cache.glyph(point);
         const float next=static_cast<float>(g.advance)*scale;
         if(pen+next>max_width)break;
         for(int row=0;row<g.height;++row) {

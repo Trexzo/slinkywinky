@@ -295,6 +295,15 @@ int main() {
         REQUIRE(measure_menu_system_text("Aim Assist",20.0f)>55.0f);
         const float spaceWidth=measure_menu_system_text(" ",20.0f);
         REQUIRE(spaceWidth>0.0f);
+        const float replacement=measure_menu_system_text("?",20.0f);
+        REQUIRE(std::fabs(measure_menu_system_text(u8"\U0001f600",20.0f)-replacement)<0.01f);
+        REQUIRE(std::fabs(measure_menu_system_text(u8"A\U0001f600B",20.0f)-
+            (measure_menu_system_text("A",20.0f)+replacement+
+             measure_menu_system_text("B",20.0f)))<0.01f);
+        REQUIRE(measure_menu_system_text(u8"\u00e5\u00e4\u00f6",20.0f)>0.0f);
+        REQUIRE(draw_menu_system_text(u8"\u00e5\u00e4\u00f6 \U0001f600",10.f,10.f,20.f,140.f));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
         REQUIRE(std::fabs(measure_menu_system_text("A A",20.0f)-
             (2.0f*measure_menu_system_text("A",20.0f)+spaceWidth))<0.01f);
         for(unsigned code=32;code<=126;++code) {

@@ -3,6 +3,7 @@
 #include "slinkywinky/menu_setting_layout.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include "slinkywinky/recovered_settings.hpp"
+#include "slinkywinky/menu_utf8.hpp"
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -12,38 +13,6 @@
 
 namespace slinkywinky {
 
-// R137: accepts exactly one well-formed printable Unicode scalar per
-// insertion. Controls, overlong UTF-8, surrogates and invalid bytes are
-// rejected; max rendered input is a bounded 128 UTF-8 bytes.
-inline bool menu_one_printable_utf8(std::string_view input) noexcept {
-    if(input.empty() || input.size()>4u)return false;
-    const auto first=static_cast<unsigned char>(input[0]);
-    std::uint32_t point=0u;
-    std::size_t length=0u;
-    if(first>=0x20u && first<=0x7Eu) {
-        point=first;length=1u;
-    } else if(first>=0xC2u && first<=0xDFu) {
-        point=first&0x1Fu;length=2u;
-    } else if(first>=0xE0u && first<=0xEFu) {
-        point=first&0x0Fu;length=3u;
-    } else if(first>=0xF0u && first<=0xF4u) {
-        point=first&0x07u;length=4u;
-    } else return false;
-    if(input.size()!=length)return false;
-    for(std::size_t i=1;i<length;++i) {
-        const auto c=static_cast<unsigned char>(input[i]);
-        if((c&0xC0u)!=0x80u)return false;
-        point=(point<<6u)|(c&0x3Fu);
-    }
-    if((length==2u && point<0x80u) ||
-       (length==3u && point<0x800u) ||
-       (length==4u && point<0x10000u) ||
-       point>0x10FFFFu ||
-       (point>=0xD800u && point<=0xDFFFu) ||
-       (point>=0x7Fu && point<=0x9Fu))
-        return false;
-    return true;
-}
 struct MenuTextFieldRect {
     float x=0.0f;
     float y=0.0f;

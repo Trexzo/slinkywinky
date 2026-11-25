@@ -8,6 +8,7 @@
 #include <commdlg.h>
 #include <GL/gl.h>
 #include "slinkywinky/menu.hpp"
+#include "slinkywinky/menu_utf8.hpp"
 #include "slinkywinky/menu_profile.hpp"
 #include "slinkywinky/menu_preview_document.hpp"
 #include "slinkywinky/menu_navigation.hpp"
@@ -1011,28 +1012,9 @@ LRESULT CALLBACK window_proc(HWND hwnd,UINT message,WPARAM wp,LPARAM lp) {
                       0xD800u)<<10u)+(unit-0xDC00u);
                 pendingTextHigh=0;
             } else pendingTextHigh=0;
-            if(scalar<0x20u || scalar==0x7Fu ||
-               (scalar>=0x80u && scalar<=0x9Fu) ||
-               scalar>0x10FFFFu)return 0;
-            std::string fragment;
-            if(scalar<0x80u) {
-                fragment.push_back(static_cast<char>(scalar));
-            } else if(scalar<0x800u) {
-                fragment.push_back(static_cast<char>(0xC0u|(scalar>>6u)));
-                fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
-            } else if(scalar<0x10000u) {
-                fragment.push_back(static_cast<char>(0xE0u|(scalar>>12u)));
-                fragment.push_back(static_cast<char>(
-                    0x80u|((scalar>>6u)&0x3Fu)));
-                fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
-            } else {
-                fragment.push_back(static_cast<char>(0xF0u|(scalar>>18u)));
-                fragment.push_back(static_cast<char>(
-                    0x80u|((scalar>>12u)&0x3Fu)));
-                fragment.push_back(static_cast<char>(
-                    0x80u|((scalar>>6u)&0x3Fu)));
-                fragment.push_back(static_cast<char>(0x80u|(scalar&0x3Fu)));
-            }
+            const auto encoded=slinkywinky::menu_encode_utf8(scalar);
+            if(!encoded.size)return 0;
+            const auto fragment=encoded.view();
             if(menu.profile_name_focused()) {
                 if(menu.append_profile_name_preview(fragment))
                     request_paint(hwnd);

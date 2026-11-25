@@ -78,17 +78,6 @@ std::uint64_t fingerprint(std::string_view value) noexcept {
     for(unsigned char c:value) {h^=c;h*=1099511628211ull;}
     return h;
 }
-bool valid_text(std::string_view value) noexcept {
-    if(value.size()>128u)return false;
-    while(!value.empty()) {
-        const auto c=static_cast<unsigned char>(value.front());
-        const std::size_t length=c<128u?1u:c<224u?2u:c<240u?3u:4u;
-        if(length>value.size() ||
-           !menu_one_printable_utf8(value.substr(0,length)))return false;
-        value.remove_prefix(length);
-    }
-    return true;
-}
 bool numeric_bounds(const RecoveredWidget& w,float value) noexcept {
     return std::isfinite(w.min_value) && std::isfinite(w.max_value) &&
         std::isfinite(w.step) && w.min_value<w.max_value && w.step>0 &&
@@ -130,7 +119,7 @@ bool record_valid(const PreviewWidgetRecord& r) noexcept {
         const auto count=menu_source_multi_count(r.widget_index);
         return count>0 && (std::get<PreviewMultiValue>(r.value).mask>>count)==0u;
     }
-    case RecoveredWidgetKind::Text:return valid_text(std::get<std::string>(r.value));
+    case RecoveredWidgetKind::Text:return menu_utf8_text_valid(std::get<std::string>(r.value));
     default:return false;
     }
 }
