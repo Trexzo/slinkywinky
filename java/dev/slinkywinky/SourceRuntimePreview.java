@@ -8,6 +8,60 @@ public final class SourceRuntimePreview implements AutoCloseable {
     private static native double[] nativeObserve(long handle,long[] identity,
                                                   int opcode,int[] bits,double[] fields);
     private static native void nativeClose(long handle);
+    private static native double[] nativeSourceBoxes(
+        long handle,long[] identity,double[] coordinates);
+    /** Two original source event6 callbacks; read-only proposals. */
+    public static final class SourceBox {
+        public final boolean draw,rotate,filled;
+        public final double x,y,z,scaleX,scaleY,scaleZ,rotationY,lineWidth;
+        public final double red,green,blue,fillAlpha;
+        private SourceBox(double[] row,int offset){
+            if(row==null||row.length!=30||offset!=0&&offset!=15)
+                throw new IllegalStateException("Malformed e6 box receipt");
+            for(int i=0;i<15;++i)
+                if(!Double.isFinite(row[offset+i]))
+                    throw new IllegalStateException("Nonfinite e6 source geometry");
+            if((row[offset]!=0&&row[offset]!=1)||
+               (row[offset+7]!=0&&row[offset+7]!=1)||
+               (row[offset+9]!=0&&row[offset+9]!=1)||
+               row[offset+4]<=0||row[offset+5]<=0||row[offset+6]<=0||
+               row[offset+10]<=0||row[offset+10]>64)
+                throw new IllegalStateException("Invalid e6 geometry flags or dimensions");
+            draw=row[offset]!=0;rotate=row[offset+7]!=0;filled=row[offset+9]!=0;
+            x=row[offset+1];y=row[offset+2];z=row[offset+3];
+            scaleX=row[offset+4];scaleY=row[offset+5];scaleZ=row[offset+6];
+            rotationY=row[offset+8];lineWidth=row[offset+10];
+            red=row[offset+11];green=row[offset+12];blue=row[offset+13];
+            fillAlpha=row[offset+14];
+            if(red<0||red>1||green<0||green>1||blue<0||blue>1||
+               fillAlpha<0||fillAlpha>1)
+                throw new IllegalStateException("Invalid e6 color/alpha");
+        }
+    }
+    public static final class SourceBoxes {
+        public final long generation,tick;
+        public final SourceBox backtrack,lagRange;
+        private SourceBoxes(long generation,long tick,double[] rows){
+            this.generation=generation;this.tick=tick;
+            backtrack=new SourceBox(rows,0);
+            lagRange=new SourceBox(rows,15);
+        }
+    }
+    public synchronized SourceBoxes observeBoxes(long world,long player,
+                                  long generation,long tick,double[] coordinates){
+        assertOwner();
+        if(world<=0||player<=0||world==player||generation<=0||tick<0||
+           coordinates==null||coordinates.length!=12)
+            throw new IllegalArgumentException("Malformed source e6 world/box identity");
+        for(double d:coordinates)
+            if(!Double.isFinite(d)||Math.abs(d)>10000000)
+                throw new IllegalArgumentException("Nonfinite source render field");
+        if(coordinates[9]<0||coordinates[9]>1)
+            throw new IllegalArgumentException("Invalid e6 partial tick");
+        return new SourceBoxes(generation,tick,nativeSourceBoxes(handle,
+            new long[]{world,player,generation,tick},coordinates.clone()));
+    }
+
     private static native long[] nativeControl(long handle,long[] identity,
                                                int moduleId,boolean enabled);
     public static final int BACKTRACK=0,LAG_RANGE=1,TIMER_RANGE=2,INV_WALK=3;

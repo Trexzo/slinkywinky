@@ -109,6 +109,8 @@ public final class ForgePreview {
     private ForgeSourcePacketTap r339Tap;
     private int r339PacketBatches;
     private long r339PacketObservations;
+    private int r341BoxFrames;
+    private boolean r341SubmittedBox;
     private long r338LastRenderNanos;
     private int r338SourceRenderSamples;
     private Object r300World,r300Owner;
@@ -180,6 +182,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r337NativeSourceTickReadOnly");
     private static final boolean R339_PACKET_READONLY =
         Boolean.getBoolean("slinkywinky.r339PacketReadOnly");
+    private static final boolean R341_SOURCE_BOX_DIAGNOSTIC =
+        Boolean.getBoolean("slinkywinky.r341SourceBoxDiagnostic");
     private static final boolean R302_LOCAL_WORLD_TEST =
         Boolean.getBoolean("slinkywinky.r302EspLocalWorldTest");
     private static final boolean R303_CHEST_RENDER =
@@ -596,6 +600,9 @@ public final class ForgePreview {
                 r301EspNative=new EspNativeReadOnlyPreview(R305_SOURCE_PHASES);
             if(R337_SOURCE_READONLY)
                 r337SourceHost=new SourceWorldReadOnlyHost();
+            if(R341_SOURCE_BOX_DIAGNOSTIC&&!R337_SOURCE_READONLY)
+                throw new IllegalStateException(
+                    "R341 diagnostic boxes require the read-only source owner");
             if(R339_PACKET_READONLY){
                 if(!R337_SOURCE_READONLY || R212_ACTION_TEST)
                     throw new IllegalStateException(
@@ -631,6 +638,8 @@ public final class ForgePreview {
             r337SourceSamples=0;
             r339PacketBatches=0;
             r339PacketObservations=0;
+            r341BoxFrames=0;
+            r341SubmittedBox=false;
             r338LastRenderNanos=0;
             r338SourceRenderSamples=0;
             r303RenderFrames=0;r303SawDraw=false;
@@ -696,7 +705,8 @@ public final class ForgePreview {
                     // Multiplayer observation is NOT an admitted source scope.
                     r337SourceHost.retire();
                 }else{
-                    final ForgeSourceWorldPort port=new ForgeSourceWorldPort(mc);
+                    final ForgeSourceWorldPort port=new ForgeSourceWorldPort(
+                        mc,R341_SOURCE_BOX_DIAGNOSTIC);
                     final SourceWorldReadOnlyHost.TickReceipt received=
                         r337SourceHost.observe(port);
                     if(received!=null && ++r337SourceSamples==1)
@@ -2090,6 +2100,44 @@ public final class ForgePreview {
      * center translations; Java only submits debug line geometry. No
      * entity/world/input/packet writes and no vanilla injector dependency.
      */
+    /**
+     * R341 opt-in original source event6 geometry through REAL JNI,
+     * rendered only in a local client world on Forge RenderWorldLastEvent.
+     * Positions are live target coordinates, not historical held positions.
+     */
+    @SubscribeEvent public void onR341SourceWorldRender(RenderWorldLastEvent event) {
+        if(!R341_SOURCE_BOX_DIAGNOSTIC||!R337_SOURCE_READONLY||
+           !enabled||r337SourceHost==null)return;
+        final Minecraft mc=Minecraft.getMinecraft();
+        if(!mc.isCallingFromMinecraftThread()||mc.theWorld==null||
+           mc.thePlayer==null||!mc.theWorld.isRemote||!mc.isSingleplayer())
+            return;
+        try {
+            final SourceRuntimePreview.SourceBoxes geometry=
+                r337SourceHost.observeBoxes(
+                    new ForgeSourceWorldPort(mc,true),event.partialTicks);
+            if(geometry==null)return;
+            ++r341BoxFrames;
+            if(mc.theWorld==null||mc.thePlayer==null||!mc.isSingleplayer())
+                throw new IllegalStateException("R341 source world replaced before GL");
+            ForgeSourceBoxDiagnosticRenderer.draw(geometry);
+            if(!r341SubmittedBox &&
+               (geometry.backtrack.draw||geometry.lagRange.draw)) {
+                r341SubmittedBox=true;
+                System.out.println("[SlinkyWinkyPreview] "+
+                    "R341_REAL_JNI_SOURCE_EVENT6_GL_SUBMITTED "+
+                    "generation="+geometry.generation+
+                    " source=current_target_diagnostic"+
+                    " remote_ghost_parity_unverified=1");
+            }
+        }catch(RuntimeException | LinkageError invalid) {
+            System.err.println("[SlinkyWinkyPreview] R341_SOURCE_E6_RENDER_FAIL "+invalid);
+            try{stop();}catch(RuntimeException cleanup){
+                System.err.println("[SlinkyWinkyPreview] R341_SOURCE_E6_CLOSE_FAIL "+cleanup);
+            }
+        }
+    }
+
     @SubscribeEvent public void onR303ChestWorldRender(RenderWorldLastEvent event) {
         if(!R303_CHEST_RENDER||!enabled||r301EspNative==null||
            r303LastReceipt==null)return;

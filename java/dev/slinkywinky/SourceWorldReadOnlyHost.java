@@ -16,6 +16,22 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public interface RenderPort extends Port {
         RenderFrame captureRender(double deltaSeconds,float partialTicks);
     }
+    public interface BoxPort extends RenderPort {
+        BoxFrame captureBoxes(float partialTicks);
+    }
+    public static final class BoxFrame {
+        private final double[] coordinates;
+        public BoxFrame(double[] coordinates){
+            if(coordinates==null||coordinates.length!=12)
+                throw new IllegalArgumentException("Source e6 needs 12 immutable values");
+            this.coordinates=coordinates.clone();
+            for(double v:this.coordinates)
+                if(!Double.isFinite(v)||Math.abs(v)>10000000)
+                    throw new IllegalArgumentException("Invalid source e6 coordinate");
+            if(this.coordinates[9]<0||this.coordinates[9]>1)
+                throw new IllegalArgumentException("Invalid source e6 partial tick");
+        }
+    }
     public static final class RenderFrame {
         final double[] values;
         final boolean swordHeld;
@@ -70,6 +86,7 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     private boolean closed,inCall;
     private TickReceipt last;
     private SourceRuntimePreview.Receipt lastRender;
+    private SourceRuntimePreview.SourceBoxes lastBoxes;
     private SourcePacketReadOnlyQueue packetIngress;
     private int lastPacketSequence;
     private long packetObservationCount;
@@ -97,8 +114,9 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public long generation(){owner();return generation;}
     public TickReceipt last(){owner();return last;}
     public SourceRuntimePreview.Receipt lastRender(){owner();return lastRender;}
+    public SourceRuntimePreview.SourceBoxes lastBoxes(){owner();return lastBoxes;}
     private void invalidate(){
-        last=null;lastRender=null;packetIngress=null;
+        last=null;lastRender=null;lastBoxes=null;packetIngress=null;
         lastPacketSequence=0;packetObservationCount=0;
         world=player=null;tick=0;
         worldNumber=playerNumber=0;
@@ -254,6 +272,33 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                                      incoming,outgoing,inventory,callbacks);
         }catch(RuntimeException | Error failed){
             failClosed();throw failed;
+        }finally{inCall=false;}
+    }
+
+    /** R341 source event6 immutable shared-camera render geometry. */
+    public SourceRuntimePreview.SourceBoxes observeBoxes(BoxPort port,float partial){
+        owner();
+        if(inCall)throw new IllegalStateException("Reentrant source box request");
+        if(port==null)throw new IllegalArgumentException("Missing source e6 Port");
+        inCall=true;
+        try{
+            if(!port.admittedClientThread())
+                throw new IllegalStateException("Foreign source e6 render thread");
+            if(world==null||player==null||last==null)return null;
+            if(port.worldIdentity()!=world||port.playerIdentity()!=player){
+                invalidate();
+                return null;
+            }
+            final BoxFrame boxes=port.captureBoxes(partial);
+            if(boxes==null)return null;
+            if(!port.admittedClientThread()||
+               port.worldIdentity()!=world||port.playerIdentity()!=player)
+                throw new IllegalStateException("Source e6 world switched midread");
+            lastBoxes=nativePreview.observeBoxes(worldNumber,playerNumber,
+                generation,tick,boxes.coordinates);
+            return lastBoxes;
+        }catch(RuntimeException | Error failure){
+            failClosed();throw failure;
         }finally{inCall=false;}
     }
 

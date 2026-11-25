@@ -15,6 +15,10 @@ on:
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
+      - 'java/dev/slinkywinky/SourceRuntimePreview.java'
+      - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
       - 'experimental/forge189/build.gradle'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -43,6 +47,10 @@ on:
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
+      - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
+      - 'java/dev/slinkywinky/SourceRuntimePreview.java'
+      - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
       - 'experimental/forge189/build.gradle'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -118,7 +126,12 @@ jobs:
             dev/slinkywinky/SourcePacketReadOnlyQueue\$Observation.class \
             dev/slinkywinky/SourcePacketReadOnlyQueue\$Batch.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$PacketReceipt.class \
-            dev/slinkywinky/forge/ForgeSourcePacketTap.class; do
+            dev/slinkywinky/forge/ForgeSourcePacketTap.class \
+            dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.class \
+            dev/slinkywinky/SourceRuntimePreview\$SourceBox.class \
+            dev/slinkywinky/SourceRuntimePreview\$SourceBoxes.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$BoxPort.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$BoxFrame.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
               echo "Required read-only Forge class missing: $class" >&2
               exit 1
@@ -161,6 +174,14 @@ jobs:
           if grep -Eq 'sendPacket\(|release\(|ReferenceCountUtil\.release|ctx\.close\(|promise\.setFailure' "$packet"; then
             echo 'R339 Netty source tap may mutate real traffic' >&2; exit 1
           fi
+          # R341: source event6 uses real JNI geometry; GL only inside opt-in diagnostic.
+          gl=experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java
+          grep -Fq 'r341SourceBoxDiagnostic' "$forge"
+          grep -Fq 'R341_REAL_JNI_SOURCE_EVENT6_GL_SUBMITTED' "$forge"
+          grep -Fq 'glPushAttrib(GL11.GL_ALL_ATTRIB_BITS)' "$gl"
+          grep -Fq 'glPopAttrib()' "$gl"
+          grep -Fq 'SourceRuntimePreview.SourceBoxes' "$host"
+          echo R341_FORGE_SOURCE_BOX_OPTIN_RENDER_PACKAGING_PASS
           echo R339_FORGE_PACKET_PASSIVE_TAP_PACKAGING_PASS
           echo R338_FORGE_SOURCE_READONLY_PACKAGING_PASS
       - name: Upload experimental Forge JAR

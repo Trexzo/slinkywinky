@@ -51,7 +51,9 @@ struct Session {
         module[3]=bridge.add({"Inv Walk",1,{{5,0},{17,0},{23,0},{25,0}},false});
         if(!bridge.bind_backtrack_source_tick(module[0])||
            !bridge.bind_backtrack_source_packet(module[0])||
+           !bridge.bind_backtrack_source_render(module[0])||
            !bridge.bind_lag_range_source_tick(module[1])||
+           !bridge.bind_lag_range_source_render(module[1])||
            !bridge.bind_lag_range_source_packet(module[1])||
            !bridge.bind_timer_range_source_tick(module[2])||
            !bridge.bind_timer_range_source_packet(module[2])||
@@ -410,5 +412,91 @@ Java_dev_slinkywinky_SourceRuntimePreview_nativeControl(
     }catch(const std::exception& e){
         java_error(env,"java/lang/IllegalStateException",e.what());
         return nullptr;
+    }
+}
+
+
+// R341: source event6 passes BOTH remote box geometry callbacks through the
+// original native ModuleExecutionBridge. Observation only; JNI never invokes GL.
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_dev_slinkywinky_SourceRuntimePreview_nativeSourceBoxes(
+    JNIEnv* env,jclass,jlong handle,jlongArray identity,jdoubleArray coordinates){
+    if(!identity||!coordinates||env->GetArrayLength(identity)!=4||
+       env->GetArrayLength(coordinates)!=12){
+        java_error(env,"java/lang/IllegalArgumentException","Invalid source box JNI shape");
+        return nullptr;
+    }
+    jlong id[4]{};
+    jdouble v[12]{};
+    env->GetLongArrayRegion(identity,0,4,id);
+    env->GetDoubleArrayRegion(coordinates,0,12,v);
+    if(env->ExceptionCheck())return nullptr;
+    try {
+        for(double d:v)require(std::isfinite(d)&&std::abs(d)<=10000000,
+                                "Nonfinite or out-of-range native source box");
+        require(v[9]>=0&&v[9]<=1,"Invalid source box partial tick");
+        jdoubleArray result=env->NewDoubleArray(30);
+        if(!result)return nullptr;
+        std::lock_guard<std::mutex> lk(mutex);
+        const auto it=sessions.find(handle);
+        if(it==sessions.end()||it->second->owner!=std::this_thread::get_id())
+            throw std::logic_error("Closed or foreign source box JNI owner");
+        Session& session=*it->second;
+        session.observe_identity(id);
+        ExecutionFrame frame{};
+        frame.event=6;frame.world_present=frame.player_present=true;
+        SourceBoxObservation o{};
+        o.previous={v[0],v[1],v[2]};
+        o.current={v[3],v[4],v[5]};
+        o.camera={v[6],v[7],v[8]};
+        o.partial_ticks=static_cast<float>(v[9]);
+        o.yaw_previous=static_cast<float>(v[10]);
+        o.yaw_current=static_cast<float>(v[11]);
+        BacktrackSourceRenderPayload back{};
+        back.observation=o;
+        back.style.color={{0.75f,0.45f,0.90f}}; // debug palette, NOT original
+        back.style.line_width=1.5f;
+        back.style.rotate=true;
+        LagRangeSourceRenderPayload lag{};
+        lag.observation=o;
+        lag.style.color={{0.25f,0.65f,1.0f}}; // debug palette, NOT original
+        lag.style.line_width=1.5f;
+        frame.backtrack_source_render=back;
+        frame.lag_range_source_render=lag;
+        require(session.bridge.dispatch(frame),"Native source e6 geometry rejected");
+        const auto& b=*frame.backtrack_source_render;
+        const auto& l=*frame.lag_range_source_render;
+        require(b.executions<=1&&l.executions<=1,
+                "Duplicate native source e6 geometry callback");
+        // A disabled module produces an empty but structurally valid
+        // draw proposal; it must NOT crash the other active module.
+
+        std::array<jdouble,30> output{};
+        const auto pack=[&](int offset,const SourceBoxProposal& p){
+            output[offset+0]=p.draw?1:0;
+            output[offset+1]=p.translate.x;
+            output[offset+2]=p.translate.y;
+            output[offset+3]=p.translate.z;
+            output[offset+4]=p.scale.x;
+            output[offset+5]=p.scale.y;
+            output[offset+6]=p.scale.z;
+            output[offset+7]=p.rotate?1:0;
+            output[offset+8]=p.rotation_y_degrees;
+            output[offset+9]=p.filled?1:0;
+            output[offset+10]=p.line_width;
+            output[offset+11]=p.color[0];
+            output[offset+12]=p.color[1];
+            output[offset+13]=p.color[2];
+            output[offset+14]=p.fill_alpha;
+        };
+        pack(0,b.decision);
+        pack(15,l.decision);
+        for(double d:output)require(std::isfinite(d),"Nonfinite source e6 geometry");
+        env->SetDoubleArrayRegion(result,0,30,output.data());
+        return result;
+    }catch(const std::invalid_argument& e){
+        java_error(env,"java/lang/IllegalArgumentException",e.what());return nullptr;
+    }catch(const std::exception& e){
+        java_error(env,"java/lang/IllegalStateException",e.what());return nullptr;
     }
 }

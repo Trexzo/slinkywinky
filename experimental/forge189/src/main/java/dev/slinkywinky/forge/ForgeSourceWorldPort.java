@@ -21,12 +21,15 @@ import org.lwjgl.input.Mouse;
  * Uses real game/player/target/key *observations*, no game writes or packets.
  * Forge ClientTick.END is NOT the original Slinky native event18 timing.
  */
-public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.RenderPort {
+public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.BoxPort {
     private final Minecraft mc;
     private final Thread owner=Thread.currentThread();
-    public ForgeSourceWorldPort(Minecraft minecraft){
+    private final boolean debugBoxSettings;
+    public ForgeSourceWorldPort(Minecraft minecraft){this(minecraft,false);}
+    public ForgeSourceWorldPort(Minecraft minecraft,boolean debugBoxSettings){
         if(minecraft==null)throw new IllegalArgumentException("Minecraft unavailable");
         mc=minecraft;
+        this.debugBoxSettings=debugBoxSettings;
     }
     @Override public boolean admittedClientThread(){
         return Thread.currentThread()==owner&&
@@ -47,6 +50,32 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Rende
         int code=key.getKeyCode();
         return code>0&&code<256&&Keyboard.isKeyDown(code)?1:0;
     }
+    @Override public SourceWorldReadOnlyHost.BoxFrame captureBoxes(float partial){
+        if(!admittedClientThread()||worldIdentity()==null)
+            throw new IllegalStateException("R341 source box needs owned local world");
+        final WorldClient world=mc.theWorld;
+        final EntityPlayerSP self=mc.thePlayer;
+        final MovingObjectPosition look=mc.objectMouseOver;
+        final Entity entity=look==null?null:look.entityHit;
+        if(!(entity instanceof EntityLivingBase)||entity==self||
+           entity.isDead||entity.worldObj!=world)return null;
+        final EntityLivingBase target=(EntityLivingBase)entity;
+        final net.minecraft.client.renderer.entity.RenderManager camera=
+            mc.getRenderManager();
+        if(camera==null)throw new IllegalStateException("Missing e6 camera");
+        // This uses current target client positions, NOT an original
+        // backtracked server position. It is diagnostics only.
+        final double[] values={
+            target.lastTickPosX,target.lastTickPosY,target.lastTickPosZ,
+            target.posX,target.posY,target.posZ,
+            camera.viewerPosX,camera.viewerPosY,camera.viewerPosZ,
+            partial,target.prevRotationYaw,target.rotationYaw
+        };
+        if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
+            throw new IllegalStateException("World changed during e6 capture");
+        return new SourceWorldReadOnlyHost.BoxFrame(values);
+    }
+
     @Override public SourceWorldReadOnlyHost.RenderFrame captureRender(
             double dt,float partial){
         if(!admittedClientThread()||worldIdentity()==null)
@@ -115,11 +144,12 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Rende
             // Backtrack tick: reach admission deliberately 0.
             {1,weapon?1:0,target!=null?1:0,self.ticksExisted,0,
              targetId,self.getEntityId(),target==null?0:target.hurtTime,
-             0,0,0,1},
+             0,0,debugBoxSettings?1:0,1},
             // Lag Range tick: observed target and sprint, no inferred hit.
             {1,weapon?1:0,target!=null?1:0,self.isSprinting()?1:0,
              0,0,mc.gameSettings.thirdPersonView==0?0:1,
-             target==null?0:target.hurtTime,0,0,0,0},
+             target==null?0:target.hurtTime,0,0,0,
+             debugBoxSettings?1:0},
             // Timer Range tick: requirements tied to actual observed input.
             {1,target!=null?1:0,self.onGround?1:0,mouse?1:0,
              weapon?1:0,self.isUsingItem()?1:0,jump?1:0,
