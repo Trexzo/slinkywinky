@@ -39,21 +39,21 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | move | `sprint` | Offline C++ controller + limited Forge diagnostics | Validate host event timing, settings and world-owner lifecycle |
 | move | `strafe` | Offline C++ controller + limited Forge diagnostics | Validate host event timing, settings and world-owner lifecycle |
 | utility | `anti_bot` | Offline per-UUID history + event-0 Teams-aware bit-2 bridge (no game writes) | Validate original native event precedence and host player roster ownership |
-| utility | `auto_pot` | Not implemented | Identify state, host events and reference traces |
-| utility | `auto_rod` | Not implemented | Identify state, host events and reference traces |
-| utility | `auto_soup` | Not implemented | Identify state, host events and reference traces |
+| utility | `auto_pot` | Offline C++ controller (splash classification and activation count subset) | Recover remaining original policy and lifecycle; no host actions |
+| utility | `auto_rod` | Offline C++ controller (item classification subset) | Recover remaining original policy and lifecycle; no host actions |
+| utility | `auto_soup` | Offline C++ controller (health thresholds and item classification subset) | Recover remaining original policy and lifecycle; no host actions |
 | utility | `blink` | Not implemented | Identify state, host events and reference traces |
 | utility | `chest_stealer` | Not implemented | Identify state, host events and reference traces |
 | utility | `debug` | Offline C++ controller (typed diagnostic records from supplied observations) | Verify remaining original settings, host callbacks and runtime integration |
 | utility | `fake_lag` | Not implemented | Identify state, host events and reference traces |
 | utility | `friends` | Offline C++ controller (UUID table and relationship-bit snapshot) | Verify remaining original settings, host callbacks and runtime integration |
-| utility | `inv_manager` | Not implemented | Identify state, host events and reference traces |
+| utility | `inv_manager` | Offline C++ controller (supplied score ranking and paired-kind subset) | Recover remaining original policy and lifecycle; no host actions |
 | utility | `item_use_fix` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `no_hit_delay` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `no_item_release` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `no_use_delay` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `ping_fix` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
-| utility | `refill` | Not implemented | Identify state, host events and reference traces |
+| utility | `refill` | Offline C++ controller (27-slot classification and capacity subset) | Recover remaining original policy and lifecycle; no host actions |
 | utility | `teams` | Offline C++ Teams color policy + event-0 bridge (no relationship writes) | Validate owner-safe player-list snapshots and original callback priority |
 | utility | `timer` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | visual | `anti_debuff` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R313 records 44 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R314 records 49 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
