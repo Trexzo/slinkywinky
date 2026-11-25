@@ -27,6 +27,9 @@
       "reference_compat/tests/test_auto_weapon_controller.cpp",
       "reference_compat/tests/test_auto_weapon_weapons_bridge.cpp"
     ],
+    "blink": [
+      "reference_compat/tests/test_r327_source_policies.cpp"
+    ],
     "block_esp": [
       "reference_compat/tests/test_r315_resource_lifecycle.cpp"
     ],
@@ -51,6 +54,9 @@
     ],
     "debug": [
       "reference_compat/tests/test_r312_presentation_state.cpp"
+    ],
+    "fake_lag": [
+      "reference_compat/tests/test_r327_source_policies.cpp"
     ],
     "fast_accel": [
       "reference_compat/tests/test_fast_accel_bridge.cpp"
@@ -96,6 +102,9 @@
     ],
     "keep_sprint": [
       "reference_compat/tests/test_keep_sprint_bridge.cpp"
+    ],
+    "knockback_delay": [
+      "reference_compat/tests/test_r327_source_policies.cpp"
     ],
     "mod_overlay": [
       "reference_compat/tests/test_r312_presentation_state.cpp"
@@ -149,6 +158,9 @@
     "sprint": [
       "reference_compat/tests/test_sprint_bridge.cpp",
       "reference_compat/tests/test_sprint_observation_preview.cpp"
+    ],
+    "sprint_reset": [
+      "reference_compat/tests/test_r327_source_policies.cpp"
     ],
     "strafe": [
       "reference_compat/tests/test_strafe_bridge.cpp"
