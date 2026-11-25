@@ -189,6 +189,12 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
             if(readWorld!=world||readPlayer!=player){
                 if(generation==Long.MAX_VALUE||tokenSequence>Long.MAX_VALUE-2)
                     throw new IllegalStateException("Source generation exhausted");
+                // A direct ClientTick world/player replacement must retire
+                // packet channel identity, historical UUID/positions and
+                // old JNI receipts, EVEN if no render/packet callback ran
+                // between the two worlds. Otherwise old entity-ID history
+                // can silently survive a dimension/world transition.
+                invalidate();
                 ++generation;
                 world=readWorld;player=readPlayer;tick=0;
                 worldNumber=++tokenSequence;playerNumber=++tokenSequence;
