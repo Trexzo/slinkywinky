@@ -7,12 +7,21 @@ static void check(bool v,const char* m){if(!v)throw std::runtime_error(m);}
 int main(){
 try{
     ModuleExecutionBridge bridge;
-    const auto bk=bridge.add({"Backtrack",0,{{2,0},{6,0},{18,20}},false});
-    const auto lg=bridge.add({"Lag Range",0,{{3,0},{6,0},{15,0},{18,10}},false});
-    const auto tr=bridge.add({"Timer Range",0,{{0,2},{1,0},{3,0},{5,0}},false});
-    const auto iw=bridge.add({"Inv Walk",1,{{5,0},{17,0},{23,0},{25,5}},false});
+    const auto bk=bridge.add({"Backtrack",0,{{2,0},{6,0},{18,0}},false});
+    const auto lg=bridge.add({"Lag Range",0,{{3,-100},{6,0},{15,0},{18,0}},false});
+    const auto tr=bridge.add({"Timer Range",0,{{0,-100},{1,0},{3,0},{5,0}},false});
+    const auto iw=bridge.add({"Inv Walk",1,{{5,0},{17,0},{23,0},{25,0}},false});
     const auto malformed=bridge.add({"Backtrack Wrong",0,{{18,0}},false});
     check(!bridge.bind_backtrack_source_tick(malformed),"deny wrong owner");
+    ModuleExecutionBridge wrong_priorities;
+    const auto invalid_lag=wrong_priorities.add(
+        {"Lag Range",0,{{3,0},{6,0},{15,0},{18,0}},false});
+    check(!wrong_priorities.bind_lag_range_source_tick(invalid_lag),
+          "reject incorrect original packet callback priority");
+    const auto invalid_timer=wrong_priorities.add(
+        {"Timer Range",0,{{0,0},{1,0},{3,0},{5,0}},false});
+    check(!wrong_priorities.bind_timer_range_source_tick(invalid_timer),
+          "reject incorrect original tick callback priority");
     check(!bridge.bind_inv_walk_source_tick(bk),"deny wrong category");
     check(bridge.bind_backtrack_source_tick(bk),"bind backtrack exact row");
     check(bridge.bind_lag_range_source_tick(lg),"bind lag exact row");

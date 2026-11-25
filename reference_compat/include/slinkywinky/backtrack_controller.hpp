@@ -19,11 +19,12 @@ struct BacktrackSample {
     double distance_sq=0;
     double real_position_minus_shown_distance=0;
 };
-enum class BacktrackPacketType { other, target_status, update_health, sound_effect, self_velocity, teleport };
+enum class BacktrackPacketType { other, target_status, update_health, sound_effect, entity_velocity, teleport };
 struct BacktrackPacketSample {
     BacktrackPacketType kind=BacktrackPacketType::other;
     std::int64_t held_ms=0;
     int sequence=0;
+    int entity_id=0; // status/velocity target: source compares exact entity IDs
     bool prior_verdict_zero=true;
 };
 enum class BacktrackPacketVerdict { unchanged, hold, pass_feedback };
@@ -84,13 +85,15 @@ public:
     BacktrackPacketProposal packet(const BacktrackPacketSample& p) noexcept {
         BacktrackPacketProposal out{};
         if(!active_)return out;
-        if(p.kind==BacktrackPacketType::target_status ||
+        if((p.kind==BacktrackPacketType::target_status &&
+            p.entity_id==target_id_) ||
            p.kind==BacktrackPacketType::update_health||
            p.kind==BacktrackPacketType::sound_effect){
             out.verdict=BacktrackPacketVerdict::pass_feedback;return out;
         }
         if(p.kind==BacktrackPacketType::teleport ||
-           (settings_.disable_on_hit&&p.kind==BacktrackPacketType::self_velocity)){
+           (settings_.disable_on_hit&&p.kind==BacktrackPacketType::entity_velocity &&
+            p.entity_id==own_id_)){
             active_=false;render_box_=false;out.stopped=true;return out;
         }
         if(p.held_ms<=static_cast<std::int64_t>(settings_.delay_ms)){

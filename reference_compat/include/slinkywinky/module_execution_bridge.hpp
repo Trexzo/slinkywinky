@@ -478,12 +478,12 @@ public:
     }
 
 
-    // R330: original candidate callback slot membership only, not priorities.
+    // R331: original candidate callback slots AND exact priorities, SHA-pinned data.
     // Source +0x168 => event 18; +0x48 => event 0; +0x1d8 => event 25.
     // These are offline value-only tick adapters; non-tick subscriptions
     // remain unbound until their packet/frame ownership is independently proven.
     bool bind_backtrack_source_tick(std::size_t id) {
-        if(!matches_source_row(id,"Backtrack",0,{2,6,18}))return false;
+        if(!matches_source_row(id,"Backtrack",0,{{2,0},{6,0},{18,0}}))return false;
         return bind(id,18,[this](const Delivery&,ExecutionFrame& frame) {
             if(!frame.backtrack_source_tick)return;
             auto& p=*frame.backtrack_source_tick;
@@ -495,7 +495,7 @@ public:
         });
     }
     bool bind_lag_range_source_tick(std::size_t id) {
-        if(!matches_source_row(id,"Lag Range",0,{3,6,15,18}))return false;
+        if(!matches_source_row(id,"Lag Range",0,{{3,-100},{6,0},{15,0},{18,0}}))return false;
         return bind(id,18,[this](const Delivery&,ExecutionFrame& frame) {
             if(!frame.lag_range_source_tick)return;
             auto& p=*frame.lag_range_source_tick;
@@ -507,7 +507,7 @@ public:
         });
     }
     bool bind_timer_range_source_tick(std::size_t id) {
-        if(!matches_source_row(id,"Timer Range",0,{0,1,3,5}))return false;
+        if(!matches_source_row(id,"Timer Range",0,{{0,-100},{1,0},{3,0},{5,0}}))return false;
         return bind(id,0,[this](const Delivery&,ExecutionFrame& frame) {
             if(!frame.timer_range_source_tick)return;
             auto& p=*frame.timer_range_source_tick;
@@ -517,7 +517,7 @@ public:
         });
     }
     bool bind_inv_walk_source_tick(std::size_t id) {
-        if(!matches_source_row(id,"Inv Walk",1,{5,17,23,25}))return false;
+        if(!matches_source_row(id,"Inv Walk",1,{{5,0},{17,0},{23,0},{25,0}}))return false;
         return bind(id,25,[this](const Delivery&,ExecutionFrame& frame) {
             if(!frame.inv_walk_source_tick)return;
             auto& p=*frame.inv_walk_source_tick;
@@ -2523,16 +2523,18 @@ public:
 
 private:
     bool matches_source_row(std::size_t id,const char* name,unsigned category,
-                            std::initializer_list<unsigned> slots) const {
+                            std::initializer_list<std::pair<unsigned,int>> slots) const {
         if(stopped_||active_frame_||id>=definitions_.size()||
            definitions_[id].name!=name||
            definitions_[id].category!=category||
            definitions_[id].subscriptions.size()!=slots.size())return false;
-        for(unsigned e:slots){
-            if(e>=kEventSlots)return false;
+        for(const auto& expected:slots){
+            if(expected.first>=kEventSlots)return false;
             bool found=false;
             for(const auto& s:definitions_[id].subscriptions)
-                if(s.event==e){found=true;break;}
+                if(s.event==expected.first&&s.priority==expected.second){
+                    found=true;break;
+                }
             if(!found)return false;
         }
         return true;

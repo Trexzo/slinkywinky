@@ -32,8 +32,19 @@ try{
     require(d.sample_released_movement,"release tracking");
     require(!back.packet(bp).sample_released_movement,"single release tracking");
     bp.kind=BacktrackPacketType::target_status;
+    bp.entity_id=7;bp.held_ms=50;
     require(back.packet(bp).verdict==BacktrackPacketVerdict::pass_feedback,
-            "target hurt feedback passes");
+            "matching target hurt feedback passes");
+    bp.entity_id=1234;
+    require(back.packet(bp).verdict==BacktrackPacketVerdict::hold,
+            "unrelated entity status does not bypass hold");
+    bp.kind=BacktrackPacketType::entity_velocity;bp.entity_id=42;
+    require(!back.packet(bp).stopped&&back.active(),
+            "unrelated velocity does not stop target tracking");
+    bp.entity_id=2;
+    require(back.packet(bp).stopped&&!back.active(),
+            "own velocity disable-on-hit releases target");
+    back.tick(f);require(back.active(),"can restart after own velocity");
     bp.kind=BacktrackPacketType::teleport;
     require(back.packet(bp).stopped&&!back.active(),"teleport stops");
     back.tick(f);
