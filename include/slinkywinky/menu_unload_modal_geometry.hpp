@@ -1,6 +1,7 @@
 #pragma once
 #include "slinkywinky/menu_render.hpp"
 #include <algorithm>
+#include <cmath>
 #include <optional>
 
 namespace slinkywinky {
@@ -15,7 +16,8 @@ struct MenuUnloadModalRect {
 };
 inline std::optional<MenuUnloadModalRect> menu_unload_modal_geometry(
         const MenuRenderFrame& frame,float width,float height) noexcept {
-    if(!frame.unload_confirmation_preview || frame.dropdown_preview ||
+    if(!std::isfinite(width) || !std::isfinite(height) ||
+       !frame.unload_confirmation_preview || frame.dropdown_preview ||
        width<320.0f || height<240.0f ||
        frame.tab==MenuTab::Count || frame.tab==MenuTab::Unload)
         return std::nullopt;

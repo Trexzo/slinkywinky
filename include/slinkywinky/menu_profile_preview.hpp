@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_render.hpp"
 #include "slinkywinky/menu_visual_geometry.hpp"
 #include <cstddef>
+#include <cmath>
 #include <string_view>
 
 namespace slinkywinky {
@@ -16,6 +17,9 @@ inline bool menu_profile_text_valid(std::string_view text,
 inline bool menu_profile_preview_valid(const MenuRenderFrame& frame,
                                        float panel_width,
                                        float panel_height) noexcept {
+    // Direct geometry callers need the same finite-dimension gate.
+    if(!std::isfinite(panel_width) || !std::isfinite(panel_height) ||
+       panel_width<=0.0f || panel_height<=0.0f)return false;
     if(frame.tab!=MenuTab::Profiles)
         return frame.profile_cards.empty() &&
                frame.profile_name_draft.empty() &&

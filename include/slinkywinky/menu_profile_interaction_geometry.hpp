@@ -2,6 +2,7 @@
 #include "slinkywinky/menu_profile_preview.hpp"
 #include "slinkywinky/menu_unload_modal_geometry.hpp"
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <string>
 
@@ -13,6 +14,12 @@ struct MenuProfileControlRect {
 };
 inline bool menu_profile_contains(const MenuProfileControlRect& rect,
                                   float x,float y) noexcept {
+    if(!std::isfinite(x) || !std::isfinite(y) ||
+       !std::isfinite(rect.x) || !std::isfinite(rect.y) ||
+       !std::isfinite(rect.width) || !std::isfinite(rect.height) ||
+       rect.width<=0.0f || rect.height<=0.0f ||
+       !std::isfinite(rect.x+rect.width) ||
+       !std::isfinite(rect.y+rect.height))return false;
     return x>=rect.x && x<rect.x+rect.width &&
            y>=rect.y && y<rect.y+rect.height;
 }
@@ -87,28 +94,22 @@ inline std::optional<MenuProfileControlRect> menu_profile_tooltip_rect(
     if(label.empty())return std::nullopt;
     const float estimatedWidth=static_cast<float>(label.size())*7.4f+10.0f;
     const float w=std::min(width-16.0f,estimatedWidth);
+    if(w<=10.0f)return std::nullopt;
+    const float right=std::max(8.0f,width-w-8.0f);
     const float x=std::clamp(icon->x+icon->width*0.5f-w*0.5f,
-                             8.0f,width-w-8.0f);
+                             8.0f,right);
     const float y=std::max(8.0f,icon->y+icon->height*0.5f-28.0f);
-    if(w<=10.0f || y+20.0f>height-8.0f)
+    if(y+20.0f>height-8.0f)
         return std::nullopt;
     return MenuProfileControlRect{x,y,w,20.0f};
 }
 inline std::optional<MenuProfileControlRect> menu_profile_action_rect(
         const MenuRenderFrame& frame,float width,float height,
         std::size_t profile_index,unsigned action) noexcept {
-    if(!menu_profile_preview_valid(frame,width,height) ||
-       frame.profile_action_preview || frame.unload_confirmation_preview ||
-       action>3u || profile_index>=frame.profile_cards.size() ||
-       (profile_index==0u && (action==1u || action==3u)))
+    if(profile_index==0u && (action==1u || action==3u))
         return std::nullopt;
-    const auto card=menu_profile_card_rect(frame,width,profile_index);
-    const float x=card.x+card.width-124.0f+
-                  static_cast<float>(action)*32.0f;
-    const float y=card.y+10.0f;
-    if(x<card.x || x+20.0f>card.x+card.width ||
-       y+20.0f>card.y+card.height)return std::nullopt;
-    return MenuProfileControlRect{x,y,20.0f,20.0f};
+    // Shared bounds for drawing and hit admission.
+    return menu_profile_icon_visual_rect(frame,width,height,profile_index,action);
 }
 inline std::optional<MenuProfileControlRect> menu_profile_input_rect(
         const MenuRenderFrame& frame,float width,float height) noexcept {

@@ -7,6 +7,7 @@
 #include "slinkywinky/menu_profile_interaction_geometry.hpp"
 #include "slinkywinky/menu_render.hpp"
 #include <cmath>
+#include <limits>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -53,6 +54,27 @@ int main() {
         CHECK(frame && menu_profile_preview_valid(
             *frame,panel->logical_width(),panel->logical_height()));
         CHECK(!frame->profile_icon_hover);
+        for(float bad:{std::numeric_limits<float>::quiet_NaN(),
+                       std::numeric_limits<float>::infinity(),
+                       -std::numeric_limits<float>::infinity(),0.f,-1.f}) {
+            CHECK(!menu_profile_preview_valid(*frame,bad,630.f));
+            CHECK(!menu_profile_preview_valid(*frame,900.f,bad));
+            CHECK(!menu_profile_icon_visual_rect(*frame,bad,630.f,0u,0u));
+            CHECK(!menu_profile_action_rect(*frame,900.f,bad,0u,0u));
+            CHECK(!menu_profile_bind_rect(*frame,bad,630.f,0u));
+            CHECK(!menu_profile_input_rect(*frame,900.f,bad));
+            CHECK(!menu_profile_create_rect(*frame,bad,630.f));
+        }
+        CHECK(menu_profile_contains({1.f,2.f,4.f,5.f},1.f,2.f));
+        CHECK(!menu_profile_contains({1.f,2.f,4.f,5.f},5.f,2.f));
+        CHECK(!menu_profile_contains({0.f,0.f,std::numeric_limits<float>::infinity(),5.f},1.f,1.f));
+        CHECK(!menu_profile_contains({0.f,0.f,-1.f,5.f},0.f,1.f));
+        CHECK(!menu_profile_contains({0.f,0.f,5.f,5.f},std::numeric_limits<float>::quiet_NaN(),1.f));
+        MenuRenderFrame bad_modal=*frame;
+        bad_modal.unload_confirmation_preview=true;
+        CHECK(menu_unload_modal_geometry(bad_modal,900.f,630.f));
+        CHECK(!menu_unload_modal_geometry(bad_modal,std::numeric_limits<float>::quiet_NaN(),630.f));
+        CHECK(!menu_unload_modal_geometry(bad_modal,900.f,std::numeric_limits<float>::infinity()));
         CHECK(!menu.set_profile_icon_hover(
             MenuProfileIconHover{999u,1u}));
         CHECK(!menu.set_profile_icon_hover(
@@ -71,6 +93,12 @@ int main() {
             const auto tooltip=menu_profile_tooltip_rect(
                 *frame,panel->logical_width(),panel->logical_height());
             CHECK(tooltip && tooltip->height==20.0f);
+            CHECK(!menu_profile_tooltip_rect(*frame,std::numeric_limits<float>::quiet_NaN(),630.f));
+            if(action==0u || action==2u) {
+                const auto admitted=menu_profile_action_rect(*frame,panel->logical_width(),panel->logical_height(),0u,action);
+                CHECK(admitted && admitted->x==icon->x && admitted->y==icon->y &&
+                      admitted->width==icon->width && admitted->height==icon->height);
+            }
             CHECK(tooltip->y>=8.0f &&
                   tooltip->y+tooltip->height<
                     panel->logical_height());
