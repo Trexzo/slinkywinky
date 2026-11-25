@@ -26,7 +26,8 @@ inline float menu_control_center_text_y(
     if(!std::isfinite(top) || !std::isfinite(height) ||
        !std::isfinite(font_size) || height<0.0f || font_size<=0.0f)
         return top;
-    return top+std::max(0.0f,(height-font_size)*0.5f);
+    const float center=top+std::max(0.0f,(height-font_size)*0.5f);
+    return std::isfinite(center)?center:top;
 }
 // Approximate hover color pending comparison to actual original screenshots.
 inline std::uint32_t menu_control_hover_tint(
@@ -36,8 +37,10 @@ inline std::uint32_t menu_control_hover_tint(
     std::uint32_t out=0;
     for(const unsigned shift:{16u,8u,0u}) {
         const auto c=(color>>shift)&255u;
-        out|=static_cast<std::uint32_t>(
-            std::lround(static_cast<float>(c)+16.0f*t))<<shift;
+        // Clamp each channel before packing; overflow must not carry into
+        // the next channel or produce a value beyond 24-bit RGB.
+        const auto channel=std::min(255L,std::lround(static_cast<float>(c)+16.0f*t));
+        out|=static_cast<std::uint32_t>(channel)<<shift;
     }
     return out;
 }

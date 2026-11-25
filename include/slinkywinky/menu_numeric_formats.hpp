@@ -2,7 +2,8 @@
 #include "slinkywinky/recovered_settings.hpp"
 #include <array>
 #include <cmath>
-#include <cstdio>
+#include <charconv>
+#include <system_error>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -163,7 +164,9 @@ inline std::optional<std::string> menu_format_numeric_values(
     unsigned values=0u;
     for(std::size_t i=0;i<format.size();) {
         if(format[i]!='%') {
-            result.push_back(format[i++]);
+            const unsigned char c=static_cast<unsigned char>(format[i++]);
+            if(c<32u || c>126u)return std::nullopt;
+            result.push_back(static_cast<char>(c));
             continue;
         }
         ++i;
@@ -182,11 +185,11 @@ inline std::optional<std::string> menu_format_numeric_values(
         const double value=values++==0u?
             static_cast<double>(first):static_cast<double>(*second);
         char number[48]{};
-        const int used=std::snprintf(
-            number,sizeof(number),"%.*f",decimals,value);
-        if(used<0 || static_cast<std::size_t>(used)>=sizeof(number))
-            return std::nullopt;
-        result+=number;
+        // Locale-independent bounded conversion; do not modify global locale.
+        const auto converted=std::to_chars(number,number+sizeof(number)-1,
+            value,std::chars_format::fixed,decimals);
+        if(converted.ec!=std::errc{})return std::nullopt;
+        result.append(number,converted.ptr);
         if(result.size()>96u)return std::nullopt;
     }
     if(values!=(second?2u:1u) || result.size()>96u)

@@ -4,11 +4,25 @@
 #include <atomic>
 #include <cstdint>
 #include <limits>
+#include <locale>
 #include <stdexcept>
 #include <thread>
 #define CHECK(c) do {if(!(c)) throw std::runtime_error("render session: " #c);}while(false)
 
 using namespace slinkywinky;
+namespace {
+class CommaDecimal : public std::numpunct<char> {
+    char do_decimal_point() const override { return ','; }
+};
+class LocaleScope {
+    std::locale previous_;
+public:
+    LocaleScope():previous_(std::locale()) {
+        std::locale::global(std::locale(std::locale::classic(),new CommaDecimal));
+    }
+    ~LocaleScope(){std::locale::global(previous_);}
+};
+}
 int main() {
     MenuState menu;
     MenuRenderSession render;
@@ -101,6 +115,12 @@ int main() {
     auto updated=render.next(editorMenu,&editor);
     CHECK(updated && updated->parameters.size()==1);
     CHECK(updated->parameters[0].caption=="Range: 4.25");
+    {
+        LocaleScope localized;
+        const auto localeFrame=render.next(editorMenu,&editor);
+        CHECK(localeFrame && localeFrame->parameters.size()==1);
+        CHECK(localeFrame->parameters[0].caption=="Range: 4.25");
+    }
     CHECK(initial->parameters[0].caption=="Range: 4.00");
     MenuState foreignMenu;
     MenuProfileBridge foreign(foreignMenu);

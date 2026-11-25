@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <locale>
 #include <sstream>
 #include <utility>
 
@@ -115,6 +116,7 @@ std::optional<MenuRenderFrame> MenuRenderSession::next(
             // Captions are made only from the first-party typed configuration.
             // Rendering later never needs access to mutable profile state.
             std::ostringstream caption;
+            caption.imbue(std::locale::classic());
             caption<<parameter->name<<": "<<std::fixed
                    <<std::setprecision(parameter->integral?0:2)
                    <<parameter->value;

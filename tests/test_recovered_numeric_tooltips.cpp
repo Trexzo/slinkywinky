@@ -44,6 +44,13 @@ int main() {
     CHECK(!menu_format_numeric_values("%.1f",
         std::numeric_limits<float>::infinity()));
     CHECK(!menu_format_numeric_values("",5.0f));
+    CHECK(!menu_format_numeric_values("line\n%.1f",5.0f));
+    CHECK(!menu_format_numeric_values(std::string("x\0%.1f",6),5.0f));
+    CHECK(menu_format_numeric_values("%.2f",-1.25f)=="-1.25");
+    CHECK(menu_format_numeric_values("%.0f",2.5f)=="2");
+    CHECK(menu_format_numeric_values("%.0f",3.5f)=="4");
+    CHECK(menu_format_numeric_values("%.3f",0.0f)=="0.000");
+    CHECK(menu_format_numeric_values("%.1f",std::numeric_limits<float>::max()).has_value());
 
     const auto& all=recovered_widget_catalog();
     std::size_t numeric=0u,covered=0u,uncovered=0u;

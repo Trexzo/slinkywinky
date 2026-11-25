@@ -27,6 +27,24 @@ int main() {
     CHECK(c.settled() && c.value().switch_hover_opacity==1.0f);
     CHECK(menu_control_hover_tint(0x404040u,1.0f)!=0x404040u);
     CHECK(menu_control_hover_tint(0x404040u,0.0f)==0x404040u);
+    CHECK(menu_control_hover_tint(0xffffffu,1.0f)==0xffffffu);
+    CHECK(menu_control_hover_tint(0xfefdfcu,1.0f)==0xffffffu);
+    CHECK(menu_control_hover_tint(0x00ff00u,1.0f)==0x10ff10u);
+    CHECK(menu_control_hover_tint(0xff0000u,1.0f)==0xff1010u);
+    CHECK(menu_control_hover_tint(0x0000ffu,1.0f)==0x1010ffu);
+    for(unsigned shift:{0u,8u,16u}) {
+        for(unsigned channel=0;channel<256;++channel) {
+            for(unsigned increment:{0u,4u,8u,12u,16u}) {
+                const auto input=channel<<shift;
+                const auto expected=(std::min(255u,channel+increment)<<shift) |
+                    (increment<<( (shift+8u)%24u )) |
+                    (increment<<( (shift+16u)%24u ));
+                CHECK(menu_control_hover_tint(input,static_cast<float>(increment)/16.f)==expected);
+            }
+        }
+    }
+    CHECK(menu_control_hover_tint(0xffffffu,2.0f)==0xffffffu);
+    CHECK(menu_control_hover_tint(0x123456u,-1.0f)==0x123456u);
     CHECK(menu_control_hover_tint(0x404040u,
         std::numeric_limits<float>::quiet_NaN())==0x404040u);
     CHECK(c.retarget(false,std::nullopt));
@@ -58,6 +76,8 @@ int main() {
     CHECK(!c.advance(-1.0f));
     CHECK(menu_control_center_text_y(10.0f,22.0f,12.0f)==15.0f);
     CHECK(menu_control_center_text_y(5.0f,10.0f,15.0f)==5.0f);
+    const float huge=std::numeric_limits<float>::max();
+    CHECK(menu_control_center_text_y(huge,huge,1.0f)==huge);
     CHECK(!menu_control_motion_valid(MenuControlMotion{385u,1.0f,1.0f}));
     CHECK(!menu_control_motion_valid(MenuControlMotion{
         std::nullopt,0.0f,1.0f,67u}));
