@@ -3,8 +3,12 @@ package dev.slinkywinky.forge;
 import dev.slinkywinky.SourceWorldReadOnlyHost;
 import dev.slinkywinky.SourceRemotePositionHistory;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.client.gui.inventory.GuiInventory;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.settings.KeyBinding;
@@ -70,6 +74,59 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
         if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
             throw new IllegalStateException("R342 history world switched");
         return sample;
+    }
+
+    /**
+     * R343: bounded 32-entity, 24-block radial history sampling.
+     * The selected crosshair target is first, then up to 31 nearest
+     * other real player entities. O(players * 31) and O(31) scratch,
+     * independent of world entity count and with no packet retention.
+     */
+    @Override public List<SourceWorldReadOnlyHost.RemoteTarget> captureRemoteTargets(){
+        if(!admittedClientThread()||worldIdentity()==null)
+            throw new IllegalStateException("R343 remote player scan requires local owner");
+        final WorldClient world=mc.theWorld;
+        final EntityPlayerSP self=mc.thePlayer;
+        final SourceWorldReadOnlyHost.RemoteTarget targeted=captureRemoteTarget();
+        final int wanted=SourceRemotePositionHistory.MAX_ENTITIES-
+                         (targeted==null?0:1);
+        final List<EntityPlayer> nearest=new ArrayList<EntityPlayer>(wanted);
+        for(Object raw:world.playerEntities){
+            if(!(raw instanceof EntityPlayer))continue;
+            final EntityPlayer candidate=(EntityPlayer)raw;
+            if(candidate==self||candidate.isDead||candidate.worldObj!=world||
+               targeted!=null&&candidate.getEntityId()==targeted.entityId)
+                continue;
+            final double distance=self.getDistanceSqToEntity(candidate);
+            if(!Double.isFinite(distance)||distance<0||distance>576.0d)continue;
+            int insertion=0;
+            for(;insertion<nearest.size();++insertion){
+                final EntityPlayer existing=nearest.get(insertion);
+                final double existingDistance=self.getDistanceSqToEntity(existing);
+                if(distance<existingDistance||
+                   distance==existingDistance&&
+                   candidate.getEntityId()<existing.getEntityId())
+                    break;
+            }
+            if(insertion<wanted){
+                nearest.add(insertion,candidate);
+                if(nearest.size()>wanted)nearest.remove(wanted);
+            }
+        }
+        final List<SourceWorldReadOnlyHost.RemoteTarget> out=
+            new ArrayList<SourceWorldReadOnlyHost.RemoteTarget>(
+                SourceRemotePositionHistory.MAX_ENTITIES);
+        if(targeted!=null)out.add(targeted);
+        for(EntityPlayer e:nearest){
+            final UUID uuid=e.getUniqueID();
+            if(uuid==null)continue;
+            out.add(new SourceWorldReadOnlyHost.RemoteTarget(e.getEntityId(),
+                uuid.getMostSignificantBits(),uuid.getLeastSignificantBits(),
+                e.serverPosX,e.serverPosY,e.serverPosZ));
+        }
+        if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
+            throw new IllegalStateException("Remote player batch changed world");
+        return Collections.unmodifiableList(out);
     }
 
     @Override public SourceWorldReadOnlyHost.BoxFrame captureHistoricalBoxes(

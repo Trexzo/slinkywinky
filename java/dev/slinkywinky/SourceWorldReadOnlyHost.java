@@ -1,5 +1,9 @@
 package dev.slinkywinky;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+
 /**
  * R337: an actual client-thread observation owner for the four original-table
  * source modules. Port is implemented by Forge189; no game classes here.
@@ -22,6 +26,13 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     /** R342 only client-applied serverPos fixed-point coordinates. */
     public interface HistoryPort extends BoxPort {
         RemoteTarget captureRemoteTarget();
+        // Java8-compatible default retains all earlier owner/JNI fixtures.
+        default List<RemoteTarget> captureRemoteTargets(){
+            RemoteTarget single=captureRemoteTarget();
+            return single==null?
+                Collections.<RemoteTarget>emptyList():
+                Collections.singletonList(single);
+        }
         BoxFrame captureHistoricalBoxes(float partialTicks,
                      SourceRemotePositionHistory.Historical history);
     }
@@ -197,14 +208,22 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                     generation,tick,names[i],frame.bits[i],frame.fields[i]);
             }
             if(port instanceof HistoryPort){
-                RemoteTarget sample=((HistoryPort)port).captureRemoteTarget();
-                if(sample!=null){
+                final List<RemoteTarget> samples=
+                    ((HistoryPort)port).captureRemoteTargets();
+                if(samples==null||
+                   samples.size()>SourceRemotePositionHistory.MAX_ENTITIES)
+                    throw new IllegalStateException("Unbounded remote history batch");
+                final HashSet<Integer> unique=new HashSet<Integer>();
+                final long sampleTime=System.nanoTime();
+                for(RemoteTarget sample:samples){
+                    if(sample==null||!unique.add(sample.entityId))
+                        throw new IllegalStateException("Duplicate/null remote entity batch");
                     if(!port.admittedClientThread()||
                        port.worldIdentity()!=world||port.playerIdentity()!=player)
                         throw new IllegalStateException("History target world changed");
                     positionHistory.applied(sample.entityId,
                         sample.uuidHigh,sample.uuidLow,sample.serverX,
-                        sample.serverY,sample.serverZ,System.nanoTime());
+                        sample.serverY,sample.serverZ,sampleTime);
                 }
             }
             last=new TickReceipt(generation,tick,result);

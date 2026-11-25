@@ -590,6 +590,15 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R343: 32 bounded nearby remote-player histories per real Java8/JNI tick.
+    add_test(NAME r343_java8_remote_history_batch_jni COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r343_player_history_batch_jni.cmake)
+    set_tests_properties(r343_java8_remote_history_batch_jni PROPERTIES TIMEOUT 40)
     # R342: client-applied remote serverPos history and native e6 ownership.
     add_test(NAME r342_java8_serverpos_historical_e6_jni COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
