@@ -61,17 +61,17 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | visual | `chams` | Offline C++ original relationship mask + Graphics begin/end policy | Recover actual RenderConstants offsets and verify vanilla render-entity invocation/restore |
 | visual | `chest_esp` | Offline source event-0 collector + event-6 draw-plan (no GL or game hookup) | Validate Forge loaded-tile snapshots, GUI settings and renderer integration |
 | visual | `free_look` | Offline C++ controller + event-13 bridge (no game camera writes) | Verify event priority, settings and in-game camera restoration |
-| visual | `gui` | Not implemented | Identify state, host events and reference traces |
+| visual | `gui` | Offline C++ controller (lifecycle and appearance intent model) | Verify original rendering, remaining settings and host callbacks |
 | visual | `indicators` | Offline C++ controller (bounded projectile label collection) | Verify remaining original settings, host callbacks and runtime integration |
 | visual | `item_esp` | Offline source event-18 collection + item count-merging model (no rendering) | Verify Forge item snapshots, Java count text and draw integration |
 | visual | `mod_overlay` | Offline C++ controller (entry visibility and fade lifecycle) | Verify remaining original settings, host callbacks and runtime integration |
-| visual | `name_tags` | Not implemented | Identify state, host events and reference traces |
+| visual | `name_tags` | Offline C++ controller (structured label components and roster filters) | Verify original rendering, remaining settings and host callbacks |
 | visual | `no_hurt_cam` | Offline C++ field-lifecycle model (no live writes) | Find original pre-render hook; test old-player restore in isolated world |
 | visual | `notifications` | Offline C++ controller (bounded message queue and toggle batching) | Verify authenticated callback dispatch, settings and original drawing |
 | visual | `player_esp` | Offline source event-18 row/health/sort model (no projection or rendering) | Authenticate Forge player snapshots, 2D/3D renderer and live source colors |
-| visual | `pointers` | Not implemented | Identify state, host events and reference traces |
-| visual | `trajectories` | Not implemented | Identify state, host events and reference traces |
+| visual | `pointers` | Offline C++ controller (source scalar style arithmetic only) | Verify original rendering, remaining settings and host callbacks |
+| visual | `trajectories` | Offline C++ controller (launch selection and bounded free-flight diagnostic) | Verify original rendering, remaining settings and host callbacks |
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R312 records 40 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R313 records 44 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
