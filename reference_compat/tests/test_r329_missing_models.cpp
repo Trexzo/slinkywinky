@@ -151,8 +151,13 @@ try{
             "moving keys suspended during queued clicks");
     require(inv.inventory_tick(true,true).drain_stale_keyboard_events&&
             inv.queued()==0,"flush after replay settled");
+    for(int i=0;i<2;++i){
+        it=inv.tick(ii);
+        require(it.update_keys&&!it.pressed[3],"recent click suppresses keys");
+    }
     it=inv.tick(ii);
-    require(it.update_keys&&it.pressed[3],"restore physical key");
+    require(it.update_keys&&it.pressed[3]&&it.close_on_server,
+            "keys restored after configured stop duration");
     ii.screen=InvWalkScreen::none;
     it=inv.tick(ii);
     require(it.update_keys&&it.pressed[3],"closed screen restores key once");
