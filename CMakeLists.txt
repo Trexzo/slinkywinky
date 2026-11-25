@@ -22,6 +22,11 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R312: combined offline state and presentation fixtures.
+  add_executable(slinkywinky_r312_presentation_tests reference_compat/tests/test_r312_presentation_state.cpp)
+  target_include_directories(slinkywinky_r312_presentation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_r312_presentation_tests PRIVATE cxx_std_17)
+  add_test(NAME r312_four_offline_controllers COMMAND slinkywinky_r312_presentation_tests)
   # R310: offline Notifications state/lifecycle only.
   add_executable(slinkywinky_notifications_source_tests
     reference_compat/tests/test_notifications_controller.cpp)

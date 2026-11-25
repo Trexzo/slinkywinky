@@ -44,9 +44,9 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | utility | `auto_soup` | Not implemented | Identify state, host events and reference traces |
 | utility | `blink` | Not implemented | Identify state, host events and reference traces |
 | utility | `chest_stealer` | Not implemented | Identify state, host events and reference traces |
-| utility | `debug` | Not implemented | Identify state, host events and reference traces |
+| utility | `debug` | Offline C++ controller (typed diagnostic records from supplied observations) | Verify remaining original settings, host callbacks and runtime integration |
 | utility | `fake_lag` | Not implemented | Identify state, host events and reference traces |
-| utility | `friends` | Not implemented | Identify state, host events and reference traces |
+| utility | `friends` | Offline C++ controller (UUID table and relationship-bit snapshot) | Verify remaining original settings, host callbacks and runtime integration |
 | utility | `inv_manager` | Not implemented | Identify state, host events and reference traces |
 | utility | `item_use_fix` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | utility | `no_hit_delay` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
@@ -62,9 +62,9 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | visual | `chest_esp` | Offline source event-0 collector + event-6 draw-plan (no GL or game hookup) | Validate Forge loaded-tile snapshots, GUI settings and renderer integration |
 | visual | `free_look` | Offline C++ controller + event-13 bridge (no game camera writes) | Verify event priority, settings and in-game camera restoration |
 | visual | `gui` | Not implemented | Identify state, host events and reference traces |
-| visual | `indicators` | Not implemented | Identify state, host events and reference traces |
+| visual | `indicators` | Offline C++ controller (bounded projectile label collection) | Verify remaining original settings, host callbacks and runtime integration |
 | visual | `item_esp` | Offline source event-18 collection + item count-merging model (no rendering) | Verify Forge item snapshots, Java count text and draw integration |
-| visual | `mod_overlay` | Not implemented | Identify state, host events and reference traces |
+| visual | `mod_overlay` | Offline C++ controller (entry visibility and fade lifecycle) | Verify remaining original settings, host callbacks and runtime integration |
 | visual | `name_tags` | Not implemented | Identify state, host events and reference traces |
 | visual | `no_hurt_cam` | Offline C++ field-lifecycle model (no live writes) | Find original pre-render hook; test old-player restore in isolated world |
 | visual | `notifications` | Offline C++ controller (bounded message queue and toggle batching) | Verify authenticated callback dispatch, settings and original drawing |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R310 records 36 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R312 records 40 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
