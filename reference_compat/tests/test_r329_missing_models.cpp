@@ -112,6 +112,7 @@ try{
     ts.mode=TimerRangeMode::freeze_after;ts.block_while_frozen=true;
     ts.cooldown_seconds=0;
     tr.configure(ts);tr.reset_world();
+    tf.sword_held=true;
     tr.tick(tf);
     tp=tr.frame(0.01f,0,steps,true);
     require(tp.burst_planned&&tp.write_elapsed_ticks&&tp.elapsed_ticks==2&&

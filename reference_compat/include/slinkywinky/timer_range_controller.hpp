@@ -16,6 +16,7 @@ struct TimerRangeSettings{
 struct TimerRangeTick{
     bool in_game=false,target=false,player_on_ground=false,mouse=false,weapon=false;
     bool using_item=false,jumping=false,line_of_sight=false,entity_under_crosshair=false;
+    bool sword_held=false; // separate from generic accepted-weapon condition
     int target_hurt_time=0;
     double target_distance_sq=0,motion_y=0;
     float forward_input=0;
@@ -62,7 +63,7 @@ public:
         if(burst_ticks_>0){
             --burst_ticks_;
             if(burst_ticks_==0&&settings_.mode==TimerRangeMode::freeze_after){
-                start_freeze(out,f.weapon);
+                start_freeze(out,f.sword_held);
             }
             if(f.in_game&&f.target&&f.entity_under_crosshair)out.attack_click=true;
             return out;
