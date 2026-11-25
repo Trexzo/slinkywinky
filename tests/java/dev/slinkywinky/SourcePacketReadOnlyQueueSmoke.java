@@ -5,7 +5,7 @@ public final class SourcePacketReadOnlyQueueSmoke {
     private static void yes(boolean b,String msg){if(!b)throw new AssertionError(msg);}
     private static void denied(Runnable job,String msg){
         boolean refused=false;
-        try{job.run();}catch(IllegalArgumentException|IllegalStateException e){refused=true;}
+        try{job.run();}catch(IllegalArgumentException|IllegalStateException|UnsupportedOperationException e){refused=true;}
         yes(refused,msg);
     }
     public static void main(String[] ignored)throws Exception{

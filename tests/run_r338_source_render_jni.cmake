@@ -9,6 +9,7 @@ execute_process(COMMAND "${JAVA_COMPILER}" -source 8 -target 8 -encoding UTF-8
   -d "${STAGE}"
   "${PROJECT_ROOT}/java/dev/slinkywinky/SourceRuntimePreview.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/SourceWorldReadOnlyHost.java"
+  "${PROJECT_ROOT}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/SourceWorldReadOnlyHostSmoke.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/SourceWorldRenderPhaseSmoke.java"
   RESULT_VARIABLE RC OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)
