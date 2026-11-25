@@ -15,6 +15,7 @@ import dev.slinkywinky.RelationshipRosterSampler;
 import dev.slinkywinky.EspWorldSnapshotSampler;
 import dev.slinkywinky.EspNativeReadOnlyPreview;
 import dev.slinkywinky.SourceWorldReadOnlyHost;
+import dev.slinkywinky.SourceRuntimePreview;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import dev.slinkywinky.RelationshipRosterNativePreview;
 import dev.slinkywinky.RosterIsolationGate;
@@ -104,6 +105,8 @@ public final class ForgePreview {
     // R337: opt-in real Forge tick -> Java8/JNI -> native source controllers.
     private SourceWorldReadOnlyHost r337SourceHost;
     private int r337SourceSamples;
+    private long r338LastRenderNanos;
+    private int r338SourceRenderSamples;
     private Object r300World,r300Owner;
     private int r300EspSamples,r301EspSamples;
     private boolean r302ReceiptEmitted,r302CleanupDone,r302StartupFailed;
@@ -515,7 +518,7 @@ public final class ForgePreview {
             catch(IllegalStateException alreadyRetired) {
                 // A failed world admission already forced this preview closed.
             }
-            finally {r337SourceHost=null;}
+            finally {r337SourceHost=null;r338LastRenderNanos=0;}
         }
         if(r300EspSampler!=null) {r300EspSampler.close();r300EspSampler=null;}
         r302World=r302Player=null;
@@ -611,6 +614,8 @@ public final class ForgePreview {
             r278RosterSamples=0;
             r300EspSamples=r301EspSamples=0;
             r337SourceSamples=0;
+            r338LastRenderNanos=0;
+            r338SourceRenderSamples=0;
             r303RenderFrames=0;r303SawDraw=false;
             r304RenderFrames=0;r304SawItem=r304SawPlayer=false;
             r305WorldFrames=r305ScreenFrames=r305Collections=0;
@@ -1329,6 +1334,33 @@ public final class ForgePreview {
             System.out.println("[SlinkyWinkyPreview] RENDER_EVENT_PROBE_PASS frames=30");
         if(!enabled || host==null) return;
         final Minecraft mc=Minecraft.getMinecraft();
+        if(R337_SOURCE_READONLY&&r337SourceHost!=null){
+            try{
+                if(mc.theWorld!=null&&mc.thePlayer!=null&&mc.isSingleplayer()){
+                    final long now=System.nanoTime();
+                    final double delta=r338LastRenderNanos>0&&
+                        now>=r338LastRenderNanos?
+                        (now-r338LastRenderNanos)/1000000000d:0;
+                    r338LastRenderNanos=now;
+                    final SourceRuntimePreview.Receipt result=
+                        r337SourceHost.observeRender(new ForgeSourceWorldPort(mc),
+                            Math.min(0.25d,delta),event.renderTickTime);
+                    if(result!=null&&++r338SourceRenderSamples==1)
+                        System.out.println("[SlinkyWinkyPreview] "+
+                            "R338_REAL_FORGE_TIMER_SOURCE_FRAME_OBSERVED "+
+                            "worldGeneration="+result.generation+
+                            " event="+result.sourceEvent+" gameWrites=0");
+                }else r338LastRenderNanos=0;
+            }catch(RuntimeException | LinkageError sourceError){
+                System.err.println("[SlinkyWinkyPreview] "+
+                    "R338_SOURCE_RENDER_OBSERVATION_FAIL "+sourceError);
+                try{stop();}catch(RuntimeException closeError){
+                    System.err.println("[SlinkyWinkyPreview] "+
+                        "R338_SOURCE_RENDER_CLOSE_FAIL "+closeError);
+                }
+                return;
+            }
+        }
         GameHost.Frame frame=new GameHost.Frame();
         frame.monotonicMs=System.nanoTime()/1000000L;
         frame.worldToken=mc.theWorld;

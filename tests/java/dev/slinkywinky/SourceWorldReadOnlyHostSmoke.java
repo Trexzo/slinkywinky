@@ -13,7 +13,7 @@ public final class SourceWorldReadOnlyHostSmoke {
             new int[][]{
                 {1,1,1,100,90,21,42,1,0,0,0,1},
                 {1,1,1,0,0,0,0,0,0,0,0,0},
-                {1,1,1,0,1,0,0,1,0,1,0,1,1,1,0},
+                {1,1,1,1,1,0,0,1,0,1,0,1,1,1,0},
                 {1,0,0,0,0,1,0,0,0,0,1,1}
             },
             new double[][]{
@@ -23,7 +23,7 @@ public final class SourceWorldReadOnlyHostSmoke {
                 {4}
             });
     }
-    static final class Port implements SourceWorldReadOnlyHost.Port {
+    static final class Port implements SourceWorldReadOnlyHost.RenderPort {
         Object world=new Object(),player=new Object();
         boolean owner=true,swapWorld=false;
         SourceWorldReadOnlyHost.Frame current=frame();
@@ -33,6 +33,13 @@ public final class SourceWorldReadOnlyHostSmoke {
         public SourceWorldReadOnlyHost.Frame capture(){
             if(swapWorld)world=new Object();
             return current;
+        }
+        public SourceWorldReadOnlyHost.RenderFrame captureRender(double delta,
+                                                                   float partial){
+            if(swapWorld)world=new Object();
+            return new SourceWorldReadOnlyHost.RenderFrame(
+                new double[]{delta,partial,0,1.62,0,0,0,0,0,0,2.8,
+                             0,0,2.8,0,0,1,0,0.1,0},true);
         }
     }
     public static void main(String[] args)throws Exception{
@@ -46,12 +53,18 @@ public final class SourceWorldReadOnlyHostSmoke {
         ok(first.backtrack.at(3)==0,"Unknown original reach admission never guessed");
         ok(first.lagRange.at(3)==1,"Live-shaped Lag Range JNI source snapshot");
         ok(first.invWalk.at(2)==1,"Inventory callback executed");
+        SourceRuntimePreview.Receipt rendering=host.observeRender(port,0.01,0f);
+        ok(rendering!=null&&rendering.sourceEvent==3&&rendering.at(3)==1,
+           "Real JNI timer raycast from render snapshot");
+        ok(rendering.at(6)==1,"Native timer frame reports elapsed tick proposal");
         SourceWorldReadOnlyHost.TickReceipt second=host.observe(port);
         ok(second.generation==1&&second.tick==2,"Same owner keeps generation");
         port.player=new Object();
         SourceWorldReadOnlyHost.TickReceipt third=host.observe(port);
         ok(third.generation==2&&third.tick==1,"New player advances generation");
         port.world=null;
+        ok(host.observeRender(port,0.01,0f)==null,
+           "Lost world cannot dispatch render callback");
         ok(host.observe(port)==null&&host.last()==null,"Disconnected owner retires");
         port.world=new Object();
         SourceWorldReadOnlyHost.TickReceipt fourth=host.observe(port);
@@ -63,7 +76,10 @@ public final class SourceWorldReadOnlyHostSmoke {
         t.start();t.join();
         ok(foreign[0],"Wrong thread rejected");
         host.close();
+        host.close();
         deny(()->host.observe(port),"Closed source session rejected");
+        deny(()->host.observeRender(port,0.01,0f),
+             "Closed session cannot dispatch render");
 
         SourceWorldReadOnlyHost broken=new SourceWorldReadOnlyHost();
         port.swapWorld=true;
@@ -75,7 +91,7 @@ public final class SourceWorldReadOnlyHostSmoke {
         int[][] bits={
             {1,1,1,100,90,21,42,1,0,0,0,1},
             {1,1,1,0,0,0,0,0,0,0,0,0},
-            {1,1,1,0,1,0,0,1,0,1,0,1,1,1,0},
+            {1,1,1,1,1,0,0,1,0,1,0,1,1,1,0},
             {1,0,0,0,0,1,0,0,0,0,1,1}
         };
         double[][] values={

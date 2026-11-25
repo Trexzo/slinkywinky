@@ -12,6 +12,27 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
         Object playerIdentity();
         Frame capture();
     }
+    /** Render-time immutable ray input; no game objects or action sink. */
+    public interface RenderPort extends Port {
+        RenderFrame captureRender(double deltaSeconds,float partialTicks);
+    }
+    public static final class RenderFrame {
+        final double[] values;
+        final boolean swordHeld;
+        public RenderFrame(double[] values,boolean swordHeld){
+            if(values==null||values.length!=20)
+                throw new IllegalArgumentException("Expected 20 Timer Range render inputs");
+            this.values=values.clone();
+            this.swordHeld=swordHeld;
+            for(double v:this.values)
+                if(!Double.isFinite(v))
+                    throw new IllegalArgumentException("Nonfinite source render position");
+            if(this.values[0]<0||this.values[0]>60||
+               this.values[1]<0||this.values[1]>1)
+                throw new IllegalArgumentException("Source render delta/partial invalid");
+        }
+    }
+
     /** Four simultaneous, copied source controller snapshots.
      * Ordered BACKTRACK_TICK, LAG_RANGE_TICK, TIMER_RANGE_TICK, INV_WALK_TICK. */
     public static final class Frame {
@@ -48,6 +69,7 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     private long generation=0,tick=0,worldNumber=0,playerNumber=0,tokenSequence=100;
     private boolean closed,inCall;
     private TickReceipt last;
+    private SourceRuntimePreview.Receipt lastRender;
     public SourceWorldReadOnlyHost(){
         this(new SourceRuntimePreview());
     }
@@ -61,8 +83,9 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     }
     public long generation(){owner();return generation;}
     public TickReceipt last(){owner();return last;}
+    public SourceRuntimePreview.Receipt lastRender(){owner();return lastRender;}
     private void invalidate(){
-        last=null;
+        last=null;lastRender=null;
         world=player=null;tick=0;
         worldNumber=playerNumber=0;
     }
@@ -127,8 +150,39 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
             inCall=false;
         }
     }
-    @Override public void close(){
+    /** Source frame delivery is read-only, bound to the prior admitted tick. */
+    public SourceRuntimePreview.Receipt observeRender(RenderPort port,
+                                                       double dt,float partial){
         owner();
+        if(inCall)throw new IllegalStateException("Reentrant render source observer");
+        if(port==null)throw new IllegalArgumentException("Missing render port");
+        inCall=true;
+        try{
+            if(!port.admittedClientThread())
+                throw new IllegalStateException("Foreign render observer");
+            if(world==null||player==null||last==null)return null;
+            if(port.worldIdentity()!=world||port.playerIdentity()!=player){
+                invalidate();
+                return null;
+            }
+            RenderFrame render=port.captureRender(dt,partial);
+            if(render==null)return null;
+            if(!port.admittedClientThread()||
+               port.worldIdentity()!=world||port.playerIdentity()!=player)
+                throw new IllegalStateException("Source render owner switched midframe");
+            lastRender=nativePreview.observe(worldNumber,playerNumber,generation,tick,
+                SourceRuntimePreview.TIMER_RANGE_FRAME,
+                new int[]{render.swordHeld?1:0},render.values);
+            return lastRender;
+        }catch(RuntimeException | Error failure){
+            failClosed();
+            throw failure;
+        }finally{inCall=false;}
+    }
+    @Override public void close(){
+        if(Thread.currentThread()!=thread)
+            throw new IllegalStateException("Foreign Minecraft source close");
+        if(closed)return;
         if(inCall)throw new IllegalStateException("Cannot close during source delivery");
         failClosed();
     }

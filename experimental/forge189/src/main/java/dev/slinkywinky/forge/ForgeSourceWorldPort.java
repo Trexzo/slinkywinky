@@ -12,6 +12,7 @@ import net.minecraft.item.ItemAxe;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemSword;
 import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
@@ -20,7 +21,7 @@ import org.lwjgl.input.Mouse;
  * Uses real game/player/target/key *observations*, no game writes or packets.
  * Forge ClientTick.END is NOT the original Slinky native event18 timing.
  */
-public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Port {
+public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.RenderPort {
     private final Minecraft mc;
     private final Thread owner=Thread.currentThread();
     public ForgeSourceWorldPort(Minecraft minecraft){
@@ -46,6 +47,40 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Port 
         int code=key.getKeyCode();
         return code>0&&code<256&&Keyboard.isKeyDown(code)?1:0;
     }
+    @Override public SourceWorldReadOnlyHost.RenderFrame captureRender(
+            double dt,float partial){
+        if(!admittedClientThread()||worldIdentity()==null)
+            throw new IllegalStateException("R338 no admitted render owner");
+        final WorldClient world=mc.theWorld;
+        final EntityPlayerSP self=mc.thePlayer;
+        final MovingObjectPosition look=mc.objectMouseOver;
+        final Entity hovered=look==null?null:look.entityHit;
+        if(!(hovered instanceof EntityLivingBase)||hovered==self||
+           hovered.isDead||hovered.worldObj!=world)return null;
+        final EntityLivingBase target=(EntityLivingBase)hovered;
+        final Vec3 eye=self.getPositionEyes(partial);
+        final ItemStack held=self.getHeldItem();
+        final boolean sword=held!=null&&held.getItem() instanceof ItemSword;
+        final double x=target.lastTickPosX+(target.posX-target.lastTickPosX)*partial;
+        final double y=target.lastTickPosY+(target.posY-target.lastTickPosY)*partial;
+        final double z=target.lastTickPosZ+(target.posZ-target.lastTickPosZ)*partial;
+        // Original target interpolation countdown is not exposed here.
+        // The 0-step and 0.1 movement factor remain diagnostic assumptions.
+        final double[] values={
+            dt,partial,eye.xCoord,eye.yCoord,eye.zCoord,
+            self.motionX,self.motionY,self.motionZ,
+            x,y,z,target.serverPosX/32.0d,target.serverPosY/32.0d,
+            target.serverPosZ/32.0d,
+            self.rotationYaw,self.rotationPitch,
+            self.movementInput==null?0:self.movementInput.moveForward,
+            self.movementInput==null?0:self.movementInput.moveStrafe,
+            0.1d,0d
+        };
+        if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
+            throw new IllegalStateException("R338 render owner switched midread");
+        return new SourceWorldReadOnlyHost.RenderFrame(values,sword);
+    }
+
     @Override public SourceWorldReadOnlyHost.Frame capture(){
         if(!admittedClientThread()||worldIdentity()==null)
             throw new IllegalStateException("R337 local client owner unavailable");
