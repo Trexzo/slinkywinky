@@ -360,6 +360,41 @@ struct InvWalkSourceTickPayload {
     unsigned executions=0;
 };
 
+
+struct BacktrackSourcePacketPayload{
+    BacktrackPacketSample input{};
+    BacktrackPacketProposal decision{};
+    unsigned executions=0;
+};
+struct LagRangeSourcePacketPayload{
+    LagRangePacketSample input{};
+    LagRangePacketProposal decision{};
+    unsigned executions=0;
+};
+struct TimerRangeSourcePacketPayload{
+    bool hold_packets=false;
+    unsigned executions=0;
+};
+struct TimerRangeSourceFramePayload{
+    double delta_seconds=0;
+    float partial_ticks=0;
+    std::vector<TimerRangeRayStep> ray_steps{};
+    bool sword_held=false;
+    TimerRangeProposal decision{};
+    unsigned executions=0;
+};
+struct InvWalkSourcePacketPayload{
+    InvWalkPacketType kind=InvWalkPacketType::other;
+    InvWalkPacketProposal decision{};
+    unsigned executions=0;
+};
+struct InvWalkSourceFlushPayload{
+    bool flush_confirmed=false;
+    bool in_game=false;
+    InvWalkProposal decision{};
+    unsigned executions=0;
+};
+
 struct ExecutionFrame {
     unsigned event = 0;
     bool world_present = false;
@@ -415,6 +450,12 @@ struct ExecutionFrame {
     std::optional<SprintMovementPayload> sprint_movement{};
     std::optional<StrafeSnapshotPayload> strafe_snapshot{};
     std::optional<StrafeSteeringPayload> strafe_steering{};
+    std::optional<BacktrackSourcePacketPayload> backtrack_source_packet{};
+    std::optional<LagRangeSourcePacketPayload> lag_range_source_packet{};
+    std::optional<TimerRangeSourcePacketPayload> timer_range_source_packet{};
+    std::optional<TimerRangeSourceFramePayload> timer_range_source_frame{};
+    std::optional<InvWalkSourcePacketPayload> inv_walk_source_packet{};
+    std::optional<InvWalkSourceFlushPayload> inv_walk_source_flush{};
     std::optional<BacktrackSourceTickPayload> backtrack_source_tick{};
     std::optional<LagRangeSourceTickPayload> lag_range_source_tick{};
     std::optional<TimerRangeSourceTickPayload> timer_range_source_tick{};
@@ -524,6 +565,72 @@ public:
             ++p.executions;
             inv_walk_source_.configure(p.settings);
             p.decision=inv_walk_source_.tick(p.input);
+        });
+    }
+
+
+    // R332: paired callbacks share their R330 controllers and cannot bind
+    // unless an exact, priority-validated tick binding already owns the row.
+    // This is replay of packet *classification*, not a JNI/Netty interceptor.
+    bool bind_backtrack_source_packet(std::size_t id){
+        if(!matches_source_row(id,"Backtrack",0,{{2,0},{6,0},{18,0}}) ||
+           !callbacks_[id][18])return false;
+        return bind(id,2,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.backtrack_source_packet)return;
+            auto& p=*f.backtrack_source_packet;
+            ++p.executions;
+            p.decision=backtrack_source_.packet(p.input);
+        });
+    }
+    bool bind_lag_range_source_packet(std::size_t id){
+        if(!matches_source_row(id,"Lag Range",0,{{3,-100},{6,0},{15,0},{18,0}}) ||
+           !callbacks_[id][18])return false;
+        return bind(id,3,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.lag_range_source_packet)return;
+            auto& p=*f.lag_range_source_packet;
+            ++p.executions;
+            p.decision=lag_range_source_.packet(p.input);
+        });
+    }
+    bool bind_timer_range_source_packet(std::size_t id){
+        if(!matches_source_row(id,"Timer Range",0,{{0,-100},{1,0},{3,0},{5,0}}) ||
+           !callbacks_[id][0])return false;
+        return bind(id,1,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.timer_range_source_packet)return;
+            auto& p=*f.timer_range_source_packet;
+            ++p.executions;
+            p.hold_packets=timer_range_source_.packet_hold();
+        });
+    }
+    bool bind_timer_range_source_frame(std::size_t id){
+        if(!matches_source_row(id,"Timer Range",0,{{0,-100},{1,0},{3,0},{5,0}}) ||
+           !callbacks_[id][0])return false;
+        return bind(id,3,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.timer_range_source_frame)return;
+            auto& p=*f.timer_range_source_frame;
+            ++p.executions;
+            p.decision=timer_range_source_.frame(p.delta_seconds,p.partial_ticks,
+                                                  p.ray_steps,p.sword_held);
+        });
+    }
+    bool bind_inv_walk_source_packet(std::size_t id){
+        if(!matches_source_row(id,"Inv Walk",1,{{5,0},{17,0},{23,0},{25,0}}) ||
+           !callbacks_[id][25])return false;
+        return bind(id,23,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.inv_walk_source_packet)return;
+            auto& p=*f.inv_walk_source_packet;
+            ++p.executions;
+            p.decision=inv_walk_source_.packet(p.kind);
+        });
+    }
+    bool bind_inv_walk_source_flush(std::size_t id){
+        if(!matches_source_row(id,"Inv Walk",1,{{5,0},{17,0},{23,0},{25,0}}) ||
+           !callbacks_[id][25])return false;
+        return bind(id,17,[this](const Delivery&,ExecutionFrame& f){
+            if(!f.inv_walk_source_flush)return;
+            auto& p=*f.inv_walk_source_flush;
+            ++p.executions;
+            p.decision=inv_walk_source_.inventory_tick(p.flush_confirmed,p.in_game);
         });
     }
 
@@ -1828,6 +1935,12 @@ public:
             return false;
         if (frame.strafe_steering && frame.event != kStrafeSteeringEvent)
             return false;
+        if (frame.backtrack_source_packet && frame.event != 2)return false;
+        if (frame.lag_range_source_packet && frame.event != 3)return false;
+        if (frame.timer_range_source_packet && frame.event != 1)return false;
+        if (frame.timer_range_source_frame && frame.event != 3)return false;
+        if (frame.inv_walk_source_packet && frame.event != 23)return false;
+        if (frame.inv_walk_source_flush && frame.event != 17)return false;
         if (frame.backtrack_source_tick && frame.event != 18)return false;
         if (frame.lag_range_source_tick && frame.event != 18)return false;
         if (frame.timer_range_source_tick && frame.event != 0)return false;
@@ -1883,10 +1996,19 @@ public:
             static_cast<unsigned>(frame.sprint_movement.has_value()) +
             static_cast<unsigned>(frame.strafe_snapshot.has_value()) +
             static_cast<unsigned>(frame.strafe_steering.has_value()) +
+            static_cast<unsigned>(frame.backtrack_source_packet.has_value()) +
+            static_cast<unsigned>(frame.lag_range_source_packet.has_value()) +
+            static_cast<unsigned>(frame.timer_range_source_packet.has_value()) +
+            static_cast<unsigned>(frame.timer_range_source_frame.has_value()) +
+            static_cast<unsigned>(frame.inv_walk_source_packet.has_value()) +
+            static_cast<unsigned>(frame.inv_walk_source_flush.has_value()) +
             static_cast<unsigned>(frame.backtrack_source_tick.has_value()) +
             static_cast<unsigned>(frame.lag_range_source_tick.has_value()) +
             static_cast<unsigned>(frame.timer_range_source_tick.has_value()) +
             static_cast<unsigned>(frame.inv_walk_source_tick.has_value());
+        // R332 refuses combined candidate packet frames without identical
+        // underlying packet identity and provenance. Two optional fields alone
+        // are not proof that they refer to the same network packet.
         const bool combined_candidate_source_tick=
             typed_count==2 && frame.event==18 &&
             frame.backtrack_source_tick && frame.lag_range_source_tick;
@@ -2105,6 +2227,30 @@ public:
                 return false;
         }
         frame.executed_modules.clear();
+        if(frame.backtrack_source_packet){
+            frame.backtrack_source_packet->decision={};
+            frame.backtrack_source_packet->executions=0;
+        }
+        if(frame.lag_range_source_packet){
+            frame.lag_range_source_packet->decision={};
+            frame.lag_range_source_packet->executions=0;
+        }
+        if(frame.timer_range_source_packet){
+            frame.timer_range_source_packet->hold_packets=false;
+            frame.timer_range_source_packet->executions=0;
+        }
+        if(frame.timer_range_source_frame){
+            frame.timer_range_source_frame->decision={};
+            frame.timer_range_source_frame->executions=0;
+        }
+        if(frame.inv_walk_source_packet){
+            frame.inv_walk_source_packet->decision={};
+            frame.inv_walk_source_packet->executions=0;
+        }
+        if(frame.inv_walk_source_flush){
+            frame.inv_walk_source_flush->decision={};
+            frame.inv_walk_source_flush->executions=0;
+        }
         if(frame.backtrack_source_tick){
             frame.backtrack_source_tick->active=false;
             frame.backtrack_source_tick->show_box=false;

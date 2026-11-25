@@ -24,6 +24,13 @@ add_executable(slinkywinky_preview_document examples/preview_document_cli.cpp)
 target_link_libraries(slinkywinky_preview_document PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  # R332: packet + frame + GUI queue callbacks in existing source event replay.
+  add_executable(slinkywinky_r332_source_packet_tests reference_compat/tests/test_r332_packet_frame_flush_bridge.cpp)
+  target_link_libraries(slinkywinky_r332_source_packet_tests PRIVATE slinkywinky_core)
+  target_include_directories(slinkywinky_r332_source_packet_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include)
+  target_compile_features(slinkywinky_r332_source_packet_tests PRIVATE cxx_std_17)
+  add_test(NAME r332_source_packet_frame_flush_bridge COMMAND slinkywinky_r332_source_packet_tests)
   # R330: existing ModuleExecutionBridge now owns four candidate tick policies.
   add_executable(slinkywinky_r330_source_event_tests reference_compat/tests/test_r330_source_tick_bridge.cpp)
   target_link_libraries(slinkywinky_r330_source_event_tests PRIVATE slinkywinky_core)
