@@ -19,12 +19,12 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | combat | `criticals` | Not implemented | Identify state, host events and reference traces |
 | combat | `hit_select` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `hitboxes` | Offline C++ controller + event-8 bridge (no entity writes) | Authenticate native event ordering and Minecraft collision query |
-| combat | `knockback_delay` | Not implemented | Identify state, host events and reference traces |
+| combat | `knockback_delay` | Offline C++ controller (candidate transaction/velocity delay decisions; no transport) | Identify state, host events and reference traces |
 | combat | `knockback_displace` | Not implemented | Identify state, host events and reference traces |
 | combat | `lag_range` | Not implemented | Identify state, host events and reference traces |
 | combat | `piercing` | Offline C++ event-8 bridge + separate rank/blocks proposals | Verify original native event priority, real entity ray and cached weapon host state |
 | combat | `reach` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
-| combat | `sprint_reset` | Not implemented | Identify state, host events and reference traces |
+| combat | `sprint_reset` | Offline C++ controller (candidate staged key state; no live key writes) | Identify state, host events and reference traces |
 | combat | `timer_range` | Not implemented | Identify state, host events and reference traces |
 | combat | `velocity` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `weapons` | Offline C++ item/slot policy + event-26 clearing proposal | Verify source per-tick cache, host settings and real hotbar read-only snapshots |
@@ -42,10 +42,10 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | utility | `auto_pot` | Offline C++ controller (splash classification and activation count subset) | Recover remaining original policy and lifecycle; no host actions |
 | utility | `auto_rod` | Offline C++ controller (item classification subset) | Recover remaining original policy and lifecycle; no host actions |
 | utility | `auto_soup` | Offline C++ controller (health thresholds and item classification subset) | Recover remaining original policy and lifecycle; no host actions |
-| utility | `blink` | Not implemented | Identify state, host events and reference traces |
+| utility | `blink` | Offline C++ controller (candidate packet directions, duration and bypasses; no transport) | Identify state, host events and reference traces |
 | utility | `chest_stealer` | Not implemented | Identify state, host events and reference traces |
 | utility | `debug` | Offline C++ controller (typed diagnostic records from supplied observations) | Verify remaining original settings, host callbacks and runtime integration |
-| utility | `fake_lag` | Not implemented | Identify state, host events and reference traces |
+| utility | `fake_lag` | Offline C++ controller (candidate pulse/delay/attack policies; no transport) | Identify state, host events and reference traces |
 | utility | `friends` | Offline C++ controller (UUID table and relationship-bit snapshot) | Verify remaining original settings, host callbacks and runtime integration |
 | utility | `inv_manager` | Offline C++ controller (supplied score ranking and paired-kind subset) | Recover remaining original policy and lifecycle; no host actions |
 | utility | `item_use_fix` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R315 records 50 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R327 records 54 matching offline C++ controller headers in PR #2, including four new candidate-source-only packet/sprint policies, and the existing six experimental offline combat decision models. Seven candidate rows remain without controllers, including descriptor-only Chest Stealer. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
