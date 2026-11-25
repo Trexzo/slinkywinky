@@ -10,7 +10,7 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 | block | `clutch` | Offline C++ controller + opt-in Forge read-only observations | Validate host event timing, settings and world-owner lifecycle |
 | block | `fast_mine` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
 | block | `fast_place` | Offline C++ controller (no verified live integration) | Validate host event timing, settings and world-owner lifecycle |
-| combat | `ghost_hand` | Offline C++ policy + event-8 bridge (no game interactions) | Authenticate original callback priority; test real Minecraft entity/ray context |
+| block | `ghost_hand` | Offline C++ policy + event-8 bridge (no game interactions) | Authenticate original callback priority; test real Minecraft entity/ray context |
 | combat | `aim_assist` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_block` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
 | combat | `auto_clicker` | Experimental decision model (offline) | Compare branch-by-branch and host timing |
@@ -74,4 +74,4 @@ Reference: user-supplied native C++ archive (not an authenticated commercial rel
 
 The offline `PacketHoldQueue` is a generic identity-only queue, **not** a completed Backtrack/FakeLag implementation. Rotation, input ownership and profile handling are infrastructure rather than module parity.
 
-Inventory contains 67 candidate primary native module source files (auxiliary/callback files excluded). R310 records 36 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
+R311 distinguishes 67 candidate descriptors from the 66-entry decrypted-binary pointer table. Chest Stealer is descriptor-only and is excluded from the 66-module reconstruction target. The category of Ghost Hand is Block, as verified directly from the descriptor. The C++ archive has 66 separate logic files (no separate No Hurt Cam file), while the recovered Java snapshot has 68 names. R310 records 36 matching offline C++ controller headers in PR #2, and the existing six experimental offline combat decision models. The remaining rows require source reconstruction; no row should be interpreted as a fully playable module. The separate reconstructed Java bundle includes 68 class names, which is not a direct 1:1 match to this native inventory.
