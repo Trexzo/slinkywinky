@@ -8,13 +8,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Disposable Java 8 source-shaped test; no game JVM or transformed ave. */
 public final class MouseQueueOwnerSmoke {
     private static void check(boolean yes,String reason) {
-        if(!yes)throw new AssertionError(reason);
+        if(!yes)throw new AssertionError(reason+" [state="+MouseQueueOwner.state()+", epoch="+MouseQueueOwner.epoch()+", pending="+Mouse.pending()+"]");
     }
     private static void focus() {
         check(MouseQueueOwner.observeForeground(true),"No focus heartbeat");
     }
     private static boolean arm(long epoch,MouseQueueOwner.PointerSink sink) {
         return MouseQueueOwner.arm(epoch,true,true,true,676,630,sink);
+    }
+    // The disposable mock is explicitly foreground for these polls.
+    // Do not rely on elapsed wall time across unrelated test assertions.
+    private static boolean foregroundPoll() {
+        focus();
+        return MouseQueueOwner.next();
     }
     private static boolean unbind() {
         return MouseQueueOwner.unbind(true,true,true,true);
@@ -74,7 +80,7 @@ public final class MouseQueueOwnerSmoke {
         Mouse.enqueue(1,true,20,620,0); // right button withheld
         Mouse.enqueue(1,false,20,620,0);
         Mouse.enqueue(0,false,21,600,0);
-        check(!MouseQueueOwner.next(),"Modal leaked to vanilla");
+        check(!foregroundPoll(),"Modal leaked to vanilla");
         check(Mouse.pending()==0,"Modal source events not consumed");
         check(received.size()==3 &&
             "0:5:0".equals(received.get(0)) &&
@@ -85,7 +91,7 @@ public final class MouseQueueOwnerSmoke {
         check(!MouseQueueOwner.close(true,false),"Keyboard not quarantined");
         check(MouseQueueOwner.close(true,true),"Modal close refused");
         check("DRAINING".equals(MouseQueueOwner.state()),"Missing drain state");
-        check(!MouseQueueOwner.next(),"Draining leaked vanilla event");
+        check(!foregroundPoll(),"Draining leaked vanilla event");
         check("VANILLA".equals(MouseQueueOwner.state()),
               "Queue did not restore after release");
         Mouse.enqueue(2,true,40,50,0);
@@ -102,10 +108,10 @@ public final class MouseQueueOwnerSmoke {
         focus();
         check(arm(2,sink),"Next epoch refused");
         Mouse.enqueue(0,true,33,44,0);
-        check(!MouseQueueOwner.next(),"Held button leaked");
+        check(!foregroundPoll(),"Held button leaked");
         check(MouseQueueOwner.close(true,true),"Held close refused");
         Mouse.enqueue(0,false,33,44,0);
-        check(!MouseQueueOwner.next(),"Held release leaked");
+        check(!foregroundPoll(),"Held release leaked");
         check("VANILLA".equals(MouseQueueOwner.state()),
               "Held-release drain not completed");
         check(unbind(),"Post-release unbind failed");
@@ -130,7 +136,7 @@ public final class MouseQueueOwnerSmoke {
         focus();
         check(arm(4,sink),"Bounds arm refused");
         Mouse.enqueue(0,true,-1,12,0);
-        check(!MouseQueueOwner.next(),"Bad bounds leaked");
+        check(!foregroundPoll(),"Bad bounds leaked");
         check("REFUSED".equals(MouseQueueOwner.state()),"Bad bounds not revoked");
         Mouse.reset();
         check(unbind(),"Bounds clean rollback failed");
@@ -145,7 +151,7 @@ public final class MouseQueueOwnerSmoke {
             }
         }),"Callback arm failed");
         Mouse.enqueue(0,true,3,3,0);
-        check(!MouseQueueOwner.next(),"Exception escaped modal");
+        check(!foregroundPoll(),"Exception escaped modal");
         check("REFUSED".equals(MouseQueueOwner.state()),"Sink fault not revoked");
         Mouse.reset();
         check(unbind(),"Callback rollback failed");
@@ -156,14 +162,26 @@ public final class MouseQueueOwnerSmoke {
         focus();
         check(arm(6,sink),"Flood arm failed");
         for(int i=0;i<160;i++)Mouse.enqueue(-1,false,15,25,120);
-        check(!MouseQueueOwner.next() && Mouse.pending()==32,
+        check(!foregroundPoll() && Mouse.pending()==32,
               "Unbounded first drain");
-        check(!MouseQueueOwner.next() && Mouse.pending()==0,
+        check(!foregroundPoll() && Mouse.pending()==0,
               "Unbounded second drain");
         check(MouseQueueOwner.close(true,true),"Flood close refused");
-        check(!MouseQueueOwner.next() &&
+        check(!foregroundPoll() &&
               "VANILLA".equals(MouseQueueOwner.state()),"Flood drain failed");
         check(unbind(),"Flood unbind refused");
+        // Independent negative control: a stale heartbeat must still refuse
+        // rather than restore a queue. No retries or deadline relaxation.
+        check(MouseQueueOwner.bind(Mouse.class,Mouse.class.getClassLoader(),true),
+              "Expiry bind failed");
+        focus();
+        check(arm(7,sink),"Expiry arm failed");
+        final long started=System.nanoTime();
+        while(System.nanoTime()-started<300000000L)Thread.sleep(10L);
+        check(!MouseQueueOwner.next(),"Expired heartbeat leaked event");
+        check("REFUSED".equals(MouseQueueOwner.state()),"Expired heartbeat not refused");
+        check(unbind(),"Expiry rollback failed");
+        System.out.println("R322_MOCK_HEARTBEAT_EXPIRY_PASS");
         System.out.println("R160_JAVA8_MOUSE_LWJGL_SOURCE_SHAPE_EDGE_COORDS_PASS");
         System.out.println("R160_MODAL_DRAIN_ROLLBACK_FOCUS_AND_OVERFLOW_PASS");
         System.out.println("R160_NO_ORIGINAL_GAME_MOUSE_HOOK_ATTACHED");
