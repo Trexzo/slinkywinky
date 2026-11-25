@@ -150,9 +150,9 @@ int main(){try{
     ensure(b.dispatch(pkt)&&pkt.inv_walk_source_packet->decision.action==
            InvWalkPacketAction::pass,"no stale queued refs after disable");
 
-    auto wrong=ev(17);wrong.backtrack_source_packet={};
+    auto wrong=ev(17);wrong.backtrack_source_packet=BacktrackSourcePacketPayload{};
     ensure(!b.dispatch(wrong),"never admit e2 packet typed on e17");
-    wrong=ev(3);wrong.lag_range_source_packet={};wrong.timer_range_source_frame={};
+    wrong=ev(3);wrong.lag_range_source_packet=LagRangeSourcePacketPayload{};wrong.timer_range_source_frame=TimerRangeSourceFramePayload{};
     ensure(!b.dispatch(wrong),"no mixed representations of event3 without identity proof");
     b.stop();
     ensure(!b.dispatch(pkt),"stopped bridge never replays owned packet state");
