@@ -191,8 +191,11 @@ struct MenuItem {
 
 // Deterministic, input-independent model for a future native game renderer.
 // The preview_enabled bits are UI demo flags, NEVER gameplay module state.
+struct MenuPreviewDocument;
 class MenuState {
 public:
+    // Explicit offline preview import; never applies ClientSettings or module flags.
+    bool restore_local_preview(const MenuPreviewDocument& document) noexcept;
     MenuTab tab() const noexcept {return selected_;}
     std::size_t scroll() const noexcept {return scroll_;}
     const MenuAppearance& appearance() const noexcept {return appearance_;}

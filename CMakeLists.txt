@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(slinkywinky VERSION 0.1.0 LANGUAGES CXX)
 
-add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/movement.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/menu.cpp src/menu_profile.cpp src/menu_prefs.cpp src/menu_render.cpp src/menu_navigation.cpp src/menu_keyboard_router.cpp src/menu_hit_test.cpp src/menu_mouse_gesture.cpp src/menu_bitmap_font.cpp src/recovered_settings.cpp
+add_library(slinkywinky_core STATIC src/core.cpp src/runtime.cpp src/combat.cpp src/movement.cpp src/settings.cpp src/session.cpp src/observation.cpp src/hud.cpp src/hud_snapshot.cpp src/menu.cpp src/menu_profile.cpp src/menu_prefs.cpp src/menu_preview_document.cpp src/menu_render.cpp src/menu_navigation.cpp src/menu_keyboard_router.cpp src/menu_hit_test.cpp src/menu_mouse_gesture.cpp src/menu_bitmap_font.cpp src/recovered_settings.cpp
   src/piercing_preview_prefs.cpp)
 find_package(Threads REQUIRED)
 target_link_libraries(slinkywinky_core PUBLIC Threads::Threads)
@@ -22,6 +22,9 @@ add_executable(slinkywinky_offline_demo examples/offline_demo.cpp)
 target_link_libraries(slinkywinky_offline_demo PRIVATE slinkywinky_core)
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(slinkywinky_r324_preview_document_tests tests/test_r324_preview_document.cpp)
+  target_link_libraries(slinkywinky_r324_preview_document_tests PRIVATE slinkywinky_core)
+  add_test(NAME r324_offline_preview_document COMMAND slinkywinky_r324_preview_document_tests)
   # R317: GUI-only preferences, bounded reads and atomic replacement.
   add_executable(slinkywinky_r317_preferences_tests tests/test_r317_preferences_persistence.cpp)
   target_link_libraries(slinkywinky_r317_preferences_tests PRIVATE slinkywinky_core)

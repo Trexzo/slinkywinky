@@ -58,11 +58,7 @@ std::array<std::uint8_t,7> menu_ascii_glyph(char c) noexcept {
         case '%':return {{17,2,4,8,17,0,0}};
         case '"':return {{10,10,10,0,0,0,0}};
         case '#':return {{10,10,31,10,31,10,10}};
-        case '
-    }
-}
-} // namespace slinkywinky
-:return {{4,15,20,14,5,30,4}};
+        case 36:return {{4,15,20,14,5,30,4}}; // dollar sign
         case '&':return {{12,18,20,8,21,18,13}};
         case '\'':return {{4,4,8,0,0,0,0}};
         case '*':return {{0,21,14,31,14,21,0}};
