@@ -293,6 +293,17 @@ int main() {
         const auto background=readback(4,628);
         REQUIRE(background[0]<65 && background[1]<65 && background[2]<65);
         REQUIRE(measure_menu_system_text("Aim Assist",20.0f)>55.0f);
+        const float spaceWidth=measure_menu_system_text(" ",20.0f);
+        REQUIRE(spaceWidth>0.0f);
+        REQUIRE(std::fabs(measure_menu_system_text("A A",20.0f)-
+            (2.0f*measure_menu_system_text("A",20.0f)+spaceWidth))<0.01f);
+        for(unsigned code=32;code<=126;++code) {
+            const char c=static_cast<char>(code);
+            REQUIRE(measure_menu_system_text(std::string_view(&c,1),20.0f)>0.0f);
+        }
+        REQUIRE(draw_menu_system_text(" ",10.0f,10.0f,20.0f,100.0f));
+        REQUIRE(glGetError()==GL_NO_ERROR);
+        same(before,snapshot());
         const auto selectedTab=readback(60,595);
         REQUIRE(selectedTab[0]>background[0] && selectedTab[1]>background[1]);
         const auto cardFill=readback(19,534);

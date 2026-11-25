@@ -3,6 +3,7 @@
 #define NOMINMAX
 #endif
 #include "slinkywinky/windows_menu_system_font.hpp"
+#include "slinkywinky/menu_glyph_metrics.hpp"
 #include <windows.h>
 #include <GL/gl.h>
 #include <array>
@@ -71,23 +72,25 @@ public:
                 Glyph& glyph=glyphs_[static_cast<std::size_t>(c-32)];
                 glyph.left=metrics.gmptGlyphOrigin.x;
                 glyph.origin_y=metrics.gmptGlyphOrigin.y;
-                // Validate unsigned GDI dimensions before narrowing or
-                // calculating padded row pitches.
-                if(metrics.gmBlackBoxX>80u || metrics.gmBlackBoxY>80u ||
-                   count>16384u)return;
-                glyph.width=static_cast<int>(metrics.gmBlackBoxX);
-                glyph.height=static_cast<int>(metrics.gmBlackBoxY);
-                glyph.pitch=(glyph.width+3)&~3;
-                glyph.advance=metrics.gmCellIncX;
-                if(glyph.advance<=0 || glyph.advance>80)return;
-                if(glyph.width>0 && glyph.height>0 &&
-                   static_cast<DWORD>(glyph.pitch*glyph.height)>count)return;
+                const auto layout=menu_glyph_raster_layout(
+                    metrics.gmBlackBoxX,metrics.gmBlackBoxY,metrics.gmCellIncX,count);
+                if(!layout)return;
+                glyph.width=static_cast<int>(layout->width);
+                glyph.height=static_cast<int>(layout->height);
+                glyph.pitch=static_cast<int>(layout->pitch);
+                glyph.advance=static_cast<int>(layout->advance);
+                // Whitespace can have no raster bytes even when GDI
+                // reports a nonzero black box. It still advances the pen.
+                if(!count)continue;
                 glyph.coverage.resize(count);
-                if(count && GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
-                    &metrics,count,glyph.coverage.data(),&transform)==GDI_ERROR)
-                    return;
-                if(count && glyph.pitch*glyph.height>static_cast<int>(count))
-                    return;
+                const DWORD copied=GetGlyphOutlineW(dc_,c,GGO_GRAY8_BITMAP,
+                    &metrics,count,glyph.coverage.data(),&transform);
+                if(copied==GDI_ERROR || copied>count ||
+                   metrics.gmBlackBoxX!=layout->width ||
+                   metrics.gmBlackBoxY!=layout->height ||
+                   metrics.gmCellIncX!=glyph.advance ||
+                   copied<static_cast<DWORD>(glyph.pitch*glyph.height))return;
+                glyph.coverage.resize(copied);
             }
             ready_=true;
         } catch(...) {ready_=false;}

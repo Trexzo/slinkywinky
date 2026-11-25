@@ -126,6 +126,30 @@ int main(){
     reject_type(6,std::string("a\0b",3));
     {auto x=*parsed;x.values.erase(std::remove_if(x.values.begin(),x.values.end(),
         [](const auto& r){return r.widget_index==4u;}),x.values.end());reject(x);}
+    // Every persistable callsite must reject an out-of-range ID, a
+    // duplicate record, and a deliberately mismatched value type.
+    for(std::size_t i=0;i<parsed->values.size();++i) {
+        auto x=*parsed;
+        x.values[i].widget_index=385;
+        CHECK(!menu_preview_document_valid(x));
+        x=*parsed;
+        x.values[i].value=x.values[i].value.index()==0?
+            PreviewWidgetValue{std::string("wrong type")}:PreviewWidgetValue{false};
+        CHECK(!menu_preview_document_valid(x));
+        x=*parsed;
+        x.values[i]=x.values[(i+1)%x.values.size()];
+        CHECK(!menu_preview_document_valid(x));
+    }
+    // All eight dedicated mode combinations must preserve the entire
+    // offline document across capture/restore and round-trip.
+    for(unsigned a=0;a<4;++a)for(unsigned t=0;t<2;++t) {
+        auto x=*parsed;x.aim_mode=a;x.target_mode=t;
+        const auto data=encode_menu_preview_document(x);
+        CHECK(data && menu.restore_local_preview(x));
+        CHECK(encode_menu_preview_document(capture_local_preview(menu))==data);
+        CHECK(decode_menu_preview_document(*data).has_value());
+    }
+    CHECK(menu.restore_local_preview(*parsed));
     // Exhaustively reject all truncated prefixes and single-byte flips
     // at representative positions. Re-sign forged version/catalog data
     // to exercise semantic guards rather than only the checksum.
@@ -138,6 +162,31 @@ int main(){
     {auto x=*encoded;x[13]^=1;recalculate(x);CHECK(!decode_menu_preview_document(x));}
     {auto x=*encoded;x[21]=2;recalculate(x);CHECK(!decode_menu_preview_document(x));}
     CHECK(!decode_menu_preview_document(std::string(menu_preview_document_limit+1,'x')));
+    // Recalculate the non-cryptographic checksum after mutations, so
+    // the decoder's structural checks are reached instead of bypassed.
+    // Some mutations are legitimate other values; any admitted document
+    // must round-trip canonically and remain valid under restoration.
+    std::mt19937 rng(325);
+    unsigned accepted=0,rejected=0;
+    for(unsigned trial=0;trial<2048;++trial) {
+        auto x=*encoded;
+        const std::size_t pos=21u+(rng()%(x.size()-29u));
+        x[pos]=static_cast<char>(static_cast<unsigned char>(x[pos])^
+            static_cast<unsigned char>(1u+(rng()%255u)));
+        recalculate(x);
+        const auto decoded=decode_menu_preview_document(x);
+        if(!decoded){++rejected;continue;}
+        ++accepted;
+        CHECK(menu_preview_document_valid(*decoded));
+        const auto canonical=encode_menu_preview_document(*decoded);
+        CHECK(canonical && decode_menu_preview_document(*canonical));
+        CHECK(menu.restore_local_preview(*decoded));
+        CHECK(encode_menu_preview_document(capture_local_preview(menu))==canonical);
+    }
+    CHECK(accepted>0 && rejected>0 && accepted+rejected==2048u);
+    CHECK(menu.restore_local_preview(*parsed));
+    std::cout<<"R325_RECHECKSUMMED_MUTATIONS_ACCEPTED="<<accepted
+             <<" REJECTED="<<rejected<<'\n';
     Scratch scratch;
     const auto file=scratch.path/fs::u8path(u8"preview-\u00e5.swp");
     CHECK(save_menu_preview_document(file,*parsed));
