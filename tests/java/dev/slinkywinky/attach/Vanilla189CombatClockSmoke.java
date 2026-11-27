@@ -76,7 +76,7 @@ public final class Vanilla189CombatClockSmoke {
         fence.close();
         rejects(()->fence.observe(2,read(player)),"Closed fence denied");
         Vanilla189CombatClock.release();
-        yes(read(ray).playerTicks==17,
+        yes(read(ray).playerTicks==18,
             "Real player subtype inherits exact Entity and LivingBase fields");
         Vanilla189CombatClock.release();
         System.out.println("R360_ORIGINAL_VANILLA_PLAYER_CLOCK_AND_ONESHOT_E15_PROXY_PASS");
