@@ -590,6 +590,14 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R360: exact original 1.8.9 combat clock + one-shot e15 tick proxy.
+    add_test(NAME r360_java8_original_combat_clock_oneshot_attack COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r360_original_combat_clock.cmake)
+    set_tests_properties(r360_java8_original_combat_clock_oneshot_attack PROPERTIES TIMEOUT 30)
     # R358: original obfuscated evidence -> real Java8 JNI e18 source controller.
     add_test(NAME r358_java8_original_source_lag_jni_roundtrip COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
