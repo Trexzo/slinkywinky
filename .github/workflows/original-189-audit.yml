@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/workflows/original-189-audit.yml'
       - 'tests/official_189_render_audit.py'
+      - 'tests/original_189_source_fields_audit.py'
+      - 'tests/test_original_189_source_fields.py'
       - 'tests/original_189_live_render_acceptance.py'
       - 'tests/test_original_189_live_acceptance.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
@@ -33,6 +35,8 @@ on:
     paths:
       - '.github/workflows/original-189-audit.yml'
       - 'tests/official_189_render_audit.py'
+      - 'tests/original_189_source_fields_audit.py'
+      - 'tests/test_original_189_source_fields.py'
       - 'tests/original_189_live_render_acceptance.py'
       - 'tests/test_original_189_live_acceptance.py'
       - 'tests/java/dev/slinkywinky/attach/RenderCallsiteAudit.java'
@@ -76,6 +80,11 @@ jobs:
         shell: pwsh
         run: |
           python -c "import ast,pathlib;ast.parse(pathlib.Path('tests/official_189_render_audit.py').read_text(encoding='utf-8'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: R357 original source-field decoder negative controls (NO game files)
+        shell: pwsh
+        run: |
+          python -B -m unittest discover -s tests -p "test_original_189_source_fields.py" -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify R81 original-game acceptance receipts offline (NO Attach)
         shell: pwsh

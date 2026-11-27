@@ -117,6 +117,10 @@ def main():
         if last_error is not None:
             raise RuntimeError("Both official Mojang download endpoints failed") from last_error
         print("R71_ORIGINAL_MOJANG_SHA1_AND_SIZE_PASS", flush=True)
+        # R357: validate original 1.8.9 private class/field layout before
+        # source-world Forge reflection is ever treated as candidate parity.
+        from original_189_source_fields_audit import audit_official_source_fields
+        audit_official_source_fields(destination)
         cp = str(audit) + os.pathsep + str(instrument)
         result = subprocess.run(
             [str(java), "-cp", cp,
