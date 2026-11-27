@@ -148,7 +148,12 @@ public final class ForgePacketHoldOwnerTest {
         EmbeddedChannel net=channel(holder);
         holder.arm(71);
         Assert.assertFalse(net.writeInbound(teleport(71,320)));
+        // EmbeddedChannel in the bundled Netty 4.0.x may defer inactive
+        // notifications during close(). Drive the exact handler lifecycle
+        // callback explicitly before checking drop/release semantics.
+        net.pipeline().fireChannelInactive();
         net.close();
+        net.runPendingTasks();
         ForgePacketHoldOwner.Metrics m=holder.metrics();
         Assert.assertEquals(1,m.accepted);
         Assert.assertEquals(0,m.pending);
