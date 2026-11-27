@@ -16,6 +16,13 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
         Object playerIdentity();
         Frame capture();
     }
+    /**
+     * R353: conservative singleplayer snapshot proving current-tick attack
+     * timestamp (not an exact original event15 phase hook). Optional.
+     */
+    public interface AttackPort extends Port {
+        boolean sourceLagRangeAttackNow();
+    }
     /** Render-time immutable ray input; no game objects or action sink. */
     public interface RenderPort extends Port {
         RenderFrame captureRender(double deltaSeconds,float partialTicks);
@@ -99,9 +106,13 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public static final class TickReceipt {
         public final long generation,tick;
         public final SourceRuntimePreview.Receipt backtrack,lagRange,timerRange,invWalk;
-        private TickReceipt(long generation,long tick,SourceRuntimePreview.Receipt[] r){
+        /** Optional authentic JNI e15 receipt from a conservative tick proxy. */
+        public final SourceRuntimePreview.Receipt lagRangeAttack;
+        private TickReceipt(long generation,long tick,SourceRuntimePreview.Receipt[] r,
+                            SourceRuntimePreview.Receipt attack){
             this.generation=generation;this.tick=tick;
             backtrack=r[0];lagRange=r[1];timerRange=r[2];invWalk=r[3];
+            lagRangeAttack=attack;
         }
     }
     private final Thread thread=Thread.currentThread();
@@ -211,6 +222,18 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
             if(tick==Long.MAX_VALUE)
                 throw new IllegalStateException("Source world tick exhausted");
             ++tick;
+            SourceRuntimePreview.Receipt attack=null;
+            // Original candidate Lag Range event15 must precede event18.
+            // A Forge ClientTick.END read is NOT exact source phase timing.
+            if(port instanceof AttackPort&&((AttackPort)port).sourceLagRangeAttackNow()){
+                if(!port.admittedClientThread()||port.worldIdentity()!=world||
+                   port.playerIdentity()!=player)
+                    throw new IllegalStateException("R353 attack observation changed owner");
+                attack=nativePreview.observe(worldNumber,playerNumber,generation,tick,
+                    SourceRuntimePreview.LAG_RANGE_ATTACK,new int[]{1,1},new double[0]);
+                if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
+                    throw new IllegalStateException("R353 source attack receipt invalid");
+            }
             final int[] names={
                 SourceRuntimePreview.BACKTRACK_TICK,
                 SourceRuntimePreview.LAG_RANGE_TICK,
@@ -241,7 +264,7 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                         sample.serverY,sample.serverZ,sampleTime);
                 }
             }
-            last=new TickReceipt(generation,tick,result);
+            last=new TickReceipt(generation,tick,result,attack);
             return last;
         }catch(RuntimeException | Error failure){
             failClosed();

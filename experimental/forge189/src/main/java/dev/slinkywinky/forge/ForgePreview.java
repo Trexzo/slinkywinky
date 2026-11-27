@@ -111,6 +111,7 @@ public final class ForgePreview {
     private int r339PacketBatches;
     private long r339PacketObservations;
     private boolean r348NativeVerdictReported;
+    private boolean r353AttackReported;
     private int r341BoxFrames;
     private boolean r341SubmittedBox;
     private int r342HistoricalFrames;
@@ -655,6 +656,7 @@ public final class ForgePreview {
             r339PacketBatches=0;
             r339PacketObservations=0;
             r348NativeVerdictReported=false;
+            r353AttackReported=false;
             r341BoxFrames=0;
             r341SubmittedBox=false;
             r342HistoricalFrames=0;
@@ -734,6 +736,15 @@ public final class ForgePreview {
                             "generation="+received.generation+
                             " tick="+received.tick+
                             " reachUnverified=1 gameWrites=0");
+                    if(received!=null&&received.lagRangeAttack!=null&&
+                       !r353AttackReported){
+                        r353AttackReported=true;
+                        System.out.println("[SlinkyWinkyPreview] "+
+                            "R353_READONLY_NATIVE_LAG_ATTACK_E15 "+
+                            "generation="+received.generation+
+                            " tick="+received.tick+
+                            " exactOriginalPhaseUnverified=1 gameWrites=0");
+                    }
                     if(received!=null&&r339Tap!=null){
                         final SourcePacketReadOnlyQueue incoming=r339Tap.ingress();
                         if(incoming!=null){

@@ -30,12 +30,15 @@ import org.lwjgl.input.Mouse;
  * Uses real game/player/target/key *observations*, no game writes or packets.
  * Forge ClientTick.END is NOT the original Slinky native event18 timing.
  */
-public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.HistoryPort {
+public final class ForgeSourceWorldPort implements
+        SourceWorldReadOnlyHost.HistoryPort,SourceWorldReadOnlyHost.AttackPort {
     private final Minecraft mc;
     private final Thread owner=Thread.currentThread();
     private final boolean debugBoxSettings;
     private static final boolean R349_EXACT_REACH_READ_ONLY =
         Boolean.getBoolean("slinkywinky.r349BacktrackExactReachReadOnly");
+    private static final boolean R353_LAG_ATTACK_READ_ONLY =
+        Boolean.getBoolean("slinkywinky.r353NativeLagAttackReadOnly");
     private static Field sourceField(Class<?> type,String name)
             throws ReflectiveOperationException{
         final Field field=type.getDeclaredField(name);
@@ -54,6 +57,18 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
                 };
             }catch(ReflectiveOperationException|SecurityException unavailable){
                 // Under unrecognized reobfuscation mappings, never guess.
+                return null;
+            }
+        }
+    }
+
+    private static final class R353AttackField {
+        static final Field FIELD=resolve();
+        private static Field resolve(){
+            try{
+                Field f=sourceField(EntityLivingBase.class,"lastAttackerTime");
+                return f.getType()==Integer.TYPE?f:null;
+            }catch(ReflectiveOperationException|SecurityException unavailable){
                 return null;
             }
         }
@@ -247,6 +262,30 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
         if(!admittedClientThread()||mc.theWorld!=world||mc.thePlayer!=self)
             throw new IllegalStateException("R338 render owner switched midread");
         return new SourceWorldReadOnlyHost.RenderFrame(values,sword);
+    }
+
+    /**
+     * R353 read-only approximation at Forge END tick, *not* an actual
+     * original Slinky attack phase-1 callback. No keyboard/network writes.
+     */
+    @Override public boolean sourceLagRangeAttackNow(){
+        if(!R353_LAG_ATTACK_READ_ONLY)return false;
+        if(!admittedClientThread()||worldIdentity()==null)
+            throw new IllegalStateException("R353 owner not admitted");
+        final WorldClient world=mc.theWorld;
+        final EntityPlayerSP player=mc.thePlayer;
+        final Field field=R353AttackField.FIELD;
+        if(field==null)throw new IllegalStateException(
+            "R353 missing original-named lastAttackerTime");
+        try{
+            int last=field.getInt(player);
+            final boolean current=last>0&&player.ticksExisted==last;
+            if(mc.theWorld!=world||mc.thePlayer!=player||!admittedClientThread())
+                throw new IllegalStateException("R353 owner changed during attack");
+            return current;
+        }catch(IllegalAccessException noSource){
+            throw new IllegalStateException("R353 source attack field inaccessible",noSource);
+        }
     }
 
     @Override public SourceWorldReadOnlyHost.Frame capture(){

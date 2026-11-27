@@ -54,6 +54,7 @@ struct Session {
            !bridge.bind_backtrack_source_render(module[0])||
            !bridge.bind_lag_range_source_tick(module[1])||
            !bridge.bind_lag_range_source_render(module[1])||
+           !bridge.bind_lag_range_source_attack(module[1])||
            !bridge.bind_lag_range_source_packet(module[1])||
            !bridge.bind_timer_range_source_tick(module[2])||
            !bridge.bind_timer_range_source_packet(module[2])||
@@ -91,9 +92,9 @@ struct Session {
 std::mutex mutex;
 std::map<jlong,std::unique_ptr<Session>> sessions;
 jlong next_id=1;
-static constexpr int bits_by_op[10]={12,4,12,4,15,1,12,1,2,0};
-static constexpr int vals_by_op[10]={7,1,6,4,7,20,1,0,0,0};
-static constexpr unsigned event_by_op[10]={18,2,18,3,0,3,25,23,17,1};
+static constexpr int bits_by_op[11]={12,4,12,4,15,1,12,1,2,0,2};
+static constexpr int vals_by_op[11]={7,1,6,4,7,20,1,0,0,0,0};
+static constexpr unsigned event_by_op[11]={18,2,18,3,0,3,25,23,17,1,15};
 std::array<double,8> dispatch(Session& s,int op,
                                const std::vector<jint>& bits,
                                const std::vector<jdouble>& vals){
@@ -275,6 +276,19 @@ std::array<double,8> dispatch(Session& s,int op,
         result[3]=d.decision.drain_stale_keyboard_events;
         break;
     }
+    case 10:{
+        // R353: original Lag Range event15 phase callback. This is native
+        // ModuleExecutionBridge's real source controller, not a Java model.
+        LagRangeSourceAttackPayload p{};
+        p.phase_one=flag(bits,0);
+        p.hit_at_current_tick=flag(bits,1);
+        f.lag_range_source_attack=p;
+        require(s.bridge.dispatch(f),"Lag Range source attack event15 denied");
+        const auto& d=*f.lag_range_source_attack;
+        result[2]=d.executions;
+        result[3]=d.phase_one&&d.hit_at_current_tick;
+        break;
+    }
     case 9:{
         // Original Timer Range source event1 is outgoing packet gating.
         // This JNI opcode merely observes the C++ source hold flag;
@@ -326,7 +340,7 @@ Java_dev_slinkywinky_SourceRuntimePreview_nativeObserve(
     if(nv)env->GetDoubleArrayRegion(values,0,static_cast<jsize>(nv),v.data());
     if(env->ExceptionCheck())return nullptr;
     try {
-        require(op>=0&&op<10,"Unknown source event opcode");
+        require(op>=0&&op<11,"Unknown source event opcode");
         require(nb==static_cast<std::size_t>(bits_by_op[op])&&
                 nv==static_cast<std::size_t>(vals_by_op[op]),
                 "Source event ABI shape mismatch");
