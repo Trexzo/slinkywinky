@@ -360,7 +360,10 @@ try:
     # Negative controls may run only after test target reports ready.
     for source_flag in ("--source-tick-readonly",
                         "--source-tick-readonly=600",
-                        "--source-tick-readonly=601"):
+                        "--source-tick-readonly=601",
+                        "--source-click-readonly",
+                        "--source-click-readonly=600",
+                        "--source-click-readonly=601"):
         denied = subprocess.run(
             [str(loader), "attach", str(target.pid), str(home), source_flag],
             capture_output=True, text=True, env=env, timeout=22)
@@ -370,6 +373,27 @@ try:
     source_env["SLINKYWINKY_SOURCE_NATIVE_READONLY"] = "1"
     source_env["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
     source_env["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
+    # Separate click consent is required even if all earlier source/tick
+    # and extended diagnostic consent variables are already set.
+    denied_click = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home),
+         "--source-click-readonly=600"],
+        capture_output=True, text=True, env=source_env, timeout=22)
+    if (denied_click.returncode == 0 or
+        "R363 exact source click diagnostic needs separate click consent"
+        not in denied_click.stderr):
+        raise AssertionError("R363 click-path accidentally inherited older tick consent: " +
+                             denied_click.stdout + denied_click.stderr)
+    source_env["SLINKYWINKY_SOURCE_CLICK_READONLY"] = "1"
+    denied_click_test = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home),
+         "--source-click-readonly=600"],
+        capture_output=True, text=True, env=source_env, timeout=22)
+    if (denied_click_test.returncode == 0 or
+        "R359 original source JNI cannot run in synthetic Attach test mode"
+        not in denied_click_test.stderr):
+        raise AssertionError("R363 click Attach synthetic-game bypass: " +
+                             denied_click_test.stdout + denied_click_test.stderr)
     denied_test = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home),
          "--source-tick-readonly=600"],

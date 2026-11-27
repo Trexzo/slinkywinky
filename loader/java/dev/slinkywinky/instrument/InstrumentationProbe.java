@@ -594,7 +594,8 @@ public final class InstrumentationProbe {
         // event. Never recursively Java Attach into a live instrumented JVM.
         final boolean continuous = "hook-continuous".equals(mode) ||
                                    "minecraft-continuous".equals(mode);
-        final boolean sourceMode="minecraft-source-readonly".equals(mode);
+        final boolean clickMode="minecraft-click-source-readonly".equals(mode);
+        final boolean sourceMode="minecraft-source-readonly".equals(mode)||clickMode;
         final boolean test = "probe".equals(mode) || "hook-probe".equals(mode) ||
                              "hook-continuous".equals(mode);
         final boolean hook = "hook-probe".equals(mode) ||
@@ -672,7 +673,7 @@ public final class InstrumentationProbe {
         if (hook) {
             r358SourceReadOnly=sourceMode||
                 Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly");
-            r362ExactClickMode=sourceMode;
+            r362ExactClickMode=clickMode;
             try {
                 if (delimiter < 0 || delimiter == options.length() - 1)
                     throw new IllegalArgumentException("Missing exact JNI library path");
