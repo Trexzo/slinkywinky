@@ -14,6 +14,7 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourceAttackEventFence.java'
+      - 'java/dev/slinkywinky/SourceCandidateField189.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
       - 'java/dev/slinkywinky/SourcePacketControlMailbox.java'
@@ -24,6 +25,7 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourceAttackEventFence.java'
+      - 'java/dev/slinkywinky/SourceCandidateField189.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwner.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwnerTest.java'
@@ -55,6 +57,7 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourceAttackEventFence.java'
+      - 'java/dev/slinkywinky/SourceCandidateField189.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
       - 'java/dev/slinkywinky/SourcePacketControlMailbox.java'
@@ -65,6 +68,7 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourceAttackEventFence.java'
+      - 'java/dev/slinkywinky/SourceCandidateField189.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwner.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwnerTest.java'
@@ -163,6 +167,7 @@ jobs:
             dev/slinkywinky/SourceWorldReadOnlyHost.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$AttackPort.class \
             dev/slinkywinky/SourceAttackEventFence.class \
+            dev/slinkywinky/SourceCandidateField189.class \
              dev/slinkywinky/SourceBacktrackReachEvidence.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderPort.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderFrame.class \

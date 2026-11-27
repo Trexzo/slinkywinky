@@ -590,6 +590,14 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R355: original candidate 1.8.9 private-name and type parity.
+    add_test(NAME r355_java8_source_mc189_private_field_mappings COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r355_source_mc189_field_mappings.cmake)
+    set_tests_properties(r355_java8_source_mc189_private_field_mappings PROPERTIES TIMEOUT 30)
     # R354: read-only actual Forge attack event, bounded Java8 handoff.
     add_test(NAME r354_java8_forge_attack_event_fence COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}

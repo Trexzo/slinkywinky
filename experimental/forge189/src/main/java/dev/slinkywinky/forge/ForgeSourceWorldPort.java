@@ -4,6 +4,7 @@ import dev.slinkywinky.SourceWorldReadOnlyHost;
 import dev.slinkywinky.SourceRemotePositionHistory;
 import dev.slinkywinky.SourceBacktrackReachEvidence;
 import dev.slinkywinky.SourceAttackEventFence;
+import dev.slinkywinky.SourceCandidateField189;
 import java.lang.reflect.Field;
 import net.minecraft.client.entity.EntityOtherPlayerMP;
 import java.util.UUID;
@@ -41,39 +42,22 @@ public final class ForgeSourceWorldPort implements
         Boolean.getBoolean("slinkywinky.r349BacktrackExactReachReadOnly");
     private static final boolean R353_LAG_ATTACK_READ_ONLY =
         Boolean.getBoolean("slinkywinky.r353NativeLagAttackReadOnly");
-    private static Field sourceField(Class<?> type,String name)
-            throws ReflectiveOperationException{
-        final Field field=type.getDeclaredField(name);
-        field.setAccessible(true);
-        return field;
-    }
     private static final class R349Fields {
         static final Field[] FIELDS=resolve();
         private static Field[] resolve(){
-            try {
-                return new Field[]{
-                    sourceField(EntityLivingBase.class,"lastAttackerTime"),
-                    sourceField(EntityOtherPlayerMP.class,"otherPlayerMPX"),
-                    sourceField(EntityOtherPlayerMP.class,"otherPlayerMPY"),
-                    sourceField(EntityOtherPlayerMP.class,"otherPlayerMPZ")
-                };
-            }catch(ReflectiveOperationException|SecurityException unavailable){
-                // Under unrecognized reobfuscation mappings, never guess.
-                return null;
-            }
+            Field attack=SourceCandidateField189.lastAttackerTime(EntityLivingBase.class);
+            Field x=SourceCandidateField189.remoteX(EntityOtherPlayerMP.class);
+            Field y=SourceCandidateField189.remoteY(EntityOtherPlayerMP.class);
+            Field z=SourceCandidateField189.remoteZ(EntityOtherPlayerMP.class);
+            // All four must resolve under exact 1.8.9 source JNI names.
+            return attack==null||x==null||y==null||z==null?
+                null:new Field[]{attack,x,y,z};
         }
     }
 
     private static final class R353AttackField {
-        static final Field FIELD=resolve();
-        private static Field resolve(){
-            try{
-                Field f=sourceField(EntityLivingBase.class,"lastAttackerTime");
-                return f.getType()==Integer.TYPE?f:null;
-            }catch(ReflectiveOperationException|SecurityException unavailable){
-                return null;
-            }
-        }
+        static final Field FIELD=
+            SourceCandidateField189.lastAttackerTime(EntityLivingBase.class);
     }
 
     public ForgeSourceWorldPort(Minecraft minecraft){this(minecraft,false,null);}
