@@ -56,7 +56,7 @@ public final class SourceClickAttackFenceSmoke {
         set(player,"pk","W",23);set(player,"pr","bl",23);
         denied(()->{
             try{fence.onClick(2,read(player));}
-            catch(ReflectiveOperationException ex){throw new IllegalStateException(ex);}
+            catch(Exception ex){throw new IllegalStateException(ex);}
         },"Unexpected >1 player-tick jump denied");
         fence.prime(2,read(player));
         final AtomicBoolean foreign=new AtomicBoolean();
