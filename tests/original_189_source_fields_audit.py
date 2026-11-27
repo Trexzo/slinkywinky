@@ -13,6 +13,7 @@ MOJANG_189_SIZE = 8461484
 # Original candidate ptr_to_str_sv / ptr_to_str_bll, variant=1.
 # Only these NAME+TYPE facts are admitted, not source module behavior.
 EXPECTED = {
+    "pk": {"W": "I"},                    # Entity ticksExisted original JNI variant 1
     "pr": {"bl": "I"},                   # EntityLivingBase lastAttackerTime
     "bex": {"c": "D", "d": "D", "e": "D"}, # EntityOtherPlayerMP xyz
 }
@@ -126,5 +127,5 @@ def audit_official_source_fields(client_jar):
     with zipfile.ZipFile(path, "r") as game:
         audit_entries(game.read)
     print("R357_ORIGINAL_189_PRIVATE_FIELDS_STATIC_PASS "
-          "EntityLivingBase=pr.bl:I OtherPlayerMP=bex.cde:D")
+          "Entity=pk.W:I EntityLivingBase=pr.bl:I OtherPlayerMP=bex.cde:D")
     print("R357_NO_GAME_PROCESS_NO_JAR_OR_CLASS_EXPORT")

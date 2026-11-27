@@ -36,6 +36,7 @@ def sample_class(owner, fields):
 class SourceFieldAuditTest(unittest.TestCase):
     def setUp(self):
         self.items = {
+            "pk.class": sample_class("pk", [("W", "I")]),
             "pr.class": sample_class("pr", [("bl", "I")]),
             "bex.class": sample_class(
                 "bex", [("c", "D"), ("d", "D"), ("e", "D")]
@@ -44,6 +45,16 @@ class SourceFieldAuditTest(unittest.TestCase):
 
     def test_exact_obfuscated_owners_and_types(self):
         audit_entries(self.items.__getitem__)
+
+    def test_original_entity_tick_type_rejected(self):
+        self.items["pk.class"] = sample_class("pk", [("W", "J")])
+        with self.assertRaises(ValueError):
+            audit_entries(self.items.__getitem__)
+
+    def test_original_entity_tick_missing_rejected(self):
+        self.items["pk.class"] = sample_class("pk", [("S", "I")])
+        with self.assertRaises(ValueError):
+            audit_entries(self.items.__getitem__)
 
     def test_wrong_primitive_type_rejected(self):
         self.items["bex.class"] = sample_class(
