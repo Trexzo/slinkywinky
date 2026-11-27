@@ -590,6 +590,14 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R349: source-pinned Backtrack eligibility, pure Java 8.
+    add_test(NAME r349_java8_source_backtrack_reach_geometry COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r349_source_reach_evidence.cmake)
+    set_tests_properties(r349_java8_source_backtrack_reach_geometry PROPERTIES TIMEOUT 30)
     # R348: in-world-shaped, native packet proposal telemetry with no I/O.
     add_test(NAME r348_java8_live_shaped_native_packet_telemetry COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}

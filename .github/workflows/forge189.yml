@@ -157,6 +157,7 @@ jobs:
             dev/slinkywinky/RosterIsolationGate.class \
             dev/slinkywinky/SourceRuntimePreview.class \
             dev/slinkywinky/SourceWorldReadOnlyHost.class \
+             dev/slinkywinky/SourceBacktrackReachEvidence.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderPort.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderFrame.class \
             dev/slinkywinky/forge/ForgeSourceWorldPort.class \
@@ -215,6 +216,9 @@ jobs:
           grep -Fq 'sourceReachEligible' docs/R337_REAL_FORGE_WORLD_SOURCE_OBSERVATION.md
           grep -Fq 'public final class ForgeSourceWorldPort' "$source"
           grep -Fq '0.1d,0d' "$source"
+           grep -Fq 'r349BacktrackExactReachReadOnly' "$source"
+           grep -Fq 'otherPlayerMPX' "$source"
+           grep -Fq 'SourceBacktrackReachEvidence.currentIsCloserThanShown' "$source"
           grep -Fq 'nativePreview.observe(' "$host"
           if grep -Eq 'write(Key|Timer)|sendPacket|addToSendQueue|glBegin' "$source"; then
             echo 'Unexpected gameplay write in read-only source sampler' >&2; exit 1

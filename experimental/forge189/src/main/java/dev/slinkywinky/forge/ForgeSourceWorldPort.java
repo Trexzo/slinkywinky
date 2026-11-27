@@ -2,6 +2,9 @@ package dev.slinkywinky.forge;
 
 import dev.slinkywinky.SourceWorldReadOnlyHost;
 import dev.slinkywinky.SourceRemotePositionHistory;
+import dev.slinkywinky.SourceBacktrackReachEvidence;
+import java.lang.reflect.Field;
+import net.minecraft.client.entity.EntityOtherPlayerMP;
 import java.util.UUID;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,6 +34,31 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
     private final Minecraft mc;
     private final Thread owner=Thread.currentThread();
     private final boolean debugBoxSettings;
+    private static final boolean R349_EXACT_REACH_READ_ONLY =
+        Boolean.getBoolean("slinkywinky.r349BacktrackExactReachReadOnly");
+    private static Field sourceField(Class<?> type,String name)
+            throws ReflectiveOperationException{
+        final Field field=type.getDeclaredField(name);
+        field.setAccessible(true);
+        return field;
+    }
+    private static final class R349Fields {
+        static final Field[] FIELDS=resolve();
+        private static Field[] resolve(){
+            try {
+                return new Field[]{
+                    sourceField(EntityLivingBase.class,"lastAttackerTime"),
+                    sourceField(EntityOtherPlayerMP.class,"otherPlayerMPX"),
+                    sourceField(EntityOtherPlayerMP.class,"otherPlayerMPY"),
+                    sourceField(EntityOtherPlayerMP.class,"otherPlayerMPZ")
+                };
+            }catch(ReflectiveOperationException|SecurityException unavailable){
+                // Under unrecognized reobfuscation mappings, never guess.
+                return null;
+            }
+        }
+    }
+
     public ForgeSourceWorldPort(Minecraft minecraft){this(minecraft,false);}
     public ForgeSourceWorldPort(Minecraft minecraft,boolean debugBoxSettings){
         if(minecraft==null)throw new IllegalArgumentException("Minecraft unavailable");
@@ -229,7 +257,7 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
         final MovingObjectPosition hit=mc.objectMouseOver;
         final Entity entity=hit==null?null:hit.entityHit;
         final EntityLivingBase target=entity instanceof EntityLivingBase&&
-            entity!=self&&!entity.isDead?(EntityLivingBase)entity:null;
+            entity!=self&&!entity.isDead&&entity.worldObj==world?(EntityLivingBase)entity:null;
         final ItemStack held=self.getHeldItem();
         final boolean weapon=held!=null&&held.getItem()!=null&&
             (held.getItem() instanceof ItemSword||held.getItem() instanceof ItemAxe);
@@ -249,13 +277,33 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
         final boolean jump=self.movementInput!=null&&self.movementInput.jump;
         final boolean cursorBusy=self.inventory!=null&&
                                  self.inventory.getItemStack()!=null;
-        // No known original reach callback or last-attack timestamp at
-        // this Forge phase: do NOT fabricate reach eligibility or attacks.
+        // Candidate-only original field snapshot. No inferred network state.
+        int sourceAttackTime=0;
+        boolean sourceReachEligible=false;
+        if(R349_EXACT_REACH_READ_ONLY && target instanceof EntityOtherPlayerMP){
+            final Field[] fields=R349Fields.FIELDS;
+            if(fields==null)
+                throw new IllegalStateException(
+                    "R349 original-named 1.8.9 reach/attack fields unavailable");
+            try {
+                sourceAttackTime=fields[0].getInt(self);
+                sourceReachEligible=
+                    SourceBacktrackReachEvidence.observedRecentAttack(
+                        self.ticksExisted,sourceAttackTime)&&
+                    SourceBacktrackReachEvidence.currentIsCloserThanShown(
+                        self.posX,self.posY+self.getEyeHeight(),self.posZ,
+                        target.posX,target.posY,target.posZ,
+                        fields[1].getDouble(target),fields[2].getDouble(target),
+                        fields[3].getDouble(target));
+            }catch(IllegalAccessException missing){
+                throw new IllegalStateException("R349 exact reach fields inaccessible",missing);
+            }
+        }
         final int[][] bits={
-            // Backtrack tick: reach admission deliberately 0.
-            {1,weapon?1:0,target!=null?1:0,self.ticksExisted,0,
+            // Backtrack: reach evidence opt-in, no packet ownership.
+            {1,weapon?1:0,target!=null?1:0,self.ticksExisted,sourceAttackTime,
              targetId,self.getEntityId(),target==null?0:target.hurtTime,
-             0,0,debugBoxSettings?1:0,1},
+             sourceReachEligible?1:0,0,debugBoxSettings?1:0,1},
             // Lag Range tick: observed target and sprint, no inferred hit.
             {1,weapon?1:0,target!=null?1:0,self.isSprinting()?1:0,
              0,0,mc.gameSettings.thirdPersonView==0?0:1,
