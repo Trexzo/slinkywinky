@@ -1,6 +1,9 @@
 package dev.slinkywinky.attach;
 
 import dev.slinkywinky.instrument.Vanilla189SourceEvidence;
+import dev.slinkywinky.instrument.Vanilla189CombatClock;
+import dev.slinkywinky.instrument.SourceAttackTickFence;
+import java.lang.reflect.Field;
 import dev.slinkywinky.SourceRuntimePreview;
 
 /** Java8 exact-source primitive copy -> original native Lag Range e18. */
@@ -28,6 +31,15 @@ public final class Vanilla189SourceNativeLagSmoke {
         ctor.setAccessible(true);
         return ctor.newInstance();
     }
+    static void setClock(Object player,String ownerName,String field,int value)throws Exception{
+        for(Class<?> type=player.getClass();type!=null;type=type.getSuperclass()){
+            if(ownerName.equals(type.getName())){
+                Field match=type.getDeclaredField(field);match.setAccessible(true);
+                match.setInt(player,value);return;
+            }
+        }
+        throw new AssertionError("Exact source clock fixture owner absent");
+    }
     public static void main(String[] args)throws Exception{
         Object player=fixture("pr");
         Object target=fixture("bex");
@@ -38,10 +50,29 @@ public final class Vanilla189SourceNativeLagSmoke {
         SourceRuntimePreview.Receipt first=tick(jni,1,1,sample);
         yes(first.sourceEvent==18&&first.at(2)==1&&first.at(3)==1,
             "Real native C++ Lag Range event18 executed and active");
-        SourceRuntimePreview.Receipt lost=tick(jni,1,2,null);
+        // A real Java8 original-source clock drives JNI event15, then
+        // the REAL native Lag Range e18 in the SAME world/owner epoch.
+        SourceAttackTickFence attackFence=new SourceAttackTickFence();
+        yes(!attackFence.observe(1,Vanilla189CombatClock.read(player)),
+            "No phantom event15 on original first-attach snapshot");
+        setClock(player,"pk","W",18);
+        setClock(player,"pr","bl",18);
+        yes(attackFence.observe(1,Vanilla189CombatClock.read(player)),
+            "New original lastAttackerTime equality admits one e15 proxy");
+        SourceRuntimePreview.Receipt attack=jni.observe(
+            1001,1002,1,2,SourceRuntimePreview.LAG_RANGE_ATTACK,
+            new int[]{1,1},new double[0]);
+        yes(attack.sourceEvent==15&&attack.at(2)==1&&attack.at(3)==1,
+            "Native source Lag Range event15 executed BEFORE next tick18");
+        yes(!attackFence.observe(1,Vanilla189CombatClock.read(player)),
+            "Repeated same game tick cannot duplicate source event15");
+        SourceRuntimePreview.Receipt afterAttack=tick(jni,1,2,sample);
+        yes(afterAttack.sourceEvent==18&&afterAttack.at(2)==1,
+            "Native event18 runs after actual JNI event15");
+        SourceRuntimePreview.Receipt lost=tick(jni,1,3,null);
         yes(lost.at(2)==1&&lost.at(3)==0,
             "Ray target loss must disarm native Lag Range within same epoch");
-        SourceRuntimePreview.Receipt second=tick(jni,1,3,sample);
+        SourceRuntimePreview.Receipt second=tick(jni,1,4,sample);
         yes(second.at(2)==1&&second.at(3)==1,
             "Fresh original candidate source sample reactivates native model");
         SourceRuntimePreview.Receipt world=tick(jni,2,1,null);
@@ -51,6 +82,10 @@ public final class Vanilla189SourceNativeLagSmoke {
         try{tick(jni,1,4,sample);}
         catch(IllegalArgumentException|IllegalStateException expected){rejected=true;}
         yes(rejected,"Old original world generation forbidden");
+        yes(!attackFence.observe(2,Vanilla189CombatClock.read(player)),
+            "No old attack-phase signal after JNI world owner generation change");
+        attackFence.close();
+        Vanilla189CombatClock.release();
         jni.close();
         rejected=false;
         try{tick(jni,2,2,sample);}
