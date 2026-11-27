@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import dev.slinkywinky.SourceRuntimePreview;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -51,6 +52,12 @@ public final class InstrumentationProbe {
     // They record validated read-only frames, never entity identities or locations.
     private static int acceptedFrames, worldPlayerFrames, rayTargetFrames, generationChanges;
     private static long lastAcceptedGeneration = -1L;
+    private static final boolean R358_SOURCE_READONLY =
+        Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly");
+    private static final String R358_ORIGINAL_AVE_SHA256 =
+        "430a17aa1911bcd0251aa4dcecb013b6c5b251bb5d0122c7305de0e36dc33e82";
+    private static SourceRuntimePreview r358Source;
+    private static int r358Executed,r358CandidateTargets;
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -106,6 +113,37 @@ public final class InstrumentationProbe {
             nativeOk=nativeContext!=0 && nativeObserveFrame(nativeContext,
                 observed.timeMs,observed.generation,observed.flags,
                 observed.xyz,observed.angles)==1;
+            if(nativeOk&&R358_SOURCE_READONLY){
+                if(r358Source==null)r358Source=new SourceRuntimePreview();
+                final Vanilla189SourceEvidence.Sample remote=observed.source;
+                final boolean worldPlayer=(observed.flags&3)==3;
+                final int[] bits={worldPlayer?1:0,0,
+                    worldPlayer&&remote!=null?1:0,0,0,0,0,0,0,0,0,0};
+                final double[] vals={0,10,0,0,0,150};
+                if(worldPlayer&&remote!=null){
+                    final double dx=observed.xyz[0]-observed.xyz[3];
+                    final double dy=observed.xyz[1]-observed.xyz[4];
+                    final double dz=observed.xyz[2]-observed.xyz[5];
+                    final double distance=dx*dx+dy*dy+dz*dz;
+                    if(!Double.isFinite(distance)||distance>900000000000000d)
+                        throw new IllegalStateException("R358 invalid player/target distance");
+                    vals[0]=distance;
+                    vals[2]=remote.x;vals[3]=remote.y;vals[4]=remote.z;
+                    ++r358CandidateTargets;
+                }
+                // Opaque tokens + actual sampler generation, no Java refs.
+                final SourceRuntimePreview.Receipt nativeTick=r358Source.observe(
+                    1001,1002,observed.generation,n,
+                    SourceRuntimePreview.LAG_RANGE_TICK,bits,vals);
+                if(nativeTick.sourceEvent!=18||nativeTick.at(2)!=1)
+                    throw new IllegalStateException("R358 native source e18 did not execute");
+                ++r358Executed;
+                if(r358Executed==1)
+                    System.out.println(PREFIX+
+                        "R358_REAL_ORIGINAL_CLIENT_SOURCE_NATIVE_E18 generation="+
+                        observed.generation+" candidateTarget="+
+                        (remote==null?0:1)+" packetWrites=0 gameWrites=0");
+            }
         }
         catch (Throwable failure) {
             System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
@@ -147,6 +185,19 @@ public final class InstrumentationProbe {
         if ((n >= tickLimit || requestedStop || !nativeOk) &&
             cleanupStarted.compareAndSet(false, true)) {
             active = false;
+            // Retire the extra source JNI owner on the original game thread.
+            boolean sourceClosed=true;
+            if(r358Source!=null){
+                try {r358Source.close();}
+                catch(Throwable failure){
+                    sourceClosed=false;
+                    System.err.println(PREFIX+"R358_NATIVE_SOURCE_CLOSE_FAIL "+failure);
+                } finally {r358Source=null;}
+            }
+            if(R358_SOURCE_READONLY)
+                System.out.println(PREFIX+"R358_NATIVE_SOURCE_SUMMARY executed="+
+                    r358Executed+" candidateTargets="+r358CandidateTargets+
+                    " nativeClosed="+(sourceClosed?1:0)+" gameWrites=0");
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
             nativeContext=0;
@@ -156,7 +207,7 @@ public final class InstrumentationProbe {
             } catch(Throwable problem) {
                 System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_FAIL "+problem);
             }
-            nativeSessionCloseOk=closed;
+            nativeSessionCloseOk=closed&&sourceClosed;
             // Summarize native-accepted observations before the Java sampler
             // releases all references. A UI cannot mistake this for combat proof.
             System.out.println(PREFIX+"NATIVE_OBSERVATION_SUMMARY accepted="+acceptedFrames+
@@ -472,6 +523,10 @@ public final class InstrumentationProbe {
                 if (type == null || !recognized(type.getName(), test)) return null;
                 seen.incrementAndGet();
                 if (!hook) return null;
+                if(R358_SOURCE_READONLY &&
+                   (!"ave".equals(type.getName())||
+                    !R358_ORIGINAL_AVE_SHA256.equals(hex(sha256(bytes)))))
+                    throw new IllegalStateException("R358 original Mojang 1.8.9 class hash mismatch");
                 originalClassFingerprint = sha256(bytes);
                 ClassReader reader = new ClassReader(bytes);
                 ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
@@ -534,6 +589,11 @@ public final class InstrumentationProbe {
                     throw new IllegalStateException("Unknown Minecraft observation mapping", mappingFailure);
                 }
                 System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
+                if(R358_SOURCE_READONLY){
+                    if(test||!"ave".equals(target.getName()))
+                        throw new IllegalStateException("R358 only admits original vanilla Minecraft");
+                    ObservedState.enableOriginalSourceReadOnly(true);
+                }
                 verifyCallbackVisibility(target);
             } catch (RuntimeException | LinkageError failure) {
                 ObservedState.release();
@@ -553,6 +613,7 @@ public final class InstrumentationProbe {
             rayTargetFrames=0;
             generationChanges=0;
             lastAcceptedGeneration=-1L;
+            r358Source=null;r358Executed=r358CandidateTargets=0;
             installedVia = instrumentation;
             installedClass = target;
             active = true;
