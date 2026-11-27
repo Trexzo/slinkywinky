@@ -55,8 +55,8 @@ public final class Vanilla189SourceNativeLagSmoke {
         SourceAttackTickFence attackFence=new SourceAttackTickFence();
         yes(!attackFence.observe(1,Vanilla189CombatClock.read(player)),
             "No phantom event15 on original first-attach snapshot");
-        setClock(player,"pk","W",18);
-        setClock(player,"pr","bl",18);
+        setClock(player,"pk","W",19);
+        setClock(player,"pr","bl",19);
         yes(attackFence.observe(1,Vanilla189CombatClock.read(player)),
             "New original lastAttackerTime equality admits one e15 proxy");
         SourceRuntimePreview.Receipt attack=jni.observe(

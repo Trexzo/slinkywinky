@@ -35,6 +35,8 @@ public final class Vanilla189CombatClockSmoke {
     }
     public static void main(String[] args)throws Exception{
         Object player=fixture("pr"),ray=fixture("bex");
+        set(player,"pk","W",17);
+        set(player,"pr","bl",16);
         yes(read(null)==null,"No player cannot create an attack phase");
         Vanilla189CombatClock.Sample original=read(player);
         yes(original.playerTicks==17&&original.lastAttackerTime==16,
@@ -64,7 +66,7 @@ public final class Vanilla189CombatClockSmoke {
         rejects(()->read(player),"Attack timestamp ahead of player refused");
         set(player,"pr","bl",22);
         yes(!fence.observe(2,read(player)),"No attack after clock repair");
-        set(player,"pk","W",21);
+        set(player,"pk","W",22);
         rejects(()->fence.observe(2,read(player)),"Clock rollback denied");
         set(player,"pk","W",23);
         set(player,"pr","bl",-1);
