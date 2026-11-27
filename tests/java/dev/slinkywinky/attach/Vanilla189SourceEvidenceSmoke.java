@@ -41,6 +41,7 @@ public final class Vanilla189SourceEvidenceSmoke {
         yes(first!=null&&first.x==10&&first.y==5&&first.z==-4&&
             first.lastAttackTick==18,"Exact original field evidence captured");
         Field c=target.getClass().getDeclaredField("c");
+        c.setAccessible(true);
         c.setDouble(target,11);
         yes(first.x==10&&read(player,target).x==11,
             "Receipt owns immutable primitive copy; cache reads latest field");
