@@ -5,6 +5,7 @@ import dev.slinkywinky.SourceRemotePositionHistory;
 import dev.slinkywinky.SourceBacktrackReachEvidence;
 import dev.slinkywinky.SourceAttackEventFence;
 import dev.slinkywinky.SourceCandidateField189;
+import dev.slinkywinky.SourceCandidatePosition189;
 import java.lang.reflect.Field;
 import net.minecraft.client.entity.EntityOtherPlayerMP;
 import java.util.UUID;
@@ -42,6 +43,8 @@ public final class ForgeSourceWorldPort implements
         Boolean.getBoolean("slinkywinky.r349BacktrackExactReachReadOnly");
     private static final boolean R353_LAG_ATTACK_READ_ONLY =
         Boolean.getBoolean("slinkywinky.r353NativeLagAttackReadOnly");
+    private static final boolean R356_EXACT_LAG_TARGET_READ_ONLY =
+        Boolean.getBoolean("slinkywinky.r356ExactLagTargetReadOnly");
     private static final class R349Fields {
         static final Field[] FIELDS=resolve();
         private static Field[] resolve(){
@@ -303,6 +306,12 @@ public final class ForgeSourceWorldPort implements
         final double serverX=target==null?0:target.serverPosX/32.0d;
         final double serverY=target==null?0:target.serverPosY/32.0d;
         final double serverZ=target==null?0:target.serverPosZ/32.0d;
+        // The original Lag Range e18 reads OtherPlayerMP private XYZ,
+        // never the vanilla fixed-point Entity.serverPosXYZ used in R337.
+        double lagSourceX=serverX,lagSourceY=serverY,lagSourceZ=serverZ;
+        boolean lagTargetKnown=target!=null;
+        if(R356_EXACT_LAG_TARGET_READ_ONLY)
+            lagTargetKnown=target instanceof EntityOtherPlayerMP;
         final boolean inGui=mc.currentScreen!=null;
         final int inventory=inGui?(mc.currentScreen instanceof GuiInventory?1:2):0;
         final float forward=self.movementInput==null?0:
@@ -313,33 +322,44 @@ public final class ForgeSourceWorldPort implements
         // Candidate-only original field snapshot. No inferred network state.
         int sourceAttackTime=0;
         boolean sourceReachEligible=false;
-        if(R349_EXACT_REACH_READ_ONLY && target instanceof EntityOtherPlayerMP){
+        if((R349_EXACT_REACH_READ_ONLY||R356_EXACT_LAG_TARGET_READ_ONLY)&&
+           target instanceof EntityOtherPlayerMP){
             final Field[] fields=R349Fields.FIELDS;
             if(fields==null)
                 throw new IllegalStateException(
-                    "R349 original-named 1.8.9 reach/attack fields unavailable");
-            try {
-                sourceAttackTime=fields[0].getInt(self);
-                sourceReachEligible=
-                    SourceBacktrackReachEvidence.observedRecentAttack(
-                        self.ticksExisted,sourceAttackTime)&&
-                    SourceBacktrackReachEvidence.currentIsCloserThanShown(
-                        self.posX,SourceBacktrackReachEvidence.candidateEyeY(
-                            1,self.posY),self.posZ,
-                        target.posX,target.posY,target.posZ,
-                        fields[1].getDouble(target),fields[2].getDouble(target),
-                        fields[3].getDouble(target));
-            }catch(IllegalAccessException missing){
-                throw new IllegalStateException("R349 exact reach fields inaccessible",missing);
+                    "R356 exact 1.8.9 candidate reach/target fields unavailable");
+            final SourceCandidatePosition189.Point remote=
+                SourceCandidatePosition189.read(target,EntityOtherPlayerMP.class,
+                    fields[1],fields[2],fields[3]);
+            if(R356_EXACT_LAG_TARGET_READ_ONLY){
+                lagSourceX=remote.x;lagSourceY=remote.y;lagSourceZ=remote.z;
+            }
+            if(R349_EXACT_REACH_READ_ONLY){
+                try {
+                    sourceAttackTime=fields[0].getInt(self);
+                    sourceReachEligible=
+                        SourceBacktrackReachEvidence.observedRecentAttack(
+                            self.ticksExisted,sourceAttackTime)&&
+                        SourceBacktrackReachEvidence.currentIsCloserThanShown(
+                            self.posX,SourceBacktrackReachEvidence.candidateEyeY(
+                                1,self.posY),self.posZ,
+                            target.posX,target.posY,target.posZ,
+                            remote.x,remote.y,remote.z);
+                }catch(IllegalAccessException missing){
+                    throw new IllegalStateException(
+                        "R349 source attack field inaccessible",missing);
+                }
             }
         }
+        if(R356_EXACT_LAG_TARGET_READ_ONLY&&!lagTargetKnown)
+            lagSourceX=lagSourceY=lagSourceZ=0;
         final int[][] bits={
             // Backtrack: reach evidence opt-in, no packet ownership.
             {1,weapon?1:0,target!=null?1:0,self.ticksExisted,sourceAttackTime,
              targetId,self.getEntityId(),target==null?0:target.hurtTime,
              sourceReachEligible?1:0,0,debugBoxSettings?1:0,1},
             // Lag Range tick: observed target and sprint, no inferred hit.
-            {1,weapon?1:0,target!=null?1:0,self.isSprinting()?1:0,
+            {1,weapon?1:0,lagTargetKnown?1:0,self.isSprinting()?1:0,
              0,0,mc.gameSettings.thirdPersonView==0?0:1,
              target==null?0:target.hurtTime,0,0,0,
              debugBoxSettings?1:0},
@@ -360,7 +380,7 @@ public final class ForgeSourceWorldPort implements
         };
         final double[][] values={
             {distanceSq,0,120,3,0,6,10},
-            {distanceSq,10,serverX,serverY,serverZ,150},
+            {distanceSq,10,lagSourceX,lagSourceY,lagSourceZ,150},
             {distanceSq,self.motionY,forward,5,3,2,0.5},
             {4}
         };
