@@ -58,7 +58,11 @@ public final class InstrumentationProbe {
         "430a17aa1911bcd0251aa4dcecb013b6c5b251bb5d0122c7305de0e36dc33e82";
     private static SourceRuntimePreview r358Source;
     private static SourceAttackTickFence r360AttackFence;
+    private static SourceClickAttackFence r362ClickFence;
+    private static volatile boolean r362ExactClickMode,r362CallbackFault;
+    private static Thread r362OwnerThread;
     private static int r358Executed,r358CandidateTargets,r360AttackCallbacks;
+    private static long r362ClickReturns,r362AcceptedClicks;
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -88,6 +92,42 @@ public final class InstrumentationProbe {
         throw new IllegalArgumentException("Unsupported diagnostic tick limit");
     }
 
+    /**
+     * R362 normal RETURN from SHA-pinned original ave.aw()V / clickMouse.
+     * Never throws into the game, never cancels a real click and never alters
+     * an on-wire packet. Errors abort the finite diagnostic on next tick.
+     */
+    public static void onOriginalClickReturn(){
+        if(!active||!r362ExactClickMode)return;
+        if(r362OwnerThread==null||r362ClickFence==null||r358Source==null)return;
+        try{
+            if(Thread.currentThread()!=r362OwnerThread)
+                throw new IllegalStateException("R362 click callback on foreign game thread");
+            final ObservedState.AttackClockFrame evidence=
+                ObservedState.captureOnOriginalClickReturn();
+            ++r362ClickReturns;
+            if(evidence!=null&&r362ClickFence.onClick(
+                evidence.generation,evidence.clock)){
+                final long n=ticks.get();
+                if(n<=0)throw new IllegalStateException("No admitted original game tick");
+                final SourceRuntimePreview.Receipt attack=r358Source.observe(
+                    1001,1002,evidence.generation,n,
+                    SourceRuntimePreview.LAG_RANGE_ATTACK,
+                    new int[]{1,1},new double[0]);
+                if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
+                    throw new IllegalStateException("R362 native e15 click receipt denied");
+                ++r362AcceptedClicks;
+                if(r362AcceptedClicks==1)
+                    System.out.println(PREFIX+
+                        "R362_REAL_ORIGINAL_CLICK_TO_NATIVE_E15 normalReturn=1 "+
+                        "timestampMatched=1 gameWrites=0 packetWrites=0");
+            }
+        }catch(Throwable failure){
+            r362CallbackFault=true;
+            System.err.println(PREFIX+"R362_CLICK_CALLBACK_ABORT "+failure);
+        }
+    }
+
     /** Runs on the actual target thread. Never changes Minecraft state. */
     public static void onGameTick() {
         if (!active) return;
@@ -95,6 +135,8 @@ public final class InstrumentationProbe {
         boolean nativeOk = false;
         ObservedState.Frame observed=null;
         try {
+            if(r362CallbackFault)
+                throw new IllegalStateException("R362 prior click callback failed closed");
             observed=ObservedState.sample();
             if(nativeContext==0) {
                 nativeContext=nativeOpenObservation(); // Runs on exact admitted game thread.
@@ -116,26 +158,33 @@ public final class InstrumentationProbe {
                 observed.xyz,observed.angles)==1;
             if(nativeOk&&r358SourceReadOnly){
                 if(r358Source==null)r358Source=new SourceRuntimePreview();
-                if(r360AttackFence==null)r360AttackFence=new SourceAttackTickFence();
                 final Vanilla189SourceEvidence.Sample remote=observed.source;
                 final boolean worldPlayer=(observed.flags&3)==3;
-                // The independent, exact original player clock is available
-                // without a ray target. This is a conservative tick-derived
-                // phase-1 proxy, NOT the original Slinky callback timing.
-                final boolean phaseCandidate=r360AttackFence.observe(
-                    worldPlayer?observed.generation:0,
-                    worldPlayer?observed.combatClock:null);
-                if(phaseCandidate){
-                    final SourceRuntimePreview.Receipt attack=r358Source.observe(
-                        1001,1002,observed.generation,n,
-                        SourceRuntimePreview.LAG_RANGE_ATTACK,
-                        new int[]{1,1},new double[0]);
-                    if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
-                        throw new IllegalStateException("R360 native e15 phase receipt denied");
-                    ++r360AttackCallbacks;
-                    if(r360AttackCallbacks==1)
-                        System.out.println(PREFIX+
-                            "R360_SINGLE_USE_NATIVE_SOURCE_E15_RECEIPT phaseProxy=1 gameWrites=0");
+                if(r362ExactClickMode){
+                    // R362 precise original vanilla clickMouse normal-return
+                    // replaces R360's tick-only candidate in this CLI mode.
+                    if(r362ClickFence==null)r362ClickFence=new SourceClickAttackFence();
+                    r362OwnerThread=Thread.currentThread();
+                    r362ClickFence.prime(
+                        worldPlayer?observed.generation:0,
+                        worldPlayer?observed.combatClock:null);
+                }else{
+                    if(r360AttackFence==null)
+                        r360AttackFence=new SourceAttackTickFence();
+                    // Legacy original prelaunch property mode retains R360
+                    // tick-only inference; it never duplicates R362 e15.
+                    final boolean phaseCandidate=r360AttackFence.observe(
+                        worldPlayer?observed.generation:0,
+                        worldPlayer?observed.combatClock:null);
+                    if(phaseCandidate){
+                        final SourceRuntimePreview.Receipt attack=r358Source.observe(
+                            1001,1002,observed.generation,n,
+                            SourceRuntimePreview.LAG_RANGE_ATTACK,
+                            new int[]{1,1},new double[0]);
+                        if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
+                            throw new IllegalStateException("R360 native e15 phase receipt denied");
+                        ++r360AttackCallbacks;
+                    }
                 }
                 final int[] bits={worldPlayer?1:0,0,
                     worldPlayer&&remote!=null?1:0,0,0,0,0,0,0,0,0,0};
@@ -211,6 +260,13 @@ public final class InstrumentationProbe {
             // Retire both native and original player-clock owners on
             // exactly the Minecraft game thread, before class restoration.
             boolean sourceClosed=true;
+            if(r362ClickFence!=null){
+                try{r362ClickFence.close();}
+                catch(Throwable failure){
+                    sourceClosed=false;
+                    System.err.println(PREFIX+"R362_CLICK_FENCE_CLOSE_FAIL "+failure);
+                } finally{r362ClickFence=null;}
+            }
             if(r360AttackFence!=null){
                 try{r360AttackFence.close();}
                 catch(Throwable failure){
@@ -229,6 +285,8 @@ public final class InstrumentationProbe {
                 System.out.println(PREFIX+"R358_NATIVE_SOURCE_SUMMARY executed="+
                     r358Executed+" candidateTargets="+r358CandidateTargets+
                     " attackPhaseCandidates="+r360AttackCallbacks+
+                    " clickReturns="+r362ClickReturns+
+                    " clickEvidenceNativeE15="+r362AcceptedClicks+
                     " nativeClosed="+(sourceClosed?1:0)+" gameWrites=0");
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
@@ -248,6 +306,8 @@ public final class InstrumentationProbe {
             // Drop Java world, player and reflection references on the exact client
             // thread before the asynchronous class restoration worker begins.
             ObservedState.release();
+            r362ExactClickMode=false;r362CallbackFault=false;
+            r362OwnerThread=null;
             r358SourceReadOnly=false;
             System.out.println(PREFIX+"OBSERVATION_RELEASE_PASS");
             if(closed) System.out.println(PREFIX+"NATIVE_SESSION_CLOSE_PASS");
@@ -565,11 +625,18 @@ public final class InstrumentationProbe {
                 ClassReader reader = new ClassReader(bytes);
                 ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
                 final AtomicInteger exact = new AtomicInteger();
+                final AtomicInteger clickMethods = new AtomicInteger();
+                final AtomicInteger clickReturns = new AtomicInteger();
                 ClassVisitor visitor = new ClassVisitor(Opcodes.ASM5, writer) {
                     @Override public MethodVisitor visitMethod(int access, String method,
                             String descriptor, String signature, String[] exceptions) {
                         MethodVisitor downstream =
                             super.visitMethod(access, method, descriptor, signature, exceptions);
+                        if(r362ExactClickMode &&
+                           Vanilla189ClickExitWeaver.matches(method,descriptor,access)){
+                            clickMethods.incrementAndGet();
+                            return Vanilla189ClickExitWeaver.wrap(downstream,clickReturns);
+                        }
                         if (isTickMethod(method,test,"ave".equals(type.getName())) && "()V".equals(descriptor) &&
                             (access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT)) == 0) {
                             exact.incrementAndGet();
@@ -588,6 +655,10 @@ public final class InstrumentationProbe {
                 reader.accept(visitor, 0);
                 if (exact.get() != 1)
                     throw new IllegalStateException("Exact tick mapping unavailable: " + exact.get());
+                if (r362ExactClickMode &&
+                    (clickMethods.get()!=1||clickReturns.get()<1))
+                    throw new IllegalStateException(
+                        "R362 exact original ave.aw()V click return mapping unavailable");
                 modified.incrementAndGet();
                 return writer.toByteArray();
             }
@@ -601,6 +672,7 @@ public final class InstrumentationProbe {
         if (hook) {
             r358SourceReadOnly=sourceMode||
                 Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly");
+            r362ExactClickMode=sourceMode;
             try {
                 if (delimiter < 0 || delimiter == options.length() - 1)
                     throw new IllegalArgumentException("Missing exact JNI library path");
@@ -636,6 +708,7 @@ public final class InstrumentationProbe {
             } catch (RuntimeException | LinkageError failure) {
                 ObservedState.release();
                 r358SourceReadOnly=false;
+                r362ExactClickMode=false;
                 hookInstalled.set(false); // No transformer was installed.
                 throw failure;
             }
@@ -652,8 +725,10 @@ public final class InstrumentationProbe {
             rayTargetFrames=0;
             generationChanges=0;
             lastAcceptedGeneration=-1L;
-            r358Source=null;r360AttackFence=null;
+            r358Source=null;r360AttackFence=null;r362ClickFence=null;
+            r362OwnerThread=null;r362CallbackFault=false;
             r358Executed=r358CandidateTargets=r360AttackCallbacks=0;
+            r362ClickReturns=r362AcceptedClicks=0;
             installedVia = instrumentation;
             installedClass = target;
             active = true;

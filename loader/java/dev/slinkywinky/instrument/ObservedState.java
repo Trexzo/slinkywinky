@@ -28,6 +28,18 @@ public final class ObservedState {
         }
     }
 
+    /**
+     * R362 callback evidence: only primitive values from the same world/player
+     * already admitted by the most recent source client tick.
+     */
+    public static final class AttackClockFrame {
+        public final long generation;
+        public final Vanilla189CombatClock.Sample clock;
+        private AttackClockFrame(long generation,Vanilla189CombatClock.Sample clock){
+            this.generation=generation;this.clock=clock;
+        }
+    }
+
     private static Class<?> mcClass;
     private static Method getter;
     private static Field worldField, playerField, rayField;
@@ -250,6 +262,24 @@ public final class ObservedState {
         }
         return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera,
                          originalSource,originalClock);
+    }
+
+    /** Read original combat clock at a normal vanilla clickMouse RETURN.
+     * Reject stale/world-replaced frames without advancing any generation.
+     */
+    public static synchronized AttackClockFrame captureOnOriginalClickReturn()
+            throws ReflectiveOperationException {
+        if(!sourceReadOnly||!vanillaObfuscated||mcClass==null)return null;
+        final Object mc=getter.invoke(null);
+        if(mc==null)return null;
+        final Object observedWorld=worldField.get(mc);
+        final Object observedPlayer=playerField.get(mc);
+        if(observedWorld==null||observedPlayer==null||
+           observedWorld!=oldWorld||observedPlayer!=oldPlayer)
+            return null;
+        final Vanilla189CombatClock.Sample clock=
+            Vanilla189CombatClock.read(observedPlayer);
+        return new AttackClockFrame(generation,clock);
     }
 
     /** Clear all strong world/player, reflection, and classloader references. */
