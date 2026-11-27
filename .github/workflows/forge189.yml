@@ -100,17 +100,17 @@ jobs:
           cache-disabled: true
       - name: Build experimental Forge 1.8.9 JAR
         run: gradle --no-daemon -p experimental/forge189 build --stacktrace
-      - name: Verify four real Netty EmbeddedChannel pass-through tests
+      - name: Verify seven real Netty EmbeddedChannel pass-through tests
         shell: bash
         run: |
           set -euo pipefail
           xml=experimental/forge189/build/test-results/TEST-dev.slinkywinky.forge.ForgeSourcePacketTapEmbeddedTest.xml
           test -f "$xml"
-          test "$(grep -c '<testcase' "$xml")" -eq 6
+          test "$(grep -c '<testcase' "$xml")" -eq 7
           if grep -Eq '<failure|<error' "$xml"; then
             echo "R340 Netty identity and overflow tests failed" >&2; exit 1
           fi
-          echo R340_EMBEDDED_CHANNEL_ORIGINAL_PACKET_IDENTITY_PASS
+          echo R352_S19_SOURCE_IDENTITY_AND_R340_PACKET_PASS_THROUGH_PASS
       - name: R344 real Netty packet retention and release owner tests
         shell: bash
         run: |
