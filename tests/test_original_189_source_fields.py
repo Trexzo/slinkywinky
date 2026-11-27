@@ -69,10 +69,7 @@ class SourceFieldAuditTest(unittest.TestCase):
     def test_truncated_or_nonclass_refused(self):
         for raw in [b"", b"notaclass", self.items["pr.class"][:-5]]:
             with self.subTest(length=len(raw)), self.assertRaises(ValueError):
-                if raw.startswith(b"\\xca\\xfe\\xba\\xbe") and len(raw) > 10:
-                    class_fields(raw)
-                else:
-                    class_fields(raw)
+                class_fields(raw)
 
 
 if __name__ == "__main__":
