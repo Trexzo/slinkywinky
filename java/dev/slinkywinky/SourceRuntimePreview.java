@@ -3,11 +3,20 @@ package dev.slinkywinky;
 /** R335: Java 8 owner-thread-only JNI view of four candidate native modules.
  * This class observes read-only results and performs NO Minecraft actions. */
 public final class SourceRuntimePreview implements AutoCloseable {
-    static {
-        // R358 original JVM Attach agent already loaded exact DLL by absolute
-        // path, in the SAME agent classloader. Normal Forge loads unchanged.
-        if(!Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly"))
-            System.loadLibrary("slinkywinky_jni");
+    // R359: eager static loading prevented a verified original Java8 Attach
+    // agent from using the DLL it already loaded through System.load(path).
+    // Only the explicit admitted agent path may bypass default library loading.
+    private static boolean nativeReady,externallyPreloaded;
+    public static synchronized void admitPreloadedLibrary(){
+        if(nativeReady&&!externallyPreloaded)
+            throw new IllegalStateException("R359 native library already owns a loader");
+        externallyPreloaded=true;
+    }
+    private static synchronized void ensureNativeReady(){
+        if(!nativeReady){
+            if(!externallyPreloaded)System.loadLibrary("slinkywinky_jni");
+            nativeReady=true;
+        }
     }
     private static native long nativeOpen();
     private static native double[] nativeObserve(long handle,long[] identity,
@@ -108,6 +117,7 @@ public final class SourceRuntimePreview implements AutoCloseable {
     private final Thread owner=Thread.currentThread();
     private long handle;
     public SourceRuntimePreview(){
+        ensureNativeReady();
         handle=nativeOpen();
         if(handle<=0)throw new IllegalStateException("Native source preview unavailable");
     }
