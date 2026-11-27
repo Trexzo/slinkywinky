@@ -590,6 +590,15 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R362: actual Java8 click-return source e15 -> native C++ e18.
+    add_test(NAME r362_java8_native_original_click_e15_e18 COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r362_click_native_lag_jni.cmake)
+    set_tests_properties(r362_java8_native_original_click_e15_e18 PROPERTIES TIMEOUT 40)
     # R362: one-shot actual click-return evidence, original combat clock.
     add_test(NAME r362_java8_original_click_return_handoff COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
