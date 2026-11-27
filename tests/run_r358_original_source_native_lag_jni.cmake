@@ -9,6 +9,8 @@ execute_process(COMMAND "${JAVA_COMPILER}" -source 8 -target 8 -encoding UTF-8
   -d "${STAGE}"
   "${PROJECT_ROOT}/java/dev/slinkywinky/SourceRuntimePreview.java"
   "${PROJECT_ROOT}/loader/java/dev/slinkywinky/instrument/Vanilla189SourceEvidence.java"
+  "${PROJECT_ROOT}/loader/java/dev/slinkywinky/instrument/Vanilla189CombatClock.java"
+  "${PROJECT_ROOT}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/attach/R358OriginalSourceFixture.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/attach/Vanilla189SourceNativeLagSmoke.java"
   RESULT_VARIABLE RC OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)

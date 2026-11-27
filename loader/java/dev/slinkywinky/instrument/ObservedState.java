@@ -18,10 +18,13 @@ public final class ObservedState {
         public final float[] angles; // yaw, pitch
         /** Immutable original 1.8.9 source candidate, when explicitly enabled. */
         public final Vanilla189SourceEvidence.Sample source;
+        public final Vanilla189CombatClock.Sample combatClock;
 
         Frame(long t,long g,int f,double[] p,float[] a,
-              Vanilla189SourceEvidence.Sample source){
-            timeMs=t;generation=g;flags=f;xyz=p;angles=a;this.source=source;
+              Vanilla189SourceEvidence.Sample source,
+              Vanilla189CombatClock.Sample clock){
+            timeMs=t;generation=g;flags=f;xyz=p;angles=a;
+            this.source=source;this.combatClock=clock;
         }
     }
 
@@ -206,7 +209,11 @@ public final class ObservedState {
         double[] xyz=new double[6];
         float[] camera=new float[2];
         Vanilla189SourceEvidence.Sample originalSource=null;
+        Vanilla189CombatClock.Sample originalClock=null;
         if(world!=null && player!=null) {
+            // R360: original clock is not conditional on ray-selected target.
+            if(sourceReadOnly)
+                originalClock=Vanilla189CombatClock.read(player);
             PlayerFields bound=playerBinding(player);
             xyz[0]=numeric(bound.position.x,player);
             xyz[1]=numeric(bound.position.y,player)+eyeHeight(bound,player);
@@ -242,7 +249,7 @@ public final class ObservedState {
             oldPlayer=player;
         }
         return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera,
-                         originalSource);
+                         originalSource,originalClock);
     }
 
     /** Clear all strong world/player, reflection, and classloader references. */
@@ -257,6 +264,7 @@ public final class ObservedState {
         vanillaObfuscated=false;
         sourceReadOnly=false;
         Vanilla189SourceEvidence.release();
+        Vanilla189CombatClock.release();
         generation=1;
         cachedPlayer=null;
         cachedTarget=null;
