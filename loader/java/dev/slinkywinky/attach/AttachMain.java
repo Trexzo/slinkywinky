@@ -42,6 +42,9 @@ public final class AttachMain {
             final boolean renderVisibility = args.length == 4 && "--render-visibility=72".equals(args[3]);
             final boolean manualVisibility = args.length == 4 && "--render-visibility=manual".equals(args[3]);
             final String requestedOption = args.length == 4 ? args[3] : "";
+            final boolean sourceExtended="--source-tick-readonly=600".equals(requestedOption);
+            final boolean sourceHook=sourceExtended||
+                "--source-tick-readonly".equals(requestedOption);
             final boolean extendedHook = "--hook-probe=120".equals(requestedOption) ||
                                          "--hook-probe=600".equals(requestedOption);
             final boolean continuousHook = "--hook-probe=continuous".equals(requestedOption);
@@ -87,6 +90,15 @@ public final class AttachMain {
                 throw new IllegalArgumentException("R75 requires SLINKYWINKY_RENDER_CALLBACK=1");
             if (renderPreflight && !"1".equals(System.getenv("SLINKYWINKY_RENDER_PREFLIGHT")))
                 throw new IllegalArgumentException("Render preflight requires SLINKYWINKY_RENDER_PREFLIGHT=1");
+            if (sourceHook &&
+                (!"1".equals(System.getenv("SLINKYWINKY_EXPERIMENTAL_HOOK")) ||
+                 !"1".equals(System.getenv("SLINKYWINKY_SOURCE_NATIVE_READONLY"))))
+                throw new IllegalArgumentException(
+                    "R359 requires separate original source and experimental hook consent");
+            if (sourceExtended &&
+                !"1".equals(System.getenv("SLINKYWINKY_EXTENDED_DIAGNOSTIC")))
+                throw new IllegalArgumentException(
+                    "R359 600 ticks require the extended diagnostic consent");
             if (hookProbe && !"1".equals(System.getenv("SLINKYWINKY_EXPERIMENTAL_HOOK")))
                 throw new IllegalArgumentException("Unverified hook requires explicit SLINKYWINKY_EXPERIMENTAL_HOOK=1");
             if (extendedHook && !"1".equals(System.getenv("SLINKYWINKY_EXTENDED_DIAGNOSTIC")))
@@ -94,7 +106,7 @@ public final class AttachMain {
             if (continuousHook && !"1".equals(System.getenv("SLINKYWINKY_CONTINUOUS_OBSERVATION")))
                 throw new IllegalArgumentException("Continuous hook requires SLINKYWINKY_CONTINUOUS_OBSERVATION=1");
             if (args.length == 4 && !tickProbe && !instrumentProbe &&
-                !renderPreflight && !renderCallback && !renderContext && !renderWindowAudit && !renderOverlay && !renderMultiframe && !renderRetained && !renderOperator && !renderVisibility && !manualVisibility && !hookProbe) throw new IllegalArgumentException("Unknown option");
+                !renderPreflight && !renderCallback && !renderContext && !renderWindowAudit && !renderOverlay && !renderMultiframe && !renderRetained && !renderOperator && !renderVisibility && !manualVisibility && !hookProbe && !sourceHook) throw new IllegalArgumentException("Unknown option");
             final String pid = args[1];
             if (!pid.matches("[0-9]{1,10}"))
                 throw new IllegalArgumentException("Numeric PID required");
@@ -105,13 +117,16 @@ public final class AttachMain {
             if (target == null) throw new IllegalArgumentException("Target is not an attachable JVM owned by this user");
             final boolean test = "1".equals(System.getenv("SLINKYWINKY_ATTACH_TEST"));
             // Never allow the synthetic Attach-test bypass for the original-only R75 hook.
+            if (sourceHook && test)
+                throw new IllegalArgumentException(
+                    "R359 original source JNI cannot run in synthetic Attach test mode");
             if ((renderCallback || renderContext || renderWindowAudit || renderOverlay || renderMultiframe || renderRetained || renderOperator) && test)
                 throw new IllegalArgumentException("R75 cannot run in Attach test mode");
             if (!test && !recognizedMinecraft(target.displayName()))
                 throw new IllegalArgumentException("Refusing non-Minecraft target: " + target.displayName());
             VirtualMachine vm = VirtualMachine.attach(target);
             try {
-                if (instrumentProbe || hookProbe || renderPreflight || renderCallback || renderContext || renderWindowAudit || renderOverlay || renderMultiframe || renderRetained || renderOperator || renderVisibility || manualVisibility) {
+                if (instrumentProbe || hookProbe || sourceHook || renderPreflight || renderCallback || renderContext || renderWindowAudit || renderOverlay || renderMultiframe || renderRetained || renderOperator || renderVisibility || manualVisibility) {
                     File instrumentationJar = new File(dll.getParentFile(), "slinkywinky_instrument.jar");
                     if (!instrumentationJar.isFile())
                         throw new IllegalArgumentException("Missing instrumentation agent JAR");
@@ -136,14 +151,16 @@ public final class AttachMain {
                         new File(dll.getParentFile(),"slinkywinky_jni.dll").getCanonicalPath();
                     if ((renderContext || renderWindowAudit || renderOverlay || renderMultiframe || renderRetained || renderOperator || renderVisibility || manualVisibility) && !new File(dll.getParentFile(),"slinkywinky_jni.dll").isFile())
                         throw new IllegalArgumentException("R78 requires standalone JNI library");
-                    if (hookProbe) {
+                    if (hookProbe || sourceHook) {
                         File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
                         if (!jniLibrary.isFile())
                             throw new IllegalArgumentException("Missing standalone JNI library");
-                        options = (continuousHook ? (test ? "hook-continuous" : "minecraft-continuous") :
-                                               (test ? "hook-probe" : "minecraft-hook")) +
-                            "|" + jniLibrary.getCanonicalPath() +
-                            (extendedHook ? "|" + requestedOption.substring("--hook-probe=".length()) : "");
+                        final String selectedMode=sourceHook ? "minecraft-source-readonly" :
+                            (continuousHook ? (test ? "hook-continuous" : "minecraft-continuous") :
+                                             (test ? "hook-probe" : "minecraft-hook"));
+                        options = selectedMode + "|" + jniLibrary.getCanonicalPath() +
+                            (sourceExtended ? "|600" :
+                             (extendedHook ? "|" + requestedOption.substring("--hook-probe=".length()) : ""));
                     }
                     vm.loadAgent(instrumentationJar.getCanonicalPath(), options);
                 } else {
@@ -158,6 +175,7 @@ public final class AttachMain {
                 (manualVisibility ? " mode=render-manual-r94" :
                 (renderVisibility ? " mode=render-visibility-r93" :
                 (renderMultiframe ? " mode=render-overlay-r92" : (renderOverlay ? " mode=render-overlay-r91" : (renderContext ? " mode=render-context-r78" : (renderCallback ? " mode=render-callback-r75" : (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))))))))))));
+            if(sourceHook)receipt=" mode=original-source-readonly-r359";
             System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + receipt);
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
