@@ -7,6 +7,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.ChannelPromise;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.lang.reflect.Field;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.NetworkManager;
@@ -57,6 +58,24 @@ public final class ForgeSourcePacketTap implements AutoCloseable {
         return installed?queue:null;
     }
     private static final class Observer extends ChannelDuplexHandler {
+        // R352: the private candidate JNI uses GetIntField on S19, not
+        // getEntity(World). Only exact mapped int fields are admissible.
+        // No World, game Entity, or JNI calls occur on Netty.
+        private static final Field SOURCE_S19_ID=resolveS19EntityId();
+        private static Field resolveS19EntityId(){
+            final String[] mappedNames={"entityId","field_149164_a","a"};
+            for(String name:mappedNames){
+                try{
+                    Field field=S19PacketEntityStatus.class.getDeclaredField(name);
+                    if(field.getType()!=Integer.TYPE)continue;
+                    field.setAccessible(true);
+                    return field;
+                }catch(ReflectiveOperationException|SecurityException missing){
+                    // Try only the other original-candidate mapping names.
+                }
+            }
+            return null;
+        }
         private final SourcePacketReadOnlyQueue ingress;
         private Observer(SourcePacketReadOnlyQueue queue){ingress=queue;}
         private void observe(int direction,Object msg){
@@ -68,8 +87,21 @@ public final class ForgeSourcePacketTap implements AutoCloseable {
             if(direction==SourcePacketReadOnlyQueue.IN){
                 if(msg instanceof S19PacketEntityStatus){
                     kind=SourcePacketReadOnlyQueue.ENTITY_STATUS;
-                    // In 1.8.9 S19 exposes ID only via getEntity(World).
-                    // Never dereference a World from Netty.
+                    // R352: candidate's exact private integer field is
+                    // admissible without the public getEntity(World) API.
+                    // Unknown/default/nonpositive IDs remain untrusted.
+                    if(SOURCE_S19_ID!=null){
+                        try{
+                            final int statusEntityId=SOURCE_S19_ID.getInt(msg);
+                            if(statusEntityId>0){
+                                entity=statusEntityId;
+                                entityKnown=true;
+                            }
+                        }catch(IllegalAccessException invalid){
+                            throw new IllegalStateException(
+                                "S19 source field inaccessible after admission",invalid);
+                        }
+                    }
                 }else if(msg instanceof S06PacketUpdateHealth){
                     kind=SourcePacketReadOnlyQueue.UPDATE_HEALTH;
                 }else if(msg instanceof S29PacketSoundEffect){

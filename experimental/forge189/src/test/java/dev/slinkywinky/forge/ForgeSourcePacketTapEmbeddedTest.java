@@ -67,6 +67,46 @@ public final class ForgeSourcePacketTapEmbeddedTest {
         }
     }
 
+    @Test public void originalS19EntityIdCapturedWithoutWorldAndPacketRetained()
+            throws Exception{
+        // Recreate a decoded private S19 field in a disposable packet.
+        // Candidate rdata.s names: entityId (MCP), field_149164_a (SRG), a (obf).
+        final S19PacketEntityStatus status=new S19PacketEntityStatus();
+        java.lang.reflect.Field idField=null;
+        for(String name:new String[]{"entityId","field_149164_a","a"}){
+            try{
+                final java.lang.reflect.Field candidate=
+                    S19PacketEntityStatus.class.getDeclaredField(name);
+                if(candidate.getType()==Integer.TYPE){
+                    idField=candidate;
+                    break;
+                }
+            }catch(NoSuchFieldException missing){/* next known mapping */}
+        }
+        Assert.assertNotNull("Original candidate S19 int field must resolve",idField);
+        idField.setAccessible(true);
+        idField.setInt(status,21);
+        final SourcePacketReadOnlyQueue q=new SourcePacketReadOnlyQueue();
+        final EmbeddedChannel channel=new EmbeddedChannel(
+            ForgeSourcePacketTap.diagnosticObserver(q));
+        try{
+            Assert.assertTrue(channel.writeInbound(status));
+            Assert.assertSame("Same original S19 Packet",status,channel.readInbound());
+            Assert.assertNull("Never duplicated",channel.readInbound());
+            SourcePacketReadOnlyQueue.Batch b=q.drain(4);
+            Assert.assertEquals(1,b.rows.size());
+            SourcePacketReadOnlyQueue.Observation o=b.rows.get(0);
+            Assert.assertEquals(SourcePacketReadOnlyQueue.ENTITY_STATUS,o.kind);
+            Assert.assertTrue("Exact candidate direct integer ID",o.entityIdKnown);
+            Assert.assertEquals(21,o.entityId);
+            Assert.assertEquals(1,SourcePacketReadOnlyQueue.sourceBacktrackKind(o));
+            Assert.assertTrue("Observer never interrupts channel",channel.isOpen());
+        }finally{
+            channel.finish();
+            q.close();
+        }
+    }
+
     @Test public void overflowNeverBlocksOrSwallowsRealPackets(){
         SourcePacketReadOnlyQueue q=new SourcePacketReadOnlyQueue();
         EmbeddedChannel channel=new EmbeddedChannel(
