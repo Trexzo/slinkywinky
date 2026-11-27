@@ -21,10 +21,15 @@ public final class SourceLagRangeAttackPhaseSmoke {
     static final class Port implements SourceWorldReadOnlyHost.AttackPort {
         Object world=new Object(),player=new Object();
         boolean current=true;
+        SourceAttackEventFence attackFence;
+        int playerTick=100;
         public boolean admittedClientThread(){return true;}
         public Object worldIdentity(){return world;}
         public Object playerIdentity(){return player;}
-        public boolean sourceLagRangeAttackNow(){return current;}
+        public boolean sourceLagRangeAttackNow(){
+            return (attackFence==null||attackFence.consume(world,player,
+                playerTick,System.nanoTime()))&&current;
+        }
         public SourceWorldReadOnlyHost.Frame capture(){
             return new SourceWorldReadOnlyHost.Frame(new int[][]{
                 {1,1,0,100,0,0,1,0,0,0,0,0},
@@ -87,14 +92,15 @@ public final class SourceLagRangeAttackPhaseSmoke {
         Port port=new Port();
         // R354: no source e15 without an owned, recent Forge attempt.
         SourceAttackEventFence attackFence=new SourceAttackEventFence();
-        port.current=false;
+        port.attackFence=attackFence;
+        port.current=true;
         SourceWorldReadOnlyHost.TickReceipt unarmed=host.observe(port);
         yes(unarmed.lagRangeAttack==null,"No attack attempt means no native e15");
-        port.current=true;
-        attackFence.record(port.world,port.player,1,System.nanoTime());
-        yes(attackFence.consume(port.world,port.player,1,System.nanoTime()),
-            "Real-shaped Forge attack event accepted before native source e15");
+        attackFence.record(port.world,port.player,port.playerTick,System.nanoTime());
+        ++port.playerTick;
         SourceWorldReadOnlyHost.TickReceipt received=host.observe(port);
+        yes(attackFence.admitted()==1&&attackFence.pending()==0,
+            "Host's real AttackPort consumed one owned Forge event");
         yes(received.lagRangeAttack!=null&&received.lagRangeAttack.sourceEvent==15&&
             received.lagRangeAttack.at(2)==1&&
             received.lagRangeAttack.tick==received.lagRange.tick,
@@ -102,8 +108,11 @@ public final class SourceLagRangeAttackPhaseSmoke {
         yes(outgoingAttack(nativeHost,received.lagRange.world,received.lagRange.player,
             received.generation,received.tick).at(4)==1,
             "Host-backed native attack state reaches packet release model");
-        port.world=new Object();port.current=false;
+        attackFence.record(port.world,port.player,port.playerTick,System.nanoTime());
+        port.world=new Object();port.current=false;++port.playerTick;
         SourceWorldReadOnlyHost.TickReceipt switched=host.observe(port);
+        yes(attackFence.pending()==0&&attackFence.rejected()>=1,
+            "World replacement rejected stale pending Forge attack event");
         yes(switched.lagRangeAttack==null&&switched.generation==received.generation+1,
             "World replacement refuses previous attack epoch");
         yes(outgoingAttack(nativeHost,switched.lagRange.world,switched.lagRange.player,

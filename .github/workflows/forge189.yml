@@ -161,6 +161,8 @@ jobs:
             dev/slinkywinky/RosterIsolationGate.class \
             dev/slinkywinky/SourceRuntimePreview.class \
             dev/slinkywinky/SourceWorldReadOnlyHost.class \
+            dev/slinkywinky/SourceWorldReadOnlyHost\$AttackPort.class \
+            dev/slinkywinky/SourceAttackEventFence.class \
              dev/slinkywinky/SourceBacktrackReachEvidence.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderPort.class \
             dev/slinkywinky/SourceWorldReadOnlyHost\$RenderFrame.class \
