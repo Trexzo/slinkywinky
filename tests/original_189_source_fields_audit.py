@@ -19,7 +19,7 @@ EXPECTED = {
 }
 
 
-def class_fields(raw):
+def class_members(raw):
     """Minimal bounds-checked JVM ClassFile metadata decoder; no bytecode."""
     data = memoryview(raw)
     offset = 0
@@ -98,7 +98,53 @@ def class_fields(raw):
         for _ in range(u2()):  # field attributes
             u2()  # name index
             take(u4())
-    return class_name, fields
+    # The original private-field audit parsed only field_info. R361 also
+    # verifies the exact vanilla clickMouse method inside the same validated
+    # ClassFile. Parse all method_info entries with attribute bounds checks.
+    methods = {}
+    for _ in range(u2()):
+        flags = u2()
+        name = utf8(u2())
+        descriptor = utf8(u2())
+        code = False
+        for _ in range(u2()):
+            attribute_name = utf8(u2())
+            payload = bytes(take(u4()))
+            if attribute_name == "Code":
+                if code or len(payload) < 12:
+                    raise ValueError("Invalid/duplicate JVM Code attribute")
+                bytecode_length = struct.unpack_from(">I", payload, 4)[0]
+                if bytecode_length == 0 or 8 + bytecode_length + 4 > len(payload):
+                    raise ValueError("Truncated JVM Code body")
+                code = True
+        key = (name, descriptor)
+        if key in methods:
+            raise ValueError("Duplicate original JVM method")
+        methods[key] = (flags, code)
+    for _ in range(u2()):  # class attributes
+        u2()
+        take(u4())
+    if offset != len(data):
+        raise ValueError("Unexpected trailing class bytes")
+    return class_name, fields, methods
+
+
+def class_fields(raw):
+    name, fields, _ = class_members(raw)
+    return name, fields
+
+
+def audit_original_attack_method(read_class):
+    """Original JNI table variant 1: Minecraft=ave, clickMouse=aw()V."""
+    name, _, methods = class_members(read_class("ave.class"))
+    if name != "ave":
+        raise ValueError("Wrong original Minecraft owner for clickMouse")
+    # Require both original vanilla tick and source candidate clickMouse
+    # shapes. Mere source mapping names are insufficient.
+    for method in ("s", "aw"):
+        member = methods.get((method, "()V"))
+        if member is None or member[0] & (0x0008 | 0x0100 | 0x0400) or not member[1]:
+            raise ValueError("Missing or non-instance original ave." + method + "()V")
 
 
 def audit_entries(read_class):
@@ -126,6 +172,9 @@ def audit_official_source_fields(client_jar):
         raise ValueError("Wrong original Mojang 1.8.9 SHA-1")
     with zipfile.ZipFile(path, "r") as game:
         audit_entries(game.read)
+        audit_original_attack_method(game.read)
+    print("R361_ORIGINAL_189_ATTACK_METHOD_STATIC_PASS "
+          "owner=ave method=aw descriptor=()V originalTick=s()V")
     print("R357_ORIGINAL_189_PRIVATE_FIELDS_STATIC_PASS "
           "Entity=pk.W:I EntityLivingBase=pr.bl:I OtherPlayerMP=bex.cde:D")
     print("R357_NO_GAME_PROCESS_NO_JAR_OR_CLASS_EXPORT")
