@@ -264,6 +264,14 @@ jobs:
             echo 'R347 JNI verdict transport may NOT replay network packets' >&2
             exit 1
           fi
+          grep -Fq 'r348NativePacketVerdictTelemetryReadOnly' "$forge"
+          grep -Fq 'R348_REAL_NATIVE_PACKET_VERDICT_TELEMETRY' "$forge"
+          grep -Fq 'backtrackHold' "$host"
+          grep -Fq 'backtrackFeedback' "$host"
+          grep -Fq 'lagRangeHold' "$host"
+          grep -Fq 'timerHold' "$host"
+          grep -Fq 'packetsAlreadyForwarded=1 gameWrites=0' "$forge"
+          echo R348_REAL_NATIVE_PACKET_PROPOSALS_ONLY_PACKAGING_PASS
           echo R347_REAL_JNI_PACKET_VERDICT_FIFO_PASSIVE_PACKAGING_PASS
           echo R346_PASSIVE_JNI_NETTY_TICKET_PACKAGING_PASS
           echo R343_BOUNDED_NEARBY_PLAYER_HISTORY_PACKAGING_PASS

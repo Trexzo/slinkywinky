@@ -121,11 +121,16 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
     public static final class PacketReceipt {
         public final long generation,tick,observed;
         public final int incoming,outgoing,inventory,callbacks;
+        /** REAL native JNI packet *proposals*. All packets already forwarded. */
+        public final int backtrackHold,backtrackFeedback,lagRangeHold,timerHold;
         private PacketReceipt(long g,long t,long observed,int inbound,
-                              int outbound,int inventory,int callbacks){
+                              int outbound,int inventory,int callbacks,
+                              int btHold,int btFeedback,int lagHold,int tmHold){
             generation=g;tick=t;this.observed=observed;
             incoming=inbound;outgoing=outbound;this.inventory=inventory;
             this.callbacks=callbacks;
+            backtrackHold=btHold;backtrackFeedback=btFeedback;
+            lagRangeHold=lagHold;timerHold=tmHold;
         }
     }
     public SourceWorldReadOnlyHost(){
@@ -271,6 +276,7 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
             if(packetIngress==null)packetIngress=ingress;
             final SourcePacketReadOnlyQueue.Batch batch=ingress.drain(128);
             int incoming=0,outgoing=0,inventory=0,callbacks=0;
+            int btHeld=0,btFeedback=0,lagHeld=0,timerHeld=0;
             for(SourcePacketReadOnlyQueue.Observation o:batch.rows){
                 if(!port.admittedClientThread()||
                    port.worldIdentity()!=world||port.playerIdentity()!=player)
@@ -291,13 +297,19 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                         kind=2;
                     else if(o.kind==SourcePacketReadOnlyQueue.SOUND)kind=3;
                     else if(o.kind==SourcePacketReadOnlyQueue.VELOCITY)kind=4;
-                    else if(o.kind==SourcePacketReadOnlyQueue.TELEPORT)kind=5;
+                    else if(o.kind==SourcePacketReadOnlyQueue.TELEPORT||
+                            o.kind==SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT)
+                        kind=5;
                     SourceRuntimePreview.Receipt r=nativePreview.observe(
                         worldNumber,playerNumber,generation,tick,
                         SourceRuntimePreview.BACKTRACK_PACKET,
                         new int[]{kind,o.sequence,o.entityId,1},
                         new double[]{0});
                     if(r.sourceEvent!=2)throw new IllegalStateException("Wrong source ingress phase");
+                    if(r.at(3)==1)++btHeld;
+                    else if(r.at(3)==2)++btFeedback;
+                    else if(r.at(3)!=0)throw new IllegalStateException(
+                        "Invalid native Backtrack packet proposal");
                     ++incoming;++callbacks;
                 }else if(o.direction==SourcePacketReadOnlyQueue.OUT){
                     int kind=o.kind==SourcePacketReadOnlyQueue.MOVEMENT?1:
@@ -309,6 +321,9 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                         new int[]{kind,o.sequence,o.moving?1:0,1},
                         new double[]{0,o.x,o.y,o.z});
                     if(r.sourceEvent!=3)throw new IllegalStateException("Wrong source egress phase");
+                    if(r.at(3)==1)++lagHeld;
+                    else if(r.at(3)!=0)throw new IllegalStateException(
+                        "Invalid native Lag Range packet proposal");
                     ++outgoing;++callbacks;
                     // Timer Range's original event1 is invoked for every
                     // outgoing packet. The result is NOT an on-wire verdict:
@@ -319,6 +334,9 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                         new int[0],new double[0]);
                     if(timerPacket.sourceEvent!=1)
                         throw new IllegalStateException("Wrong source Timer Range packet phase");
+                    if(timerPacket.at(3)==1)++timerHeld;
+                    else if(timerPacket.at(3)!=0)throw new IllegalStateException(
+                        "Invalid native Timer Range packet proposal");
                     ++callbacks;
                     final int inv=o.kind==SourcePacketReadOnlyQueue.INV_OPEN?1:
                         o.kind==SourcePacketReadOnlyQueue.INV_CLICK?2:
@@ -335,7 +353,8 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                 ++packetObservationCount;
             }
             return new PacketReceipt(generation,tick,packetObservationCount,
-                                     incoming,outgoing,inventory,callbacks);
+                incoming,outgoing,inventory,callbacks,
+                btHeld,btFeedback,lagHeld,timerHeld);
         }catch(RuntimeException | Error failed){
             failClosed();throw failed;
         }finally{inCall=false;}

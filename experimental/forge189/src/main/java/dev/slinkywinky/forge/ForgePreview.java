@@ -110,6 +110,7 @@ public final class ForgePreview {
     private ForgeSourcePacketTap r339Tap;
     private int r339PacketBatches;
     private long r339PacketObservations;
+    private boolean r348NativeVerdictReported;
     private int r341BoxFrames;
     private boolean r341SubmittedBox;
     private int r342HistoricalFrames;
@@ -185,6 +186,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r337NativeSourceTickReadOnly");
     private static final boolean R339_PACKET_READONLY =
         Boolean.getBoolean("slinkywinky.r339PacketReadOnly");
+    private static final boolean R348_PACKET_VERDICT_TELEMETRY =
+        Boolean.getBoolean("slinkywinky.r348NativePacketVerdictTelemetryReadOnly");
     private static final boolean R341_SOURCE_BOX_DIAGNOSTIC =
         Boolean.getBoolean("slinkywinky.r341SourceBoxDiagnostic");
     private static final boolean R342_HISTORY_DIAGNOSTIC =
@@ -612,6 +615,10 @@ public final class ForgePreview {
                (!R341_SOURCE_BOX_DIAGNOSTIC||!R339_PACKET_READONLY))
                 throw new IllegalStateException(
                     "R342 historical positions require R337/R339/R341 passive source gates");
+            if(R348_PACKET_VERDICT_TELEMETRY&&
+               (!R339_PACKET_READONLY||!R337_SOURCE_READONLY||R212_ACTION_TEST))
+                throw new IllegalStateException(
+                    "R348 native packet telemetry requires passive R337/R339 owner");
             if(R339_PACKET_READONLY){
                 if(!R337_SOURCE_READONLY || R212_ACTION_TEST)
                     throw new IllegalStateException(
@@ -647,6 +654,7 @@ public final class ForgePreview {
             r337SourceSamples=0;
             r339PacketBatches=0;
             r339PacketObservations=0;
+            r348NativeVerdictReported=false;
             r341BoxFrames=0;
             r341SubmittedBox=false;
             r342HistoricalFrames=0;
@@ -733,6 +741,22 @@ public final class ForgePreview {
                                 r337SourceHost.observePackets(port,incoming);
                             if(batch!=null){
                                 r339PacketObservations+=batch.incoming+batch.outgoing;
+                                if(R348_PACKET_VERDICT_TELEMETRY&&
+                                   batch.callbacks>0&&!r348NativeVerdictReported){
+                                    // These are source JNI proposals AFTER the
+                                    // original network packets were forwarded.
+                                    // Diagnostic counts must never arm the
+                                    // test-only R344/345 Netty hold owners.
+                                    r348NativeVerdictReported=true;
+                                    System.out.println("[SlinkyWinkyPreview] "+
+                                        "R348_REAL_NATIVE_PACKET_VERDICT_TELEMETRY "+
+                                        "backtrackHold="+batch.backtrackHold+
+                                        " feedback="+batch.backtrackFeedback+
+                                        " lagHold="+batch.lagRangeHold+
+                                        " timerHold="+batch.timerHold+
+                                        " generation="+batch.generation+
+                                        " packetsAlreadyForwarded=1 gameWrites=0");
+                                }
                                 if(batch.callbacks>0&&++r339PacketBatches==1)
                                     System.out.println("[SlinkyWinkyPreview] "+
                                         "R339_REAL_NETTY_READONLY_JNI_PACKET_OBSERVED "+
