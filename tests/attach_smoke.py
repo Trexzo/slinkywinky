@@ -341,6 +341,19 @@ try:
                              source_preload.stdout + source_preload.stderr)
     print("PASS: R359 Java8 absolute JNI preload + real native Lag Range e18")
 
+    # R362 executes the exact production ASM exit-weaver on a generated
+    # fixture. No original Mojang class bytes or live click are involved.
+    click_woven = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.Vanilla189ClickExitWeaverSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (click_woven.returncode != 0 or
+        "R362_EXACT_VANILLA189_CLICK_EXIT_ASM_CALLSITES_PASS"
+        not in click_woven.stdout):
+        raise AssertionError("R362 exact click-exit ASM rewrite failed: " +
+                             click_woven.stdout + click_woven.stderr)
+    print("PASS: R362 two normal click exits, zero unrelated source hooks")
+
     line = target.stdout.readline().strip()
     assert line == "SLINKYWINKY_ATTACH_TARGET_READY", repr(line)
     # R359: never attach a source-mode probe to a disposable fake JVM.
