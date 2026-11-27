@@ -57,7 +57,8 @@ public final class InstrumentationProbe {
     private static final String R358_ORIGINAL_AVE_SHA256 =
         "430a17aa1911bcd0251aa4dcecb013b6c5b251bb5d0122c7305de0e36dc33e82";
     private static SourceRuntimePreview r358Source;
-    private static int r358Executed,r358CandidateTargets;
+    private static SourceAttackTickFence r360AttackFence;
+    private static int r358Executed,r358CandidateTargets,r360AttackCallbacks;
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -115,8 +116,27 @@ public final class InstrumentationProbe {
                 observed.xyz,observed.angles)==1;
             if(nativeOk&&r358SourceReadOnly){
                 if(r358Source==null)r358Source=new SourceRuntimePreview();
+                if(r360AttackFence==null)r360AttackFence=new SourceAttackTickFence();
                 final Vanilla189SourceEvidence.Sample remote=observed.source;
                 final boolean worldPlayer=(observed.flags&3)==3;
+                // The independent, exact original player clock is available
+                // without a ray target. This is a conservative tick-derived
+                // phase-1 proxy, NOT the original Slinky callback timing.
+                final boolean phaseCandidate=r360AttackFence.observe(
+                    worldPlayer?observed.generation:0,
+                    worldPlayer?observed.combatClock:null);
+                if(phaseCandidate){
+                    final SourceRuntimePreview.Receipt attack=r358Source.observe(
+                        1001,1002,observed.generation,n,
+                        SourceRuntimePreview.LAG_RANGE_ATTACK,
+                        new int[]{1,1},new double[0]);
+                    if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
+                        throw new IllegalStateException("R360 native e15 phase receipt denied");
+                    ++r360AttackCallbacks;
+                    if(r360AttackCallbacks==1)
+                        System.out.println(PREFIX+
+                            "R360_SINGLE_USE_NATIVE_SOURCE_E15_RECEIPT phaseProxy=1 gameWrites=0");
+                }
                 final int[] bits={worldPlayer?1:0,0,
                     worldPlayer&&remote!=null?1:0,0,0,0,0,0,0,0,0,0};
                 final double[] vals={0,10,0,0,0,150};
@@ -146,6 +166,9 @@ public final class InstrumentationProbe {
             }
         }
         catch (Throwable failure) {
+            // A source JNI refusal must terminate the observation rather
+            // than preserving the nativeOk bit from the earlier JNI frame.
+            nativeOk=false;
             System.err.println(PREFIX + "NATIVE_GAME_THREAD_PROBE_FAIL " + failure);
         }
         if (nativeOk && observed != null) {
@@ -185,8 +208,16 @@ public final class InstrumentationProbe {
         if ((n >= tickLimit || requestedStop || !nativeOk) &&
             cleanupStarted.compareAndSet(false, true)) {
             active = false;
-            // Retire the extra source JNI owner on the original game thread.
+            // Retire both native and original player-clock owners on
+            // exactly the Minecraft game thread, before class restoration.
             boolean sourceClosed=true;
+            if(r360AttackFence!=null){
+                try{r360AttackFence.close();}
+                catch(Throwable failure){
+                    sourceClosed=false;
+                    System.err.println(PREFIX+"R360_ATTACK_FENCE_CLOSE_FAIL "+failure);
+                } finally{r360AttackFence=null;}
+            }
             if(r358Source!=null){
                 try {r358Source.close();}
                 catch(Throwable failure){
@@ -197,6 +228,7 @@ public final class InstrumentationProbe {
             if(r358SourceReadOnly)
                 System.out.println(PREFIX+"R358_NATIVE_SOURCE_SUMMARY executed="+
                     r358Executed+" candidateTargets="+r358CandidateTargets+
+                    " attackPhaseCandidates="+r360AttackCallbacks+
                     " nativeClosed="+(sourceClosed?1:0)+" gameWrites=0");
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
@@ -620,7 +652,8 @@ public final class InstrumentationProbe {
             rayTargetFrames=0;
             generationChanges=0;
             lastAcceptedGeneration=-1L;
-            r358Source=null;r358Executed=r358CandidateTargets=0;
+            r358Source=null;r360AttackFence=null;
+            r358Executed=r358CandidateTargets=r360AttackCallbacks=0;
             installedVia = instrumentation;
             installedClass = target;
             active = true;
