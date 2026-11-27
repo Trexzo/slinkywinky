@@ -317,8 +317,57 @@ try:
         raise AssertionError("Native JNI -> Windows IPC acceptance failed: " +
                              ipc_test.stdout + ipc_test.stderr)
     print("PASS: opted-in JNI publisher -> separate Win32 reader process")
+    # R359: the packaged agent must contain its read-only original source
+    # bridge, but none of the disposable Java source-fidelity test classes.
+    with zipfile.ZipFile(instrument_jar, "r") as source_agent:
+        source_entries = set(source_agent.namelist())
+        if not {
+            "dev/slinkywinky/SourceRuntimePreview.class",
+            "dev/slinkywinky/instrument/Vanilla189SourceEvidence.class",
+            "dev/slinkywinky/instrument/Vanilla189SourceEvidence$Sample.class",
+        }.issubset(source_entries):
+            raise AssertionError("R359 original source JNI classes missing in agent")
+        if "dev/slinkywinky/attach/SourcePreloadedNativeSmoke.class" in source_entries:
+            raise AssertionError("R359 disposable source JNI smoke leaked into agent")
+    source_preload = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.SourcePreloadedNativeSmoke",
+         str(loader.parent / "slinkywinky_jni.dll")],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (source_preload.returncode != 0 or
+        "R359_JAVA8_ABSOLUTE_DLL_PRELOAD_NATIVE_SOURCE_PASS"
+        not in source_preload.stdout):
+        raise AssertionError("R359 original agent preloaded native source gate: " +
+                             source_preload.stdout + source_preload.stderr)
+    print("PASS: R359 Java8 absolute JNI preload + real native Lag Range e18")
+
     line = target.stdout.readline().strip()
     assert line == "SLINKYWINKY_ATTACH_TARGET_READY", repr(line)
+    # R359: never attach a source-mode probe to a disposable fake JVM.
+    # Negative controls may run only after test target reports ready.
+    for source_flag in ("--source-tick-readonly",
+                        "--source-tick-readonly=600",
+                        "--source-tick-readonly=601"):
+        denied = subprocess.run(
+            [str(loader), "attach", str(target.pid), str(home), source_flag],
+            capture_output=True, text=True, env=env, timeout=22)
+        if denied.returncode == 0:
+            raise AssertionError("R359 source mode admitted without consent: " + source_flag)
+    source_env = env.copy()
+    source_env["SLINKYWINKY_SOURCE_NATIVE_READONLY"] = "1"
+    source_env["SLINKYWINKY_EXPERIMENTAL_HOOK"] = "1"
+    source_env["SLINKYWINKY_EXTENDED_DIAGNOSTIC"] = "1"
+    denied_test = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home),
+         "--source-tick-readonly=600"],
+        capture_output=True, text=True, env=source_env, timeout=22)
+    if (denied_test.returncode == 0 or
+        "R359 original source JNI cannot run in synthetic Attach test mode"
+        not in denied_test.stderr):
+        raise AssertionError("R359 fake JVM bypass accepted or incorrectly denied: " +
+                             denied_test.stdout + denied_test.stderr)
+    print("PASS: R359 source mode requires independent consent, exact spelling and original JVM")
+
     result = subprocess.run([str(loader), "attach", str(target.pid), str(home)],
                             capture_output=True, text=True, env=env, timeout=22)
     print(result.stdout, result.stderr)
