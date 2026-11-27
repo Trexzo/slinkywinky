@@ -181,6 +181,39 @@ public final class SourcePacketVerdictBridgeSmoke {
             bridge.rejected()>=SourcePacketVerdictBridge.CAPACITY,
             "Overflow cannot leak arbitrary old per-packet decisions");
 
+        // R351: same REAL source event2 JNI, after native tick renewal.
+        // Entity S18 may be held; S08 player teleport stops Backtrack.
+        SourceWorldReadOnlyHost.TickReceipt fourth=host.observe(port);
+        bridge.begin(channel+1,fourth);
+        SourcePacketReadOnlyQueue teleportFacts=new SourcePacketReadOnlyQueue();
+        yes(teleportFacts.offer(SourcePacketReadOnlyQueue.IN,
+            SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT,21,
+            true,true,4,0,0,at+101),"S18 target position accepted");
+        yes(teleportFacts.offer(SourcePacketReadOnlyQueue.IN,
+            SourcePacketReadOnlyQueue.TELEPORT,0,
+            false,false,0,0,0,at+102),"S08 player teleport accepted");
+        yes(teleportFacts.offer(SourcePacketReadOnlyQueue.IN,
+            SourcePacketReadOnlyQueue.UNKNOWN,0,
+            false,false,0,0,0,at+103),"Post-stop inbound accepted");
+        SourcePacketReadOnlyQueue.Batch teleportRows=teleportFacts.drain(3);
+        yes(SourcePacketReadOnlyQueue.sourceBacktrackKind(teleportRows.rows.get(0))==0,
+            "S18 is source target movement, never player teleport stop");
+        yes(SourcePacketReadOnlyQueue.sourceBacktrackKind(teleportRows.rows.get(1))==5,
+            "S08 player teleport retains exact source stop category");
+        SourcePacketVerdictBridge.Decision s18=
+            bridge.observe(teleportRows.rows.get(0),at+24_000_000L);
+        SourcePacketVerdictBridge.Decision s08=
+            bridge.observe(teleportRows.rows.get(1),at+24_000_001L);
+        SourcePacketVerdictBridge.Decision afterStop=
+            bridge.observe(teleportRows.rows.get(2),at+24_000_002L);
+        yes(s18.nativeVerdict==SourcePacketVerdictBridge.BACKTRACK_HOLD,
+            "Native event2 still proposes S18 target movement hold");
+        yes(s08.nativeVerdict==SourcePacketVerdictBridge.BACKTRACK_UNCHANGED&&
+            !s08.hypotheticalHold(),"Native S08 stops Backtrack");
+        yes(afterStop.nativeVerdict==SourcePacketVerdictBridge.BACKTRACK_UNCHANGED,
+            "Post-S08 packet never inherits stopped Backtrack state");
+        yes(bridge.pending()==3,"S18/S08 JNI receipt FIFO intact");
+        teleportFacts.close();
         flood.close();stream.close();
         bridge.close();host.close();
         yes(!bridge.healthy()&&bridge.consume(channel+1,changed.worldToken,

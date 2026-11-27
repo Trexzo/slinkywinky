@@ -28,14 +28,23 @@ public final class SourceNativeVerdictTelemetrySmoke {
             yes(queue.offer(SourcePacketReadOnlyQueue.OUT,
                  SourcePacketReadOnlyQueue.MOVEMENT,0,false,true,9,0,0,t+2),
                  "Native closer movement packet observed without intervention");
+            yes(queue.offer(SourcePacketReadOnlyQueue.IN,
+                 SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT,21,true,
+                 true,4,0,0,t+3),"Real-shaped S18 target teleport observed");
+            yes(queue.offer(SourcePacketReadOnlyQueue.IN,
+                 SourcePacketReadOnlyQueue.TELEPORT,0,false,
+                 false,0,0,0,t+4),"S08 player teleport observed");
+            yes(queue.offer(SourcePacketReadOnlyQueue.IN,
+                 SourcePacketReadOnlyQueue.UNKNOWN,0,false,
+                 false,0,0,0,t+5),"Post-S08 unchanged packet observed");
         });
         netty.start();netty.join();
         SourceWorldReadOnlyHost.PacketReceipt receipt=host.observePackets(port,queue);
-        yes(receipt!=null&&receipt.incoming==2&&receipt.outgoing==1&&
-            receipt.callbacks==4&&receipt.observed==3,
-            "Native callbacks retain original four-phase e2/e3/e1 order");
-        yes(receipt.backtrackHold==1&&receipt.backtrackFeedback==1,
-            "ACTUAL Backtrack JNI event2 hold and matching target pass-feedback");
+        yes(receipt!=null&&receipt.incoming==5&&receipt.outgoing==1&&
+            receipt.callbacks==7&&receipt.observed==6,
+            "Native JNI callbacks preserve six observed packet facts");
+        yes(receipt.backtrackHold==2&&receipt.backtrackFeedback==1,
+            "Backtrack native JNI proposes holds for unknown+S18, stops at S08");
         yes(receipt.lagRangeHold==1,
             "ACTUAL Lag Range JNI event3 moving closer hold proposal");
         yes(receipt.timerHold==0||receipt.timerHold==1,
@@ -45,7 +54,7 @@ public final class SourceNativeVerdictTelemetrySmoke {
         SourceWorldReadOnlyHost.PacketReceipt empty=host.observePackets(port,queue);
         yes(empty.callbacks==0&&empty.backtrackHold==0&&
             empty.backtrackFeedback==0&&empty.lagRangeHold==0&&
-            empty.timerHold==0&&empty.observed==3,
+            empty.timerHold==0&&empty.observed==6,
             "Empty source native batch cannot invent packet holding");
         port.world=new Object();
         SourceWorldReadOnlyHost.TickReceipt newWorld=host.observe(port);
