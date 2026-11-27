@@ -52,8 +52,8 @@ public final class InstrumentationProbe {
     // They record validated read-only frames, never entity identities or locations.
     private static int acceptedFrames, worldPlayerFrames, rayTargetFrames, generationChanges;
     private static long lastAcceptedGeneration = -1L;
-    private static final boolean R358_SOURCE_READONLY =
-        Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly");
+    // R359: set only after claiming original agent owner, never a global flag.
+    private static volatile boolean r358SourceReadOnly;
     private static final String R358_ORIGINAL_AVE_SHA256 =
         "430a17aa1911bcd0251aa4dcecb013b6c5b251bb5d0122c7305de0e36dc33e82";
     private static SourceRuntimePreview r358Source;
@@ -113,7 +113,7 @@ public final class InstrumentationProbe {
             nativeOk=nativeContext!=0 && nativeObserveFrame(nativeContext,
                 observed.timeMs,observed.generation,observed.flags,
                 observed.xyz,observed.angles)==1;
-            if(nativeOk&&R358_SOURCE_READONLY){
+            if(nativeOk&&r358SourceReadOnly){
                 if(r358Source==null)r358Source=new SourceRuntimePreview();
                 final Vanilla189SourceEvidence.Sample remote=observed.source;
                 final boolean worldPlayer=(observed.flags&3)==3;
@@ -194,7 +194,7 @@ public final class InstrumentationProbe {
                     System.err.println(PREFIX+"R358_NATIVE_SOURCE_CLOSE_FAIL "+failure);
                 } finally {r358Source=null;}
             }
-            if(R358_SOURCE_READONLY)
+            if(r358SourceReadOnly)
                 System.out.println(PREFIX+"R358_NATIVE_SOURCE_SUMMARY executed="+
                     r358Executed+" candidateTargets="+r358CandidateTargets+
                     " nativeClosed="+(sourceClosed?1:0)+" gameWrites=0");
@@ -216,6 +216,7 @@ public final class InstrumentationProbe {
             // Drop Java world, player and reflection references on the exact client
             // thread before the asynchronous class restoration worker begins.
             ObservedState.release();
+            r358SourceReadOnly=false;
             System.out.println(PREFIX+"OBSERVATION_RELEASE_PASS");
             if(closed) System.out.println(PREFIX+"NATIVE_SESSION_CLOSE_PASS");
             else System.err.println(PREFIX+"NATIVE_SESSION_CLOSE_REJECTED");
@@ -501,10 +502,11 @@ public final class InstrumentationProbe {
         // event. Never recursively Java Attach into a live instrumented JVM.
         final boolean continuous = "hook-continuous".equals(mode) ||
                                    "minecraft-continuous".equals(mode);
+        final boolean sourceMode="minecraft-source-readonly".equals(mode);
         final boolean test = "probe".equals(mode) || "hook-probe".equals(mode) ||
                              "hook-continuous".equals(mode);
         final boolean hook = "hook-probe".equals(mode) ||
-                             "minecraft-hook".equals(mode) || continuous;
+                             "minecraft-hook".equals(mode) || continuous || sourceMode;
         if (!test && !"minecraft".equals(mode) && !hook)
             throw new IllegalArgumentException("Unsupported instrument mode");
         if (!instrumentation.isRetransformClassesSupported())
@@ -523,7 +525,7 @@ public final class InstrumentationProbe {
                 if (type == null || !recognized(type.getName(), test)) return null;
                 seen.incrementAndGet();
                 if (!hook) return null;
-                if(R358_SOURCE_READONLY &&
+                if(r358SourceReadOnly &&
                    (!"ave".equals(type.getName())||
                     !R358_ORIGINAL_AVE_SHA256.equals(hex(sha256(bytes)))))
                     throw new IllegalStateException("R358 original Mojang 1.8.9 class hash mismatch");
@@ -565,6 +567,8 @@ public final class InstrumentationProbe {
         if (!hookInstalled.compareAndSet(false, true))
             throw new IllegalStateException("Minecraft instrumentation already active");
         if (hook) {
+            r358SourceReadOnly=sourceMode||
+                Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly");
             try {
                 if (delimiter < 0 || delimiter == options.length() - 1)
                     throw new IllegalArgumentException("Missing exact JNI library path");
@@ -583,13 +587,15 @@ public final class InstrumentationProbe {
                 tickLimit = requestedLimit;
                 if (nativeZeroActionTick() != 1)
                     throw new IllegalStateException("Disabled C++ decision returned action/error");
+                if(r358SourceReadOnly)
+                    SourceRuntimePreview.admitPreloadedLibrary();
                 System.out.println(PREFIX + "NATIVE_CXX_PREFLIGHT_PASS");
                 try { ObservedState.admit(target); }
                 catch (ReflectiveOperationException mappingFailure) {
                     throw new IllegalStateException("Unknown Minecraft observation mapping", mappingFailure);
                 }
                 System.out.println(PREFIX + "OBSERVATION_MAPPING_ADMITTED");
-                if(R358_SOURCE_READONLY){
+                if(r358SourceReadOnly){
                     if(test||!"ave".equals(target.getName()))
                         throw new IllegalStateException("R358 only admits original vanilla Minecraft");
                     ObservedState.enableOriginalSourceReadOnly(true);
@@ -597,6 +603,7 @@ public final class InstrumentationProbe {
                 verifyCallbackVisibility(target);
             } catch (RuntimeException | LinkageError failure) {
                 ObservedState.release();
+                r358SourceReadOnly=false;
                 hookInstalled.set(false); // No transformer was installed.
                 throw failure;
             }
