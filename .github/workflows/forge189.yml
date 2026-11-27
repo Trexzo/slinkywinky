@@ -228,7 +228,11 @@ jobs:
           grep -Fq 'public final class ForgeSourceWorldPort' "$source"
           grep -Fq '0.1d,0d' "$source"
            grep -Fq 'r349BacktrackExactReachReadOnly' "$source"
-           grep -Fq 'otherPlayerMPX' "$source"
+           # R355: source-candidate fields moved into a dedicated Java8 resolver.
+           mapping=java/dev/slinkywinky/SourceCandidateField189.java
+           grep -Fq 'SourceCandidateField189.remoteX(EntityOtherPlayerMP.class)' "$source"
+           grep -Fq '"otherPlayerMPX","field_71185_c","c"' "$mapping"
+           grep -Fq '"lastAttackerTime","field_142016_bo","bl"' "$mapping"
            grep -Fq 'SourceBacktrackReachEvidence.currentIsCloserThanShown' "$source"
           grep -Fq 'nativePreview.observe(' "$host"
           if grep -Eq 'write(Key|Timer)|sendPacket|addToSendQueue|glBegin' "$source"; then
