@@ -109,27 +109,34 @@ public final class SourcePacketVerdictBridge implements AutoCloseable {
      * Same client-thread method computes its REAL JNI verdict, checks JNI
      * result shape, and records the primitive Decision atomically.
      */
-    public synchronized Decision observe(SourcePacketReadOnlyQueue.Observation o,
-                                         long nowNanos){
+    public Decision observe(SourcePacketReadOnlyQueue.Observation o,
+                            long nowNanos){
         assertOwner();
-        if(epoch==null||failed||o==null)
-            throw new IllegalStateException("R347 source epoch unavailable");
-        if(o.sequence<=lastPacketSequence||o.sequence<1)
-            throw new IllegalArgumentException("Packet sequence replay or regression");
+        final Epoch active;
+        // R347.1: keep the Netty reader monitor out of slow JNI. The
+        // expensive source.observe(...) below is on the client owner ONLY.
+        synchronized(this){
+            if(epoch==null||failed||o==null)
+                throw new IllegalStateException("R347 source epoch unavailable");
+            if(o.sequence<=lastPacketSequence||o.sequence<1)
+                throw new IllegalArgumentException("Packet sequence replay or regression");
+            final long ageCheck=nowNanos-o.nanoTime;
+            if(ageCheck<0||ageCheck>MAX_PACKET_AGE_NANOS){
+                failClosed();
+                throw new IllegalStateException("Packet too old/future for source verdict");
+            }
+            if(fifo.size()>=CAPACITY){
+                failClosed();
+                throw new IllegalStateException("Bounded Netty verdict mailbox overflow");
+            }
+            if(o.direction!=SourcePacketReadOnlyQueue.IN&&
+               o.direction!=SourcePacketReadOnlyQueue.OUT){
+                failClosed();
+                throw new IllegalArgumentException("Malformed network direction");
+            }
+            active=epoch;
+        }
         final long age=nowNanos-o.nanoTime;
-        if(age<0||age>MAX_PACKET_AGE_NANOS){
-            failClosed();
-            throw new IllegalStateException("Packet too old/future for source verdict");
-        }
-        if(fifo.size()>=CAPACITY){
-            failClosed();
-            throw new IllegalStateException("Bounded Netty verdict mailbox overflow");
-        }
-        if(o.direction!=SourcePacketReadOnlyQueue.IN&&
-           o.direction!=SourcePacketReadOnlyQueue.OUT){
-            failClosed();
-            throw new IllegalArgumentException("Malformed network direction");
-        }
         final int ms=(int)(age/1_000_000L);
         final int opcode,event;
         final int[] flags;
@@ -157,20 +164,31 @@ public final class SourcePacketVerdictBridge implements AutoCloseable {
         }
         try{
             SourceRuntimePreview.Receipt r=source.observe(
-                epoch.world,epoch.player,epoch.generation,epoch.tick,
+                active.world,active.player,active.generation,active.tick,
                 opcode,flags,fields);
             int verdict=(int)r.at(3);
-            if(r.world!=epoch.world||r.player!=epoch.player||
-               r.generation!=epoch.generation||r.tick!=epoch.tick||
+            if(r.world!=active.world||r.player!=active.player||
+               r.generation!=active.generation||r.tick!=active.tick||
                r.opcode!=opcode||r.sourceEvent!=event||
                r.at(3)!=verdict||verdict<0||
                verdict>(event==2?BACKTRACK_FEEDBACK:LAG_RANGE_HOLD))
                 throw new IllegalStateException("Wrong native source packet verdict");
-            Decision d=new Decision(epoch,o,event,verdict,nowNanos);
-            fifo.addLast(d);lastPacketSequence=o.sequence;++produced;
-            return d;
+            synchronized(this){
+                // Netty can consume/revoke stale queued entries while JNI
+                // works. Never republish after such a failure or epoch swap.
+                if(closed||failed||epoch!=active)
+                    throw new IllegalStateException("Native result outlived owner epoch");
+                if(fifo.size()>=CAPACITY){
+                    failClosed();
+                    throw new IllegalStateException("Source verdict cap after JNI");
+                }
+                Decision d=new Decision(active,o,event,verdict,nowNanos);
+                fifo.addLast(d);lastPacketSequence=o.sequence;++produced;
+                return d;
+            }
         }catch(RuntimeException|Error failure){
-            failClosed();throw failure;
+            synchronized(this){failClosed();}
+            throw failure;
         }
     }
 
