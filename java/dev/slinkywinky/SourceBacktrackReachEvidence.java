@@ -17,6 +17,26 @@ public final class SourceBacktrackReachEvidence {
         return Double.isFinite(current)&&Double.isFinite(shown)&&
                shown-current>SOURCE_THRESHOLD;
     }
+    /**
+     * Original JNI IDs encode variant=0 as the 1.7.10 path (no BlockPos),
+     * and variant=1 as the 1.8.9 path. The candidate Backtrack callback
+     * only calls vec3_add_eye_height_sneak for variant=0; that candidate
+     * helper's scalar is -1.62 (confirmed in private rdata.s). In 1.8.9,
+     * the input to entity_reach_check is the raw player posY, NOT Minecraft
+     * getEyeHeight() or an interpolated camera viewpoint.
+     *
+     * This reproduces the candidate code path, not guaranteed binary parity.
+     */
+    public static double candidateEyeY(int candidateVariant,double playerPositionY){
+        if(candidateVariant<0||candidateVariant>1||
+           !Double.isFinite(playerPositionY)||
+           Math.abs(playerPositionY)>30000000.0d)
+            throw new IllegalArgumentException("Invalid candidate variant/position");
+        final double y=playerPositionY+(candidateVariant==0?-1.62d:0.0d);
+        if(!Double.isFinite(y))throw new IllegalArgumentException("Bad source eye Y");
+        return y;
+    }
+
     /** Conservative recent-attack snapshot, not an original attack event. */
     public static boolean observedRecentAttack(int currentTick,int lastAttackerTick){
         return lastAttackerTick>0&&currentTick>=lastAttackerTick&&

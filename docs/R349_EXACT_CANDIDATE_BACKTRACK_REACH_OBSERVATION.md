@@ -32,8 +32,10 @@ New `r349_java8_source_backtrack_reach_geometry` regression tests threshold,
 negative/future/expired attack times, nonfinite/bounded coordinates and
 translated positions; local Java 8-compatible tests passed. CI must still
 verify the complete ForgeGradle build and packaged class. No live positive
-EntityOtherPlayerMP receipt, original attack-event timing, eye-height
-variant parity or physical game input is claimed. This is a conservative
+EntityOtherPlayerMP receipt, original attack-event timing or physical game
+input is claimed. **R350 subsequently corrected R349's incorrect added
+eye-height** for the 1.8.9 source variant; use R350 on top of R349.
+See `docs/R350_SOURCE_VARIANT_EYE_CORRECTION.md`. This is a conservative
 source-faithful start gate, not a fully functioning Backtrack module.
 
 No packet holding, replay, game writes, or original proprietary code

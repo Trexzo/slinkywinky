@@ -24,6 +24,30 @@ public final class SourceBacktrackReachEvidenceSmoke {
         check(!SourceBacktrackReachEvidence.observedRecentAttack(100,101),"future attack");
         check(!SourceBacktrackReachEvidence.observedRecentAttack(10,0),"unknown prior attack");
         check(!SourceBacktrackReachEvidence.observedRecentAttack(Integer.MAX_VALUE,1),"overflow safe");
+        // R350: source candidate variant=1 (1.8.9) does NOT add eye height.
+        final double vanilla189EyeY=
+            SourceBacktrackReachEvidence.candidateEyeY(1,0d);
+        final double oldIncorrectEyeY=1.62d;
+        check(vanilla189EyeY==0d,"1.8.9 source raw posY");
+        check(SourceBacktrackReachEvidence.candidateEyeY(1,63d)==63d,
+              "1.8.9 source Y invariant under translation");
+        check(Math.abs(SourceBacktrackReachEvidence.candidateEyeY(0,63d)-61.38d)<0.000001d,
+              "1.7.10 candidate uses -1.62 scalar, never 1.8.9 height");
+        check(!SourceBacktrackReachEvidence.currentIsCloserThanShown(
+            0,vanilla189EyeY,0,2,1.62,0,2.012,1.62,0),
+            "1.8.9 source threshold refuses 0.0093 distance advantage");
+        check(SourceBacktrackReachEvidence.currentIsCloserThanShown(
+            0,oldIncorrectEyeY,0,2,1.62,0,2.012,1.62,0),
+            "R349 old +1.62 camera eye incorrectly allowed same scene");
+        boolean refusedVariant=false;
+        try{SourceBacktrackReachEvidence.candidateEyeY(2,0);}
+        catch(IllegalArgumentException expected){refusedVariant=true;}
+        check(refusedVariant,"unknown candidate variant must be rejected");
+        refusedVariant=false;
+        try{SourceBacktrackReachEvidence.candidateEyeY(1,Double.NaN);}
+        catch(IllegalArgumentException expected){refusedVariant=true;}
+        check(refusedVariant,"nonfinite player eye observation rejected");
+        System.out.println("R350_SOURCE_VARIANT_EYE_PARITY_PASS");
         System.out.println("R349_SOURCE_BACKTRACK_REACH_GEOMETRY_PASS");
     }
 }

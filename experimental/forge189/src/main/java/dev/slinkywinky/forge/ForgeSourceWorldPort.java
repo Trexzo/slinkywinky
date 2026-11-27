@@ -291,7 +291,8 @@ public final class ForgeSourceWorldPort implements SourceWorldReadOnlyHost.Histo
                     SourceBacktrackReachEvidence.observedRecentAttack(
                         self.ticksExisted,sourceAttackTime)&&
                     SourceBacktrackReachEvidence.currentIsCloserThanShown(
-                        self.posX,self.posY+self.getEyeHeight(),self.posZ,
+                        self.posX,SourceBacktrackReachEvidence.candidateEyeY(
+                            1,self.posY),self.posZ,
                         target.posX,target.posY,target.posZ,
                         fields[1].getDouble(target),fields[2].getDouble(target),
                         fields[3].getDouble(target));
