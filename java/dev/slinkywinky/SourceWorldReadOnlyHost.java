@@ -290,16 +290,7 @@ public final class SourceWorldReadOnlyHost implements AutoCloseable {
                 if(o.direction==SourcePacketReadOnlyQueue.IN){
                     // S19 status exposes an entity only via a World lookup.
                     // Unknown ID must never simulate known target feedback.
-                    int kind=0;
-                    if(o.kind==SourcePacketReadOnlyQueue.ENTITY_STATUS&&o.entityIdKnown)
-                        kind=1;
-                    else if(o.kind==SourcePacketReadOnlyQueue.UPDATE_HEALTH)
-                        kind=2;
-                    else if(o.kind==SourcePacketReadOnlyQueue.SOUND)kind=3;
-                    else if(o.kind==SourcePacketReadOnlyQueue.VELOCITY)kind=4;
-                    else if(o.kind==SourcePacketReadOnlyQueue.TELEPORT||
-                            o.kind==SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT)
-                        kind=5;
+                    final int kind=SourcePacketReadOnlyQueue.sourceBacktrackKind(o);
                     SourceRuntimePreview.Receipt r=nativePreview.observe(
                         worldNumber,playerNumber,generation,tick,
                         SourceRuntimePreview.BACKTRACK_PACKET,

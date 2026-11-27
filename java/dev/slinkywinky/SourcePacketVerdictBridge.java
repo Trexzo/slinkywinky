@@ -144,14 +144,8 @@ public final class SourcePacketVerdictBridge implements AutoCloseable {
         if(o.direction==SourcePacketReadOnlyQueue.IN){
             opcode=SourceRuntimePreview.BACKTRACK_PACKET;
             event=2;
-            int k=0;
-            if(o.kind==SourcePacketReadOnlyQueue.ENTITY_STATUS&&o.entityIdKnown)k=1;
-            else if(o.kind==SourcePacketReadOnlyQueue.UPDATE_HEALTH)k=2;
-            else if(o.kind==SourcePacketReadOnlyQueue.SOUND)k=3;
-            else if(o.kind==SourcePacketReadOnlyQueue.VELOCITY)k=4;
-            else if(o.kind==SourcePacketReadOnlyQueue.TELEPORT||
-                    o.kind==SourcePacketReadOnlyQueue.ENTITY_ABSOLUTE_TELEPORT)k=5;
-            flags=new int[]{k,o.sequence,o.entityId,1};
+            final int kind=SourcePacketReadOnlyQueue.sourceBacktrackKind(o);
+            flags=new int[]{kind,o.sequence,o.entityId,1};
             fields=new double[]{ms};
         }else{
             opcode=SourceRuntimePreview.LAG_RANGE_PACKET;

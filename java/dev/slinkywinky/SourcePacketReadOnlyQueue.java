@@ -47,6 +47,21 @@ public final class SourcePacketReadOnlyQueue implements AutoCloseable {
             this.dropped=dropped;totalCaptured=total;
         }
     }
+    /**
+     * R351 original Backtrack source event2: S08 local-player teleport
+     * stops the module; S18 entity teleport is target movement, not S08.
+     * This only constructs a read-only native JNI proposal category.
+     */
+    public static int sourceBacktrackKind(Observation o){
+        if(o==null||o.direction!=IN)
+            throw new IllegalArgumentException("Invalid inbound source packet");
+        if(o.kind==ENTITY_STATUS&&o.entityIdKnown)return 1;
+        if(o.kind==UPDATE_HEALTH)return 2;
+        if(o.kind==SOUND)return 3;
+        if(o.kind==VELOCITY)return 4;
+        if(o.kind==TELEPORT)return 5; // S08 player position + look
+        return 0; // includes S18 entity position updates
+    }
     private final Thread owner=Thread.currentThread();
     private final ArrayDeque<Observation> queue=new ArrayDeque<Observation>(CAPACITY);
     private boolean closed,failed;
