@@ -3,6 +3,7 @@ package dev.slinkywinky.forge;
 import dev.slinkywinky.SourceWorldReadOnlyHost;
 import dev.slinkywinky.SourceRemotePositionHistory;
 import dev.slinkywinky.SourceBacktrackReachEvidence;
+import dev.slinkywinky.SourceAttackEventFence;
 import java.lang.reflect.Field;
 import net.minecraft.client.entity.EntityOtherPlayerMP;
 import java.util.UUID;
@@ -35,6 +36,7 @@ public final class ForgeSourceWorldPort implements
     private final Minecraft mc;
     private final Thread owner=Thread.currentThread();
     private final boolean debugBoxSettings;
+    private final SourceAttackEventFence attackFence;
     private static final boolean R349_EXACT_REACH_READ_ONLY =
         Boolean.getBoolean("slinkywinky.r349BacktrackExactReachReadOnly");
     private static final boolean R353_LAG_ATTACK_READ_ONLY =
@@ -74,11 +76,16 @@ public final class ForgeSourceWorldPort implements
         }
     }
 
-    public ForgeSourceWorldPort(Minecraft minecraft){this(minecraft,false);}
+    public ForgeSourceWorldPort(Minecraft minecraft){this(minecraft,false,null);}
     public ForgeSourceWorldPort(Minecraft minecraft,boolean debugBoxSettings){
+        this(minecraft,debugBoxSettings,null);
+    }
+    public ForgeSourceWorldPort(Minecraft minecraft,boolean debugBoxSettings,
+                                SourceAttackEventFence attackFence){
         if(minecraft==null)throw new IllegalArgumentException("Minecraft unavailable");
         mc=minecraft;
         this.debugBoxSettings=debugBoxSettings;
+        this.attackFence=attackFence;
     }
     @Override public boolean admittedClientThread(){
         return Thread.currentThread()==owner&&
@@ -269,11 +276,14 @@ public final class ForgeSourceWorldPort implements
      * original Slinky attack phase-1 callback. No keyboard/network writes.
      */
     @Override public boolean sourceLagRangeAttackNow(){
-        if(!R353_LAG_ATTACK_READ_ONLY)return false;
+        if(attackFence==null&&!R353_LAG_ATTACK_READ_ONLY)return false;
         if(!admittedClientThread()||worldIdentity()==null)
             throw new IllegalStateException("R353 owner not admitted");
         final WorldClient world=mc.theWorld;
         final EntityPlayerSP player=mc.thePlayer;
+        if(attackFence!=null&&!attackFence.consume(world,player,
+                player.ticksExisted,System.nanoTime()))
+            return false;
         final Field field=R353AttackField.FIELD;
         if(field==null)throw new IllegalStateException(
             "R353 missing original-named lastAttackerTime");

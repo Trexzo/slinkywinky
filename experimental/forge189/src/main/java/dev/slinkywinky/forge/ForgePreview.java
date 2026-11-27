@@ -40,6 +40,10 @@ import net.minecraft.util.Vec3;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.entity.living.LivingEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
+import net.minecraftforge.fml.common.eventhandler.EventPriority;
+import net.minecraft.entity.EntityLivingBase;
+import dev.slinkywinky.SourceAttackEventFence;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
@@ -112,6 +116,7 @@ public final class ForgePreview {
     private long r339PacketObservations;
     private boolean r348NativeVerdictReported;
     private boolean r353AttackReported;
+    private SourceAttackEventFence r354AttackFence;
     private int r341BoxFrames;
     private boolean r341SubmittedBox;
     private int r342HistoricalFrames;
@@ -189,6 +194,8 @@ public final class ForgePreview {
         Boolean.getBoolean("slinkywinky.r339PacketReadOnly");
     private static final boolean R348_PACKET_VERDICT_TELEMETRY =
         Boolean.getBoolean("slinkywinky.r348NativePacketVerdictTelemetryReadOnly");
+    private static final boolean R354_FORGE_ATTACK_READ_ONLY =
+        Boolean.getBoolean("slinkywinky.r354ForgeAttackEventReadOnly");
     private static final boolean R341_SOURCE_BOX_DIAGNOSTIC =
         Boolean.getBoolean("slinkywinky.r341SourceBoxDiagnostic");
     private static final boolean R342_HISTORY_DIAGNOSTIC =
@@ -535,6 +542,9 @@ public final class ForgePreview {
         if(r339Tap!=null){
             try {r339Tap.close();}finally {r339Tap=null;}
         }
+        if(r354AttackFence!=null){
+            try {r354AttackFence.close();}finally {r354AttackFence=null;}
+        }
         if(r337SourceHost!=null){
             try {r337SourceHost.close();}
             catch(IllegalStateException alreadyRetired) {
@@ -607,6 +617,12 @@ public final class ForgePreview {
                 r300EspSampler=new EspWorldSnapshotSampler();
             if(R301_NATIVE_ESP_READONLY)
                 r301EspNative=new EspNativeReadOnlyPreview(R305_SOURCE_PHASES);
+            if(R354_FORGE_ATTACK_READ_ONLY){
+                if(!R337_SOURCE_READONLY||R212_ACTION_TEST)
+                    throw new IllegalStateException(
+                        "R354 Forge attack event requires read-only native owner");
+                r354AttackFence=new SourceAttackEventFence();
+            }
             if(R337_SOURCE_READONLY)
                 r337SourceHost=new SourceWorldReadOnlyHost();
             if(R341_SOURCE_BOX_DIAGNOSTIC&&!R337_SOURCE_READONLY)
@@ -706,6 +722,27 @@ public final class ForgePreview {
         }
     }
 
+    /**
+     * R354 real Forge AttackEntityEvent, captured on the registered
+     * MinecraftForge.EVENT_BUS. We never cancel events or call JNI here.
+     * The next admitted singleplayer client tick owns the native receipt.
+     */
+    @SubscribeEvent(priority=EventPriority.LOWEST)
+    public void onSourceAttackEntity(AttackEntityEvent event){
+        if(!R354_FORGE_ATTACK_READ_ONLY||!enabled||
+           r337SourceHost==null||r354AttackFence==null||event.isCanceled())
+            return;
+        final Minecraft mc=Minecraft.getMinecraft();
+        if(!mc.isCallingFromMinecraftThread()||mc.theWorld==null||
+           mc.thePlayer==null||!mc.theWorld.isRemote||!mc.isSingleplayer()||
+           event.entityPlayer!=mc.thePlayer||
+           !(event.target instanceof EntityLivingBase)||
+           event.target.worldObj!=mc.theWorld)return;
+        r354AttackFence.record(mc.theWorld,mc.thePlayer,
+            mc.thePlayer.ticksExisted,System.nanoTime());
+        // Event is an attack attempt, not proof the subsequent hit lands.
+    }
+
     @SubscribeEvent public void onClientTick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END) return;
         if(toggle.isPressed()) {
@@ -722,12 +759,14 @@ public final class ForgePreview {
                 // Channel/world swap must retire the old C++ controller epoch.
                 if(r339Tap!=null&&r339Tap.reconcile(mc))
                     r337SourceHost.retire();
+                if(r354AttackFence!=null)
+                    r354AttackFence.reconcile(mc.theWorld,mc.thePlayer);
                 if(mc.theWorld!=null&&mc.thePlayer!=null&&!mc.isSingleplayer()){
                     // Multiplayer observation is NOT an admitted source scope.
                     r337SourceHost.retire();
                 }else{
                     final ForgeSourceWorldPort port=new ForgeSourceWorldPort(
-                        mc,R341_SOURCE_BOX_DIAGNOSTIC);
+                        mc,R341_SOURCE_BOX_DIAGNOSTIC,r354AttackFence);
                     final SourceWorldReadOnlyHost.TickReceipt received=
                         r337SourceHost.observe(port);
                     if(received!=null && ++r337SourceSamples==1)

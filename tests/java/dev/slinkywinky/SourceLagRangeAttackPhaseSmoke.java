@@ -85,6 +85,15 @@ public final class SourceLagRangeAttackPhaseSmoke {
         SourceRuntimePreview nativeHost=new SourceRuntimePreview();
         SourceWorldReadOnlyHost host=new SourceWorldReadOnlyHost(nativeHost);
         Port port=new Port();
+        // R354: no source e15 without an owned, recent Forge attempt.
+        SourceAttackEventFence attackFence=new SourceAttackEventFence();
+        port.current=false;
+        SourceWorldReadOnlyHost.TickReceipt unarmed=host.observe(port);
+        yes(unarmed.lagRangeAttack==null,"No attack attempt means no native e15");
+        port.current=true;
+        attackFence.record(port.world,port.player,1,System.nanoTime());
+        yes(attackFence.consume(port.world,port.player,1,System.nanoTime()),
+            "Real-shaped Forge attack event accepted before native source e15");
         SourceWorldReadOnlyHost.TickReceipt received=host.observe(port);
         yes(received.lagRangeAttack!=null&&received.lagRangeAttack.sourceEvent==15&&
             received.lagRangeAttack.at(2)==1&&
@@ -100,7 +109,7 @@ public final class SourceLagRangeAttackPhaseSmoke {
         yes(outgoingAttack(nativeHost,switched.lagRange.world,switched.lagRange.player,
             switched.generation,switched.tick).at(4)==0,
             "New world never retains old attack release state");
-        host.close();
+        host.close();attackFence.close();
         System.out.println("R353_NATIVE_LAG_RANGE_EVENT15_EVENT18_JNI_PASS");
     }
 }

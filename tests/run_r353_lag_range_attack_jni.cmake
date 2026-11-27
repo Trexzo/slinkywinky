@@ -11,6 +11,7 @@ execute_process(COMMAND "${JAVA_COMPILER}" -source 8 -target 8 -encoding UTF-8
   "${PROJECT_ROOT}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/SourceRemotePositionHistory.java"
   "${PROJECT_ROOT}/java/dev/slinkywinky/SourceWorldReadOnlyHost.java"
+  "${PROJECT_ROOT}/java/dev/slinkywinky/SourceAttackEventFence.java"
   "${PROJECT_ROOT}/tests/java/dev/slinkywinky/SourceLagRangeAttackPhaseSmoke.java"
   RESULT_VARIABLE RC OUTPUT_VARIABLE OUT ERROR_VARIABLE ERR)
 if(NOT RC EQUAL 0)
