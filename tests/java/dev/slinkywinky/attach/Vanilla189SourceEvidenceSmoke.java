@@ -26,9 +26,15 @@ public final class Vanilla189SourceEvidenceSmoke {
             f.set(subject,value);
         }catch(Exception fail){throw new IllegalStateException(fail);}
     }
+    /** R358 fixtures are package-private default-package exact obfuscated names. */
+    static Object fixture(String name)throws Exception{
+        java.lang.reflect.Constructor<?> ctor=Class.forName(name).getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return ctor.newInstance();
+    }
     public static void main(String[] args)throws Exception{
-        Object player=Class.forName("pr").newInstance();
-        Object target=Class.forName("bex").newInstance();
+        Object player=fixture("pr");
+        Object target=fixture("bex");
         yes(read(player,new Object())==null,"Nonplayer ray is not a candidate");
         yes(read(null,target)==null,"No player means no candidate");
         Vanilla189SourceEvidence.Sample first=read(player,target);

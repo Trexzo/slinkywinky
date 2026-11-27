@@ -22,9 +22,15 @@ public final class Vanilla189SourceNativeLagSmoke {
         return nativeSource.observe(1001,1002,generation,sequence,
             SourceRuntimePreview.LAG_RANGE_TICK,flags,fields);
     }
+    /** R358 fixtures are package-private default-package exact obfuscated names. */
+    static Object fixture(String name)throws Exception{
+        java.lang.reflect.Constructor<?> ctor=Class.forName(name).getDeclaredConstructor();
+        ctor.setAccessible(true);
+        return ctor.newInstance();
+    }
     public static void main(String[] args)throws Exception{
-        Object player=Class.forName("pr").newInstance();
-        Object target=Class.forName("bex").newInstance();
+        Object player=fixture("pr");
+        Object target=fixture("bex");
         Vanilla189SourceEvidence.Sample sample=source(player,target);
         yes(sample!=null&&sample.x==10&&sample.y==5&&sample.z==-4&&
             sample.lastAttackTick==18,"Exact source original candidate captured");
