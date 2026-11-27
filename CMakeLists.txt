@@ -590,6 +590,15 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R358: original obfuscated evidence -> real Java8 JNI e18 source controller.
+    add_test(NAME r358_java8_original_source_lag_jni_roundtrip COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r358_original_source_native_lag_jni.cmake)
+    set_tests_properties(r358_java8_original_source_lag_jni_roundtrip PROPERTIES TIMEOUT 40)
     # R358: real original Java8 agent source-candidate evidence.
     add_test(NAME r358_java8_vanilla189_original_source_evidence COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
