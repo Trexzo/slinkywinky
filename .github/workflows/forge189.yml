@@ -16,6 +16,7 @@ on:
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
       - 'java/dev/slinkywinky/SourcePacketControlMailbox.java'
+      - 'java/dev/slinkywinky/SourcePacketVerdictBridge.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -54,6 +55,7 @@ on:
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
       - 'java/dev/slinkywinky/SourcePacketControlMailbox.java'
+      - 'java/dev/slinkywinky/SourcePacketVerdictBridge.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -174,7 +176,9 @@ jobs:
             dev/slinkywinky/SourceRemotePositionHistory\$Position.class \
             dev/slinkywinky/SourceRemotePositionHistory\$Historical.class \
             dev/slinkywinky/SourcePacketControlMailbox.class \
-            dev/slinkywinky/SourcePacketControlMailbox\$Ticket.class; do
+            dev/slinkywinky/SourcePacketControlMailbox\$Ticket.class \
+            dev/slinkywinky/SourcePacketVerdictBridge.class \
+            dev/slinkywinky/SourcePacketVerdictBridge\$Decision.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
               echo "Required read-only Forge class missing: $class" >&2
               exit 1
@@ -251,6 +255,16 @@ jobs:
             echo 'R346 mailbox must never control packets or call JNI on Netty' >&2
             exit 1
           fi
+          verdicts=java/dev/slinkywinky/SourcePacketVerdictBridge.java
+          grep -Fq 'BACKTRACK_PACKET' "$verdicts"
+          grep -Fq 'LAG_RANGE_PACKET' "$verdicts"
+          grep -Fq 'MAX_DECISION_AGE_NANOS=100_000_000L' "$verdicts"
+          grep -Fq 'CAPACITY=64' "$verdicts"
+          if grep -Eq 'sendPacket\(|ctx\.write\(|ctx\.fireChannelRead\(' "$verdicts"; then
+            echo 'R347 JNI verdict transport may NOT replay network packets' >&2
+            exit 1
+          fi
+          echo R347_REAL_JNI_PACKET_VERDICT_FIFO_PASSIVE_PACKAGING_PASS
           echo R346_PASSIVE_JNI_NETTY_TICKET_PACKAGING_PASS
           echo R343_BOUNDED_NEARBY_PLAYER_HISTORY_PACKAGING_PASS
           echo R342_EXACT_SERVERPOS_HISTORY_PACKAGING_PASS
