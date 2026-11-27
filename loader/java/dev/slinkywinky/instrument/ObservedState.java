@@ -16,9 +16,12 @@ public final class ObservedState {
         public final int flags; // world=1, player=2, ray-selected entity=4
         public final double[] xyz; // player eye XYZ, selected entity XYZ
         public final float[] angles; // yaw, pitch
+        /** Immutable original 1.8.9 source candidate, when explicitly enabled. */
+        public final Vanilla189SourceEvidence.Sample source;
 
-        Frame(long t, long g, int f, double[] p, float[] a) {
-            timeMs=t; generation=g; flags=f; xyz=p; angles=a;
+        Frame(long t,long g,int f,double[] p,float[] a,
+              Vanilla189SourceEvidence.Sample source){
+            timeMs=t;generation=g;flags=f;xyz=p;angles=a;this.source=source;
         }
     }
 
@@ -28,6 +31,13 @@ public final class ObservedState {
     private static Object oldWorld, oldPlayer;
     private static long generation=1;
     private static boolean vanillaObfuscated;
+    private static boolean sourceReadOnly;
+
+    public static synchronized void enableOriginalSourceReadOnly(boolean enable){
+        if(enable&&(!vanillaObfuscated||mcClass==null))
+            throw new IllegalStateException("R358 requires original vanilla 1.8.9");
+        sourceReadOnly=enable;
+    }
 
     private static final class PositionFields {
         final Field x,y,z;
@@ -195,6 +205,7 @@ public final class ObservedState {
         int flags=(world==null?0:1)|(player==null?0:2);
         double[] xyz=new double[6];
         float[] camera=new float[2];
+        Vanilla189SourceEvidence.Sample originalSource=null;
         if(world!=null && player!=null) {
             PlayerFields bound=playerBinding(player);
             xyz[0]=numeric(bound.position.x,player);
@@ -210,6 +221,8 @@ public final class ObservedState {
             if(ray!=null) {
                 Object target=rayEntityBinding(ray).get(ray);
                 if(target!=null) {
+                    if(sourceReadOnly)
+                        originalSource=Vanilla189SourceEvidence.read(player,target);
                     TargetFields targetFields=targetBinding(target);
                     xyz[3]=numeric(targetFields.position.x,target);
                     xyz[4]=numeric(targetFields.position.y,target);
@@ -228,7 +241,8 @@ public final class ObservedState {
             oldWorld=world;
             oldPlayer=player;
         }
-        return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera);
+        return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera,
+                         originalSource);
     }
 
     /** Clear all strong world/player, reflection, and classloader references. */
@@ -241,6 +255,8 @@ public final class ObservedState {
         oldWorld=null;
         oldPlayer=null;
         vanillaObfuscated=false;
+        sourceReadOnly=false;
+        Vanilla189SourceEvidence.release();
         generation=1;
         cachedPlayer=null;
         cachedTarget=null;

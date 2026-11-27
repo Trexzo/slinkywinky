@@ -3,7 +3,12 @@ package dev.slinkywinky;
 /** R335: Java 8 owner-thread-only JNI view of four candidate native modules.
  * This class observes read-only results and performs NO Minecraft actions. */
 public final class SourceRuntimePreview implements AutoCloseable {
-    static {System.loadLibrary("slinkywinky_jni");}
+    static {
+        // R358 original JVM Attach agent already loaded exact DLL by absolute
+        // path, in the SAME agent classloader. Normal Forge loads unchanged.
+        if(!Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly"))
+            System.loadLibrary("slinkywinky_jni");
+    }
     private static native long nativeOpen();
     private static native double[] nativeObserve(long handle,long[] identity,
                                                   int opcode,int[] bits,double[] fields);
