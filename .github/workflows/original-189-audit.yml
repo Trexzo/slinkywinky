@@ -101,7 +101,7 @@ jobs:
       - name: Download verified Mojang 1.8.9 original and audit memory-only renderer weave
         shell: pwsh
         run: |
-          python tests/official_189_render_audit.py `
+          python -B tests/official_189_render_audit.py `
             --java8 "$env:JAVA_HOME/bin/java.exe" `
             --audit-jar "build-original-189/Release/slinkywinky_render_audit.jar" `
             --instrument-jar "build-original-189/Release/slinkywinky_instrument.jar"
