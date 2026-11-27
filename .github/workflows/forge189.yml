@@ -15,6 +15,7 @@ on:
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
+      - 'java/dev/slinkywinky/SourcePacketControlMailbox.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -52,6 +53,7 @@ on:
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'java/dev/slinkywinky/SourcePacketReadOnlyQueue.java'
       - 'java/dev/slinkywinky/SourceRemotePositionHistory.java'
+      - 'java/dev/slinkywinky/SourcePacketControlMailbox.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourcePacketTap.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceBoxDiagnosticRenderer.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
@@ -170,7 +172,9 @@ jobs:
             dev/slinkywinky/SourceWorldReadOnlyHost\$RemoteTarget.class \
             dev/slinkywinky/SourceRemotePositionHistory.class \
             dev/slinkywinky/SourceRemotePositionHistory\$Position.class \
-            dev/slinkywinky/SourceRemotePositionHistory\$Historical.class; do
+            dev/slinkywinky/SourceRemotePositionHistory\$Historical.class \
+            dev/slinkywinky/SourcePacketControlMailbox.class \
+            dev/slinkywinky/SourcePacketControlMailbox\$Ticket.class; do
             if ! grep -Fxq "$class" forge-preview-contents.txt; then
               echo "Required read-only Forge class missing: $class" >&2
               exit 1
@@ -239,6 +243,15 @@ jobs:
           grep -Fq 'world.playerEntities' experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java
           grep -Fq 'distance>576.0d' experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java
           grep -Fq 'sourceHistory' "$host" || grep -Fq 'positionHistory.applied' "$host"
+          mailbox=java/dev/slinkywinky/SourcePacketControlMailbox.java
+          grep -Fq 'AtomicReference<Ticket>' "$mailbox"
+          grep -Fq 'MAX_TICKET_AGE_NANOS=100_000_000L' "$mailbox"
+          grep -Fq 'R346' "$mailbox"
+          if grep -Eq 'sendPacket\(|ctx\.write\(|ctx\.fireChannelRead\(|nativeOpen\(' "$mailbox"; then
+            echo 'R346 mailbox must never control packets or call JNI on Netty' >&2
+            exit 1
+          fi
+          echo R346_PASSIVE_JNI_NETTY_TICKET_PACKAGING_PASS
           echo R343_BOUNDED_NEARBY_PLAYER_HISTORY_PACKAGING_PASS
           echo R342_EXACT_SERVERPOS_HISTORY_PACKAGING_PASS
           echo R341_FORGE_SOURCE_BOX_OPTIN_RENDER_PACKAGING_PASS
