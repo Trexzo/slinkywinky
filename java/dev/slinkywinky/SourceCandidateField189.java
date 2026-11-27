@@ -24,7 +24,7 @@ public final class SourceCandidateField189 {
                 selected=f;
             }catch(NoSuchFieldException unavailable){
                 // Try exactly the next candidate JNI mapping.
-            }catch(SecurityException|RuntimeException forbidden){
+            }catch(RuntimeException forbidden){
                 return null;
             }
         }
