@@ -21,6 +21,8 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
+      - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwner.java'
+      - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwnerTest.java'
       - 'experimental/forge189/build.gradle'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
@@ -54,6 +56,8 @@ on:
       - 'java/dev/slinkywinky/SourceRuntimePreview.java'
       - 'java/dev/slinkywinky/SourceWorldReadOnlyHost.java'
       - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgeSourcePacketTapEmbeddedTest.java'
+      - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwner.java'
+      - 'experimental/forge189/src/test/java/dev/slinkywinky/forge/ForgePacketHoldOwnerTest.java'
       - 'experimental/forge189/build.gradle'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeSourceWorldPort.java'
       - 'experimental/forge189/src/main/java/dev/slinkywinky/forge/ForgeEspWorldSnapshotPort.java'
@@ -99,6 +103,18 @@ jobs:
             echo "R340 Netty identity and overflow tests failed" >&2; exit 1
           fi
           echo R340_EMBEDDED_CHANNEL_ORIGINAL_PACKET_IDENTITY_PASS
+      - name: R344 real Netty packet retention and release owner tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xml=experimental/forge189/build/test-results/TEST-dev.slinkywinky.forge.ForgePacketHoldOwnerTest.xml
+          test -f "$xml"
+          test "$(grep -c '<testcase' "$xml")" -eq 8
+          if grep -Eq '<failure|<error' "$xml"; then
+            echo 'R344 Netty packet lifetime ownership tests failed' >&2
+            exit 1
+          fi
+          echo R344_ACTUAL_PACKET_HOLD_FIFO_EXPIRE_OVERFLOW_DISCONNECT_PASS
       - name: Check packaged classes
         shell: bash
         run: |
@@ -144,6 +160,12 @@ jobs:
               exit 1
             fi
           done
+          # The actual packet-owning implementation is confined to
+          # the test source set until source timing and runtime gates exist.
+          if grep -Eq 'ForgePacketHoldOwner(\\$|\\.)|ForgePacketHoldOwnerTest\\.class' forge-preview-contents.txt; then
+            echo 'R344 experimental packet owner must NOT ship inside the Forge JAR' >&2
+            exit 1
+          fi
           if grep -Fq 'ForgeSourcePacketTapEmbeddedTest.class' forge-preview-contents.txt; then
             echo 'R340 test class leaked into production Forge jar' >&2; exit 1
           fi
