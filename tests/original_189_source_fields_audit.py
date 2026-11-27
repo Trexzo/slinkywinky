@@ -147,6 +147,19 @@ def audit_original_attack_method(read_class):
             raise ValueError("Missing or non-instance original ave." + method + "()V")
 
 
+def audit_original_network_send(read_class):
+    """Private JNI variant=1: NetworkManager ek.a(Lff;)V, Packet=ff."""
+    name, _, methods = class_members(read_class("ek.class"))
+    if name != "ek":
+        raise ValueError("Unexpected original 1.8.9 NetworkManager owner")
+    entry = methods.get(("a", "(Lff;)V"))
+    if entry is None or entry[0] & (0x0008 | 0x0100 | 0x0400) or not entry[1]:
+        raise ValueError("Original NetworkManager sendPacket entrypoint mismatch")
+    packet_name, _, _ = class_members(read_class("ff.class"))
+    if packet_name != "ff":
+        raise ValueError("Original 1.8.9 Packet owner mismatch")
+
+
 def audit_entries(read_class):
     """Read only two exact owner classes, reject missing/wrong field types."""
     for owner, required in EXPECTED.items():
@@ -173,6 +186,9 @@ def audit_official_source_fields(client_jar):
     with zipfile.ZipFile(path, "r") as game:
         audit_entries(game.read)
         audit_original_attack_method(game.read)
+        audit_original_network_send(game.read)
+    print("R364_ORIGINAL_189_NETWORK_SEND_METHOD_STATIC_PASS "
+          "owner=ek method=a descriptor=(Lff;)V packetClass=ff")
     print("R361_ORIGINAL_189_ATTACK_METHOD_STATIC_PASS "
           "owner=ave method=aw descriptor=()V originalTick=s()V")
     print("R357_ORIGINAL_189_PRIVATE_FIELDS_STATIC_PASS "

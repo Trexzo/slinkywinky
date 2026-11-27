@@ -3,7 +3,7 @@ import struct
 import unittest
 
 from original_189_source_fields_audit import (
-    audit_entries, audit_original_attack_method, class_fields
+    audit_entries, audit_original_attack_method, audit_original_network_send, class_fields
 )
 
 
@@ -52,6 +52,29 @@ class SourceFieldAuditTest(unittest.TestCase):
                 "bex", [("c", "D"), ("d", "D"), ("e", "D")]
             ),
         }
+
+    def test_original_network_send_mapping(self):
+        self.items["ek.class"] = sample_class("ek", [], [("a", "(Lff;)V")])
+        self.items["ff.class"] = sample_class("ff", [])
+        audit_original_network_send(self.items.__getitem__)
+
+    def test_original_network_send_wrong_packet_signature(self):
+        self.items["ek.class"] = sample_class("ek", [], [("a", "(Lft;)V")])
+        self.items["ff.class"] = sample_class("ff", [])
+        with self.assertRaises(ValueError):
+            audit_original_network_send(self.items.__getitem__)
+
+    def test_original_network_send_wrong_class_owner(self):
+        self.items["ek.class"] = sample_class("ej", [], [("a", "(Lff;)V")])
+        self.items["ff.class"] = sample_class("ff", [])
+        with self.assertRaises(ValueError):
+            audit_original_network_send(self.items.__getitem__)
+
+    def test_original_network_send_wrong_packet_class(self):
+        self.items["ek.class"] = sample_class("ek", [], [("a", "(Lff;)V")])
+        self.items["ff.class"] = sample_class("ft", [])
+        with self.assertRaises(ValueError):
+            audit_original_network_send(self.items.__getitem__)
 
     def test_original_click_mouse_mapping(self):
         self.items["ave.class"] = sample_class("ave", [], [("s", "()V"), ("aw", "()V")])
