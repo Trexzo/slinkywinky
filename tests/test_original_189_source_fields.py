@@ -51,6 +51,9 @@ class SourceFieldAuditTest(unittest.TestCase):
             "bex.class": sample_class(
                 "bex", [("c", "D"), ("d", "D"), ("e", "D")]
             ),
+            "ip.class": sample_class(
+                "ip", [("g", "Z"), ("a", "D"), ("b", "D"), ("c", "D")]
+            ),
         }
 
     def test_original_network_send_mapping(self):
@@ -104,6 +107,20 @@ class SourceFieldAuditTest(unittest.TestCase):
 
     def test_exact_obfuscated_owners_and_types(self):
         audit_entries(self.items.__getitem__)
+
+    def test_original_movement_packet_moving_type_rejected(self):
+        self.items["ip.class"] = sample_class(
+            "ip", [("g", "I"), ("a", "D"), ("b", "D"), ("c", "D")]
+        )
+        with self.assertRaises(ValueError):
+            audit_entries(self.items.__getitem__)
+
+    def test_original_movement_packet_position_type_rejected(self):
+        self.items["ip.class"] = sample_class(
+            "ip", [("g", "Z"), ("a", "D"), ("b", "D"), ("c", "F")]
+        )
+        with self.assertRaises(ValueError):
+            audit_entries(self.items.__getitem__)
 
     def test_original_entity_tick_type_rejected(self):
         self.items["pk.class"] = sample_class("pk", [("W", "J")])

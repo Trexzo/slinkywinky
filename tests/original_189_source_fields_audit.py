@@ -16,6 +16,7 @@ EXPECTED = {
     "pk": {"W": "I"},                    # Entity ticksExisted original JNI variant 1
     "pr": {"bl": "I"},                   # EntityLivingBase lastAttackerTime
     "bex": {"c": "D", "d": "D", "e": "D"}, # EntityOtherPlayerMP xyz
+    "ip": {"g": "Z", "a": "D", "b": "D", "c": "D"}, # original C03PacketPlayer
 }
 
 
@@ -192,6 +193,8 @@ def audit_official_source_fields(client_jar):
         audit_original_attack_method(game.read)
         network_sha256=audit_original_network_send(game.read)
     print("R365_ORIGINAL_189_NETWORK_MANAGER_CLASS_SHA256="+network_sha256)
+    print("R365_ORIGINAL_189_MOVEMENT_PACKET_FIELDS_STATIC_PASS "
+          "owner=ip moving=g:Z position=a,b,c:D")
     print("R364_ORIGINAL_189_NETWORK_SEND_METHOD_STATIC_PASS "
           "owner=ek method=a descriptor=(Lff;)V packetClass=ff")
     print("R361_ORIGINAL_189_ATTACK_METHOD_STATIC_PASS "
