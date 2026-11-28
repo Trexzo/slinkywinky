@@ -1,4 +1,5 @@
 #include "slinkywinky/gui_module_control_handoff.hpp"
+#include "slinkywinky/module_control_capabilities.hpp"
 #include "slinkywinky/menu.hpp"
 #include "slinkywinky/menu_navigation.hpp"
 #include <algorithm>
@@ -31,16 +32,10 @@ bool GuiModuleControlHandoff::request_focused_toggle(
     if(!focus || *focus>=catalog.size() ||
        catalog[*focus].tab!=menu.tab())return false;
     const std::string_view selected=catalog[*focus].name;
-    // R255: three real PR2 R211 controls plus three R254 owner-gated
-    // source policies. The latter are strictly OFFLINE decision models,
-    // never live native/JNI Minecraft module activations. All other
-    // recovered catalog labels remain inert preview-only.
-    const bool native_r211=selected=="No Jump Delay" ||
-         selected=="No Slow" || selected=="Sprint";
-    const bool offline_r254=selected=="No Hit Delay" ||
-         selected=="Safe Walk" || selected=="Fast Place";
-    if((!native_r211 && !offline_r254) ||
-       !candidate_native_manager_registered(selected))
+    // R263: capability is distinct from native registration and from
+    // actual acknowledged gameplay activation. This does not widen the
+    // three native owner/JNI and three OFFLINE-only policy request gates.
+    if(!module_control_request_supported(module_control_capability(selected)))
         return false;
     // A snapshot may be read off the module owner, but cannot be forged
     // from MenuState::preview_enabled or interpreted as an acknowledgement.
