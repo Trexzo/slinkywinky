@@ -440,6 +440,19 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r257_real_pr2_reach_event8_140_frame_parity
       COMMAND slinkywinky_r257_pr2_event8_parity_tests)
+    # R266: PR2's actual three-module owner projected into the full
+    # 67-descriptor GUI, with 63 unreported/descriptor-only rows preserved.
+    add_executable(slinkywinky_r266_pr2_roster_tests
+      tests/test_r266_current_pr2_full_roster.cpp)
+    target_include_directories(slinkywinky_r266_pr2_roster_tests PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r266_pr2_roster_tests
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r266_pr2_roster_tests
+      PRIVATE cxx_std_17)
+    add_test(NAME r266_real_pr2_full_67_roster_source_provenance
+      COMMAND slinkywinky_r266_pr2_roster_tests)
     if(WIN32)
       # R253 source-pinned actual native manager + kernel process HANDLE
       # witness. Driven only by separate explicitly-owned Java8 test JVMs.
