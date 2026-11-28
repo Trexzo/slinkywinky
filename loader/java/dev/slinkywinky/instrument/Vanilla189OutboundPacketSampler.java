@@ -18,8 +18,8 @@ public final class Vanilla189OutboundPacketSampler implements AutoCloseable {
         }
     }
     private final Thread owner=Thread.currentThread();
-    private Class<?> packetBase,movementBase;
-    private Field moving,x,y,z;
+    private Class<?> packetBase,movementBase,attackBase,actionBase,actionEnum;
+    private Field moving,x,y,z,actionField;
     private volatile boolean closed;
 
     public Vanilla189OutboundPacketSampler(Class<?> packetClass,Class<?> movingClass)
@@ -37,6 +37,32 @@ public final class Vanilla189OutboundPacketSampler implements AutoCloseable {
         packetBase=packetClass;movementBase=movingClass;
         moving=movingField;x=xField;y=yField;z=zField;
     }
+    /**
+     * R369: original 1.8.9 C02 and C0B source categories, with exact
+     * `is.b:Lis$a;` and java.lang.Enum ordinal. Never stores a Packet.
+     * Original source maps any C02 to attack release; only ordinal 4 of C0B
+     * represents stop-sprinting. All other C0B actions remain UNKNOWN.
+     */
+    public Vanilla189OutboundPacketSampler(Class<?> packetClass,Class<?> movingClass,
+            Class<?> useEntityClass,Class<?> entityActionClass,Class<?> enumClass)
+            throws ReflectiveOperationException{
+        this(packetClass,movingClass);
+        final ClassLoader loader=packetClass.getClassLoader();
+        if(useEntityClass==null||entityActionClass==null||enumClass==null||
+           !"in".equals(useEntityClass.getName())||
+           !"is".equals(entityActionClass.getName())||
+           !"is$a".equals(enumClass.getName())||
+           useEntityClass.getClassLoader()!=loader||
+           entityActionClass.getClassLoader()!=loader||
+           enumClass.getClassLoader()!=loader||
+           !packetClass.isAssignableFrom(useEntityClass)||
+           !packetClass.isAssignableFrom(entityActionClass)||
+           !enumClass.isEnum())
+            throw new IllegalArgumentException("Untrusted original source combat packet classes");
+        final Field field=exact(entityActionClass,"b",enumClass);
+        attackBase=useEntityClass;actionBase=entityActionClass;
+        actionEnum=enumClass;actionField=field;
+    }
     private static Field exact(Class<?> cls,String name,Class<?> type)
             throws ReflectiveOperationException{
         Field f=cls.getDeclaredField(name);
@@ -50,6 +76,19 @@ public final class Vanilla189OutboundPacketSampler implements AutoCloseable {
         if(closed)throw new IllegalStateException("R365 packet snapshot owner retired");
         if(packet==null||!packetBase.isInstance(packet))
             throw new IllegalArgumentException("Untrusted non-ff outbound Packet");
+        // Source Lag Range packet code checks exact C03, then any C02,
+        // then C0B with original enum ordinal==4. No Packet escapes.
+        if(attackBase!=null&&attackBase.isInstance(packet))
+            return new Sample(SourcePacketReadOnlyQueue.ATTACK,false,0,0,0);
+        if(actionBase!=null&&actionBase.isInstance(packet)){
+            final Object originalAction=actionField.get(packet);
+            if(originalAction==null||!actionEnum.isInstance(originalAction))
+                throw new IllegalStateException("R369 invalid C0B enum action");
+            final Enum<?> action=(Enum<?>)originalAction;
+            if(action.ordinal()==4)
+                return new Sample(SourcePacketReadOnlyQueue.STOP_SPRINT,false,0,0,0);
+            return new Sample(SourcePacketReadOnlyQueue.UNKNOWN,false,0,0,0);
+        }
         if(!movementBase.isInstance(packet))
             return new Sample(SourcePacketReadOnlyQueue.UNKNOWN,false,0,0,0);
         final boolean hasPosition=moving.getBoolean(packet);
@@ -67,7 +106,7 @@ public final class Vanilla189OutboundPacketSampler implements AutoCloseable {
         if(Thread.currentThread()!=owner)
             throw new IllegalStateException("Only Minecraft owner retires packet sampler");
         closed=true;
-        packetBase=movementBase=null;
-        moving=x=y=z=null;
+        packetBase=movementBase=attackBase=actionBase=actionEnum=null;
+        moving=x=y=z=actionField=null;
     }
 }

@@ -75,6 +75,8 @@ public final class InstrumentationProbe {
     private static volatile Class<?> installedNetworkClass;
     private static volatile byte[] networkOriginalClassFingerprint;
     private static Class<?> r366PacketBase,r366MovementBase;
+    private static Class<?> r369AttackBase,r369ActionBase,r369ActionEnum;
+    private static long r369AttackPackets,r369StopSprintPackets;
     private static long r366WorldGeneration,r366Packets,r366NativeEvent3,r366HoldProposals;
 
     private static byte[] sha256(byte[] bytes) {
@@ -271,7 +273,8 @@ public final class InstrumentationProbe {
                             r368ActiveNetworkManager=null;
                             if(r366Outbound!=null)r366Outbound.close();
                             r366Outbound=new Vanilla189OutboundPrimitiveQueue(
-                                r366PacketBase,r366MovementBase);
+                                r366PacketBase,r366MovementBase,
+                                r369AttackBase,r369ActionBase,r369ActionEnum);
                             r366WorldGeneration=observed.generation;
                             r368ActiveNetworkManager=
                                 new WeakReference<Object>(originalManager);
@@ -281,10 +284,15 @@ public final class InstrumentationProbe {
                         final SourcePacketReadOnlyQueue.Batch observations=
                             r366Outbound.drain(32);
                         for(SourcePacketReadOnlyQueue.Observation row:observations.rows){
+                            if(row.kind==SourcePacketReadOnlyQueue.ATTACK)++r369AttackPackets;
+                            if(row.kind==SourcePacketReadOnlyQueue.STOP_SPRINT)
+                                ++r369StopSprintPackets;
                             final long age=System.nanoTime()-row.nanoTime;
                             if(age<0||age>100000000L)
                                 throw new IllegalStateException("R366 stale original packet evidence");
-                            final int k=row.kind==SourcePacketReadOnlyQueue.MOVEMENT?1:0;
+                            final int k=row.kind==SourcePacketReadOnlyQueue.MOVEMENT?1:
+                                (row.kind==SourcePacketReadOnlyQueue.ATTACK?2:
+                                 (row.kind==SourcePacketReadOnlyQueue.STOP_SPRINT?3:0));
                             final SourceRuntimePreview.Receipt proposal=r358Source.observe(
                                 1001,1002,observed.generation,n,
                                 SourceRuntimePreview.LAG_RANGE_PACKET,
@@ -387,6 +395,8 @@ public final class InstrumentationProbe {
                 System.out.println(PREFIX+"R366_ORIGINAL_NETWORK_SOURCE_SUMMARY "+
                     "packetRows="+r366Packets+" nativeEvent3="+r366NativeEvent3+
                     " hypotheticalHold="+r366HoldProposals+
+                    " originalC02="+r369AttackPackets+
+                    " originalStopSprint="+r369StopSprintPackets+
                     " packetWrites=0 packetCancelled=0");
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
@@ -484,6 +494,7 @@ public final class InstrumentationProbe {
                             networkOriginalClassFingerprint=null;
                             installedNetworkClass=null;
                             r366PacketBase=r366MovementBase=null;
+                            r369AttackBase=r369ActionBase=r369ActionEnum=null;
                             installedVia = null;
                             installedClass = null;
                             hookInstalled.set(false);
@@ -883,14 +894,20 @@ public final class InstrumentationProbe {
                     ClassLoader loader=network.getClassLoader();
                     Class<?> packet=Class.forName("ff",false,loader);
                     Class<?> movement=Class.forName("ip",false,loader);
-                    // Validate exact original primitive names and field types
-                    // before installing EITHER original class transformer.
+                    Class<?> useEntity=Class.forName("in",false,loader);
+                    Class<?> entityAction=Class.forName("is",false,loader);
+                    Class<?> actionEnum=Class.forName("is$a",false,loader);
+                    // Validate exact original primitive and combat packet
+                    // names/types BEFORE modifying either original class.
                     Vanilla189OutboundPacketSampler preflight=
-                        new Vanilla189OutboundPacketSampler(packet,movement);
+                        new Vanilla189OutboundPacketSampler(packet,movement,
+                            useEntity,entityAction,actionEnum);
                     preflight.close();
                     ObservedState.enableOriginalNetworkBinding(network);
                     installedNetworkClass=network;
                     r366PacketBase=packet;r366MovementBase=movement;
+                    r369AttackBase=useEntity;r369ActionBase=entityAction;
+                    r369ActionEnum=actionEnum;
                 }
             } catch (RuntimeException | LinkageError | ReflectiveOperationException failure) {
                 ObservedState.release();
@@ -900,6 +917,7 @@ public final class InstrumentationProbe {
                 installedNetworkClass=null;
                 r368ActiveNetworkManager=null;
                 r366PacketBase=r366MovementBase=null;
+                r369AttackBase=r369ActionBase=r369ActionEnum=null;
                 hookInstalled.set(false); // No transformer was installed.
                 if(failure instanceof RuntimeException)
                     throw (RuntimeException)failure;
@@ -926,6 +944,7 @@ public final class InstrumentationProbe {
             r366Outbound=null;r366PacketFault=false;r366WorldGeneration=0;
             r368ActiveNetworkManager=null;
             r366Packets=r366NativeEvent3=r366HoldProposals=0;
+            r369AttackPackets=r369StopSprintPackets=0;
             r358Executed=r358CandidateTargets=r360AttackCallbacks=0;
             r362ClickReturns=r362AcceptedClicks=0;
             installedVia = instrumentation;

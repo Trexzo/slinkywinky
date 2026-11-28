@@ -19,6 +19,12 @@ public final class Vanilla189OutboundPrimitiveQueue implements AutoCloseable {
             throws ReflectiveOperationException {
         sampler=new Vanilla189OutboundPacketSampler(packetClass,movement);
     }
+    public Vanilla189OutboundPrimitiveQueue(Class<?> packetClass,Class<?> movement,
+            Class<?> useEntity,Class<?> entityAction,Class<?> actionEnum)
+            throws ReflectiveOperationException {
+        sampler=new Vanilla189OutboundPacketSampler(packetClass,movement,
+            useEntity,entityAction,actionEnum);
+    }
     /** ALWAYS called before original send; never changes the send result. */
     public boolean observe(Object packet,long nowNanos) {
         if(closed||failed)return false;
