@@ -32,7 +32,7 @@ int main(){
     ModuleExecutionBridge b;
     const auto hit=b.add({"Hitboxes",0,{{8,50}},false});
     const auto reach=b.add({"Reach",0,{{8,40}},false});
-    const auto ghost=b.add({"Ghost Hand",0,{{8,0}},false});
+    const auto ghost=b.add({"Ghost Hand",3,{{8,0}},false});
     CHECK(b.bind_hitboxes_from_catalog() && b.bind_reach(reach) &&
           b.bind_ghost_hand(ghost));
     CHECK(b.coverage().implemented_per_event[8]==3);
