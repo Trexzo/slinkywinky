@@ -17,6 +17,7 @@ EXPECTED = {
     "pr": {"bl": "I"},                   # EntityLivingBase lastAttackerTime
     "bex": {"c": "D", "d": "D", "e": "D"}, # EntityOtherPlayerMP xyz
     "ip": {"g": "Z", "a": "D", "b": "D", "c": "D"}, # original C03PacketPlayer
+    "bcy": {"c": "Lek;"},              # original NetHandlerPlayClient.netManager
 }
 
 
@@ -148,6 +149,22 @@ def audit_original_attack_method(read_class):
             raise ValueError("Missing or non-instance original ave." + method + "()V")
 
 
+def audit_original_active_manager(read_class):
+    """Minecraft.getNetHandler -> NetHandlerPlayClient.netManager, variant=1."""
+    name, _, methods=class_members(read_class("ave.class"))
+    if name!="ave":
+        raise ValueError("Wrong original Minecraft owner")
+    entry=methods.get(("u", "()Lbcy;"))
+    if entry is None or entry[0] & (0x0008 | 0x0100 | 0x0400) or not entry[1]:
+        raise ValueError("Original getNetHandler method mapping mismatch")
+    handler,fields,_=class_members(read_class("bcy.class"))
+    if handler!="bcy" or fields.get("c")!="Lek;":
+        raise ValueError("Original NetHandlerPlayClient.netManager mismatch")
+    network,_,_=class_members(read_class("ek.class"))
+    if network!="ek":
+        raise ValueError("Original NetworkManager owner mismatch")
+
+
 def audit_original_network_send(read_class):
     """Private JNI variant=1: NetworkManager ek.a(Lff;)V, Packet=ff."""
     raw=read_class("ek.class")
@@ -192,6 +209,9 @@ def audit_official_source_fields(client_jar):
         audit_entries(game.read)
         audit_original_attack_method(game.read)
         network_sha256=audit_original_network_send(game.read)
+        audit_original_active_manager(game.read)
+    print("R368_ORIGINAL_189_ACTIVE_NETWORK_MANAGER_STATIC_PASS "
+          "owner=ave method=u()Lbcy; handler=bcy.c:Lek;")
     print("R365_ORIGINAL_189_NETWORK_MANAGER_CLASS_SHA256="+network_sha256)
     print("R365_ORIGINAL_189_MOVEMENT_PACKET_FIELDS_STATIC_PASS "
           "owner=ip moving=g:Z position=a,b,c:D")

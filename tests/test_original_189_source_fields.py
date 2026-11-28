@@ -3,7 +3,8 @@ import struct
 import unittest
 
 from original_189_source_fields_audit import (
-    audit_entries, audit_original_attack_method, audit_original_network_send, class_fields
+    audit_entries, audit_original_attack_method, audit_original_network_send,
+    audit_original_active_manager, class_fields
 )
 
 
@@ -54,7 +55,26 @@ class SourceFieldAuditTest(unittest.TestCase):
             "ip.class": sample_class(
                 "ip", [("g", "Z"), ("a", "D"), ("b", "D"), ("c", "D")]
             ),
+            "bcy.class": sample_class("bcy", [("c", "Lek;")]),
         }
+
+    def test_original_active_network_manager(self):
+        self.items["ave.class"] = sample_class("ave", [], [("u", "()Lbcy;")])
+        self.items["ek.class"] = sample_class("ek", [])
+        audit_original_active_manager(self.items.__getitem__)
+
+    def test_original_wrong_network_manager_accessor(self):
+        self.items["ave.class"] = sample_class("ave", [], [("u", "()Lbjb;")])
+        self.items["ek.class"] = sample_class("ek", [])
+        with self.assertRaises(ValueError):
+            audit_original_active_manager(self.items.__getitem__)
+
+    def test_original_wrong_nethandler_manager_field(self):
+        self.items["ave.class"] = sample_class("ave", [], [("u", "()Lbcy;")])
+        self.items["bcy.class"] = sample_class("bcy", [("c", "Lej;")])
+        self.items["ek.class"] = sample_class("ek", [])
+        with self.assertRaises(ValueError):
+            audit_original_active_manager(self.items.__getitem__)
 
     def test_original_network_send_mapping(self):
         self.items["ek.class"] = sample_class("ek", [], [("a", "(Lff;)V")])
