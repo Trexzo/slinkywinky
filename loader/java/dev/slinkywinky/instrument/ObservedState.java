@@ -13,6 +13,7 @@ import java.lang.reflect.Modifier;
 public final class ObservedState {
     public static final class Frame {
         public final long timeMs, generation;
+        public final long worldToken,playerToken; // source JNI primitives
         public final int flags; // world=1, player=2, ray-selected entity=4
         public final double[] xyz; // player eye XYZ, selected entity XYZ
         public final float[] angles; // yaw, pitch
@@ -20,10 +21,11 @@ public final class ObservedState {
         public final Vanilla189SourceEvidence.Sample source;
         public final Vanilla189CombatClock.Sample combatClock;
 
-        Frame(long t,long g,int f,double[] p,float[] a,
+        Frame(long t,long g,long worldId,long playerId,int f,double[] p,float[] a,
               Vanilla189SourceEvidence.Sample source,
               Vanilla189CombatClock.Sample clock){
-            timeMs=t;generation=g;flags=f;xyz=p;angles=a;
+            timeMs=t;generation=g;worldToken=worldId;playerToken=playerId;
+            flags=f;xyz=p;angles=a;
             this.source=source;this.combatClock=clock;
         }
     }
@@ -33,10 +35,12 @@ public final class ObservedState {
      * already admitted by the most recent source client tick.
      */
     public static final class AttackClockFrame {
-        public final long generation;
+        public final long generation,worldToken,playerToken;
         public final Vanilla189CombatClock.Sample clock;
-        private AttackClockFrame(long generation,Vanilla189CombatClock.Sample clock){
-            this.generation=generation;this.clock=clock;
+        private AttackClockFrame(long generation,long worldId,long playerId,
+                                 Vanilla189CombatClock.Sample clock){
+            this.generation=generation;this.worldToken=worldId;
+            this.playerToken=playerId;this.clock=clock;
         }
     }
 
@@ -45,6 +49,10 @@ public final class ObservedState {
     private static Field worldField, playerField, rayField;
     private static Object oldWorld, oldPlayer;
     private static long generation=1;
+    // Never reset this serial on release: new attach cannot alias old source
+    // session IDs. Opaque native tokens, not raw object identityHashCodes.
+    private static long sourceIdentitySerial=1;
+    private static long originalWorldToken,originalPlayerToken;
     private static boolean vanillaObfuscated;
     private static boolean sourceReadOnly;
     private static Vanilla189ActiveNetworkBinding originalNetworkBinding;
@@ -277,14 +285,23 @@ public final class ObservedState {
             if(!Double.isFinite(value))
                 throw new IllegalStateException("Nonfinite derived coordinates");
 
-        // Commit the session identity only after a fully valid frame was sampled.
-        if(oldWorld!=world || oldPlayer!=player) {
-            generation++;
-            oldWorld=world;
-            oldPlayer=player;
+        // Allocate only after fully validating all original observations.
+        // Never allow token reuse on disconnect, world/player swap or reattach.
+        if(oldWorld!=world||oldPlayer!=player||
+           originalWorldToken==0||originalPlayerToken==0){
+            if(generation==Long.MAX_VALUE||
+               sourceIdentitySerial>Long.MAX_VALUE-2)
+                throw new IllegalStateException("R371 original identity epoch exhausted");
+            final boolean changed=oldWorld!=world||oldPlayer!=player;
+            final long newWorld=++sourceIdentitySerial;
+            final long newPlayer=++sourceIdentitySerial;
+            if(changed)++generation;
+            oldWorld=world;oldPlayer=player;
+            originalWorldToken=newWorld;originalPlayerToken=newPlayer;
         }
-        return new Frame(System.nanoTime()/1000000L,generation,flags,xyz,camera,
-                         originalSource,originalClock);
+        return new Frame(System.nanoTime()/1000000L,generation,
+                         originalWorldToken,originalPlayerToken,
+                         flags,xyz,camera,originalSource,originalClock);
     }
 
     /** Read original combat clock at a normal vanilla clickMouse RETURN.
@@ -302,7 +319,10 @@ public final class ObservedState {
             return null;
         final Vanilla189CombatClock.Sample clock=
             Vanilla189CombatClock.read(observedPlayer);
-        return new AttackClockFrame(generation,clock);
+        if(originalWorldToken<=0||originalPlayerToken<=0)
+            throw new IllegalStateException("R371 click has no source JNI epoch");
+        return new AttackClockFrame(generation,originalWorldToken,
+            originalPlayerToken,clock);
     }
 
     /** Clear all strong world/player, reflection, and classloader references. */
@@ -321,6 +341,8 @@ public final class ObservedState {
         if(originalNetworkBinding!=null)originalNetworkBinding.close();
         originalNetworkBinding=null;
         generation=1;
+        originalWorldToken=originalPlayerToken=0;
+        // sourceIdentitySerial intentionally remains monotonic.
         cachedPlayer=null;
         cachedTarget=null;
         cachedRayClass=null;

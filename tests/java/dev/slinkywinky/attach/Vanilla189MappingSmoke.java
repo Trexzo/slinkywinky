@@ -10,6 +10,8 @@ public final class Vanilla189MappingSmoke {
         ObservedState.admit(mc);
         ObservedState.Frame first=ObservedState.sample();
         check(first.flags==7,"Mapped world/player/target flags");
+        check(first.worldToken>0&&first.playerToken>first.worldToken,
+              "Original obfuscated JNI world and player tokens distinct");
         check(Math.abs(first.xyz[1]-65.62)<.001,"Mapped eye height");
         check(first.xyz[0]==1.25 && first.xyz[2]==2.0,"Mapped player coords");
         check(first.xyz[3]==4.5 && first.xyz[4]==65 && first.xyz[5]==-2.0,"Mapped target coords");
@@ -20,8 +22,10 @@ public final class Vanilla189MappingSmoke {
         check(initial==3,"Vanilla profile must bind three runtime classes");
         for(int i=0;i<200;i++) {
             ObservedState.Frame stable=ObservedState.sample();
-            check(stable.flags==7 && stable.generation==first.generation,
-                  "Vanilla repeated frames must preserve session");
+            check(stable.flags==7 && stable.generation==first.generation &&
+                  stable.worldToken==first.worldToken &&
+                  stable.playerToken==first.playerToken,
+                  "Vanilla repeated frames must preserve JNI ownership");
         }
         check(cache.getLong(null)==initial,"Vanilla mapping must be reused, not reflected per tick");
         Method tick=InstrumentationProbe.class.getDeclaredMethod("isTickMethod",String.class,boolean.class,boolean.class);
@@ -39,10 +43,12 @@ public final class Vanilla189MappingSmoke {
         Field world=mc.getDeclaredField("f"),player=mc.getDeclaredField("h");
         world.set(game,null);player.set(game,null);
         ObservedState.Frame menu=ObservedState.sample();
-        check(menu.flags==0 && menu.generation>first.generation,"disconnect");
+        check(menu.flags==0 && menu.generation>first.generation &&
+              menu.worldToken>first.playerToken,"disconnect");
         world.set(game,new Object());player.set(game,Class.forName("pk").newInstance());
         ObservedState.Frame rejoin=ObservedState.sample();
-        check(rejoin.flags==3 && rejoin.generation>menu.generation,"reentry");
+        check(rejoin.flags==3 && rejoin.generation>menu.generation &&
+              rejoin.worldToken>menu.playerToken,"reentry");
         ObservedState.release();
         check(cache.getLong(null)==0,"Release must drop vanilla reflection bindings");
         ObservedState.admit(mc);

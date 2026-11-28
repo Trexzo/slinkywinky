@@ -152,7 +152,7 @@ public final class InstrumentationProbe {
                 final long n=ticks.get();
                 if(n<=0)throw new IllegalStateException("No admitted original game tick");
                 final SourceRuntimePreview.Receipt attack=r358Source.observe(
-                    1001,1002,evidence.generation,n,
+                    evidence.worldToken,evidence.playerToken,evidence.generation,n,
                     SourceRuntimePreview.LAG_RANGE_ATTACK,
                     new int[]{1,1},new double[0]);
                 if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
@@ -221,7 +221,7 @@ public final class InstrumentationProbe {
                         worldPlayer?observed.combatClock:null);
                     if(phaseCandidate){
                         final SourceRuntimePreview.Receipt attack=r358Source.observe(
-                            1001,1002,observed.generation,n,
+                            observed.worldToken,observed.playerToken,observed.generation,n,
                             SourceRuntimePreview.LAG_RANGE_ATTACK,
                             new int[]{1,1},new double[0]);
                         if(attack.sourceEvent!=15||attack.at(2)!=1||attack.at(3)!=1)
@@ -245,7 +245,7 @@ public final class InstrumentationProbe {
                 }
                 // Opaque tokens + actual sampler generation, no Java refs.
                 final SourceRuntimePreview.Receipt nativeTick=r358Source.observe(
-                    1001,1002,observed.generation,n,
+                    observed.worldToken,observed.playerToken,observed.generation,n,
                     SourceRuntimePreview.LAG_RANGE_TICK,bits,vals);
                 if(nativeTick.sourceEvent!=18||nativeTick.at(2)!=1)
                     throw new IllegalStateException("R358 native source e18 did not execute");
@@ -295,7 +295,7 @@ public final class InstrumentationProbe {
                                 (row.kind==SourcePacketReadOnlyQueue.ATTACK?2:
                                  (row.kind==SourcePacketReadOnlyQueue.STOP_SPRINT?3:0));
                             final SourceRuntimePreview.Receipt proposal=r358Source.observe(
-                                1001,1002,observed.generation,n,
+                                observed.worldToken,observed.playerToken,observed.generation,n,
                                 SourceRuntimePreview.LAG_RANGE_PACKET,
                                 new int[]{k,row.sequence,row.moving?1:0,1},
                                 new double[]{age/1000000L,row.x,row.y,row.z});
