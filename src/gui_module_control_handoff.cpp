@@ -23,9 +23,13 @@ bool GuiModuleControlHandoff::request_focused_toggle(
         const MenuState& menu,const MenuNavigation& navigation,
         const ModuleArrayListFeed& source,
         std::uint64_t expected_source_sequence) {
+    // R264: all text, dropdown, profile, keybind and unload dialogs
+    // own input exclusively. A held numeric drag also owns the pointer.
+    // The old two-popup check could route a source toggle behind an
+    // unrelated open modal.
     if(std::this_thread::get_id()!=gui_owner_ ||
-       !navigation.owns_menu(menu) || menu.color_popup_owner() ||
-       menu.unload_confirmation_preview())
+       !navigation.owns_menu(menu) || menu.modal_input_owned() ||
+       menu.numeric_drag_preview().has_value())
         return false;
     const auto focus=navigation.visible_focus();
     const auto& catalog=official_module_catalog();
