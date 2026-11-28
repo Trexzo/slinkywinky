@@ -56,7 +56,9 @@ class SourceFieldAuditTest(unittest.TestCase):
     def test_original_network_send_mapping(self):
         self.items["ek.class"] = sample_class("ek", [], [("a", "(Lff;)V")])
         self.items["ff.class"] = sample_class("ff", [])
-        audit_original_network_send(self.items.__getitem__)
+        sha=audit_original_network_send(self.items.__getitem__)
+        self.assertEqual(len(sha),64)
+        self.assertTrue(all(c in "0123456789abcdef" for c in sha))
 
     def test_original_network_send_wrong_packet_signature(self):
         self.items["ek.class"] = sample_class("ek", [], [("a", "(Lft;)V")])

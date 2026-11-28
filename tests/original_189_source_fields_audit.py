@@ -149,7 +149,8 @@ def audit_original_attack_method(read_class):
 
 def audit_original_network_send(read_class):
     """Private JNI variant=1: NetworkManager ek.a(Lff;)V, Packet=ff."""
-    name, _, methods = class_members(read_class("ek.class"))
+    raw=read_class("ek.class")
+    name, _, methods = class_members(raw)
     if name != "ek":
         raise ValueError("Unexpected original 1.8.9 NetworkManager owner")
     entry = methods.get(("a", "(Lff;)V"))
@@ -158,6 +159,9 @@ def audit_original_network_send(read_class):
     packet_name, _, _ = class_members(read_class("ff.class"))
     if packet_name != "ff":
         raise ValueError("Original 1.8.9 Packet owner mismatch")
+    # SHA-256 of only an already identity-checked, official-file-bounded
+    # class. Never prints or exports actual class bytes.
+    return hashlib.sha256(raw).hexdigest()
 
 
 def audit_entries(read_class):
@@ -186,7 +190,8 @@ def audit_official_source_fields(client_jar):
     with zipfile.ZipFile(path, "r") as game:
         audit_entries(game.read)
         audit_original_attack_method(game.read)
-        audit_original_network_send(game.read)
+        network_sha256=audit_original_network_send(game.read)
+    print("R365_ORIGINAL_189_NETWORK_MANAGER_CLASS_SHA256="+network_sha256)
     print("R364_ORIGINAL_189_NETWORK_SEND_METHOD_STATIC_PASS "
           "owner=ek method=a descriptor=(Lff;)V packetClass=ff")
     print("R361_ORIGINAL_189_ATTACK_METHOD_STATIC_PASS "
