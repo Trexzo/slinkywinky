@@ -122,6 +122,21 @@ def main():
         from original_189_source_fields_audit import audit_official_source_fields
         audit_official_source_fields(destination)
         cp = str(audit) + os.pathsep + str(instrument)
+        network_audit = subprocess.run(
+            [str(java), "-cp", cp,
+             "dev.slinkywinky.attach.OriginalNetworkEntryAudit",
+             str(destination.resolve())],
+            check=False, capture_output=True, text=True, timeout=40
+        )
+        if (network_audit.returncode != 0
+                or network_audit.stdout.count(
+                    "R367_REAL_ORIGINAL_EK_PACKET_ASM_MEMORY_ONLY_PASS ") != 1
+                or "R367_NO_CLASS_EXPORT_NO_GAME_PROCESS_NO_PACKET_IO"
+                    not in network_audit.stdout):
+            raise RuntimeError("R367 original NetworkManager ASM weaver rejected: " +
+                               network_audit.stdout[-1200:] +
+                               network_audit.stderr[-1200:])
+        print(network_audit.stdout.strip(),flush=True)
         result = subprocess.run(
             [str(java), "-cp", cp,
              "dev.slinkywinky.attach.RenderCallsiteAudit",
