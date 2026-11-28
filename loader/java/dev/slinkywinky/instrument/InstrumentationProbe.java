@@ -901,8 +901,12 @@ public final class InstrumentationProbe {
                 r368ActiveNetworkManager=null;
                 r366PacketBase=r366MovementBase=null;
                 hookInstalled.set(false); // No transformer was installed.
+                if(failure instanceof RuntimeException)
+                    throw (RuntimeException)failure;
+                if(failure instanceof Error)
+                    throw (Error)failure;
                 throw new IllegalStateException(
-                    "R366 exact original network preflight rejected",failure);
+                    "R366 checked reflective preflight rejected",failure);
             }
         }
         if (hook) {
