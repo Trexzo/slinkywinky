@@ -791,12 +791,14 @@ public:
                     });
     }
 
-    // R256: reconstructed Ghost Hand event8 query override. Native
-    // callback priority is unverified; descriptor order is a fixture.
+    // R372: native 66-descriptor pointer-table uses Block (3) for
+    // Ghost Hand. The older recovered Java class reports Combat (0);
+    // this native-event bridge follows the native registration metadata.
+    // Callback priority is unverified; descriptor order is a fixture.
     bool bind_ghost_hand(std::size_t id) {
         if(stopped_ || active_frame_ || id>=definitions_.size() ||
            definitions_[id].name!="Ghost Hand" ||
-           definitions_[id].category!=0 ||
+           definitions_[id].category!=3 ||
            definitions_[id].subscriptions.size()!=1u ||
            definitions_[id].subscriptions[0].event!=kReachQueryEvent ||
            callbacks_[id][kReachQueryEvent])return false;
