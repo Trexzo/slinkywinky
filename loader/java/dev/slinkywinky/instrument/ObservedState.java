@@ -47,6 +47,29 @@ public final class ObservedState {
     private static long generation=1;
     private static boolean vanillaObfuscated;
     private static boolean sourceReadOnly;
+    private static Vanilla189ActiveNetworkBinding originalNetworkBinding;
+
+    /** SHA-pinned NetworkManager mapping admission; no manager is retained. */
+    public static synchronized void enableOriginalNetworkBinding(Class<?> network)
+            throws ReflectiveOperationException {
+        if(!sourceReadOnly||!vanillaObfuscated||mcClass==null||network==null||
+           network.getClassLoader()!=mcClass.getClassLoader())
+            throw new IllegalStateException("R368 original game network mapping not admitted");
+        Class<?> handler=Class.forName("bcy",false,mcClass.getClassLoader());
+        originalNetworkBinding=new Vanilla189ActiveNetworkBinding(
+            mcClass,handler,network);
+    }
+    /** Called only by the admitted original Minecraft game-thread tick. */
+    public static synchronized Object currentOriginalNetworkManager()
+            throws ReflectiveOperationException {
+        if(originalNetworkBinding==null)return null;
+        final Object mc=getter.invoke(null);
+        if(mc==null)return null;
+        Object actualWorld=worldField.get(mc),actualPlayer=playerField.get(mc);
+        if(actualWorld==null||actualPlayer==null||
+           actualWorld!=oldWorld||actualPlayer!=oldPlayer)return null;
+        return originalNetworkBinding.read(mc); // ephemeral, caller must weakly reference
+    }
 
     public static synchronized void enableOriginalSourceReadOnly(boolean enable){
         if(enable&&(!vanillaObfuscated||mcClass==null))
@@ -295,6 +318,8 @@ public final class ObservedState {
         sourceReadOnly=false;
         Vanilla189SourceEvidence.release();
         Vanilla189CombatClock.release();
+        if(originalNetworkBinding!=null)originalNetworkBinding.close();
+        originalNetworkBinding=null;
         generation=1;
         cachedPlayer=null;
         cachedTarget=null;

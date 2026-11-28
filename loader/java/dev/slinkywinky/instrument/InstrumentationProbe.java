@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import dev.slinkywinky.SourceRuntimePreview;
 import dev.slinkywinky.SourcePacketReadOnlyQueue;
+import java.lang.ref.WeakReference;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -70,6 +71,7 @@ public final class InstrumentationProbe {
         "0b898cf41a16e432dd4e873ed3bfbaf2536c149d44269910f31dca5f242d9436";
     private static volatile boolean r366PacketMode,r366PacketFault;
     private static volatile Vanilla189OutboundPrimitiveQueue r366Outbound;
+    private static volatile WeakReference<Object> r368ActiveNetworkManager;
     private static volatile Class<?> installedNetworkClass;
     private static volatile byte[] networkOriginalClassFingerprint;
     private static Class<?> r366PacketBase,r366MovementBase;
@@ -115,6 +117,10 @@ public final class InstrumentationProbe {
             final Class<?> bound=installedNetworkClass;
             if(bound==null||manager==null||manager.getClass()!=bound)
                 throw new IllegalStateException("R366 unknown network owner");
+            final WeakReference<Object> owner=r368ActiveNetworkManager;
+            // A second original ek may still send while a world changes.
+            // Ignore it: never associate a stale channel with active JNI e3.
+            if(owner==null||owner.get()!=manager)return;
             final Vanilla189OutboundPrimitiveQueue ingress=r366Outbound;
             if(ingress!=null&&!ingress.observe(packet,System.nanoTime()))
                 r366PacketFault=true;
@@ -249,18 +255,26 @@ public final class InstrumentationProbe {
                 if(r366PacketMode){
                     // R365 primitive-only, 256-cap, client-thread FIFO.
                     // Never schedule JNI on a foreign NetworkManager thread.
-                    if(!worldPlayer){
+                    final Object originalManager=worldPlayer?
+                        ObservedState.currentOriginalNetworkManager():null;
+                    if(originalManager==null){
+                        r368ActiveNetworkManager=null;
                         if(r366Outbound!=null){
                             r366Outbound.close();r366Outbound=null;
                         }
                         r366WorldGeneration=0;
                     }else{
+                        final WeakReference<Object> bound=r368ActiveNetworkManager;
                         if(r366Outbound==null||
-                           r366WorldGeneration!=observed.generation){
+                           r366WorldGeneration!=observed.generation||
+                           bound==null||bound.get()!=originalManager){
+                            r368ActiveNetworkManager=null;
                             if(r366Outbound!=null)r366Outbound.close();
                             r366Outbound=new Vanilla189OutboundPrimitiveQueue(
                                 r366PacketBase,r366MovementBase);
                             r366WorldGeneration=observed.generation;
+                            r368ActiveNetworkManager=
+                                new WeakReference<Object>(originalManager);
                         }
                         if(!r366Outbound.healthy())
                             throw new IllegalStateException("R366 original packet queue poisoned");
@@ -333,6 +347,7 @@ public final class InstrumentationProbe {
             // Retire both native and original player-clock owners on
             // exactly the Minecraft game thread, before class restoration.
             boolean sourceClosed=true;
+            r368ActiveNetworkManager=null;
             if(r366Outbound!=null){
                 try{r366Outbound.close();}
                 catch(Throwable failure){
@@ -873,6 +888,7 @@ public final class InstrumentationProbe {
                     Vanilla189OutboundPacketSampler preflight=
                         new Vanilla189OutboundPacketSampler(packet,movement);
                     preflight.close();
+                    ObservedState.enableOriginalNetworkBinding(network);
                     installedNetworkClass=network;
                     r366PacketBase=packet;r366MovementBase=movement;
                 }
@@ -882,6 +898,7 @@ public final class InstrumentationProbe {
                 r362ExactClickMode=false;
                 r366PacketMode=false;
                 installedNetworkClass=null;
+                r368ActiveNetworkManager=null;
                 r366PacketBase=r366MovementBase=null;
                 hookInstalled.set(false); // No transformer was installed.
                 throw new IllegalStateException(
@@ -903,6 +920,7 @@ public final class InstrumentationProbe {
             r358Source=null;r360AttackFence=null;r362ClickFence=null;
             r362OwnerThread=null;r362CallbackFault=false;
             r366Outbound=null;r366PacketFault=false;r366WorldGeneration=0;
+            r368ActiveNetworkManager=null;
             r366Packets=r366NativeEvent3=r366HoldProposals=0;
             r358Executed=r358CandidateTargets=r360AttackCallbacks=0;
             r362ClickReturns=r362AcceptedClicks=0;
