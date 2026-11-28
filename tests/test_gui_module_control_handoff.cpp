@@ -93,6 +93,14 @@ int main() {
     CHECK(menu.toggle_preview(25u)); // inert GUI preview, not an ack
     CHECK(menu.preview_enabled(25u));
     CHECK(!first.request_focused_toggle(menu,navigation,feed,999u));
+    // R264: a real source keybind capture owns both keyboard and
+    // background menu; no hidden module request may bypass it.
+    CHECK(menu.begin_bind_capture(25u));
+    CHECK(menu.modal_input_owned());
+    CHECK(!first.request_focused_toggle(menu,navigation,feed,10u));
+    CHECK(first.view().phase==GuiModuleControlPhase::Idle);
+    CHECK(menu.cancel_bind_capture());
+    CHECK(!menu.modal_input_owned());
     CHECK(first.request_focused_toggle(menu,navigation,feed,10u));
     CHECK(!first.request_focused_toggle(menu,navigation,feed));
     const auto pending=first.view();
