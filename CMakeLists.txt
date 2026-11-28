@@ -453,6 +453,20 @@ if(BUILD_TESTING)
       PRIVATE cxx_std_17)
     add_test(NAME r266_real_pr2_full_67_roster_source_provenance
       COMMAND slinkywinky_r266_pr2_roster_tests)
+    # R267: actual PR2's R211 3-module native owner and PR1's three
+    # independently reconstructed OFFLINE policies share one explicit
+    # owner-authenticated source feed (not a Minecraft runtime).
+    add_executable(slinkywinky_r267_pr2_six_owner_tests
+      tests/test_r267_combined_six_module_owner.cpp)
+    target_include_directories(slinkywinky_r267_pr2_six_owner_tests PRIVATE
+      "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include"
+      "${SLINKYWINKY_R247_PR2_ROOT}/include")
+    target_link_libraries(slinkywinky_r267_pr2_six_owner_tests
+      PRIVATE slinkywinky_core)
+    target_compile_features(slinkywinky_r267_pr2_six_owner_tests
+      PRIVATE cxx_std_17)
+    add_test(NAME r267_real_pr2_combined_six_owner_provenance
+      COMMAND slinkywinky_r267_pr2_six_owner_tests)
     if(WIN32)
       # R253 source-pinned actual native manager + kernel process HANDLE
       # witness. Driven only by separate explicitly-owned Java8 test JVMs.
