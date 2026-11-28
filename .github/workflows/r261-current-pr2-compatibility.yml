@@ -1,0 +1,84 @@
+name: R261 current PR2 native GUI compatibility
+
+on:
+  push:
+    branches:
+      - reconstruction/r1-core-fidelity
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  current-pr2-owner-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout PR1 GUI, adapter and exact source
+        uses: actions/checkout@v4
+        with:
+          path: shell
+          persist-credentials: false
+
+      - name: Checkout current PR2 reconstruction head
+        uses: actions/checkout@v4
+        with:
+          repository: Trexzo/slinkywinky
+          ref: integration/openslinky-fd9c592-reference
+          path: pr2-current
+          persist-credentials: false
+
+      - name: Record actual PR2 source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git -C pr2-current rev-parse HEAD)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          test -f pr2-current/reference_compat/include/slinkywinky/sprint_observation_preview.hpp
+          test -f pr2-current/include/slinkywinky/module_control_contract.hpp
+          echo "R261_PR2_HEAD=$sha" >> "$GITHUB_ENV"
+          echo "R261_PR2_CHECKOUT=$sha"
+
+      - name: Negative control refuses a forged source pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          if cmake -S shell -B build-r261-reject -DCMAKE_BUILD_TYPE=Release \
+            -DSLINKYWINKY_R247_PR2_ROOT="$GITHUB_WORKSPACE/pr2-current" \
+            -DSLINKYWINKY_R247_PR2_EXPECTED_SHA=0000000000000000000000000000000000000000 \
+            >r261-negative.log 2>&1; then
+            echo "R261_BAD_PIN_UNEXPECTEDLY_ACCEPTED"
+            exit 1
+          fi
+          grep -q "R247 PR2 checkout does not match pinned source commit" r261-negative.log
+          echo "R261_BAD_PIN_REFUSED_PASS"
+
+      - name: Configure GUI against exact checked-out current PR2
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S shell -B build-r261 -DCMAKE_BUILD_TYPE=Release \
+            -DSLINKYWINKY_R247_PR2_ROOT="$GITHUB_WORKSPACE/pr2-current" \
+            -DSLINKYWINKY_R247_PR2_EXPECTED_SHA="$R261_PR2_HEAD"
+
+      - name: Compile real PR2 native owner and GUI integration regressions
+        shell: bash
+        run: |
+          cmake --build build-r261 \
+            --target slinkywinky_r247_real_native_module_test \
+                     slinkywinky_r248_real_three_module_test \
+                     slinkywinky_r249_native_failure_tests \
+                     slinkywinky_r250_native_recovery_test \
+                     slinkywinky_r252_witnessed_recovery_tests \
+                     slinkywinky_r254_pr2_module_parity_tests \
+                     slinkywinky_r257_pr2_event8_parity_tests \
+            --parallel 2
+
+      - name: Run cross-branch owner, failure and lifecycle tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir build-r261 \
+            -R '^r2(47|48|49|50|52|54|57)_real_pr2_' \
+            --output-on-failure
+          echo "R261_CURRENT_PR2_COMPATIBILITY_PASS $R261_PR2_HEAD"
