@@ -310,6 +310,11 @@ if(BUILD_TESTING)
   # Ordinary PR #1 builds remain independent of PR #2. No game is loaded.
   set(SLINKYWINKY_R247_PR2_ROOT "" CACHE PATH
       "Checked-out, exact pinned PR #2 source root for R247 integration")
+  # R261: retain the historical known-good pin by default, but allow a
+  # separately tested HEAD checkout to prove current PR2 API compatibility.
+  set(SLINKYWINKY_R247_PR2_EXPECTED_SHA
+      "7f457376058ad42e0a0e0323ed874d7e5b2ae03a" CACHE STRING
+      "Expected exact PR2 commit SHA for optional native integration")
   if(NOT "${SLINKYWINKY_R247_PR2_ROOT}" STREQUAL "")
     if(NOT EXISTS
         "${SLINKYWINKY_R247_PR2_ROOT}/reference_compat/include/slinkywinky/sprint_observation_preview.hpp"
@@ -325,7 +330,7 @@ if(BUILD_TESTING)
       OUTPUT_VARIABLE R247_PR2_HEAD
       OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT R247_GIT_EXIT EQUAL 0 OR
-       NOT R247_PR2_HEAD STREQUAL "7f457376058ad42e0a0e0323ed874d7e5b2ae03a")
+       NOT R247_PR2_HEAD STREQUAL SLINKYWINKY_R247_PR2_EXPECTED_SHA)
       message(FATAL_ERROR "R247 PR2 checkout does not match pinned source commit")
     endif()
     add_executable(slinkywinky_r247_real_native_module_test
