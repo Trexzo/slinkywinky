@@ -21,6 +21,21 @@ enum class ModuleControlCapability : std::uint8_t {
     NativeOwnerProbe = 4  // R211 three native owner/JNI decision probes
 };
 
+// Canonical R211/R254 control names in actual native manager order.
+inline constexpr std::array<std::string_view,3> kNativeOwnerProbeNames{{
+    "No Jump Delay", "No Slow", "Sprint"
+}};
+inline constexpr std::array<std::string_view,3> kOfflinePolicyNames{{
+    "No Hit Delay", "Safe Walk", "Fast Place"
+}};
+inline bool module_control_name_in(
+        std::string_view name,
+        const std::array<std::string_view,3>& group) noexcept {
+    for(const auto candidate : group)
+        if(name == candidate) return true;
+    return false;
+}
+
 inline ModuleControlCapability module_control_capability(
         std::string_view canonical_name) noexcept {
     if(canonical_name == "Chest Stealer")
@@ -29,13 +44,9 @@ inline ModuleControlCapability module_control_capability(
     // Unknown names, including invented aliases, must not become requests.
     if(!candidate_native_manager_registered(canonical_name))
         return ModuleControlCapability::Unknown;
-    if(canonical_name == "No Jump Delay" ||
-       canonical_name == "No Slow" ||
-       canonical_name == "Sprint")
+    if(module_control_name_in(canonical_name,kNativeOwnerProbeNames))
         return ModuleControlCapability::NativeOwnerProbe;
-    if(canonical_name == "No Hit Delay" ||
-       canonical_name == "Safe Walk" ||
-       canonical_name == "Fast Place")
+    if(module_control_name_in(canonical_name,kOfflinePolicyNames))
         return ModuleControlCapability::OfflinePolicy;
     return ModuleControlCapability::PreviewOnly;
 }
