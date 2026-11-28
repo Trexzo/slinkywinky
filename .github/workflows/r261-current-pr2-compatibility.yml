@@ -81,6 +81,7 @@ jobs:
                      slinkywinky_r252_witnessed_recovery_tests \
                      slinkywinky_r254_pr2_module_parity_tests \
                      slinkywinky_r257_pr2_event8_parity_tests \
+                     slinkywinky_r266_pr2_roster_tests \
             --parallel 2
 
       - name: Run cross-branch owner, failure and lifecycle tests
@@ -88,6 +89,6 @@ jobs:
         run: |
           set -euo pipefail
           ctest --test-dir build-r261 \
-            -R '^r2(47|48|49|50|52|54|57)_real_pr2_' \
+            -R '^r2(47|48|49|50|52|54|57|66)_real_pr2_' \
             --output-on-failure
           echo "R261_CURRENT_PR2_COMPATIBILITY_PASS $R261_PR2_HEAD"
