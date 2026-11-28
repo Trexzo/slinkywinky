@@ -10,6 +10,7 @@ import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import dev.slinkywinky.SourceRuntimePreview;
+import dev.slinkywinky.SourcePacketReadOnlyQueue;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -63,6 +64,16 @@ public final class InstrumentationProbe {
     private static Thread r362OwnerThread;
     private static int r358Executed,r358CandidateTargets,r360AttackCallbacks;
     private static long r362ClickReturns,r362AcceptedClicks;
+    // R366: exact original NetworkManager packet bridge. Explicit opt-in
+    // and NO source packet hold/replay, only read-only proposals.
+    private static final String R365_ORIGINAL_EK_SHA256 =
+        "0b898cf41a16e432dd4e873ed3bfbaf2536c149d44269910f31dca5f242d9436";
+    private static volatile boolean r366PacketMode,r366PacketFault;
+    private static volatile Vanilla189OutboundPrimitiveQueue r366Outbound;
+    private static volatile Class<?> installedNetworkClass;
+    private static volatile byte[] networkOriginalClassFingerprint;
+    private static Class<?> r366PacketBase,r366MovementBase;
+    private static long r366WorldGeneration,r366Packets,r366NativeEvent3,r366HoldProposals;
 
     private static byte[] sha256(byte[] bytes) {
         try { return MessageDigest.getInstance("SHA-256").digest(bytes); }
@@ -90,6 +101,27 @@ public final class InstrumentationProbe {
         if ("120".equals(value)) return 120;
         if ("600".equals(value)) return 600;
         throw new IllegalArgumentException("Unsupported diagnostic tick limit");
+    }
+
+    /**
+     * R366 observational original NetworkManager ek.a(Lff;)V ENTRY.
+     * The packet argument is used transiently to copy primitive metadata;
+     * this callback NEVER retains a Packet, Channel, World or JNI reference.
+     * Network sends always continue through the original method unmodified.
+     */
+    public static void onOriginalOutboundPacket(Object manager,Object packet){
+        if(!active||!r366PacketMode)return;
+        try{
+            final Class<?> bound=installedNetworkClass;
+            if(bound==null||manager==null||manager.getClass()!=bound)
+                throw new IllegalStateException("R366 unknown network owner");
+            final Vanilla189OutboundPrimitiveQueue ingress=r366Outbound;
+            if(ingress!=null&&!ingress.observe(packet,System.nanoTime()))
+                r366PacketFault=true;
+        }catch(Throwable fail){
+            // Never propagate into NetworkManager/sendPacket.
+            r366PacketFault=true;
+        }
     }
 
     /**
@@ -137,6 +169,8 @@ public final class InstrumentationProbe {
         try {
             if(r362CallbackFault)
                 throw new IllegalStateException("R362 prior click callback failed closed");
+            if(r366PacketFault)
+                throw new IllegalStateException("R366 packet entry stream incomplete");
             observed=ObservedState.sample();
             if(nativeContext==0) {
                 nativeContext=nativeOpenObservation(); // Runs on exact admitted game thread.
@@ -212,6 +246,45 @@ public final class InstrumentationProbe {
                         "R358_REAL_ORIGINAL_CLIENT_SOURCE_NATIVE_E18 generation="+
                         observed.generation+" candidateTarget="+
                         (remote==null?0:1)+" packetWrites=0 gameWrites=0");
+                if(r366PacketMode){
+                    // R365 primitive-only, 256-cap, client-thread FIFO.
+                    // Never schedule JNI on a foreign NetworkManager thread.
+                    if(!worldPlayer){
+                        if(r366Outbound!=null){
+                            r366Outbound.close();r366Outbound=null;
+                        }
+                        r366WorldGeneration=0;
+                    }else{
+                        if(r366Outbound==null||
+                           r366WorldGeneration!=observed.generation){
+                            if(r366Outbound!=null)r366Outbound.close();
+                            r366Outbound=new Vanilla189OutboundPrimitiveQueue(
+                                r366PacketBase,r366MovementBase);
+                            r366WorldGeneration=observed.generation;
+                        }
+                        if(!r366Outbound.healthy())
+                            throw new IllegalStateException("R366 original packet queue poisoned");
+                        final SourcePacketReadOnlyQueue.Batch observations=
+                            r366Outbound.drain(32);
+                        for(SourcePacketReadOnlyQueue.Observation row:observations.rows){
+                            final long age=System.nanoTime()-row.nanoTime;
+                            if(age<0||age>100000000L)
+                                throw new IllegalStateException("R366 stale original packet evidence");
+                            final int k=row.kind==SourcePacketReadOnlyQueue.MOVEMENT?1:0;
+                            final SourceRuntimePreview.Receipt proposal=r358Source.observe(
+                                1001,1002,observed.generation,n,
+                                SourceRuntimePreview.LAG_RANGE_PACKET,
+                                new int[]{k,row.sequence,row.moving?1:0,1},
+                                new double[]{age/1000000L,row.x,row.y,row.z});
+                            if(proposal.sourceEvent!=3||proposal.at(2)!=1||
+                               (proposal.at(3)!=0&&proposal.at(3)!=1))
+                                throw new IllegalStateException("R366 native e3 returned invalid verdict");
+                            ++r366NativeEvent3;
+                            if(proposal.at(3)==1)++r366HoldProposals;
+                        }
+                        r366Packets+=observations.rows.size();
+                    }
+                }
             }
         }
         catch (Throwable failure) {
@@ -260,6 +333,13 @@ public final class InstrumentationProbe {
             // Retire both native and original player-clock owners on
             // exactly the Minecraft game thread, before class restoration.
             boolean sourceClosed=true;
+            if(r366Outbound!=null){
+                try{r366Outbound.close();}
+                catch(Throwable failure){
+                    sourceClosed=false;
+                    System.err.println(PREFIX+"R366_PACKET_PRIMITIVE_CLOSE_FAIL "+failure);
+                } finally{r366Outbound=null;r366WorldGeneration=0;}
+            }
             if(r362ClickFence!=null){
                 try{r362ClickFence.close();}
                 catch(Throwable failure){
@@ -288,6 +368,11 @@ public final class InstrumentationProbe {
                     " clickReturns="+r362ClickReturns+
                     " clickEvidenceNativeE15="+r362AcceptedClicks+
                     " nativeClosed="+(sourceClosed?1:0)+" gameWrites=0");
+            if(r366PacketMode)
+                System.out.println(PREFIX+"R366_ORIGINAL_NETWORK_SOURCE_SUMMARY "+
+                    "packetRows="+r366Packets+" nativeEvent3="+r366NativeEvent3+
+                    " hypotheticalHold="+r366HoldProposals+
+                    " packetWrites=0 packetCancelled=0");
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
             nativeContext=0;
@@ -306,6 +391,7 @@ public final class InstrumentationProbe {
             // Drop Java world, player and reflection references on the exact client
             // thread before the asynchronous class restoration worker begins.
             ObservedState.release();
+            r366PacketMode=false;r366PacketFault=false;
             r362ExactClickMode=false;r362CallbackFault=false;
             r362OwnerThread=null;
             r358SourceReadOnly=false;
@@ -594,7 +680,8 @@ public final class InstrumentationProbe {
         // event. Never recursively Java Attach into a live instrumented JVM.
         final boolean continuous = "hook-continuous".equals(mode) ||
                                    "minecraft-continuous".equals(mode);
-        final boolean clickMode="minecraft-click-source-readonly".equals(mode);
+        final boolean packetMode="minecraft-network-source-readonly".equals(mode);
+        final boolean clickMode="minecraft-click-source-readonly".equals(mode)||packetMode;
         final boolean sourceMode="minecraft-source-readonly".equals(mode)||clickMode;
         final boolean test = "probe".equals(mode) || "hook-probe".equals(mode) ||
                              "hook-continuous".equals(mode);
@@ -674,6 +761,7 @@ public final class InstrumentationProbe {
             r358SourceReadOnly=sourceMode||
                 Boolean.getBoolean("slinkywinky.r358OriginalSourceTickReadOnly");
             r362ExactClickMode=clickMode;
+            r366PacketMode=packetMode;
             try {
                 if (delimiter < 0 || delimiter == options.length() - 1)
                     throw new IllegalArgumentException("Missing exact JNI library path");
@@ -706,10 +794,38 @@ public final class InstrumentationProbe {
                     ObservedState.enableOriginalSourceReadOnly(true);
                 }
                 verifyCallbackVisibility(target);
-            } catch (RuntimeException | LinkageError failure) {
+                if(packetMode){
+                    // Both classes must be loaded already, modifiable,
+                    // and resolved from the SAME original vanilla loader.
+                    Class<?> network=null;
+                    for(Class<?> c:instrumentation.getAllLoadedClasses()){
+                        if("ek".equals(c.getName())&&
+                           c.getClassLoader()==target.getClassLoader()){
+                            if(network!=null)
+                                throw new IllegalStateException("Duplicate original NetworkManager");
+                            network=c;
+                        }
+                    }
+                    if(network==null||!instrumentation.isModifiableClass(network))
+                        throw new IllegalStateException("Original ek NetworkManager not already loaded");
+                    ClassLoader loader=network.getClassLoader();
+                    Class<?> packet=Class.forName("ff",false,loader);
+                    Class<?> movement=Class.forName("ip",false,loader);
+                    // Validate exact original primitive names and field types
+                    // before installing EITHER original class transformer.
+                    Vanilla189OutboundPacketSampler preflight=
+                        new Vanilla189OutboundPacketSampler(packet,movement);
+                    preflight.close();
+                    installedNetworkClass=network;
+                    r366PacketBase=packet;r366MovementBase=movement;
+                }
+            } catch (RuntimeException | LinkageError | ReflectiveOperationException failure) {
                 ObservedState.release();
                 r358SourceReadOnly=false;
                 r362ExactClickMode=false;
+                r366PacketMode=false;
+                installedNetworkClass=null;
+                r366PacketBase=r366MovementBase=null;
                 hookInstalled.set(false); // No transformer was installed.
                 throw failure;
             }
@@ -728,6 +844,8 @@ public final class InstrumentationProbe {
             lastAcceptedGeneration=-1L;
             r358Source=null;r360AttackFence=null;r362ClickFence=null;
             r362OwnerThread=null;r362CallbackFault=false;
+            r366Outbound=null;r366PacketFault=false;r366WorldGeneration=0;
+            r366Packets=r366NativeEvent3=r366HoldProposals=0;
             r358Executed=r358CandidateTargets=r360AttackCallbacks=0;
             r362ClickReturns=r362AcceptedClicks=0;
             installedVia = instrumentation;
