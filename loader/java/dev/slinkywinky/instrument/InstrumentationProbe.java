@@ -412,40 +412,63 @@ public final class InstrumentationProbe {
                 @Override public void run() {
                     boolean restored = false;
                     final byte[] expected = originalClassFingerprint;
+                    final Class<?> networkTarget=installedNetworkClass;
+                    final byte[] networkExpected=networkOriginalClassFingerprint;
                     final AtomicInteger observed = new AtomicInteger();
                     final AtomicBoolean sameBytes = new AtomicBoolean();
+                    final AtomicInteger networkObserved=new AtomicInteger();
+                    final AtomicBoolean sameNetworkBytes=new AtomicBoolean();
                     ClassFileTransformer verifier = new ClassFileTransformer() {
                         @Override public byte[] transform(ClassLoader loader, String name,
                                 Class<?> type, ProtectionDomain protection, byte[] bytes) {
                             if (type == target) {
                                 observed.incrementAndGet();
                                 sameBytes.set(Arrays.equals(expected, sha256(bytes)));
+                            }else if(networkTarget!=null&&type==networkTarget){
+                                networkObserved.incrementAndGet();
+                                sameNetworkBytes.set(
+                                    Arrays.equals(networkExpected,sha256(bytes)));
                             }
                             return null;
                         }
                     };
                     try {
-                        if (expected == null) throw new IllegalStateException("Missing baseline fingerprint");
+                        if (expected == null ||
+                           (networkTarget!=null&&networkExpected==null))
+                            throw new IllegalStateException("Missing original class fingerprint(s)");
                         instrumentation.addTransformer(verifier, true);
                         try {
                             // The hook transformer was removed after installation.
                             // This second retransform restores its unmodified input.
-                            instrumentation.retransformClasses(target);
+                            if(networkTarget==null)
+                                instrumentation.retransformClasses(target);
+                            else
+                                instrumentation.retransformClasses(target,networkTarget);
                         } finally {
                             instrumentation.removeTransformer(verifier);
                         }
-                        if (observed.get() != 1 || !sameBytes.get())
-                            throw new IllegalStateException("Original class fingerprint mismatch");
+                        if (observed.get() != 1 || !sameBytes.get()||
+                            (networkTarget!=null&&
+                             (networkObserved.get()!=1||!sameNetworkBytes.get())))
+                            throw new IllegalStateException(
+                                "Original Minecraft and/or NetworkManager restore fingerprint mismatch");
                         if(!nativeSessionCloseOk) throw new IllegalStateException("Native client-thread context was not released");
                         restored = true;
                         System.out.println(PREFIX + "CLASS_BYTECODE_RESTORE_PASS sha256=" +
                             hex(expected));
+                        if(networkTarget!=null)
+                            System.out.println(PREFIX+
+                                "R366_ORIGINAL_NETWORK_MANAGER_RESTORE_PASS sha256="+
+                                hex(networkExpected));
                         System.out.println(PREFIX + "GAME_THREAD_HOOK_CLEANUP_PASS");
                     } catch (Throwable problem) {
                         System.err.println(PREFIX + "GAME_THREAD_HOOK_CLEANUP_FAIL " + problem);
                     } finally {
                         if (restored) {
                             originalClassFingerprint = null;
+                            networkOriginalClassFingerprint=null;
+                            installedNetworkClass=null;
+                            r366PacketBase=r366MovementBase=null;
                             installedVia = null;
                             installedClass = null;
                             hookInstalled.set(false);
@@ -699,9 +722,43 @@ public final class InstrumentationProbe {
             throw new IllegalStateException("Target class not loaded or unmodifiable");
         final AtomicInteger seen = new AtomicInteger();
         final AtomicInteger modified = new AtomicInteger();
+        final AtomicInteger modifiedNetwork = new AtomicInteger();
         ClassFileTransformer transformer = new ClassFileTransformer() {
             @Override public byte[] transform(ClassLoader loader, String name, Class<?> type,
                                                ProtectionDomain protection, byte[] bytes) {
+                if(type!=null&&packetMode&&type==installedNetworkClass){
+                    // Exactly one original, SHA-pinned NetworkManager method
+                    // in the SAME original vanilla classloader. No other
+                    // method is modified and no send is intercepted.
+                    final byte[] digest=sha256(bytes);
+                    if(!R365_ORIGINAL_EK_SHA256.equals(hex(digest)))
+                        throw new IllegalStateException(
+                            "R366 original Mojang 1.8.9 ek.class hash mismatch");
+                    final ClassReader packetReader=new ClassReader(bytes);
+                    final ClassWriter packetWriter=
+                        new ClassWriter(packetReader,ClassWriter.COMPUTE_MAXS);
+                    final AtomicInteger packetMethods=new AtomicInteger();
+                    final AtomicInteger packetEntryHooks=new AtomicInteger();
+                    packetReader.accept(new ClassVisitor(Opcodes.ASM5,packetWriter){
+                        @Override public MethodVisitor visitMethod(int access,String method,
+                                String descriptor,String signature,String[] exceptions){
+                            MethodVisitor downstream=super.visitMethod(access,method,
+                                descriptor,signature,exceptions);
+                            if(Vanilla189OutboundEntryWeaver.matches(method,descriptor,access)){
+                                packetMethods.incrementAndGet();
+                                return Vanilla189OutboundEntryWeaver.wrap(
+                                    downstream,packetEntryHooks);
+                            }
+                            return downstream;
+                        }
+                    },0);
+                    if(packetMethods.get()!=1||packetEntryHooks.get()!=1)
+                        throw new IllegalStateException(
+                            "R366 exact original outbound packet method unavailable");
+                    networkOriginalClassFingerprint=digest;
+                    modifiedNetwork.incrementAndGet();
+                    return packetWriter.toByteArray();
+                }
                 if (type == null || !recognized(type.getName(), test)) return null;
                 seen.incrementAndGet();
                 if (!hook) return null;
@@ -858,11 +915,24 @@ public final class InstrumentationProbe {
             instrumentation.addTransformer(transformer, true);
             transformerInstalled = true;
             retransformStarted = true;
-            instrumentation.retransformClasses(target);
-            if (seen.get() != 1 || (hook && modified.get() != 1))
-                throw new IllegalStateException("Expected exactly one transformed target");
+            if(packetMode){
+                if(installedNetworkClass==null)
+                    throw new IllegalStateException("Original NetworkManager admission missing");
+                instrumentation.retransformClasses(target,installedNetworkClass);
+            }else{
+                instrumentation.retransformClasses(target);
+            }
+            if (seen.get() != 1 || (hook && modified.get() != 1)||
+                (packetMode&&
+                 (modifiedNetwork.get()!=1||networkOriginalClassFingerprint==null)))
+                throw new IllegalStateException("Expected exact original transformed target(s)");
             System.out.println(PREFIX + (hook ? "GAME_THREAD_HOOK_INSTALLED" :
                 "INSTRUMENT_RETRANSFORM_PASS") + " class=" + target.getName());
+            if(packetMode)
+                System.out.println(PREFIX+
+                    "R366_ORIGINAL_EK_PACKET_OBSERVER_INSTALLED "+
+                    "sha256="+R365_ORIGINAL_EK_SHA256+
+                    " method=a(Lff;)V packetWrites=0");
             System.out.flush();
         } catch (Throwable problem) {
             active = false;
