@@ -56,14 +56,20 @@ int main() {
     CHECK(caps[static_cast<std::size_t>(native)]==3u);
     // Original R211 JNI/native owner probes are not automatically usable
     // in the standalone production client; only source-authorized requests.
-    for(const std::string_view name: {"No Jump Delay","No Slow","Sprint"})
+    CHECK(kNativeOwnerProbeNames[0]=="No Jump Delay" &&
+          kNativeOwnerProbeNames[1]=="No Slow" &&
+          kNativeOwnerProbeNames[2]=="Sprint");
+    for(const auto name:kNativeOwnerProbeNames)
         CHECK(module_control_capability(name)==native);
-    for(const std::string_view name: {"No Hit Delay","Safe Walk","Fast Place"})
+    CHECK(kOfflinePolicyNames[0]=="No Hit Delay" &&
+          kOfflinePolicyNames[1]=="Safe Walk" &&
+          kOfflinePolicyNames[2]=="Fast Place");
+    for(const auto name:kOfflinePolicyNames)
         CHECK(module_control_capability(name)==offline);
     for(const auto& row:rows)
         if(row.canonical_name=="Chest Stealer")
             CHECK(!row.native_registered &&
                   !module_control_request_supported(row.capability));
-    std::cout<<"R263_GUI_67_DESCRIPTORS_66_REGISTRATIONS_CAPABILITY_PASS\\n";
-    std::cout<<"R263_3_NATIVE_PROBES_3_OFFLINE_POLICIES_60_PREVIEW_ONLY_PASS\\n";
+    std::cout<<"R263_GUI_67_DESCRIPTORS_66_REGISTRATIONS_CAPABILITY_PASS\n";
+    std::cout<<"R263_3_NATIVE_PROBES_3_OFFLINE_POLICIES_60_PREVIEW_ONLY_PASS\n";
 }
