@@ -298,6 +298,14 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME r210_gui_module_request_ack_owner_lifecycle
     COMMAND slinkywinky_gui_module_control_tests)
+  # R263: every catalog row distinguishes source registration, implemented
+  # owner request path, offline-only policy and inert preview.
+  add_executable(slinkywinky_r263_module_capability_tests
+    tests/test_r263_module_control_capabilities.cpp)
+  target_link_libraries(slinkywinky_r263_module_capability_tests
+    PRIVATE slinkywinky_core)
+  add_test(NAME r263_module_control_capabilities_67_66
+    COMMAND slinkywinky_r263_module_capability_tests)
   # R246: owner-thread copy-only bridge matching PR #2's real R211
   # request_module/control_states/generation contract. No game hooks.
   add_executable(slinkywinky_r246_owner_adapter_tests
