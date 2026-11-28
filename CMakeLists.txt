@@ -306,6 +306,16 @@ if(BUILD_TESTING)
     PRIVATE slinkywinky_core)
   add_test(NAME r263_module_control_capabilities_67_66
     COMMAND slinkywinky_r263_module_capability_tests)
+  # R265: render-neutral, versioned 67-row roster with source provenance,
+  # preserving the actual three native-owner states and unknown slots.
+  add_executable(slinkywinky_r265_runtime_roster_tests
+    tests/test_r265_runtime_roster.cpp)
+  target_link_libraries(slinkywinky_r265_runtime_roster_tests
+    PRIVATE slinkywinky_core)
+  target_compile_features(slinkywinky_r265_runtime_roster_tests
+    PRIVATE cxx_std_17)
+  add_test(NAME r265_runtime_roster_67_66_source_provenance
+    COMMAND slinkywinky_r265_runtime_roster_tests)
   # R246: owner-thread copy-only bridge matching PR #2's real R211
   # request_module/control_states/generation contract. No game hooks.
   add_executable(slinkywinky_r246_owner_adapter_tests
