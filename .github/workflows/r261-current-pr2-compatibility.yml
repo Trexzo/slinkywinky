@@ -53,6 +53,15 @@ jobs:
           grep -q "R247 PR2 checkout does not match pinned source commit" r261-negative.log
           echo "R261_BAD_PIN_REFUSED_PASS"
 
+      - name: R262 all 67 GUI descriptors and 66 native registrations
+        shell: bash
+        env:
+          SLINKYWINKY_R262_PR2_ROOT: ${{ github.workspace }}/pr2-current
+        run: |
+          set -euo pipefail
+          python shell/tools/audit_r262_cross_branch_catalog.py --pr1 shell --pr2 pr2-current
+          python -m unittest discover -s shell/tests -p test_r262_cross_branch_catalog.py -v
+
       - name: Configure GUI against exact checked-out current PR2
         shell: bash
         run: |
