@@ -111,6 +111,54 @@ public final class Vanilla189CombatPacketNativeSmoke {
             yes(r.sourceEvent==3&&r.at(2)==1&&(r.at(3)==0||r.at(3)==1),
                 "Actual native C++ event3 must execute and return a bounded verdict");
         }
+        // Native C++ real Lag Range event15 -> e18 hold-active -> C02
+        // packet e3 should set released_on_attack (receipt[4]).
+        SourceRuntimePreview attackSource=new SourceRuntimePreview();
+        SourceRuntimePreview.Receipt phase=attackSource.observe(
+            5001,5002,1,1,SourceRuntimePreview.LAG_RANGE_ATTACK,
+            new int[]{1,1},new double[0]);
+        yes(phase.sourceEvent==15&&phase.at(2)==1&&phase.at(3)==1,
+            "Original native Lag Range source attack phase owns this epoch");
+        SourceRuntimePreview.Receipt attackTick=attackSource.observe(
+            5001,5002,1,1,SourceRuntimePreview.LAG_RANGE_TICK,
+            new int[]{1,0,1,0,0,0,0,0,0,0,0,0},
+            new double[]{9,10,10,0,0,150});
+        yes(attackTick.sourceEvent==18&&attackTick.at(3)==1,
+            "Actual C++ Lag Range attack phase consumed in eligible tick");
+        SourceRuntimePreview.Receipt attackRelease=attackSource.observe(
+            5001,5002,1,1,SourceRuntimePreview.LAG_RANGE_PACKET,
+            new int[]{2,1,0,1},new double[]{0,0,0,0});
+        yes(attackRelease.sourceEvent==3&&attackRelease.at(4)==1,
+            "Original C02 packet releases native C++ attack hold");
+        attackSource.close();
+
+        // Source sprint release requires an actual sprinting -> NOT
+        // sprinting transition while the original C0B ordinal 4 arrives.
+        SourceRuntimePreview sprintSource=new SourceRuntimePreview();
+        SourceRuntimePreview.Receipt sprintStart=sprintSource.observe(
+            6001,6002,1,1,SourceRuntimePreview.LAG_RANGE_TICK,
+            new int[]{1,0,1,1,0,0,0,0,0,0,1,0},
+            new double[]{9,10,10,0,0,150});
+        yes(sprintStart.sourceEvent==18&&sprintStart.at(3)==1,
+            "Native C++ Lag Range sprint precondition admitted");
+        SourceRuntimePreview.Receipt sprintStop=sprintSource.observe(
+            6001,6002,1,2,SourceRuntimePreview.LAG_RANGE_TICK,
+            new int[]{1,0,1,0,0,0,0,0,0,0,1,0},
+            new double[]{9,10,10,0,0,150});
+        yes(sprintStop.sourceEvent==18&&sprintStop.at(3)==1,
+            "Native sprint stop transition occurred in real event18");
+        SourceRuntimePreview.Receipt wrongAction=sprintSource.observe(
+            6001,6002,1,2,SourceRuntimePreview.LAG_RANGE_PACKET,
+            new int[]{0,1,0,1},new double[]{0,0,0,0});
+        yes(wrongAction.sourceEvent==3&&wrongAction.at(5)==0,
+            "Non-stop-sprint C0B must never release the native packet window");
+        SourceRuntimePreview.Receipt sprintRelease=sprintSource.observe(
+            6001,6002,1,2,SourceRuntimePreview.LAG_RANGE_PACKET,
+            new int[]{3,2,0,1},new double[]{0,0,0,0});
+        yes(sprintRelease.sourceEvent==3&&sprintRelease.at(5)==1,
+            "Source C0B ordinal 4 releases real native C++ sprint window");
+        sprintSource.close();
+
         queue.close();source.close();sampler.close();
         reject(()->queue.drain(1),"Retired source sender queue cannot replay");
         System.out.println("R369_REAL_ORIGINAL_COMBAT_CATEGORIES_NATIVE_E3_JNI_PASS");
