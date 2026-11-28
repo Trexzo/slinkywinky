@@ -18,6 +18,7 @@ EXPECTED = {
     "bex": {"c": "D", "d": "D", "e": "D"}, # EntityOtherPlayerMP xyz
     "ip": {"g": "Z", "a": "D", "b": "D", "c": "D"}, # original C03PacketPlayer
     "bcy": {"c": "Lek;"},              # original NetHandlerPlayClient.netManager
+    "is": {"b": "Lis$a;"},               # 1.8.9 C0B EntityAction's enum field
 }
 
 
@@ -136,6 +137,17 @@ def class_fields(raw):
     return name, fields
 
 
+def audit_original_combat_packets(read_class):
+    """Private JNI 1.8.9 source event3: C02=in, C0B=is, enum=is$a."""
+    for expected in ("in", "is", "is$a"):
+        owner, _, _=class_members(read_class(expected+".class"))
+        if owner!=expected:
+            raise ValueError("Untrusted original combat packet class: "+expected)
+    owner, fields, _=class_members(read_class("is.class"))
+    if fields.get("b")!="Lis$a;":
+        raise ValueError("Untrusted C0BPacketEntityAction enum field mapping")
+
+
 def audit_original_attack_method(read_class):
     """Original JNI table variant 1: Minecraft=ave, clickMouse=aw()V."""
     name, _, methods = class_members(read_class("ave.class"))
@@ -210,6 +222,9 @@ def audit_official_source_fields(client_jar):
         audit_original_attack_method(game.read)
         network_sha256=audit_original_network_send(game.read)
         audit_original_active_manager(game.read)
+        audit_original_combat_packets(game.read)
+    print("R369_ORIGINAL_189_COMBAT_PACKET_STATIC_PASS "
+          "attack=in action=is actionField=is.b:Lis$a; sourceStopOrdinal=4")
     print("R368_ORIGINAL_189_ACTIVE_NETWORK_MANAGER_STATIC_PASS "
           "owner=ave method=u()Lbcy; handler=bcy.c:Lek;")
     print("R365_ORIGINAL_189_NETWORK_MANAGER_CLASS_SHA256="+network_sha256)

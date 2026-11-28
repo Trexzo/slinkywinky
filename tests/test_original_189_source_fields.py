@@ -4,7 +4,7 @@ import unittest
 
 from original_189_source_fields_audit import (
     audit_entries, audit_original_attack_method, audit_original_network_send,
-    audit_original_active_manager, class_fields
+    audit_original_active_manager, audit_original_combat_packets, class_fields
 )
 
 
@@ -56,7 +56,28 @@ class SourceFieldAuditTest(unittest.TestCase):
                 "ip", [("g", "Z"), ("a", "D"), ("b", "D"), ("c", "D")]
             ),
             "bcy.class": sample_class("bcy", [("c", "Lek;")]),
+            "in.class": sample_class("in", []),
+            "is.class": sample_class("is", [("b", "Lis$a;")]),
+            "is$a.class": sample_class("is$a", []),
         }
+
+    def test_original_combat_packet_classes(self):
+        audit_original_combat_packets(self.items.__getitem__)
+
+    def test_original_wrong_use_entity_class(self):
+        self.items["in.class"]=sample_class("im", [])
+        with self.assertRaises(ValueError):
+            audit_original_combat_packets(self.items.__getitem__)
+
+    def test_original_wrong_entity_action_enum_descriptor(self):
+        self.items["is.class"]=sample_class("is",[("b","I")])
+        with self.assertRaises(ValueError):
+            audit_original_combat_packets(self.items.__getitem__)
+
+    def test_original_missing_entity_action_enum(self):
+        del self.items["is$a.class"]
+        with self.assertRaises(KeyError):
+            audit_original_combat_packets(self.items.__getitem__)
 
     def test_original_active_network_manager(self):
         self.items["ave.class"] = sample_class("ave", [], [("u", "()Lbcy;")])
