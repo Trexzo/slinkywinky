@@ -22,7 +22,7 @@ static ExecutionFrame frame8(){
 int main(){
     ModuleExecutionBridge b;
     const auto reach=b.add({"Reach",0,{{8,7}},false});
-    const auto gh=b.add({"Ghost Hand",0,{{8,0}},false});
+    const auto gh=b.add({"Ghost Hand",3,{{8,0}},false});
     CHECK(b.bind_reach(reach));
     CHECK(b.bind_ghost_hand_from_catalog());
     CHECK(!b.bind_ghost_hand(gh));
@@ -59,17 +59,19 @@ int main(){
     f=frame8();f.reach=r;CHECK(b.dispatch(f));
     CHECK(f.ghost_hand->executions==0 && !f.ghost_hand->query_override);
     CHECK(f.reach->executions==1);
+    // R372: explicitly deny the legacy Java Combat (0) categorization
+    // where the native 66-module registration requires Block (3).
     // Reject malformed module category, name or subscription.
     ModuleExecutionBridge wrong;
     const auto badName=wrong.add({"Other",0,{{8,0}},true});
-    const auto badCategory=wrong.add({"Ghost Hand",1,{{8,0}},true});
+    const auto badCategory=wrong.add({"Ghost Hand",0,{{8,0}},true});
     CHECK(!wrong.bind_ghost_hand(badName));
     CHECK(!wrong.bind_ghost_hand(badCategory));
     ModuleExecutionBridge other;
-    const auto wrongSlot=other.add({"Ghost Hand",0,{{13,0}},true});
+    const auto wrongSlot=other.add({"Ghost Hand",3,{{13,0}},true});
     CHECK(!other.bind_ghost_hand(wrongSlot));
     ModuleExecutionBridge extra;
-    const auto extraSub=extra.add({"Ghost Hand",0,{{8,0},{13,0}},true});
+    const auto extraSub=extra.add({"Ghost Hand",3,{{8,0},{13,0}},true});
     CHECK(!extra.bind_ghost_hand(extraSub));
     b.stop();f=frame8();CHECK(!b.dispatch(f));
     CHECK(!b.bind_ghost_hand(gh));
