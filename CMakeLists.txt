@@ -590,6 +590,14 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R368: original source NetHandler -> active NetworkManager weak identity.
+    add_test(NAME r368_java8_original_network_manager_weak_identity COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r368_original_network_identity.cmake)
+    set_tests_properties(r368_java8_original_network_manager_weak_identity PROPERTIES TIMEOUT 30)
     # R365: exact original ff/ip primitive copies through real Java8 JNI e3.
     add_test(NAME r365_java8_original_packet_primitive_native_e3 COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
@@ -1028,6 +1036,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPacketSampler.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPrimitiveQueue.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundEntryWeaver.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189ActiveNetworkBinding.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourceRuntimePreview.java"
@@ -1143,6 +1152,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPacketSampler.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPrimitiveQueue.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundEntryWeaver.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189ActiveNetworkBinding.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourceRuntimePreview.java"
