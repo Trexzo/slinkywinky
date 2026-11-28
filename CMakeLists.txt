@@ -590,6 +590,15 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R365: exact original ff/ip primitive copies through real Java8 JNI e3.
+    add_test(NAME r365_java8_original_packet_primitive_native_e3 COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -DLIBRARY_DIR=$<TARGET_FILE_DIR:slinkywinky_jni>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r365_original_packet_primitive_jni.cmake)
+    set_tests_properties(r365_java8_original_packet_primitive_native_e3 PROPERTIES TIMEOUT 40)
     # R362: actual Java8 click-return source e15 -> native C++ e18.
     add_test(NAME r362_java8_native_original_click_e15_e18 COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
@@ -1016,6 +1025,10 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189CombatClock.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceClickAttackFence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189ClickExitWeaver.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPacketSampler.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPrimitiveQueue.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundEntryWeaver.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourceRuntimePreview.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java"
@@ -1127,6 +1140,10 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189CombatClock.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceClickAttackFence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189ClickExitWeaver.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPacketSampler.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPrimitiveQueue.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundEntryWeaver.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourceRuntimePreview.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/RendererLivePreflight.java"
@@ -1182,6 +1199,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/ObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/R362SyntheticClickTarget.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/Vanilla189ClickExitWeaverSmoke.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/Vanilla189OutboundEntryWeaverSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeObservationSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/SourcePreloadedNativeSmoke.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/java/dev/slinkywinky/attach/NativeHudIpcSmoke.java"

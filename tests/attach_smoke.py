@@ -353,6 +353,16 @@ try:
         raise AssertionError("R362 exact click-exit ASM rewrite failed: " +
                              click_woven.stdout + click_woven.stderr)
     print("PASS: R362 two normal click exits, zero unrelated source hooks")
+    network_woven = subprocess.run(
+        [str(java), "-cp", classpath,
+         "dev.slinkywinky.attach.Vanilla189OutboundEntryWeaverSmoke"],
+        capture_output=True, text=True, env=env, timeout=15)
+    if (network_woven.returncode != 0 or
+        "R365_EXACT_ORIGINAL_EK_PACKET_ENTRY_ONE_OBSERVER_PASS"
+        not in network_woven.stdout):
+        raise AssertionError("R365 exact outbound sender rewrite failed: " +
+                             network_woven.stdout + network_woven.stderr)
+    print("PASS: R365 one original ek send observer, no packet interception")
 
     line = target.stdout.readline().strip()
     assert line == "SLINKYWINKY_ATTACH_TARGET_READY", repr(line)
