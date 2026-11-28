@@ -77,6 +77,7 @@ public final class InstrumentationProbe {
     private static Class<?> r366PacketBase,r366MovementBase;
     private static Class<?> r369AttackBase,r369ActionBase,r369ActionEnum;
     private static long r369AttackPackets,r369StopSprintPackets;
+    private static long r370AttackReleases,r370SprintReleases,r370PositionsRecorded;
     private static long r366WorldGeneration,r366Packets,r366NativeEvent3,r366HoldProposals;
 
     private static byte[] sha256(byte[] bytes) {
@@ -299,10 +300,18 @@ public final class InstrumentationProbe {
                                 new int[]{k,row.sequence,row.moving?1:0,1},
                                 new double[]{age/1000000L,row.x,row.y,row.z});
                             if(proposal.sourceEvent!=3||proposal.at(2)!=1||
-                               (proposal.at(3)!=0&&proposal.at(3)!=1))
-                                throw new IllegalStateException("R366 native e3 returned invalid verdict");
+                               proposal.generation!=observed.generation||
+                               proposal.tick!=n)
+                                throw new IllegalStateException("R370 native e3 source owner mismatch");
+                            final Vanilla189LagPacketReceiptVerifier.Status verdict=
+                                Vanilla189LagPacketReceiptVerifier.verify(
+                                    k,row.moving,proposal.at(3),proposal.at(4),
+                                    proposal.at(5),proposal.at(6));
                             ++r366NativeEvent3;
-                            if(proposal.at(3)==1)++r366HoldProposals;
+                            if(verdict.hypotheticalHold)++r366HoldProposals;
+                            if(verdict.attackRelease)++r370AttackReleases;
+                            if(verdict.sprintRelease)++r370SprintReleases;
+                            if(verdict.positionRecorded)++r370PositionsRecorded;
                         }
                         r366Packets+=observations.rows.size();
                     }
@@ -397,6 +406,9 @@ public final class InstrumentationProbe {
                     " hypotheticalHold="+r366HoldProposals+
                     " originalC02="+r369AttackPackets+
                     " originalStopSprint="+r369StopSprintPackets+
+                    " nativeAttackReleases="+r370AttackReleases+
+                    " nativeSprintReleases="+r370SprintReleases+
+                    " nativePositionsRecorded="+r370PositionsRecorded+
                     " packetWrites=0 packetCancelled=0");
             // Destroy on the same client thread that created this C++ context.
             long closing=nativeContext;
@@ -945,6 +957,7 @@ public final class InstrumentationProbe {
             r368ActiveNetworkManager=null;
             r366Packets=r366NativeEvent3=r366HoldProposals=0;
             r369AttackPackets=r369StopSprintPackets=0;
+            r370AttackReleases=r370SprintReleases=r370PositionsRecorded=0;
             r358Executed=r358CandidateTargets=r360AttackCallbacks=0;
             r362ClickReturns=r362AcceptedClicks=0;
             installedVia = instrumentation;

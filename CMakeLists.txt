@@ -590,6 +590,14 @@ if(SLINKYWINKY_BUILD_JNI)
     ${CMAKE_CURRENT_SOURCE_DIR}/reference_compat/include ${JNI_INCLUDE_DIRS})
   if(BUILD_TESTING)
     find_package(Java COMPONENTS Runtime Development REQUIRED)
+    # R370: verify exact JNI e3 kind-specific release/position receipt invariants.
+    add_test(NAME r370_java8_original_native_e3_receipt_contract COMMAND ${CMAKE_COMMAND}
+      -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
+      -DBUILD_ROOT=${CMAKE_CURRENT_BINARY_DIR}
+      -DJAVA_COMPILER=${Java_JAVAC_EXECUTABLE}
+      -DJAVA_EXECUTABLE=${Java_JAVA_EXECUTABLE}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_r370_native_event3_receipt.cmake)
+    set_tests_properties(r370_java8_original_native_e3_receipt_contract PROPERTIES TIMEOUT 30)
     # R369: exact original C02/C0B primitive combat category -> real native e3.
     add_test(NAME r369_java8_original_combat_packets_native_e3 COMMAND ${CMAKE_COMMAND}
       -DPROJECT_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
@@ -1046,6 +1054,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPrimitiveQueue.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundEntryWeaver.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189ActiveNetworkBinding.java"
+    "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189LagPacketReceiptVerifier.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
     "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourceRuntimePreview.java"
@@ -1162,6 +1171,7 @@ if(SLINKYWINKY_BUILD_ATTACH)
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundPrimitiveQueue.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189OutboundEntryWeaver.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189ActiveNetworkBinding.java"
+      "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/Vanilla189LagPacketReceiptVerifier.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourcePacketReadOnlyQueue.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/loader/java/dev/slinkywinky/instrument/SourceAttackTickFence.java"
       "${CMAKE_CURRENT_SOURCE_DIR}/java/dev/slinkywinky/SourceRuntimePreview.java"
