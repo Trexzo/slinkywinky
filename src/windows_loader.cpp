@@ -34,7 +34,9 @@ int wmain(int argc, wchar_t** argv) {
     const bool source_option=option == L"--source-tick-readonly" ||
                              option == L"--source-tick-readonly=600" ||
                              option == L"--source-click-readonly" ||
-                             option == L"--source-click-readonly=600";
+                             option == L"--source-click-readonly=600" ||
+                             option == L"--source-network-readonly" ||
+                             option == L"--source-network-readonly=600";
     const bool hook_option = source_option || option == L"--hook-probe" ||
                              option == L"--hook-probe=120" ||
                              option == L"--hook-probe=600" ||
@@ -67,7 +69,7 @@ int wmain(int argc, wchar_t** argv) {
          option != L"--instrument-probe" && !hook_option && !stop_option && !render_preflight && !render_callback && !render_context && !render_window_audit && !render_overlay && !render_multiframe && !render_retained && !render_operator && !render_visibility && !manual_visibility &&
          !toggle_visibility && !stop_visibility && !operator_command)) {
         std::wcerr << L"Usage: slinkywinky_loader.exe list JDK8_HOME\n"
-                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--source-tick-readonly[=600]|--source-click-readonly[=600]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-window-audit=8|--render-overlay=8|--render-overlay=72|--render-retained=72|--render-menu=operator|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility|--menu-next-tab|--menu-previous-tab|--menu-next-row|--menu-previous-row|--menu-expand|--menu-toggle-preview|--menu-increase|--menu-decrease|--menu-stop]\n";
+                   << L"   or: slinkywinky_loader.exe attach PID JDK8_HOME [--hook-probe[=120|600|continuous]|--source-tick-readonly[=600]|--source-click-readonly[=600]|--source-network-readonly[=600]|--stop-observation|--render-preflight|--render-callback=8|--render-context=8|--render-window-audit=8|--render-overlay=8|--render-overlay=72|--render-retained=72|--render-menu=operator|--render-visibility=72|--render-visibility=manual|--toggle-visibility|--stop-visibility|--menu-next-tab|--menu-previous-tab|--menu-next-row|--menu-previous-row|--menu-expand|--menu-toggle-preview|--menu-increase|--menu-decrease|--menu-stop]\n";
         return 2;
     }
     // R100 producer is serialized by a process-birth-scoped named mutex.

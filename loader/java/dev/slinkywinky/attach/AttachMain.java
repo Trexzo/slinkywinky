@@ -49,7 +49,11 @@ public final class AttachMain {
                 "--source-click-readonly=600".equals(requestedOption);
             final boolean clickHook=clickExtended||
                 "--source-click-readonly".equals(requestedOption);
-            final boolean sourceDiagnostic=sourceHook||clickHook;
+            final boolean networkExtended=
+                "--source-network-readonly=600".equals(requestedOption);
+            final boolean networkHook=networkExtended||
+                "--source-network-readonly".equals(requestedOption);
+            final boolean sourceDiagnostic=sourceHook||clickHook||networkHook;
             final boolean extendedHook = "--hook-probe=120".equals(requestedOption) ||
                                          "--hook-probe=600".equals(requestedOption);
             final boolean continuousHook = "--hook-probe=continuous".equals(requestedOption);
@@ -100,11 +104,15 @@ public final class AttachMain {
                  !"1".equals(System.getenv("SLINKYWINKY_SOURCE_NATIVE_READONLY"))))
                 throw new IllegalArgumentException(
                     "R359 requires separate original source and experimental hook consent");
-            if (clickHook &&
+            if ((clickHook||networkHook) &&
                 !"1".equals(System.getenv("SLINKYWINKY_SOURCE_CLICK_READONLY")))
                 throw new IllegalArgumentException(
                     "R363 exact source click diagnostic needs separate click consent");
-            if ((sourceExtended||clickExtended) &&
+            if (networkHook &&
+                !"1".equals(System.getenv("SLINKYWINKY_SOURCE_PACKET_READONLY")))
+                throw new IllegalArgumentException(
+                    "R366 network packet entry diagnostic requires separate packet consent");
+            if ((sourceExtended||clickExtended||networkExtended) &&
                 !"1".equals(System.getenv("SLINKYWINKY_EXTENDED_DIAGNOSTIC")))
                 throw new IllegalArgumentException(
                     "R359 600 ticks require the extended diagnostic consent");
@@ -164,12 +172,13 @@ public final class AttachMain {
                         File jniLibrary = new File(dll.getParentFile(), "slinkywinky_jni.dll");
                         if (!jniLibrary.isFile())
                             throw new IllegalArgumentException("Missing standalone JNI library");
-                        final String selectedMode=clickHook ? "minecraft-click-source-readonly" :
+                        final String selectedMode=networkHook ? "minecraft-network-source-readonly" :
+                            (clickHook ? "minecraft-click-source-readonly" :
                             (sourceHook ? "minecraft-source-readonly" :
                              (continuousHook ? (test ? "hook-continuous" : "minecraft-continuous") :
-                                              (test ? "hook-probe" : "minecraft-hook")));
+                                              (test ? "hook-probe" : "minecraft-hook"))));
                         options = selectedMode + "|" + jniLibrary.getCanonicalPath() +
-                            ((sourceExtended||clickExtended) ? "|600" :
+                            ((sourceExtended||clickExtended||networkExtended) ? "|600" :
                              (extendedHook ? "|" + requestedOption.substring("--hook-probe=".length()) : ""));
                     }
                     vm.loadAgent(instrumentationJar.getCanonicalPath(), options);
@@ -187,6 +196,7 @@ public final class AttachMain {
                 (renderMultiframe ? " mode=render-overlay-r92" : (renderOverlay ? " mode=render-overlay-r91" : (renderContext ? " mode=render-context-r78" : (renderCallback ? " mode=render-callback-r75" : (renderPreflight ? " mode=render-preflight" : (hookProbe ? " mode=hook-probe" : (instrumentProbe ? " mode=instrument-probe" : (test ? " mode=probe" : (tickProbe ? " mode=minecraft-ticks" : " mode=minecraft")))))))))))));
             if(sourceHook)receipt=" mode=original-source-readonly-r359";
             if(clickHook)receipt=" mode=original-click-readonly-r363";
+            if(networkHook)receipt=" mode=original-network-readonly-r366";
             System.out.println("ATTACH_RESULT=SUCCESS pid=" + pid + receipt);
         } catch (Exception failure) {
             System.err.println("ATTACH_RESULT=FAIL " + failure.getClass().getSimpleName() + ": " + failure.getMessage());

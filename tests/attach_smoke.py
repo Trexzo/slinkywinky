@@ -373,7 +373,10 @@ try:
                         "--source-tick-readonly=601",
                         "--source-click-readonly",
                         "--source-click-readonly=600",
-                        "--source-click-readonly=601"):
+                        "--source-click-readonly=601",
+                        "--source-network-readonly",
+                        "--source-network-readonly=600",
+                        "--source-network-readonly=601"):
         denied = subprocess.run(
             [str(loader), "attach", str(target.pid), str(home), source_flag],
             capture_output=True, text=True, env=env, timeout=22)
@@ -395,6 +398,25 @@ try:
         raise AssertionError("R363 click-path accidentally inherited older tick consent: " +
                              denied_click.stdout + denied_click.stderr)
     source_env["SLINKYWINKY_SOURCE_CLICK_READONLY"] = "1"
+    denied_network_consent = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home),
+         "--source-network-readonly=600"],
+        capture_output=True, text=True, env=source_env, timeout=22)
+    if (denied_network_consent.returncode == 0 or
+        "R366 network packet entry diagnostic requires separate packet consent"
+        not in denied_network_consent.stderr):
+        raise AssertionError("R366 packet entry accidentally inherited older click consent: " +
+                             denied_network_consent.stdout + denied_network_consent.stderr)
+    source_env["SLINKYWINKY_SOURCE_PACKET_READONLY"] = "1"
+    denied_network_test = subprocess.run(
+        [str(loader), "attach", str(target.pid), str(home),
+         "--source-network-readonly=600"],
+        capture_output=True, text=True, env=source_env, timeout=22)
+    if (denied_network_test.returncode == 0 or
+        "R359 original source JNI cannot run in synthetic Attach test mode"
+        not in denied_network_test.stderr):
+        raise AssertionError("R366 original packet diagnostics admitted synthetic JVM: " +
+                             denied_network_test.stdout + denied_network_test.stderr)
     denied_click_test = subprocess.run(
         [str(loader), "attach", str(target.pid), str(home),
          "--source-click-readonly=600"],
