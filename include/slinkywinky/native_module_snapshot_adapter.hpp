@@ -1,5 +1,6 @@
 #pragma once
 #include "slinkywinky/gui_module_control_handoff.hpp"
+#include "slinkywinky/module_control_capabilities.hpp"
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -159,9 +160,10 @@ private:
         if(!original || original->size()!=3u)return std::nullopt;
         const std::uint64_t generation=native.generation();
         if(world_ready && generation==0u)return std::nullopt;
-        constexpr std::array<std::string_view,3> names{
-            "No Jump Delay","No Slow","Sprint"
-        };
+        // R263: same canonical order/availability contract as the GUI.
+        // An offline-policy or preview-only name can never be silently
+        // admitted through this three-module native owner.
+        constexpr auto& names=kNativeOwnerProbeNames;
         ModuleArrayListSnapshot copy;
         copy.source_sequence=sequence;
         copy.world_generation=generation;
